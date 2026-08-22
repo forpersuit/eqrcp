@@ -140,7 +140,8 @@
     <!-- Include Paddle.js SDK & Verification Component -->
     <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
     <script src="js/api-base.js"></script>
-    <script src="js/checkout-verify.js?v=1.0.3"></script>
+    <!-- Note: bump ?v= query parameter when modifying js/checkout-verify.js -->
+    <script src="js/checkout-verify.js?v=1.0.4"></script>
 </head>
 <body class="bg-background text-on-surface font-sans antialiased min-h-screen flex flex-col justify-between">
     <!-- Header -->
@@ -1025,7 +1026,7 @@
                     <label class="block text-xs font-medium text-on-surface-variant" data-i18n="email_address">Email Address</label>
                     <div class="flex gap-2">
                         <input type="email" id="checkout-email-input" class="flex-grow bg-black/40 border border-white/15 focus:border-primary text-white text-sm rounded-lg px-3 py-2 outline-none transition-all" placeholder="user@example.com" />
-                        <button id="send-checkout-code-btn" class="px-4 py-2 bg-white/10 hover:bg-white/20 active:scale-95 text-primary text-xs font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px]" data-i18n="send_code_btn">Send Code</button>
+                        <button id="send-checkout-code-btn" class="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 active:scale-95 text-white/90 text-xs font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px] cursor-pointer" data-i18n="send_code_btn">Send Code</button>
                     </div>
                     <p id="email-field-error-msg" class="text-[11px] text-red-400 hidden mt-1 text-left flex items-center gap-1"></p>
                 </div>

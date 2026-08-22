@@ -33,6 +33,10 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
 - **活动输入框焦点保护 (Active Input Protection)**：
   - 收到后台推送（`agent-status`）、心跳同步（`applyStatusData`）时，即便是包含付费/篡改状态变更（`paidChanged`），若 `shouldProtectActiveInput()` 判定当前 `document.activeElement` 为正在编辑的输入框/文本域，必须挂起全屏 DOM 重绘，保护输入焦点与光标。
   - 所有带有未提交暂存状态的输入框（如 `#redeem-code`）必须绑定 `input` 事件实时同步当前输入至全局 `state` 内存（如 `state.tempRedeemCode`），形成 DOM 与 Memory 的双保险。
+- **输入框失焦 (Blur) 与按钮点击事件防吞 (Click Event Swallowing Prevention)**：
+  - 当用户在输入框聚焦输入完毕并直接点击操作按钮时，浏览器的底层触发顺序为：`mousedown`（目标为按钮子节点如 `<span>`）-> 输入框 `blur` -> `mouseup` -> `click`。
+  - **规则**：严禁在输入框的 `blur` / `input` 事件处理器中无差别全量重写相关按钮的 `innerHTML`（如 `btn.innerHTML = '<span>...'`）。这会导致 `mousedown` 命中的子节点在 `blur` 时被销毁，浏览器无法判定同一节点闭合而**直接丢弃 `click` 事件**（导致用户必须点第二次才触发）。
+  - **实践**：状态更新时优先判断并更新 `textContent`、`disabled` 或 `classList`，保持按钮内层 DOM 树的稳定性；同时为输入框配备 `keydown` (Enter) 快捷触发。
 - **红点与阶段文本就地补丁 (Incremental Badges)**：
   - 自动更新检测阶段变化（后台完成下载变为 `ready`）时，不触发全屏重绘，直接通过 `updateSettingsBadgeUI()` 为 `#open-settings` 增量 append/remove `.badge-dot` 节点。
 

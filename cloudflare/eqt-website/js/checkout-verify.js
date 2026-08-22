@@ -95,6 +95,22 @@
                 this.sendCode();
             });
 
+            // Press Enter to send code in email field
+            dom.emailInput?.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.sendCode();
+                }
+            });
+
+            // Press Enter to verify & pay in code field
+            dom.codeInput?.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.verifyAndPay();
+                }
+            });
+
             // Verify & Pay action
             dom.payBtn?.addEventListener('click', (e) => {
                 e.preventDefault();
@@ -190,18 +206,25 @@
             if (this.cooldownRemaining > 0) {
                 if (dom.sendBtn) {
                     dom.sendBtn.disabled = true;
-                    dom.sendBtn.className = 'px-4 py-2.5 bg-white/5 text-on-surface-variant text-xs font-mono font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px] cursor-not-allowed opacity-60';
-                    dom.sendBtn.textContent = `${this.cooldownRemaining}s`;
+                    dom.sendBtn.className = 'px-4 py-2.5 bg-white/5 border border-white/10 text-on-surface-variant text-xs font-mono font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px] cursor-not-allowed opacity-60';
+                    const cdText = `${this.cooldownRemaining}s`;
+                    if (dom.sendBtn.textContent !== cdText) {
+                        dom.sendBtn.textContent = cdText;
+                    }
                 }
                 return;
             }
 
+            const sendCodeText = this.getTranslation('send_code_btn', 'Send Code');
+
             if (!isValid) {
-                // Allow button click to trigger validate email warning if email is entered
+                // Inactive / default state: bright legible text with glass border
                 if (dom.sendBtn) {
                     dom.sendBtn.disabled = false;
-                    dom.sendBtn.className = 'px-4 py-2.5 bg-white/10 hover:bg-white/20 active:scale-95 text-primary text-xs font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px] cursor-pointer';
-                    dom.sendBtn.innerHTML = `<span>${this.getTranslation('send_code_btn', 'Send Code')}</span>`;
+                    dom.sendBtn.className = 'px-4 py-2.5 bg-white/10 hover:bg-white/20 border border-white/20 active:scale-95 text-white/90 text-xs font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px] cursor-pointer';
+                    if (dom.sendBtn.textContent !== sendCodeText) {
+                        dom.sendBtn.textContent = sendCodeText;
+                    }
                 }
                 if (email.length > 0) {
                     this.showEmailFieldError(this.getTranslation('invalid_email_err', 'Please enter a valid email address'));
@@ -209,12 +232,14 @@
                     this.hideEmailFieldError();
                 }
             } else {
-                // Valid email format: enable button with high-contrast primary glow
+                // Valid email format: enable button with vibrant #39e5b6 teal glow & high contrast dark text
                 this.hideEmailFieldError();
                 if (dom.sendBtn) {
                     dom.sendBtn.disabled = false;
-                    dom.sendBtn.className = 'px-4 py-2.5 bg-primary hover:bg-primary/90 active:scale-95 text-surface-dim text-xs font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px] shadow-lg shadow-primary/25 cursor-pointer';
-                    dom.sendBtn.innerHTML = `<span>${this.getTranslation('send_code_btn', 'Send Code')}</span>`;
+                    dom.sendBtn.className = 'px-4 py-2.5 bg-[#39e5b6] hover:bg-[#39e5b6]/90 active:scale-95 text-[#080e0c] text-xs font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px] shadow-lg shadow-[#39e5b6]/25 cursor-pointer';
+                    if (dom.sendBtn.textContent !== sendCodeText) {
+                        dom.sendBtn.textContent = sendCodeText;
+                    }
                 }
             }
         }
@@ -266,8 +291,8 @@
 
             if (dom.sendBtn) {
                 dom.sendBtn.disabled = true;
-                dom.sendBtn.className = 'px-4 py-2.5 bg-primary/20 text-primary text-xs font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px] cursor-wait opacity-80 flex items-center justify-center';
-                dom.sendBtn.innerHTML = `<span class="inline-block w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin mr-1.5"></span> <span>${this.getTranslation('sending_code', 'Sending...')}</span>`;
+                dom.sendBtn.className = 'px-4 py-2.5 bg-[#39e5b6]/20 border border-[#39e5b6]/40 text-[#39e5b6] text-xs font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px] cursor-wait opacity-90 flex items-center justify-center gap-1.5';
+                dom.sendBtn.innerHTML = `<span class="inline-block w-3.5 h-3.5 border-2 border-[#39e5b6] border-t-transparent rounded-full animate-spin"></span><span>${this.getTranslation('sending_code', 'Sending...')}</span>`;
             }
 
             try {
@@ -298,6 +323,7 @@
 
         startCooldown(seconds) {
             this.cooldownRemaining = seconds;
+            this.isSending = false;
             this.updateButtonState();
 
             if (this.cooldownTimer) clearInterval(this.cooldownTimer);

@@ -121,7 +121,7 @@
                     <div class="flex-grow">
                         <input id="login-code" type="text" placeholder="Verification Code" data-i18n-placeholder="code_placeholder" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all duration-300" disabled />
                     </div>
-                    <button id="send-code-btn" class="bg-white/5 hover:bg-white/10 border border-white/10 text-primary px-4 rounded-xl font-medium text-sm transition-all duration-300 active:scale-95 whitespace-nowrap" data-i18n="send_code_btn">Send Code</button>
+                    <button id="send-code-btn" class="bg-primary/20 hover:bg-primary/30 border border-primary/40 text-primary hover:text-white px-4 rounded-xl font-semibold text-sm transition-all duration-300 active:scale-95 whitespace-nowrap shadow-sm shadow-primary/10 cursor-pointer" data-i18n="send_code_btn">Send Code</button>
                 </div>
 
                 <!-- Inline Send Code Status Message Banner -->
@@ -1055,6 +1055,7 @@
             let cooldown = 60;
             if (sendBtn) {
                 sendBtn.disabled = true;
+                sendBtn.className = 'bg-white/5 border border-white/10 text-on-surface-variant px-4 rounded-xl font-mono font-bold text-sm transition-all duration-300 cursor-not-allowed opacity-60 whitespace-nowrap';
                 sendBtn.textContent = `${cooldown}s`;
             }
             setSendCodeStatus(dict.sending_code || 'Sending verification code, please wait...', 'info');
@@ -1067,7 +1068,8 @@
                     state.sendCodeInFlight = false;
                     if (sendBtn) {
                         sendBtn.disabled = false;
-                        sendBtn.textContent = translations[state.lang].send_code_btn || 'Send Code';
+                        sendBtn.className = 'bg-primary/20 hover:bg-primary/30 border border-primary/40 text-primary hover:text-white px-4 rounded-xl font-semibold text-sm transition-all duration-300 active:scale-95 whitespace-nowrap shadow-sm shadow-primary/10 cursor-pointer';
+                        sendBtn.textContent = (translations[state.lang] || translations.en).send_code_btn || 'Send Code';
                     }
                 } else {
                     if (sendBtn) sendBtn.textContent = `${cooldown}s`;
@@ -1126,7 +1128,8 @@
                     state.sendCodeInFlight = false;
                     if (sendBtn) {
                         sendBtn.disabled = false;
-                        sendBtn.textContent = translations[state.lang].send_code_btn || 'Send Code';
+                        sendBtn.className = 'bg-primary/20 hover:bg-primary/30 border border-primary/40 text-primary hover:text-white px-4 rounded-xl font-semibold text-sm transition-all duration-300 active:scale-95 whitespace-nowrap shadow-sm shadow-primary/10 cursor-pointer';
+                        sendBtn.textContent = (translations[state.lang] || translations.en).send_code_btn || 'Send Code';
                     }
                     setSendCodeStatus(errMsg, 'error');
                     showToast(errMsg, 'error');
@@ -1953,7 +1956,8 @@
             
             const sendBtn = document.getElementById('send-code-btn');
             sendBtn.disabled = false;
-            sendBtn.textContent = translations[state.lang].send_code_btn;
+            sendBtn.className = 'bg-primary/20 hover:bg-primary/30 border border-primary/40 text-primary hover:text-white px-4 rounded-xl font-semibold text-sm transition-all duration-300 active:scale-95 whitespace-nowrap shadow-sm shadow-primary/10 cursor-pointer';
+            sendBtn.textContent = (translations[state.lang] || translations.en).send_code_btn;
 
             document.getElementById('dashboard-section').classList.add('hidden');
             document.getElementById('login-section').classList.remove('hidden');
