@@ -33,6 +33,7 @@
                         "surface": "#080e0c",
                         "surface-variant": "#17231f",
                         "primary": "#39e5b6",
+                        "accent-bright": "#39e5b6",
                         "secondary": "#156f5a",
                         "on-surface": "#dae7e3",
                         "on-surface-variant": "#a5b9b2",
@@ -43,6 +44,9 @@
         }
     </script>
     <style>
+        :root {
+            --accent-bright: #39e5b6;
+        }
         .glass-panel {
             background: rgba(23, 35, 31, 0.4);
             backdrop-filter: blur(16px);
@@ -121,7 +125,7 @@
                     <div class="flex-grow">
                         <input id="login-code" type="text" placeholder="Verification Code" data-i18n-placeholder="code_placeholder" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all duration-300" disabled />
                     </div>
-                    <button id="send-code-btn" class="bg-primary/20 hover:bg-primary/30 border border-primary/40 text-primary hover:text-white px-4 rounded-xl font-semibold text-sm transition-all duration-300 active:scale-95 whitespace-nowrap shadow-sm shadow-primary/10 cursor-pointer" data-i18n="send_code_btn">Send Code</button>
+                    <button id="send-code-btn" class="bg-white/10 hover:bg-white/20 border border-white/20 text-white/90 px-4 rounded-xl font-medium text-sm transition-all duration-300 active:scale-95 whitespace-nowrap cursor-pointer" data-i18n="send_code_btn">Send Code</button>
                 </div>
 
                 <!-- Inline Send Code Status Message Banner -->
@@ -882,6 +886,24 @@
             fr: 'Français'
         };
 
+        const SEND_BTN_CLASSES = {
+            default: 'bg-white/10 hover:bg-white/20 border border-white/20 text-white/90 px-4 rounded-xl font-medium text-sm transition-all duration-300 active:scale-95 whitespace-nowrap cursor-pointer',
+            active: 'bg-primary hover:bg-primary/90 text-background px-4 rounded-xl font-bold text-sm transition-all duration-300 active:scale-95 whitespace-nowrap shadow-md shadow-primary/20 cursor-pointer',
+            cooldown: 'bg-white/5 border border-white/10 text-on-surface-variant px-4 rounded-xl font-mono font-bold text-sm transition-all duration-300 cursor-not-allowed opacity-60 whitespace-nowrap',
+            loading: 'bg-primary/20 border border-primary/40 text-primary px-4 rounded-xl font-semibold text-sm transition-all duration-300 cursor-wait opacity-90 whitespace-nowrap flex items-center justify-center gap-1.5'
+        };
+
+        function setSendBtnState(btn, stateType, text) {
+            if (!btn) return;
+            if (SEND_BTN_CLASSES[stateType]) {
+                btn.className = SEND_BTN_CLASSES[stateType];
+            }
+            btn.disabled = (stateType === 'cooldown' || stateType === 'loading');
+            if (text && btn.textContent !== text) {
+                btn.textContent = text;
+            }
+        }
+
         // Security: Escape HTML strings to prevent DOM XSS injection
         function escapeHtml(str) {
             if (str == null) return '';
@@ -1053,11 +1075,7 @@
             
             // Instant optimistic feedback: Start 60s cooldown immediately upon click
             let cooldown = 60;
-            if (sendBtn) {
-                sendBtn.disabled = true;
-                sendBtn.className = 'bg-white/5 border border-white/10 text-on-surface-variant px-4 rounded-xl font-mono font-bold text-sm transition-all duration-300 cursor-not-allowed opacity-60 whitespace-nowrap';
-                sendBtn.textContent = `${cooldown}s`;
-            }
+            setSendBtnState(sendBtn, 'cooldown', `${cooldown}s`);
             setSendCodeStatus(dict.sending_code || 'Sending verification code, please wait...', 'info');
 
             if (state.timer) clearInterval(state.timer);
@@ -1066,11 +1084,9 @@
                 if (cooldown <= 0) {
                     clearInterval(state.timer);
                     state.sendCodeInFlight = false;
-                    if (sendBtn) {
-                        sendBtn.disabled = false;
-                        sendBtn.className = 'bg-primary/20 hover:bg-primary/30 border border-primary/40 text-primary hover:text-white px-4 rounded-xl font-semibold text-sm transition-all duration-300 active:scale-95 whitespace-nowrap shadow-sm shadow-primary/10 cursor-pointer';
-                        sendBtn.textContent = (translations[state.lang] || translations.en).send_code_btn || 'Send Code';
-                    }
+                    const curEmail = (document.getElementById('login-email')?.value || '').trim();
+                    const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(curEmail);
+                    setSendBtnState(sendBtn, isEmailValid ? 'active' : 'default', (translations[state.lang] || translations.en).send_code_btn || 'Send Code');
                 } else {
                     if (sendBtn) sendBtn.textContent = `${cooldown}s`;
                 }
@@ -1126,11 +1142,9 @@
                     // Cancel cooldown on actual errors (e.g. 404 No purchase record or network error)
                     if (state.timer) clearInterval(state.timer);
                     state.sendCodeInFlight = false;
-                    if (sendBtn) {
-                        sendBtn.disabled = false;
-                        sendBtn.className = 'bg-primary/20 hover:bg-primary/30 border border-primary/40 text-primary hover:text-white px-4 rounded-xl font-semibold text-sm transition-all duration-300 active:scale-95 whitespace-nowrap shadow-sm shadow-primary/10 cursor-pointer';
-                        sendBtn.textContent = (translations[state.lang] || translations.en).send_code_btn || 'Send Code';
-                    }
+                    const curEmail = (document.getElementById('login-email')?.value || '').trim();
+                    const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(curEmail);
+                    setSendBtnState(sendBtn, isEmailValid ? 'active' : 'default', (translations[state.lang] || translations.en).send_code_btn || 'Send Code');
                     setSendCodeStatus(errMsg, 'error');
                     showToast(errMsg, 'error');
                 } else {
@@ -1955,9 +1969,7 @@
             document.getElementById('login-submit-btn').disabled = true;
             
             const sendBtn = document.getElementById('send-code-btn');
-            sendBtn.disabled = false;
-            sendBtn.className = 'bg-primary/20 hover:bg-primary/30 border border-primary/40 text-primary hover:text-white px-4 rounded-xl font-semibold text-sm transition-all duration-300 active:scale-95 whitespace-nowrap shadow-sm shadow-primary/10 cursor-pointer';
-            sendBtn.textContent = (translations[state.lang] || translations.en).send_code_btn;
+            setSendBtnState(sendBtn, 'default', (translations[state.lang] || translations.en).send_code_btn);
 
             document.getElementById('dashboard-section').classList.add('hidden');
             document.getElementById('login-section').classList.remove('hidden');
@@ -2001,6 +2013,18 @@
 
             // Send code
             document.getElementById('send-code-btn').addEventListener('click', handleSendCode);
+
+            // Real-time email validation to dynamically upgrade send button styling
+            document.getElementById('login-email')?.addEventListener('input', (e) => {
+                const email = e.target.value.trim();
+                const sendBtn = document.getElementById('send-code-btn');
+                if (state.sendCodeInFlight || (state.timer && sendBtn?.disabled)) return;
+                if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                    setSendBtnState(sendBtn, 'active');
+                } else {
+                    setSendBtnState(sendBtn, 'default');
+                }
+            });
 
             // Press Enter to send code in email field
             document.getElementById('login-email').addEventListener('keydown', (e) => {
@@ -2098,8 +2122,7 @@
                     // Enable send code button if valid email format
                     const sendBtn = document.getElementById('send-code-btn');
                     if (sendBtn && cleanEmail.includes('@')) {
-                        sendBtn.disabled = false;
-                        sendBtn.classList.remove('opacity-50');
+                        setSendBtnState(sendBtn, 'active');
                     }
 
                     // Enable verification code input

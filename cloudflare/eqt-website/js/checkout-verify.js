@@ -19,6 +19,13 @@
     }
     window.siteToPaddleLocale = siteToPaddleLocale;
 
+    const SEND_BTN_CLASSES = {
+        default: 'px-4 py-2.5 bg-white/10 hover:bg-white/20 border border-white/20 active:scale-95 text-white/90 text-xs font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px] cursor-pointer',
+        active: 'px-4 py-2.5 bg-accent-bright hover:bg-accent-bright/90 active:scale-95 text-surface-dim text-xs font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px] shadow-lg shadow-accent-bright/25 cursor-pointer',
+        cooldown: 'px-4 py-2.5 bg-white/5 border border-white/10 text-on-surface-variant text-xs font-mono font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px] cursor-not-allowed opacity-60',
+        loading: 'px-4 py-2.5 bg-accent-bright/20 border border-accent-bright/40 text-accent-bright text-xs font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px] cursor-wait opacity-90 flex items-center justify-center gap-1.5'
+    };
+
     class CheckoutVerifyComponent {
         constructor() {
             this.cooldownTimer = null;
@@ -206,7 +213,7 @@
             if (this.cooldownRemaining > 0) {
                 if (dom.sendBtn) {
                     dom.sendBtn.disabled = true;
-                    dom.sendBtn.className = 'px-4 py-2.5 bg-white/5 border border-white/10 text-on-surface-variant text-xs font-mono font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px] cursor-not-allowed opacity-60';
+                    dom.sendBtn.className = SEND_BTN_CLASSES.cooldown;
                     const cdText = `${this.cooldownRemaining}s`;
                     if (dom.sendBtn.textContent !== cdText) {
                         dom.sendBtn.textContent = cdText;
@@ -221,7 +228,7 @@
                 // Inactive / default state: bright legible text with glass border
                 if (dom.sendBtn) {
                     dom.sendBtn.disabled = false;
-                    dom.sendBtn.className = 'px-4 py-2.5 bg-white/10 hover:bg-white/20 border border-white/20 active:scale-95 text-white/90 text-xs font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px] cursor-pointer';
+                    dom.sendBtn.className = SEND_BTN_CLASSES.default;
                     if (dom.sendBtn.textContent !== sendCodeText) {
                         dom.sendBtn.textContent = sendCodeText;
                     }
@@ -232,11 +239,11 @@
                     this.hideEmailFieldError();
                 }
             } else {
-                // Valid email format: enable button with vibrant #39e5b6 teal glow & high contrast dark text
+                // Valid email format: enable button with vibrant accent-bright teal glow & high contrast dark text
                 this.hideEmailFieldError();
                 if (dom.sendBtn) {
                     dom.sendBtn.disabled = false;
-                    dom.sendBtn.className = 'px-4 py-2.5 bg-[#39e5b6] hover:bg-[#39e5b6]/90 active:scale-95 text-[#080e0c] text-xs font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px] shadow-lg shadow-[#39e5b6]/25 cursor-pointer';
+                    dom.sendBtn.className = SEND_BTN_CLASSES.active;
                     if (dom.sendBtn.textContent !== sendCodeText) {
                         dom.sendBtn.textContent = sendCodeText;
                     }
@@ -291,8 +298,8 @@
 
             if (dom.sendBtn) {
                 dom.sendBtn.disabled = true;
-                dom.sendBtn.className = 'px-4 py-2.5 bg-[#39e5b6]/20 border border-[#39e5b6]/40 text-[#39e5b6] text-xs font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px] cursor-wait opacity-90 flex items-center justify-center gap-1.5';
-                dom.sendBtn.innerHTML = `<span class="inline-block w-3.5 h-3.5 border-2 border-[#39e5b6] border-t-transparent rounded-full animate-spin"></span><span>${this.getTranslation('sending_code', 'Sending...')}</span>`;
+                dom.sendBtn.className = SEND_BTN_CLASSES.loading;
+                dom.sendBtn.innerHTML = `<span class="inline-block w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin"></span><span>${this.getTranslation('sending_code', 'Sending...')}</span>`;
             }
 
             try {
