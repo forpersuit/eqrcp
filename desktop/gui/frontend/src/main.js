@@ -1848,13 +1848,16 @@ function renderChatPanel(task) {
     const qrToggleLabel = state.chatQROpen ? t('hide_chat_qr') : t('show_chat_qr');
     const qrPulse = !state.chatQRPromptDismissed && state.chatQRPulseUntil > Date.now();
     const remoteDeviceCount = Math.max(0, deviceCount - 1);
+    const licenseTier = state.status?.licenseTier || state.license?.tier || '';
+    const licenseExpires = state.status?.licenseExpiresAt || state.license?.codeDate;
+    const licenseIsLifetime = licenseTier === 'PLUS' && licenseExpires === 'LIFETIME';
     return `
         <aside class="side">
             <div class="panel chat-session-panel">
                 <div class="panel-head">
                     <div>
                         <div class="panel-title-inline">
-                            ${hasPaidLicense() ? `<span class="license-badge sidebar-badge">${escapeHTML(state.status?.licenseTier || state.license?.tier || '')}</span>` : ''}
+                            ${hasPaidLicense() ? `<span class="license-badge sidebar-badge${licenseIsLifetime ? ' tier-plus-lifetime' : ''}">${escapeHTML(licenseTier)}</span>` : ''}
                             <h2>${t('chat_status')}</h2>
                         </div>
                         <p class="side-note tight">${escapeHTML(chatStateLabel(chatState))}</p>

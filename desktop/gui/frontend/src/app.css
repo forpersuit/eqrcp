@@ -5,6 +5,7 @@
     --panel: #ffffff;
     --accent: #156f5a;
     --accent-strong: #0d4e42;
+    --gold: #FFD700;
     --danger: #a63232;
     --warning: #c58a1a;
     --wash: #edf2eb;
@@ -108,6 +109,10 @@ body {
     font-size: 9px;
     padding: 1.5px 5px;
     border-radius: 3.5px;
+}
+
+.license-badge.tier-plus-lifetime {
+    color: var(--gold, #FFD700);
 }
 
 .top-actions {
@@ -3180,10 +3185,10 @@ dd {
 }
 
 .topbar-tier-badge.tier-plus-lifetime {
-    background: linear-gradient(135deg, #6b21a8 0%, #4c1d95 100%);
-    color: #ffffff;
-    border: 1px solid rgba(216, 180, 254, 0.35);
-    box-shadow: 0 1px 4px rgba(107, 33, 168, 0.3), inset 0 0.5px 0px rgba(255,255,255,0.25);
+    background: var(--accent, #156f5a);
+    color: var(--gold, #FFD700);
+    border: 1px solid rgba(255, 215, 0, 0.45);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12), inset 0 0.5px 0px rgba(255,215,0,0.18);
 }
 
 .topbar-tier-badge.tier-pro {

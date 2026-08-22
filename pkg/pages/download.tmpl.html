@@ -15,6 +15,7 @@
             --text-muted: #9ca3af;
             --accent: #156f5a;
             --accent-strong: #0d4e42;
+            --gold: #FFD700;
             --accent-rgb: 21,111,90;
             --accent-light: rgba(21,111,90, 0.06);
             --accent-border: rgba(21,111,90, 0.16);
@@ -84,6 +85,10 @@
             color: #dc2626 !important;
             border: 1.2px solid #dc2626 !important;
             box-sizing: border-box;
+        }
+
+        .license-badge.tier-lifetime {
+            color: var(--gold, #FFD700);
         }
 
         .status-badge {
@@ -346,7 +351,7 @@
         <img class="brand-logo" src="/assets/eqt-logo-horizontal.png" alt="EQT logo">
         
         <div class="status-card">
-            <span class="license-badge{{if .ClockTampered}} clock-error{{end}}">
+            <span class="license-badge{{if .ClockTampered}} clock-error{{else if .LicenseTier}} tier-paid{{if .LicenseLifetime}} tier-lifetime{{end}}{{end}}">
                 {{if .ClockTampered}}CLOCK ERROR{{else if .LicenseTier}}{{.LicenseTier}}{{else}}FREE{{end}}
             </span>
             
@@ -887,7 +892,7 @@
             
             var badges = document.querySelectorAll('.license-badge');
             badges.forEach(function(badge) {
-                if (!badge.classList.contains('clock-error')) {
+                if (!badge.classList.contains('clock-error') && !badge.classList.contains('tier-paid')) {
                     badge.style.backgroundColor = t.border;
                     badge.style.color = '#ffffff';
                 }

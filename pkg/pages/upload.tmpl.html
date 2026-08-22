@@ -15,6 +15,7 @@
             --muted: #66736f;
             --accent: #0f766e;
             --accent-strong: #115e59;
+            --gold: #FFD700;
             --danger: #b42318;
         }
         * {
@@ -866,6 +867,7 @@
         var usedTransfers = {{.UsedTransfers}};
         var clockTampered = {{.ClockTampered}};
         var isPaidMode = isPaid && !clockTampered;
+        var licenseLifetime = {{.LicenseLifetime}};
         var clientID = '{{.ClientID}}';
         window.currentClientID = clientID;
 
@@ -930,7 +932,11 @@
             
             var badges = document.querySelectorAll('.license-badge');
             badges.forEach(function(badge) {
-                if (!badge.classList.contains('clock-error')) {
+                if (badge.classList.contains('clock-error')) return;
+                if (isPaidMode && licenseTier) {
+                    badge.style.backgroundColor = 'var(--accent)';
+                    badge.style.color = licenseLifetime ? 'var(--gold, #FFD700)' : '#ffffff';
+                } else {
                     badge.style.backgroundColor = t.border;
                     badge.style.color = '#ffffff';
                 }
@@ -1354,7 +1360,7 @@
             var failHtml = '<main style="width: min(100%, 480px); padding: 40px 20px; text-align: center; margin: 0 auto;">' +
                 '<img class="brand-logo" src="/assets/eqt-logo-horizontal.png" alt="EQT logo" style="display: block; height: auto; max-width: 140px; margin: 0 auto 32px;">' +
                 '<div class="status-card" style="background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 32px 24px; box-shadow: 0 10px 30px rgba(17, 24, 39, 0.04); margin-bottom: 24px; position: relative;">' +
-                '<span class="license-badge ' + badgeClass + '" style="position: absolute; top: 16px; right: 16px; font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 4px; line-height: 1.2; letter-spacing: 0.05em; background: var(--accent); color: #fff;">' +
+                '<span class="license-badge ' + badgeClass + '" style="position: absolute; top: 16px; right: 16px; font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 4px; line-height: 1.2; letter-spacing: 0.05em; background: var(--accent); color: ' + (licenseLifetime ? 'var(--gold, #FFD700)' : '#fff') + ';">' +
                 badgeText +
                 '</span>' +
                 '<div class="fail-badge" style="width: 64px; height: 64px; border-radius: 50%; background: #fef3f2; border: 2px solid #fee4e2; color: #d92d20; display: inline-flex; align-items: center; justify-content: center; font-size: 28px; font-weight: bold; margin-bottom: 18px; box-shadow: 0 4px 12px rgba(217, 45, 32, 0.08);">✕</div>' +

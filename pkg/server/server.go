@@ -2429,28 +2429,30 @@ func New(cfg *config.Config) (*Server, error) {
 			fileSize := formatByteSize(totalBytes)
 
 			htmlVariables := struct {
-				Route         string
-				File          string
-				Files         []string
-				Sizes         []string
-				FileSize      string
-				Count         int
-				Lang          string
-				IsPaid        bool
-				LicenseTier   string
-				UsedTransfers int
-				ClockTampered bool
+				Route           string
+				File            string
+				Files           []string
+				Sizes           []string
+				FileSize        string
+				Count           int
+				Lang            string
+				IsPaid          bool
+				LicenseTier     string
+				UsedTransfers   int
+				ClockTampered   bool
+				LicenseLifetime bool
 			}{
-				Route:         "/send/" + path,
-				File:          app.body.Filename,
-				Files:         app.body.Items,
-				Sizes:         sizes,
-				FileSize:      fileSize,
-				Count:         len(app.body.Items),
-				IsPaid:        usage.IsPaid,
-				LicenseTier:   usage.LicenseTier,
-				UsedTransfers: usage.UsedTransfers,
-				ClockTampered: usage.ClockTampered,
+				Route:           "/send/" + path,
+				File:            app.body.Filename,
+				Files:           app.body.Items,
+				Sizes:           sizes,
+				FileSize:        fileSize,
+				Count:           len(app.body.Items),
+				IsPaid:          usage.IsPaid,
+				LicenseTier:     usage.LicenseTier,
+				UsedTransfers:   usage.UsedTransfers,
+				ClockTampered:   usage.ClockTampered,
+				LicenseLifetime: usage.CodeDate == "LIFETIME",
 			}
 			if cookie, err := r.Cookie("eqt-lang"); err == nil && cookie.Value != "" {
 				htmlVariables.Lang = cookie.Value
@@ -2960,25 +2962,27 @@ func New(cfg *config.Config) (*Server, error) {
 			return
 		}
 		htmlVariables := struct {
-			Route         string
-			ClientID      string
-			DeviceName    string
-			File          string
-			Files         []string
-			Count         int
-			Lang          string
-			IsPaid        bool
-			LicenseTier   string
-			UsedTransfers int
-			ClockTampered bool
+			Route           string
+			ClientID        string
+			DeviceName      string
+			File            string
+			Files           []string
+			Count           int
+			Lang            string
+			IsPaid          bool
+			LicenseTier     string
+			UsedTransfers   int
+			ClockTampered   bool
+			LicenseLifetime bool
 		}{
-			Route:         "/receive/" + path,
-			ClientID:      clientID,
-			DeviceName:    app.getClientStatus(clientID).DeviceName,
-			IsPaid:        usage.IsPaid,
-			LicenseTier:   usage.LicenseTier,
-			UsedTransfers: usage.UsedReceiveTransfers,
-			ClockTampered: usage.ClockTampered,
+			Route:           "/receive/" + path,
+			ClientID:        clientID,
+			DeviceName:      app.getClientStatus(clientID).DeviceName,
+			IsPaid:          usage.IsPaid,
+			LicenseTier:     usage.LicenseTier,
+			UsedTransfers:   usage.UsedReceiveTransfers,
+			ClockTampered:   usage.ClockTampered,
+			LicenseLifetime: usage.CodeDate == "LIFETIME",
 		}
 		if cookie, err := r.Cookie("eqt-lang"); err == nil && cookie.Value != "" {
 			htmlVariables.Lang = cookie.Value

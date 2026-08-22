@@ -15,6 +15,7 @@
             --text-secondary: #4b5563;
             --text-muted: #9ca3af;
             --accent: #0f766e;
+            --gold: #FFD700;
             --accent-light: #f0fdf4;
             --accent-border: #bbf7d0;
             --accent-icon: #16a34a;
@@ -80,6 +81,10 @@
             color: #dc2626 !important;
             border: 1.2px solid #dc2626 !important;
             box-sizing: border-box;
+        }
+
+        .license-badge.tier-lifetime {
+            color: var(--gold, #FFD700);
         }
 
         .success-badge {
@@ -216,7 +221,7 @@
         <img class="brand-logo" src="/assets/eqt-logo-horizontal.png" alt="EQT logo">
         
         <div class="status-card">
-            <span class="license-badge{{if .ClockTampered}} clock-error{{end}}">
+            <span class="license-badge{{if .ClockTampered}} clock-error{{else if .LicenseLifetime}} tier-lifetime{{end}}">
                 {{if .ClockTampered}}CLOCK ERROR{{else if .LicenseTier}}{{.LicenseTier}}{{else}}FREE{{end}}
             </span>
             <div class="success-badge">✓</div>
