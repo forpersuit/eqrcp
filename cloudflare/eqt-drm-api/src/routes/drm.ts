@@ -508,13 +508,14 @@ export async function handleDrmRoutes(
         tierLabel: 'free',
         appVersion: body.app_version || null
       }, net);
-      const authoritativeDeviceId = regRes.device_id || (device_id || "");
+      const authoritativeDeviceId = regRes.device_id || "";
 
-      // Check if license is bound to a specific test device ID
+      // Check if license is bound to a specific test device ID.
+      // Security: Only authoritativeDeviceId computed from verified hardware fingerprints
+      // is trusted. The client-provided device_id in request body is untrusted and NEVER used to bypass binding.
       if (license.bound_device_id && license.bound_device_id.trim() !== "") {
         const boundId = license.bound_device_id.trim();
-        const currentReqDevId = (device_id || "").trim();
-        if (currentReqDevId !== boundId && authoritativeDeviceId !== boundId) {
+        if (authoritativeDeviceId !== boundId) {
           return new Response(JSON.stringify({
             error: getApiTranslation("unauthorized_test_device", reqLang) || `This test license is restricted to authorized device: ${boundId}`
           }), {

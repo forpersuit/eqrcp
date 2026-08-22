@@ -55,6 +55,7 @@
 
   // Sandbox Beta Testers State
   let betaTesters = $state<BetaTester[]>([]);
+  let loadingTesters = $state(false);
   let showAddTesterModal = $state(false);
   let newTesterDevice = $state('');
   let newTesterEmail = $state('');
@@ -238,8 +239,6 @@
       quickMinting = false;
     }
   }
-
-  let loadingTesters = $state(false);
 
   async function handleGenerate(e: Event) {
     e.preventDefault();
@@ -757,7 +756,7 @@
 
 {#if showAddTesterModal}
   <Modal open={true} title={$t('licenses.addTesterBtn')} maxWidth="520px" onclose={() => (showAddTesterModal = false)}>
-    <form onsubmit={handleAddTester} class="gen-form">
+    <form id="add-tester-form" onsubmit={handleAddTester} class="gen-form">
       <div class="form-group">
         <label for="tester-device">{$t('licenses.deviceIdLabel')}:</label>
         <input id="tester-device" type="text" class="input" placeholder="e.g. b0036718cb9a469999d2910cdf418b1f" bind:value={newTesterDevice} />
@@ -775,7 +774,7 @@
     </form>
     {#snippet footer()}
       <button type="button" class="btn btn-secondary" onclick={() => (showAddTesterModal = false)}>{$t('common.cancel')}</button>
-      <button type="button" class="btn btn-primary" onclick={handleAddTester}>{$t('common.save')}</button>
+      <button type="submit" form="add-tester-form" class="btn btn-primary">{$t('common.save')}</button>
     {/snippet}
   </Modal>
 {/if}

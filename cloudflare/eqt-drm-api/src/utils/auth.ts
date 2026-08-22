@@ -2,6 +2,7 @@ import { Env } from '../types';
 import { ensureManualBlacklistTable } from './blacklist';
 import { verifyCloudflareAccessJwt } from './cf-access-jwt';
 import { logSystemError } from './error-logger';
+import { isTestEnvironment } from './env-guard';
 
 export function getCorsHeaders(request: Request): Record<string, string> {
   const origin = request.headers.get("Origin") || "";
@@ -404,15 +405,17 @@ export async function ensureBetaTestersTable(env: Env): Promise<void> {
       `).run();
     } catch (_) {}
 
-    // Check if initial seeding is needed
-    const countRow = await env.DB.prepare("SELECT COUNT(*) as count FROM sandbox_beta_testers").first<{ count: number }>();
-    if (!countRow || countRow.count === 0) {
-      const now = new Date().toISOString();
-      await env.DB.batch([
-        env.DB.prepare("INSERT OR IGNORE INTO sandbox_beta_testers (device_id, email, notes, status, created_at) VALUES (?, NULL, ?, 'active', ?)").bind('b0036718cb9a469999d2910cdf418b1f', 'Default Sandbox Beta Device', now),
-        env.DB.prepare("INSERT OR IGNORE INTO sandbox_beta_testers (device_id, email, notes, status, created_at) VALUES (NULL, ?, ?, 'active', ?)").bind('tmp@301098.xyz', 'Default Sandbox Tester 1', now),
-        env.DB.prepare("INSERT OR IGNORE INTO sandbox_beta_testers (device_id, email, notes, status, created_at) VALUES (NULL, ?, ?, 'active', ?)").bind('anon@301098.xyz', 'Default Sandbox Tester 2', now),
-      ]);
+    // Seeding safety: ONLY seed default test data in test/sandbox environments!
+    if (isTestEnvironment(env)) {
+      const countRow = await env.DB.prepare("SELECT COUNT(*) as count FROM sandbox_beta_testers").first<{ count: number }>();
+      if (!countRow || countRow.count === 0) {
+        const now = new Date().toISOString();
+        await env.DB.batch([
+          env.DB.prepare("INSERT OR IGNORE INTO sandbox_beta_testers (device_id, email, notes, status, created_at) VALUES (?, NULL, ?, 'active', ?)").bind('b0036718cb9a469999d2910cdf418b1f', 'Default Sandbox Beta Device', now),
+          env.DB.prepare("INSERT OR IGNORE INTO sandbox_beta_testers (device_id, email, notes, status, created_at) VALUES (NULL, ?, ?, 'active', ?)").bind('tmp@301098.xyz', 'Default Sandbox Tester 1', now),
+          env.DB.prepare("INSERT OR IGNORE INTO sandbox_beta_testers (device_id, email, notes, status, created_at) VALUES (NULL, ?, ?, 'active', ?)").bind('anon@301098.xyz', 'Default Sandbox Tester 2', now),
+        ]);
+      }
     }
 
     betaTestersTableEnsured.add(env.DB);

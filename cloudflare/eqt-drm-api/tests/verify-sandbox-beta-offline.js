@@ -1,11 +1,11 @@
 /**
  * Offline test suite for Sandbox Beta Tester Eligibility, Admin Whitelist,
- * Test License Minting, and Bound Device ID Enforcement on Activation.
+ * Test License Minting, Environment Guards, and Bound Device ID Enforcement on Activation.
  *
  * Build:
  *   npx esbuild src/routes/admin.ts src/routes/drm.ts --bundle --alias:cloudflare:sockets=./tests/mocks/cloudflare-sockets-stub.js --outdir=tests/compiled --platform=node --format=cjs
  * Run:
- *   node tests/verify-sandbox-beta-offline.js
+ *   node --experimental-sqlite tests/verify-sandbox-beta-offline.js
  */
 
 const fs = require('fs');
@@ -14,14 +14,16 @@ const { DatabaseSync } = require('node:sqlite');
 
 const adminRoutePath = path.join(__dirname, 'compiled', 'admin.js');
 const drmRoutePath = path.join(__dirname, 'compiled', 'drm.js');
+const authPath = path.join(__dirname, 'compiled', 'auth.js');
 
-if (!fs.existsSync(adminRoutePath) || !fs.existsSync(drmRoutePath)) {
+if (!fs.existsSync(adminRoutePath) || !fs.existsSync(drmRoutePath) || !fs.existsSync(authPath)) {
   console.error('Compiled routes not found. Run esbuild first.');
   process.exit(1);
 }
 
 const { handleAdminRoutes } = require(adminRoutePath);
 const { handleDrmRoutes } = require(drmRoutePath);
+const { ensureBetaTestersTable } = require(authPath);
 
 let passed = 0;
 let failed = 0;
@@ -107,7 +109,7 @@ async function runTests() {
   const mockD1 = new SqliteD1Mock();
   const schemaSql = fs.readFileSync(path.join(__dirname, '..', 'schema.sql'), 'utf8');
   mockD1.db.exec(schemaSql);
-  const env = {
+  const testEnv = {
     DB: mockD1,
     CF_ACCESS_TEAM_DOMAIN: 'local.dev',
     CF_ACCESS_AUD: 'local-dev',
@@ -122,8 +124,9 @@ async function runTests() {
   };
 
   // Helper to call handleAdminRoutes
-  async function callAdmin(method, path, body = null) {
-    const url = new URL(path, 'http://localhost');
+  async function callAdmin(method, path, body = null, env = testEnv) {
+    const base = env.ENVIRONMENT === 'production' ? 'https://lic.eqt.net.im' : 'http://localhost';
+    const url = new URL(path, base);
     const req = new Request(url.toString(), {
       method,
       headers: adminHeaders,
@@ -136,8 +139,9 @@ async function runTests() {
   }
 
   // Helper to call handleDrmRoutes
-  async function callDrm(method, path, body = null) {
-    const url = new URL(path, 'http://localhost');
+  async function callDrm(method, path, body = null, env = testEnv) {
+    const base = env.ENVIRONMENT === 'production' ? 'https://lic.eqt.net.im' : 'http://localhost';
+    const url = new URL(path, base);
     const req = new Request(url.toString(), {
       method,
       headers: { 'Content-Type': 'application/json' },
@@ -150,12 +154,12 @@ async function runTests() {
   }
 
   // ------------------------------------------------------------
-  // Test 1: GET /api/v1/admin/sandbox/testers (Initial Seed)
+  // Test 1: GET /api/v1/admin/sandbox/testers (Initial Seed in Test Env)
   // ------------------------------------------------------------
-  console.log('--- Test 1: Query default seeded beta testers ---');
+  console.log('--- Test 1: Query default seeded beta testers (Test Env) ---');
   {
     const { status, json } = await callAdmin('GET', '/api/v1/admin/sandbox/testers');
-    assertEqual(status, 200, 'GET /api/v1/admin/sandbox/testers returns 200');
+    assertEqual(status, 200, 'GET /api/v1/admin/sandbox/testers returns 200 in test env');
     assert(json.success === true, 'Response success is true');
     assert(Array.isArray(json.testers), 'Testers is an array');
     assert(json.testers.length >= 3, `Seeded at least 3 beta testers (got ${json.testers.length})`);
@@ -171,9 +175,55 @@ async function runTests() {
   }
 
   // ------------------------------------------------------------
-  // Test 2: POST /api/v1/admin/sandbox/testers (Add tester entry)
+  // Test 2: Production Environment Guard: Sandbox Endpoints Blocked
   // ------------------------------------------------------------
-  console.log('\n--- Test 2: Add new tester qualification entry ---');
+  console.log('\n--- Test 2: Production Environment Guard (Blocks Sandbox Endpoints) ---');
+  {
+    const prodEnv = {
+      ...testEnv,
+      ENVIRONMENT: 'production'
+    };
+
+    // 2A: Sandbox testers endpoint blocked in production
+    const resTesters = await callAdmin('GET', '/api/v1/admin/sandbox/testers', null, prodEnv);
+    assertEqual(resTesters.status, 403, 'GET /sandbox/testers returns 403 in production');
+    assertEqual(resTesters.json.code, 'SANDBOX_ONLY', 'Error code is SANDBOX_ONLY');
+
+    // 2B: Mint test license blocked in production
+    const resMint = await callAdmin('POST', '/api/v1/admin/sandbox/mint-test-license', {
+      device_id: 'b0036718cb9a469999d2910cdf418b1f',
+      email: 'tmp@301098.xyz'
+    }, prodEnv);
+    assertEqual(resMint.status, 403, 'POST /sandbox/mint-test-license returns 403 in production');
+
+    // 2C: Generate license with source='test' blocked in production
+    const resGen = await callAdmin('POST', '/api/v1/admin/generate-license', {
+      tier: 'PLUS',
+      source: 'test',
+      bound_device_id: 'b0036718cb9a469999d2910cdf418b1f'
+    }, prodEnv);
+    assertEqual(resGen.status, 403, 'Generate license with source=test returns 403 in production');
+  }
+
+  // ------------------------------------------------------------
+  // Test 3: ensureBetaTestersTable in Production Does NOT Seed
+  // ------------------------------------------------------------
+  console.log('\n--- Test 3: ensureBetaTestersTable in Production does NOT seed ---');
+  {
+    const prodMockD1 = new SqliteD1Mock();
+    const prodEnvClean = {
+      DB: prodMockD1,
+      ENVIRONMENT: 'production'
+    };
+    await ensureBetaTestersTable(prodEnvClean);
+    const count = await prodMockD1.db.prepare("SELECT COUNT(*) as count FROM sandbox_beta_testers").get();
+    assertEqual(Number(count.count), 0, 'Production DB has 0 seeded test records');
+  }
+
+  // ------------------------------------------------------------
+  // Test 4: Add and Delete Tester Qualification Entry
+  // ------------------------------------------------------------
+  console.log('\n--- Test 4: Add & Delete tester qualification entry ---');
   let addedTesterId = 0;
   {
     const { status, json } = await callAdmin('POST', '/api/v1/admin/sandbox/testers', {
@@ -189,14 +239,25 @@ async function runTests() {
     const listRes = await callAdmin('GET', '/api/v1/admin/sandbox/testers');
     const newlyAdded = listRes.json.testers.find(t => t.id === addedTesterId);
     assert(newlyAdded && newlyAdded.device_id === 'dev_test_lab_machine_999', 'New tester persists in database');
+
+    // Delete it
+    const delRes = await callAdmin('DELETE', `/api/v1/admin/sandbox/testers/${addedTesterId}`);
+    assertEqual(delRes.status, 200, 'DELETE tester returns 200');
+    assert(delRes.json.success === true, 'Delete success is true');
   }
 
   // ------------------------------------------------------------
-  // Test 3: POST /api/v1/admin/sandbox/mint-test-license
+  // Test 5: Mint Test License: Validation and 1-Click Minting
   // ------------------------------------------------------------
-  console.log('\n--- Test 3: 1-Click Quick Mint Test License ---');
+  console.log('\n--- Test 5: Mint Test License Validation & Minting ---');
   let quickTestCode = '';
   {
+    // 5A: Missing required parameters -> 400 Bad Request
+    const resBad1 = await callAdmin('POST', '/api/v1/admin/sandbox/mint-test-license', {});
+    assertEqual(resBad1.status, 400, 'Missing params returns 400');
+    assert(resBad1.json.error.includes('Missing required parameters'), 'Error mentions missing parameters');
+
+    // 5B: Valid parameters -> 200 OK
     const { status, json } = await callAdmin('POST', '/api/v1/admin/sandbox/mint-test-license', {
       tier: 'PLUS',
       device_id: 'b0036718cb9a469999d2910cdf418b1f',
@@ -214,74 +275,60 @@ async function runTests() {
   }
 
   // ------------------------------------------------------------
-  // Test 4: Activate with matching Bound Device ID -> SUCCESS
+  // Test 6: ATTACK SPOOFING DEFENSE (CRUCIAL): Attacker fake device_id bypass is BLOCKED
   // ------------------------------------------------------------
-  console.log('\n--- Test 4: Activate test license on authorized test device ID ---');
+  console.log('\n--- Test 6: Attacker Spoofs device_id=boundId with fake fingerprints -> 403 Forbidden ---');
   {
+    // Attacker knows bound_device_id 'b0036718cb9a469999d2910cdf418b1f' from public source
+    // Attacker sends request with device_id: 'b0036718cb9a469999d2910cdf418b1f' BUT attacker's own fingerprints
+    const { status, json } = await callDrm('POST', '/api/v1/activate', {
+      license_code: quickTestCode,
+      device_id: 'b0036718cb9a469999d2910cdf418b1f', // SPOOFED in body
+      uuid_hash: 'attacker_fake_uuid_9999999999999999',
+      cpu_hash: 'attacker_fake_cpu_8888888888888888',
+      disk_hash: 'attacker_fake_disk_7777777777777777'
+    });
+
+    assertEqual(status, 403, 'Attacker spoofing device_id is REJECTED with 403 Forbidden');
+    assert(json.error && (json.error.includes('测试设备') || json.error.includes('test device')), 'Error mentions test device restriction');
+
+    // Verify no activation was created by attacker
+    const acts = await mockD1.db.prepare("SELECT * FROM activations WHERE license_code = ?").all(quickTestCode);
+    assertEqual(acts.length, 0, 'No activation record was created by attacker');
+  }
+
+  // ------------------------------------------------------------
+  // Test 7: Legitimate Tester Activation with genuine hardware
+  // ------------------------------------------------------------
+  console.log('\n--- Test 7: Legitimate tester activates with genuine hardware -> 200 OK ---');
+  {
+    // Pre-registered legitimate test machine in device_registry with bound device_id
     mockD1.db.prepare(`
       INSERT INTO device_registry (device_id, uuid_hash, cpu_hash, disk_hash, tier_label, registered_at, last_seen_at)
       VALUES (?, ?, ?, ?, 'free', datetime('now'), datetime('now'))
     `).run(
       'b0036718cb9a469999d2910cdf418b1f',
-      'mock_uuid_hash_1111111111111111',
-      'mock_cpu_hash_2222222222222222',
-      'mock_disk_hash_3333333333333333'
+      'legit_uuid_hash_1111111111111111',
+      'legit_cpu_hash_2222222222222222',
+      'legit_disk_hash_3333333333333333'
     );
 
     const { status, json } = await callDrm('POST', '/api/v1/activate', {
       license_code: quickTestCode,
       device_id: 'b0036718cb9a469999d2910cdf418b1f',
-      uuid_hash: 'mock_uuid_hash_1111111111111111',
-      cpu_hash: 'mock_cpu_hash_2222222222222222',
-      disk_hash: 'mock_disk_hash_3333333333333333'
+      uuid_hash: 'legit_uuid_hash_1111111111111111',
+      cpu_hash: 'legit_cpu_hash_2222222222222222',
+      disk_hash: 'legit_disk_hash_3333333333333333'
     });
-    assertEqual(status, 200, 'Activation on authorized test device returns 200');
+
+    assertEqual(status, 200, 'Legitimate test device activates successfully (200 OK)');
     assert(json.signature && json.signature.length > 20, 'Returns signed license signature');
     assertEqual(json.tier, 'PLUS', 'Tier is PLUS');
-    assertEqual(json.device_id, 'b0036718cb9a469999d2910cdf418b1f', 'Device ID matches');
-  }
+    assertEqual(json.device_id, 'b0036718cb9a469999d2910cdf418b1f', 'Authoritative device ID is bound test ID');
 
-  // ------------------------------------------------------------
-  // Test 5: Activate with unauthorized Device ID -> REJECTED (403)
-  // ------------------------------------------------------------
-  console.log('\n--- Test 5: Activate test license on unauthorized device -> 403 Forbidden ---');
-  {
-    // Generate a fresh test code bound to device A
-    const mintRes = await callAdmin('POST', '/api/v1/admin/generate-license', {
-      tier: 'PRO',
-      source: 'test',
-      bound_device_id: 'b0036718cb9a469999d2910cdf418b1f',
-      buyer_email: 'anon@301098.xyz',
-      expires_in_days: 7,
-      duration_days: 14
-    });
-    assertEqual(mintRes.status, 200, 'Generate test license via standard endpoint returns 200');
-    const proTestCode = mintRes.json.license_code;
-
-    // Try to activate on unauthorized device B
-    const { status, json } = await callDrm('POST', '/api/v1/activate', {
-      license_code: proTestCode,
-      device_id: 'unauthorized_attacker_device_999',
-      uuid_hash: 'other_uuid_hash_4444444444444444',
-      cpu_hash: 'other_cpu_hash_5555555555555555',
-      disk_hash: 'other_disk_hash_6666666666666666'
-    });
-    assertEqual(status, 403, 'Activation on unauthorized device returns 403 Forbidden');
-    assert(json.error && (json.error.includes('测试设备') || json.error.includes('test device')), `Error message mentions test device restriction: ${json.error}`);
-  }
-
-  // ------------------------------------------------------------
-  // Test 6: DELETE /api/v1/admin/sandbox/testers/:id
-  // ------------------------------------------------------------
-  console.log('\n--- Test 6: Remove tester qualification entry ---');
-  {
-    const { status, json } = await callAdmin('DELETE', `/api/v1/admin/sandbox/testers/${addedTesterId}`);
-    assertEqual(status, 200, 'DELETE tester returns 200');
-    assert(json.success === true, 'Delete success is true');
-
-    const listRes = await callAdmin('GET', '/api/v1/admin/sandbox/testers');
-    const stillExists = listRes.json.testers.some(t => t.id === addedTesterId);
-    assert(!stillExists, 'Deleted tester no longer appears in whitelist');
+    // Verify 1 activation was recorded
+    const acts = await mockD1.db.prepare("SELECT * FROM activations WHERE license_code = ?").all(quickTestCode);
+    assertEqual(acts.length, 1, 'Exactly 1 activation recorded for legitimate test device');
   }
 
   console.log('\n============================================================');

@@ -12,6 +12,7 @@ import {
 } from '../utils/blacklist';
 import { rateLimitStatus } from '../utils/rate-limit';
 import { normalizeLicenseSource } from '../utils/license-source';
+import { isTestEnvironment } from '../utils/env-guard';
 
 function parseBoundedInt(val: string | null | undefined, defaultVal: number, min: number, max: number): number {
   if (val === null || val === undefined || val === '') return defaultVal;
@@ -162,6 +163,15 @@ export async function handleAdminRoutes(
     // Admin may mint promo (campaign), test (sandbox beta tester), or admin (support/internal).
     const sourceRaw = String(rawSource || "admin").trim().toLowerCase();
     const source = sourceRaw === "promo" ? "promo" : (sourceRaw === "test" || sourceRaw === "beta" ? "test" : "admin");
+    if (source === "test" && !isTestEnvironment(env, url)) {
+      return new Response(JSON.stringify({
+        error: "Test licenses with source='test' can only be generated in test/sandbox environment",
+        code: "SANDBOX_ONLY"
+      }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
     const boundDevice = (bound_device_id || "").trim() || null;
 
     const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -1218,6 +1228,15 @@ export async function handleAdminRoutes(
   if (url.pathname === "/api/v1/admin/sandbox/testers" && request.method === "GET") {
     const denied = await requireAdminAuth(request, env, corsHeaders);
     if (denied) return denied;
+    if (!isTestEnvironment(env, url)) {
+      return new Response(JSON.stringify({
+        error: "Sandbox endpoints are strictly disabled in production environment",
+        code: "SANDBOX_ONLY"
+      }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
     await ensureBetaTestersTable(env);
 
     const rows = await env.DB.prepare(
@@ -1237,6 +1256,15 @@ export async function handleAdminRoutes(
   if (url.pathname === "/api/v1/admin/sandbox/testers" && request.method === "POST") {
     const denied = await requireAdminAuth(request, env, corsHeaders);
     if (denied) return denied;
+    if (!isTestEnvironment(env, url)) {
+      return new Response(JSON.stringify({
+        error: "Sandbox endpoints are strictly disabled in production environment",
+        code: "SANDBOX_ONLY"
+      }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
     await ensureBetaTestersTable(env);
 
     const body: any = await request.json().catch(() => ({}));
@@ -1269,6 +1297,15 @@ export async function handleAdminRoutes(
   if ((url.pathname === "/api/v1/admin/sandbox/testers" && request.method === "DELETE") || url.pathname.startsWith("/api/v1/admin/sandbox/testers/")) {
     const denied = await requireAdminAuth(request, env, corsHeaders);
     if (denied) return denied;
+    if (!isTestEnvironment(env, url)) {
+      return new Response(JSON.stringify({
+        error: "Sandbox endpoints are strictly disabled in production environment",
+        code: "SANDBOX_ONLY"
+      }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
     await ensureBetaTestersTable(env);
 
     let targetId: number | null = null;
@@ -1299,13 +1336,30 @@ export async function handleAdminRoutes(
   if (url.pathname === "/api/v1/admin/sandbox/mint-test-license" && request.method === "POST") {
     const denied = await requireAdminAuth(request, env, corsHeaders);
     if (denied) return denied;
+    if (!isTestEnvironment(env, url)) {
+      return new Response(JSON.stringify({
+        error: "Sandbox endpoints are strictly disabled in production environment",
+        code: "SANDBOX_ONLY"
+      }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
     await ensureLicenseSourceColumns(env);
     await ensureBetaTestersTable(env);
 
     const body: any = await request.json().catch(() => ({}));
     const tier = (body.tier === "PRO" ? "PRO" : "PLUS");
-    const deviceId = (body.device_id || "").trim() || "b0036718cb9a469999d2910cdf418b1f";
-    const email = (body.email || "").trim() || "tmp@301098.xyz";
+    const deviceId = (body.device_id || "").trim();
+    const email = (body.email || "").trim();
+    if (!deviceId || !email) {
+      return new Response(JSON.stringify({
+        error: "Missing required parameters: device_id and email are required for test license minting"
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
     const expDays = Number(body.expires_in_days || 7);
     const durDays = Number(body.duration_days || 30);
 
