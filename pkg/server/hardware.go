@@ -378,6 +378,7 @@ func RegisterDeviceOnline() {
 	}
 	uuid, cpu, disk := GetDeviceFingerprintHashes()
 	if uuid == "" && cpu == "" && disk == "" {
+		log.Println("[DRM] All hardware fingerprints are empty. Skipping device registration.")
 		return
 	}
 
@@ -392,20 +393,23 @@ func RegisterDeviceOnline() {
 	reqBody, _ := json.Marshal(reqMap)
 	apiURL := fmt.Sprintf("%s/api/v1/device/register", getLicenseServer())
 
-	client := &http.Client{Timeout: 5 * time.Second}
+	client := &http.Client{Timeout: 10 * time.Second}
 	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(reqBody))
 	if err != nil {
+		log.Printf("[DRM] Failed to create device registration request: %v", err)
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.Do(req)
 	if err != nil {
+		log.Printf("[DRM] Anonymous device registration failed (network): %v", err)
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		log.Printf("[DRM] Anonymous device registration returned non-200 status: %d", resp.StatusCode)
 		return
 	}
 
@@ -413,7 +417,12 @@ func RegisterDeviceOnline() {
 		DeviceID string `json:"device_id"`
 		Tier     string `json:"tier"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&resData); err == nil && resData.DeviceID != "" {
+	if err := json.NewDecoder(resp.Body).Decode(&resData); err != nil {
+		log.Printf("[DRM] Failed to decode device registration response: %v", err)
+		return
+	}
+	if resData.DeviceID != "" {
 		SetAuthorityDeviceID(resData.DeviceID)
+		log.Printf("[DRM] Anonymous free device registered successfully. Authority DeviceID: %s, Tier: %s", resData.DeviceID, resData.Tier)
 	}
 }
