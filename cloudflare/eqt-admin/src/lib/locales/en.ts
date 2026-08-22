@@ -143,8 +143,6 @@ export const en = {
     unbindAllSuccess: "All devices unbound successfully",
     activatedAt: "First Activated",
     lastSeenAt: "Last Seen",
-    appVersion: "App Version",
-    lastLocation: "Last Location",
     network: "Network",
     emptyState: "No matching license records found",
     noIpRecorded: "No IP recorded",

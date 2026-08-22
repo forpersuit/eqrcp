@@ -74,9 +74,6 @@ export function evaluateLicenseExpiration(
   };
 }
 
-const SANDBOX_TEST_DAYS = 8;
-const SANDBOX_TEST_MS = SANDBOX_TEST_DAYS * 86400 * 1000;
-
 // Sandbox constraint gate: test licenses are constrained in EVERY environment;
 // in test environments ALL licenses are constrained (covers Paddle sandbox purchases).
 function needsSandboxConstraint(licenseSource: string, env: Env, url?: URL): boolean {
@@ -120,16 +117,6 @@ async function assertSandboxTesterAllowed(
     }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
   return null;
-}
-
-// Hard 8-day cap: effective expiry = min(baseExpiresAt, created_at + 8 days). LIFETIME treated as infinite.
-function applySandboxExpiry(baseExpiresAt: string, createdMs: number): string {
-  const hardMs = createdMs + SANDBOX_TEST_MS;
-  const hardIso = new Date(hardMs).toISOString();
-  if (baseExpiresAt === "LIFETIME") return hardIso;
-  const baseMs = new Date(baseExpiresAt).getTime();
-  if (Number.isNaN(baseMs) || baseMs > hardMs) return hardIso;
-  return baseExpiresAt;
 }
 
 
@@ -474,14 +461,6 @@ export async function handleDrmRoutes(
     }
 
     let baseExpiresAt = license.expires_at || "LIFETIME";
-
-    // Hard 8-day cap for sandbox-constrained licenses (min with created_at + 8 days)
-    if (needsSandboxConstraint(licenseSource, env, url)) {
-      const createdMs = license.created_at ? new Date(license.created_at).getTime() : 0;
-      if (!Number.isNaN(createdMs) && createdMs > 0) {
-        baseExpiresAt = applySandboxExpiry(baseExpiresAt, createdMs);
-      }
-    }
 
     // Initial expiration check before DB mutations
     const initialEval = evaluateLicenseExpiration(license, baseExpiresAt);
@@ -845,14 +824,6 @@ export async function handleDrmRoutes(
 
     const licenseSource = normalizeLicenseSource(license.source, license.paddle_transaction_id);
     let baseExpiresAt = license.expires_at || "LIFETIME";
-
-    // Hard 8-day cap for sandbox-constrained licenses (min with created_at + 8 days)
-    if (needsSandboxConstraint(licenseSource, env, url)) {
-      const createdMs = license.created_at ? new Date(license.created_at).getTime() : 0;
-      if (!Number.isNaN(createdMs) && createdMs > 0) {
-        baseExpiresAt = applySandboxExpiry(baseExpiresAt, createdMs);
-      }
-    }
 
     // Initial expiration check before checking device activation or DB mutations
     const initialEval = evaluateLicenseExpiration(license, baseExpiresAt);

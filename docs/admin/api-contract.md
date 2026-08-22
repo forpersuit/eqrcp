@@ -73,18 +73,25 @@
 | `cpu_hash` | string \| null | |
 | `disk_hash` | string \| null | |
 | `device_id` | string \| null | 客户端展示用设备 ID（若有） |
-| `activated_at` | string | ISO |
+| `activated_at` | string | ISO（初次激活时间） |
 | `client_ip` | string \| null | 激活时 `CF-Connecting-IP` / 转发头（**新激活**才有） |
 | `ip_country` | string \| null | Cloudflare `CF-IPCountry`（ISO 国家码；旧数据可空） |
 | `user_agent` | string \| null | UA 截断 ≤256（可选，便于端类型粗分） |
+| `last_seen_at` | string \| null | 从 `device_registry` 联查，最近心跳 / 活跃时间（ISO） |
+| `app_version` | string \| null | 从 `device_registry` 联查，客户端版本号（如 `1.0.5`） |
+| `last_ip` | string \| null | 从 `device_registry` 联查，最近活跃 IP |
+| `last_city` | string \| null | 从 `device_registry` 联查，最近活跃城市 |
+| `last_region` | string \| null | 从 `device_registry` 联查，最近活跃地区/省/州 |
+| `last_country` | string \| null | 从 `device_registry` 联查，最近活跃国家 |
 
 **禁止**虚构：`device_fingerprint`、`device_name`。
 
 管理端展示建议：
 
-- 主标题：`device_id` 或 `Activation #id`  
-- 副文：哈希前 8 位摘要（uuid/cpu/disk）  
-- 网络行：`ip_country · client_ip`（旧激活无记录时显示「IP 未记录」）  
+- 主标题：`device_id` 或 `Activation #id`，并带客户端版本徽标（如 `v1.0.5`）
+- 副文：哈希前 8 位摘要（uuid/cpu/disk）
+- 时间行：初次激活时间 (`activated_at`) 与 最近活跃时间 (`last_seen_at`)
+- 网络行：`城市, 地区, 国家 · IP`（旧激活无记录时显示「IP 未记录」）
 - 列表近实时：前端 **20s 静默轮询** `GET /admin/licenses`（可开关）
 
 ### 1.3 `system_error_logs`

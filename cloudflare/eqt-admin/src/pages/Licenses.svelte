@@ -77,15 +77,9 @@
   }
 
   function deviceNetworkLine(act: Activation): string {
-    const parts: string[] = [];
     const locParts = [act.last_city, act.last_region, act.last_country || act.ip_country].filter(Boolean);
-    if (locParts.length) {
-      parts.push(locParts.join(', '));
-    }
     const ip = act.last_ip || act.client_ip;
-    if (ip && !parts.some(p => p.includes(ip))) {
-      parts.push(ip);
-    }
+    const parts = [...locParts, ip].filter(Boolean);
     return parts.length ? parts.join(' · ') : $t('licenses.noIpRecorded');
   }
 
@@ -232,7 +226,7 @@
         body: JSON.stringify({
           device_id: devId || undefined,
           email: email || undefined,
-          expires_in_days: 7,
+          expires_in_days: 30,
           duration_days: 30
         })
       });
@@ -1028,7 +1022,6 @@
   .metric-label { color: var(--text-muted); }
   .metric-val { color: var(--text-secondary); }
   .highlight-seen { color: var(--accent-primary); font-weight: 600; }
-  .dev-time { font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem; }
 
   .loading-state, .empty-state { text-align: center; padding: 3rem; color: var(--text-muted); }
 </style>

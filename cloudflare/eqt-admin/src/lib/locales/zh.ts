@@ -144,8 +144,6 @@ export const zh = {
     unbindAllSuccess: "已解绑全部设备",
     activatedAt: "初次激活",
     lastSeenAt: "最近活跃",
-    appVersion: "客户端版本",
-    lastLocation: "最新位置",
     network: "网络",
     emptyState: "未找到符合条件的授权记录",
     noIpRecorded: "IP 未记录",

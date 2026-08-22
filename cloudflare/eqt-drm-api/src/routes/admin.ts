@@ -1290,38 +1290,48 @@ export async function handleAdminRoutes(
     }
 
     const now = new Date().toISOString();
-    let res: any;
-    if (email) {
-      const existing = await env.DB.prepare(
-        "SELECT id FROM sandbox_beta_testers WHERE LOWER(email) = ?"
-      ).bind(email).first<{ id: number }>();
+    try {
+      if (email) {
+        const existing = await env.DB.prepare(
+          "SELECT id FROM sandbox_beta_testers WHERE LOWER(email) = ?"
+        ).bind(email).first<{ id: number }>();
 
-      if (existing) {
-        res = await env.DB.prepare(
-          "UPDATE sandbox_beta_testers SET device_id = COALESCE(?, device_id), notes = COALESCE(?, notes), status = 'active' WHERE id = ?"
-        ).bind(deviceId, notes, existing.id).run();
-        return new Response(JSON.stringify({
-          success: true,
-          id: existing.id,
-          updated: true
-        }), {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
-        });
+        if (existing) {
+          const updateDev = body.device_id !== undefined ? deviceId : null;
+          const updateNotes = body.notes !== undefined ? notes : null;
+          await env.DB.prepare(
+            "UPDATE sandbox_beta_testers SET device_id = COALESCE(?, device_id), notes = COALESCE(?, notes), status = 'active' WHERE id = ?"
+          ).bind(updateDev, updateNotes, existing.id).run();
+          return new Response(JSON.stringify({
+            success: true,
+            id: existing.id,
+            updated: true
+          }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
       }
+
+      const res = await env.DB.prepare(
+        "INSERT INTO sandbox_beta_testers (device_id, email, notes, status, created_at) VALUES (?, ?, ?, 'active', ?)"
+      ).bind(deviceId, email, notes, now).run();
+
+      return new Response(JSON.stringify({
+        success: true,
+        id: res.meta?.last_row_id || 0
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    } catch (err: any) {
+      return new Response(JSON.stringify({
+        error: "Failed to save tester: " + (err.message || String(err))
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
     }
-
-    res = await env.DB.prepare(
-      "INSERT INTO sandbox_beta_testers (device_id, email, notes, status, created_at) VALUES (?, ?, ?, 'active', ?)"
-    ).bind(deviceId, email, notes, now).run();
-
-    return new Response(JSON.stringify({
-      success: true,
-      id: res.meta?.last_row_id || 0
-    }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
-    });
   }
 
   // DELETE /api/v1/admin/sandbox/testers
@@ -1339,17 +1349,16 @@ export async function handleAdminRoutes(
     }
     await ensureBetaTestersTable(env);
 
-    let targetId: number | null = null;
-    const match = url.pathname.match(/^\/api\/v1\/admin\/sandbox\/testers\/(\d+)$/);
-    if (match) {
-      targetId = parseInt(match[1], 10);
+    let targetId: string | null = null;
+    if (url.pathname.startsWith("/api/v1/admin/sandbox/testers/")) {
+      targetId = url.pathname.replace("/api/v1/admin/sandbox/testers/", "").trim();
     } else {
       const body: any = await request.json().catch(() => ({}));
-      if (body.id) targetId = Number(body.id);
+      targetId = body.id ? String(body.id) : null;
     }
 
     if (!targetId) {
-      return new Response(JSON.stringify({ error: "Missing tester id" }), {
+      return new Response(JSON.stringify({ error: "Missing tester ID to delete" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -1357,7 +1366,10 @@ export async function handleAdminRoutes(
 
     await env.DB.prepare("DELETE FROM sandbox_beta_testers WHERE id = ?").bind(targetId).run();
 
-    return new Response(JSON.stringify({ success: true }), {
+    return new Response(JSON.stringify({
+      success: true,
+      deleted_id: targetId
+    }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
@@ -1376,11 +1388,11 @@ export async function handleAdminRoutes(
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
-    await ensureLicenseSourceColumns(env);
     await ensureBetaTestersTable(env);
+    await ensureLicenseSourceColumns(env);
 
     const body: any = await request.json().catch(() => ({}));
-    const tier = (body.tier === "PRO" ? "PRO" : "PLUS");
+    const tier = (body.tier || "PLUS").toUpperCase();
     const deviceId = (body.device_id || "").trim();
     const email = (body.email || "").trim();
     if (!deviceId || !email) {
@@ -1403,8 +1415,8 @@ export async function handleAdminRoutes(
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
-    const expDays = Math.min(Number(body.expires_in_days || 8), 8);
-    const durDays = Math.min(Number(body.duration_days || 8), 8);
+    const expDays = Math.min(Number(body.expires_in_days || 30), 30);
+    const durDays = Math.min(Number(body.duration_days || 30), 30);
 
     const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
     const randBytes = new Uint8Array(6);

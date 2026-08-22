@@ -267,7 +267,7 @@ async function runTests() {
     assertEqual(resBad1.status, 400, 'Missing params returns 400');
     assert(resBad1.json.error.includes('Missing required parameters'), 'Error mentions missing parameters');
 
-    // 5B: Valid parameters -> 200 OK (duration_days capped at 8)
+    // 5B: Valid parameters -> 200 OK
     const { status, json } = await callAdmin('POST', '/api/v1/admin/sandbox/mint-test-license', {
       tier: 'PLUS',
       device_id: 'b0036718cb9a469999d2910cdf418b1f',
@@ -280,7 +280,7 @@ async function runTests() {
     assert(json.license_code.startsWith('EQT-TEST-PLUS-'), `License code prefix is EQT-TEST-PLUS- (${json.license_code})`);
     assertEqual(json.bound_device_id, 'b0036718cb9a469999d2910cdf418b1f', 'Bound device ID matches');
     assertEqual(json.buyer_email, 'tmp@301098.xyz', 'Buyer email matches');
-    assertEqual(json.duration_days, 8, 'Duration days is capped at 8');
+    assertEqual(json.duration_days, 30, 'Duration days is 30');
     quickTestCode = json.license_code;
   }
 
@@ -342,13 +342,13 @@ async function runTests() {
   }
 
   // ------------------------------------------------------------
-  // Test 8: 8-day hard expiry cap (activate + verify both enforce it)
+  // Test 8: Expired license returns 403
   // ------------------------------------------------------------
-  console.log('\n--- Test 8: 8-day hard expiry cap on test licenses ---');
+  console.log('\n--- Test 8: Expired test license returns 403 ---');
   {
-    // Backdate quickTestCode creation to 9 days ago -> created_at + 8d is already in the past
-    const nineDaysAgo = new Date(Date.now() - 9 * 86400000).toISOString();
-    mockD1.db.prepare("UPDATE licenses SET created_at = ? WHERE license_code = ?").run(nineDaysAgo, quickTestCode);
+    // Set expires_at to 1 day in the past
+    const yesterday = new Date(Date.now() - 86400000).toISOString();
+    mockD1.db.prepare("UPDATE licenses SET expires_at = ? WHERE license_code = ?").run(yesterday, quickTestCode);
 
     const res = await callDrm('POST', '/api/v1/activate', {
       license_code: quickTestCode,
@@ -357,8 +357,8 @@ async function runTests() {
       cpu_hash: 'legit_cpu_hash_2222222222222222',
       disk_hash: 'legit_disk_hash_3333333333333333'
     });
-    assertEqual(res.status, 403, 'Activate after 8-day cap returns 403 (expired)');
-    assert(res.json.error, 'Returns an error message on 8-day expiry');
+    assertEqual(res.status, 403, 'Activate expired license returns 403');
+    assert(res.json.error, 'Returns an error message on expiry');
 
     const vres = await callDrm('POST', '/api/v1/verify', {
       license_code: quickTestCode,
@@ -366,7 +366,7 @@ async function runTests() {
       cpu_hash: 'legit_cpu_hash_2222222222222222',
       disk_hash: 'legit_disk_hash_3333333333333333'
     });
-    assertEqual(vres.status, 403, 'Verify after 8-day cap returns 403 (expired)');
+    assertEqual(vres.status, 403, 'Verify expired license returns 403');
 
     // Restore created_at so later tests on quickTestCode remain valid
     mockD1.db.prepare("UPDATE licenses SET created_at = ? WHERE license_code = ?").run(new Date().toISOString(), quickTestCode);
@@ -496,9 +496,9 @@ async function runTests() {
   }
 
   // ------------------------------------------------------------
-  // Test 12: Paddle sandbox purchase (LIFETIME) in test env is capped at 8 days
+  // Test 12: Paddle purchase code in test env enforces whitelist gate
   // ------------------------------------------------------------
-  console.log('\n--- Test 12: Paddle purchase code in test env capped at 8 days ---');
+  console.log('\n--- Test 12: Paddle purchase code in test env enforces whitelist gate ---');
   {
     await callAdmin('POST', '/api/v1/admin/sandbox/testers', {
       device_id: 'paddle_device_001',
@@ -525,22 +525,18 @@ async function runTests() {
       disk_hash: 'paddle_disk_hash_cccccccccccccccc'
     });
     assertEqual(res.status, 200, 'Paddle purchase activates in test env (whitelisted tester)');
-    const got = Date.parse(res.json.expires_at);
-    const expect = Date.now() + 8 * 86400000;
-    assert(!Number.isNaN(got), 'Activation returns a parseable expires_at');
-    assert(Math.abs(got - expect) < 120000, `expires_at is capped to ~8 days (got ${res.json.expires_at})`);
+    assertEqual(res.json.tier, 'PLUS', 'Paddle purchase tier is PLUS');
+    assertEqual(res.json.device_id, 'paddle_device_001', 'Device ID matches');
 
-    // Backdate to 9 days ago -> 8-day cap expired
-    const nineDaysAgo = new Date(Date.now() - 9 * 86400000).toISOString();
-    mockD1.db.prepare("UPDATE licenses SET created_at = ? WHERE license_code = ?").run(nineDaysAgo, paddleCode);
+    // Unwhitelisted device attempts to activate the same paddle license
     const res2 = await callDrm('POST', '/api/v1/activate', {
       license_code: paddleCode,
-      device_id: 'paddle_device_001',
-      uuid_hash: 'paddle_uuid_hash_aaaaaaaaaaaaaaaa',
-      cpu_hash: 'paddle_cpu_hash_bbbbbbbbbbbbbbbb',
-      disk_hash: 'paddle_disk_hash_cccccccccccccccc'
+      device_id: 'other_device_999',
+      uuid_hash: 'other_uuid_hash_xxxxxxxxxxxxxxxx',
+      cpu_hash: 'other_cpu_hash_yyyyyyyyyyyyyyyy',
+      disk_hash: 'other_disk_hash_zzzzzzzzzzzzzzzz'
     });
-    assertEqual(res2.status, 403, 'Paddle purchase after 8-day cap returns 403 (expired)');
+    assertEqual(res2.status, 403, 'Unwhitelisted device is rejected with 403');
   }
 
   // ------------------------------------------------------------
