@@ -1297,11 +1297,23 @@ export async function handleAdminRoutes(
         ).bind(email).first<{ id: number }>();
 
         if (existing) {
-          const updateDev = body.device_id !== undefined ? deviceId : null;
-          const updateNotes = body.notes !== undefined ? notes : null;
-          await env.DB.prepare(
-            "UPDATE sandbox_beta_testers SET device_id = COALESCE(?, device_id), notes = COALESCE(?, notes), status = 'active' WHERE id = ?"
-          ).bind(updateDev, updateNotes, existing.id).run();
+          const updateDev = body.device_id !== undefined ? (body.device_id ? String(body.device_id).trim() : null) : undefined;
+          const updateNotes = body.notes !== undefined ? (body.notes ? String(body.notes).trim() : null) : undefined;
+
+          let updateSql = "UPDATE sandbox_beta_testers SET status = 'active'";
+          const params: any[] = [];
+          if (updateDev !== undefined) {
+            updateSql += ", device_id = ?";
+            params.push(updateDev);
+          }
+          if (updateNotes !== undefined) {
+            updateSql += ", notes = ?";
+            params.push(updateNotes);
+          }
+          updateSql += " WHERE id = ?";
+          params.push(existing.id);
+
+          await env.DB.prepare(updateSql).bind(...params).run();
           return new Response(JSON.stringify({
             success: true,
             id: existing.id,
@@ -1349,22 +1361,29 @@ export async function handleAdminRoutes(
     }
     await ensureBetaTestersTable(env);
 
-    let targetId: string | null = null;
+    let targetId: number | null = null;
     if (url.pathname.startsWith("/api/v1/admin/sandbox/testers/")) {
-      targetId = url.pathname.replace("/api/v1/admin/sandbox/testers/", "").trim();
+      const rawStr = url.pathname.replace("/api/v1/admin/sandbox/testers/", "").trim();
+      targetId = parseInt(rawStr, 10);
     } else {
       const body: any = await request.json().catch(() => ({}));
-      targetId = body.id ? String(body.id) : null;
+      targetId = body.id ? parseInt(String(body.id), 10) : null;
     }
 
-    if (!targetId) {
-      return new Response(JSON.stringify({ error: "Missing tester ID to delete" }), {
+    if (!targetId || isNaN(targetId) || targetId <= 0) {
+      return new Response(JSON.stringify({ error: "Invalid or missing tester ID to delete" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
-    await env.DB.prepare("DELETE FROM sandbox_beta_testers WHERE id = ?").bind(targetId).run();
+    const delRes = await env.DB.prepare("DELETE FROM sandbox_beta_testers WHERE id = ?").bind(targetId).run();
+    if (!delRes.meta?.changes) {
+      return new Response(JSON.stringify({ error: "Tester not found" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
 
     return new Response(JSON.stringify({
       success: true,
@@ -1392,7 +1411,8 @@ export async function handleAdminRoutes(
     await ensureLicenseSourceColumns(env);
 
     const body: any = await request.json().catch(() => ({}));
-    const tier = (body.tier || "PLUS").toUpperCase();
+    const rawTier = (body.tier || "PLUS").toString().trim().toUpperCase();
+    const tier = rawTier === "PRO" ? "PRO" : "PLUS";
     const deviceId = (body.device_id || "").trim();
     const email = (body.email || "").trim();
     if (!deviceId || !email) {
