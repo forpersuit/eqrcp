@@ -2617,8 +2617,18 @@ function renderAboutPanel() {
                     <span style="font-size: 12px; font-weight: 700; color: var(--text-primary);">${escapeHTML(info.uploadDirFreeSpace || t('unknown'))}</span>
                 </div>
                 <div style="grid-column: span 2; background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; text-align: left;">
-                    <span style="font-size: 10px; color: var(--text-secondary); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">${t('device_id')}</span>
-                    <span style="font-size: 13px; font-weight: 700; font-family: var(--font-mono); color: var(--text-primary); letter-spacing: 0.08em; user-select: text;">${escapeHTML(state.status?.deviceID || '------')}</span>
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                        <span style="font-size: 10px; color: var(--text-secondary); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;">${t('device_id')}</span>
+                        ${(state.status?.deviceID && state.status.deviceID !== '------') ? `
+                            <span class="email-copy-wrapper" data-copy-text="${escapeAttr(state.status.deviceID)}" style="cursor: pointer; position: relative; display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px; border-radius: 4px; border: 1px dashed var(--accent, #156f5a); background: rgba(21, 111, 90, 0.05); transition: background 0.2s;" title="${escapeAttr(t('copy_device_id') || 'Click to copy Device ID')}">
+                                <span style="font-size: 10px; color: var(--accent, #156f5a); font-weight: 700;">${t('copy') || 'Copy'}</span>
+                                <span class="email-copy-mask" style="position: absolute; inset: 0; background: var(--accent, #156f5a); color: #ffffff; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; opacity: 0; pointer-events: none; transition: opacity 0.2s ease; z-index: 10;">
+                                    ✓ ${escapeHTML(t('copied') || 'Copied')}
+                                </span>
+                            </span>
+                        ` : ''}
+                    </div>
+                    <span style="font-size: 13px; font-weight: 700; font-family: var(--font-mono); color: var(--text-primary); letter-spacing: 0.08em; user-select: text; word-break: break-all;">${escapeHTML(state.status?.deviceID || '------')}</span>
                 </div>
                 <div style="grid-column: span 2; background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; text-align: left;">
                     <span style="font-size: 10px; color: var(--text-secondary); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">${t('legal') || 'Legal'}</span>
@@ -4217,6 +4227,17 @@ function openPanel(panel) {
     }
     if (panel === 'about') {
         state.showPlanInfoDetails = false;
+        if (typeof AgentStatus === 'function') {
+            AgentStatus().then((status) => {
+                if (status && status.deviceID && (!state.status || state.status.deviceID !== status.deviceID)) {
+                    state.status = state.status || {};
+                    state.status.deviceID = status.deviceID;
+                    if (state.activePanel === 'about') {
+                        syncPanelSurface();
+                    }
+                }
+            }).catch(() => {});
+        }
     }
     clearMessages();
     updateMessagesSurface();

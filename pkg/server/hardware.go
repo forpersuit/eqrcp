@@ -341,24 +341,58 @@ var (
 	authorityDeviceIdMu sync.RWMutex
 )
 
-// SetAuthorityDeviceID explicitly updates the server-authoritative device ID in memory.
+func cachedDeviceIDPath() string {
+	return filepath.Join(config.DefaultConfigDir(), "device_id.dat")
+}
+
+func readCachedDeviceID() string {
+	p := cachedDeviceIDPath()
+	data, err := os.ReadFile(p)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
+}
+
+func writeCachedDeviceID(id string) {
+	if id == "" {
+		return
+	}
+	p := cachedDeviceIDPath()
+	_ = os.MkdirAll(filepath.Dir(p), 0700)
+	_ = os.WriteFile(p, []byte(strings.TrimSpace(id)), 0600)
+}
+
+// SetAuthorityDeviceID explicitly updates the server-authoritative device ID in memory and local storage.
 func SetAuthorityDeviceID(id string) {
 	authorityDeviceIdMu.Lock()
 	authorityDeviceId = id
 	authorityDeviceIdMu.Unlock()
+	if id != "" {
+		writeCachedDeviceID(id)
+	} else {
+		_ = os.Remove(cachedDeviceIDPath())
+	}
 }
 
 // GetAuthorityDeviceID returns the server-assigned authoritative device_id.
 // It prioritizes local certificate device_id when available, otherwise falls back to
-// memory cached device_id from anonymous registration, or "" if unassigned.
+// memory cached or disk cached device_id from anonymous registration, or "" if unassigned.
 func GetAuthorityDeviceID() string {
 	if cert, ok := GetLocalLicenseInfo(); ok && cert.DeviceID != "" {
 		return cert.DeviceID
 	}
 	authorityDeviceIdMu.RLock()
-	defer authorityDeviceIdMu.RUnlock()
-	if authorityDeviceId != "" {
-		return authorityDeviceId
+	id := authorityDeviceId
+	authorityDeviceIdMu.RUnlock()
+	if id != "" {
+		return id
+	}
+	if diskID := readCachedDeviceID(); diskID != "" {
+		authorityDeviceIdMu.Lock()
+		authorityDeviceId = diskID
+		authorityDeviceIdMu.Unlock()
+		return diskID
 	}
 	return ""
 }
