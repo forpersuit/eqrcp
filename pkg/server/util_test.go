@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -569,6 +570,98 @@ func TestDonePageListsTransferredFiles(t *testing.T) {
 		if !strings.Contains(html, want) {
 			t.Fatalf("Done page = %q, want to contain %q", html, want)
 		}
+	}
+}
+
+func TestTierLifetimeBadgeClasses(t *testing.T) {
+	cases := []struct {
+		name            string
+		template        string
+		licenseTier     string
+		licenseLifetime bool
+		clockTampered   bool
+		wantText        string // expected badge text
+		wantGold        bool   // expect tier-lifetime (gold) class
+	}{
+		{
+			name: "download plus lifetime shows gold class", template: "download",
+			licenseTier: "PLUS", licenseLifetime: true,
+			wantText: "PLUS", wantGold: true,
+		},
+		{
+			name: "download plus time-limited no gold class", template: "download",
+			licenseTier: "PLUS", licenseLifetime: false,
+			wantText: "PLUS", wantGold: false,
+		},
+		{
+			name: "download free keeps free badge", template: "download",
+			wantText: "FREE", wantGold: false,
+		},
+		{
+			name: "download clock tampered keeps clock-error", template: "download",
+			licenseTier: "PLUS", licenseLifetime: true, clockTampered: true,
+			wantText: "CLOCK ERROR", wantGold: false,
+		},
+		{
+			name: "done plus lifetime shows gold class", template: "done",
+			licenseTier: "PLUS", licenseLifetime: true,
+			wantText: "PLUS", wantGold: true,
+		},
+		{
+			name: "done free keeps free badge", template: "done",
+			wantText: "FREE", wantGold: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var out strings.Builder
+			data := struct {
+				Route           string
+				ClientID        string
+				DeviceName      string
+				File            string
+				Files           []string
+				Count           int
+				Lang            string
+				IsPaid          bool
+				LicenseTier     string
+				UsedTransfers   int
+				ClockTampered   bool
+				LicenseLifetime bool
+			}{
+				Route:           "/x",
+				IsPaid:          tc.licenseTier != "",
+				LicenseTier:     tc.licenseTier,
+				ClockTampered:   tc.clockTampered,
+				LicenseLifetime: tc.licenseLifetime,
+			}
+			var page string
+			if tc.template == "done" {
+				page = pages.Done
+			} else {
+				page = pages.Download
+			}
+			if err := serveTemplate(tc.template, page, &out, data); err != nil {
+				t.Fatalf("serveTemplate(%s) error = %v", tc.template, err)
+			}
+			html := out.String()
+
+			// Extract the license-badge span: class="license-badge[classes]" > text </span>
+			re := regexp.MustCompile(`class="license-badge([^"]*)"[^>]*>\s*([^<]+?)\s*</span>`)
+			m := re.FindStringSubmatch(html)
+			if m == nil {
+				t.Fatalf("%s page missing license-badge markup", tc.template)
+			}
+			classes, text := m[1], strings.TrimSpace(m[2])
+			if text != tc.wantText {
+				t.Errorf("%s badge text = %q, want %q", tc.template, text, tc.wantText)
+			}
+			if tc.wantGold != strings.Contains(classes, "tier-lifetime") {
+				t.Errorf("%s badge classes %q: wantGold=%v, got tier-lifetime present=%v",
+					tc.template, classes, tc.wantGold, strings.Contains(classes, "tier-lifetime"))
+			}
+		})
 	}
 }
 

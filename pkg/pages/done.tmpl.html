@@ -221,7 +221,7 @@
         <img class="brand-logo" src="/assets/eqt-logo-horizontal.png" alt="EQT logo">
         
         <div class="status-card">
-            <span class="license-badge{{if .ClockTampered}} clock-error{{else if .LicenseLifetime}} tier-lifetime{{end}}">
+            <span class="license-badge{{if .ClockTampered}} clock-error{{else if .LicenseTier}} tier-paid{{if .LicenseLifetime}} tier-lifetime{{end}}{{end}}">
                 {{if .ClockTampered}}CLOCK ERROR{{else if .LicenseTier}}{{.LicenseTier}}{{else}}FREE{{end}}
             </span>
             <div class="success-badge">✓</div>
