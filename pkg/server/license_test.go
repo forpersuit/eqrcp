@@ -747,6 +747,80 @@ func TestRegisterDeviceOnlineTelemetryDisabled(t *testing.T) {
 	}
 }
 
+func TestDeviceIDFormatValidationAndNegativeCaching(t *testing.T) {
+	// Test isValidDeviceID
+	validCases := []string{
+		"12345678",
+		"dev_mock_hex_1234567890abcdef",
+		"4ebbecd6982f4ca6ab347734a5245382",
+		"dev-1234-abcd_5678",
+	}
+	for _, id := range validCases {
+		if !isValidDeviceID(id) {
+			t.Errorf("expected '%s' to be valid device ID", id)
+		}
+	}
+
+	invalidCases := []string{
+		"",
+		"short",
+		"has space 1234",
+		"corrupt\x00\xff\xfe12345678",
+		"invalid@char!12345678",
+		strings.Repeat("a", 130), // too long (>128)
+	}
+	for _, id := range invalidCases {
+		if isValidDeviceID(id) {
+			t.Errorf("expected '%s' to be invalid device ID", id)
+		}
+	}
+
+	// Test corrupted disk cache handling
+	tmpDir := t.TempDir()
+	os.Setenv("EQT_CONFIG_DIR", tmpDir)
+	defer os.Unsetenv("EQT_CONFIG_DIR")
+
+	ResetLicense()
+	corruptedPath := filepath.Join(tmpDir, "device_id.dat")
+	_ = os.WriteFile(corruptedPath, []byte("bad@binary\x00data"), 0600)
+
+	// Reset in-memory check flag to force disk probe
+	authorityDeviceIdMu.Lock()
+	authorityDeviceId = ""
+	authorityDeviceIdChecked = false
+	authorityDeviceIdMu.Unlock()
+
+	// Should reject corrupted file, delete it, and return empty string
+	got := GetAuthorityDeviceID()
+	if got != "" {
+		t.Errorf("expected empty string for corrupted cache, got '%s'", got)
+	}
+	if _, err := os.Stat(corruptedPath); !os.IsNotExist(err) {
+		t.Errorf("expected corrupted device_id.dat to be removed, but it still exists")
+	}
+
+	// Test negative caching: consecutive calls should return "" from memory
+	if id := GetAuthorityDeviceID(); id != "" {
+		t.Errorf("expected negative cached empty string, got '%s'", id)
+	}
+
+	// Test valid cache write & read
+	validID := "dev_valid_disk_id_12345678"
+	SetAuthorityDeviceID(validID)
+	if id := GetAuthorityDeviceID(); id != validID {
+		t.Errorf("expected '%s', got '%s'", validID, id)
+	}
+
+	// Reset authority device ID and verify cleanup
+	SetAuthorityDeviceID("")
+	if id := GetAuthorityDeviceID(); id != "" {
+		t.Errorf("expected empty string after SetAuthorityDeviceID(''), got '%s'", id)
+	}
+	if _, err := os.Stat(corruptedPath); !os.IsNotExist(err) {
+		t.Errorf("expected device_id.dat to be removed after SetAuthorityDeviceID(''), but it still exists")
+	}
+}
+
 func TestOnlineSyncDeviceIDUpdate(t *testing.T) {
 	testBoardUUID = "mock_board_uuid"
 	testCPUSerial = "mock_cpu_serial"

@@ -21,7 +21,7 @@
 
     const SEND_BTN_CLASSES = {
         default: 'px-4 py-2.5 bg-white/10 hover:bg-white/20 border border-white/20 active:scale-95 text-white/90 text-xs font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px] cursor-pointer',
-        active: 'px-4 py-2.5 bg-accent-bright hover:bg-accent-bright/90 active:scale-95 text-surface-dim text-xs font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px] shadow-lg shadow-accent-bright/25 cursor-pointer',
+        active: 'px-4 py-2.5 bg-accent-bright hover:bg-accent-bright/90 active:scale-95 text-background text-xs font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px] shadow-lg shadow-accent-bright/25 cursor-pointer',
         cooldown: 'px-4 py-2.5 bg-white/5 border border-white/10 text-on-surface-variant text-xs font-mono font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px] cursor-not-allowed opacity-60',
         loading: 'px-4 py-2.5 bg-accent-bright/20 border border-accent-bright/40 text-accent-bright text-xs font-bold rounded-lg transition-all whitespace-nowrap min-w-[110px] cursor-wait opacity-90 flex items-center justify-center gap-1.5'
     };

@@ -337,9 +337,25 @@ func GetDeviceFingerprintHashes() (string, string, string) {
 }
 
 var (
-	authorityDeviceId   string
-	authorityDeviceIdMu sync.RWMutex
+	authorityDeviceId        string
+	authorityDeviceIdChecked bool
+	authorityDeviceIdMu      sync.RWMutex
 )
+
+// isValidDeviceID validates that the device ID consists of valid alphanumeric characters,
+// dashes, or underscores, and has a reasonable length (8 to 128 chars).
+func isValidDeviceID(id string) bool {
+	id = strings.TrimSpace(id)
+	if len(id) < 8 || len(id) > 128 {
+		return false
+	}
+	for _, r := range id {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-') {
+			return false
+		}
+	}
+	return true
+}
 
 func cachedDeviceIDPath() string {
 	return filepath.Join(config.DefaultConfigDir(), "device_id.dat")
@@ -351,11 +367,17 @@ func readCachedDeviceID() string {
 	if err != nil {
 		return ""
 	}
-	return strings.TrimSpace(string(data))
+	id := strings.TrimSpace(string(data))
+	if !isValidDeviceID(id) {
+		// Corrupted or invalid cache file; remove it to prevent repeated corrupt reads
+		_ = os.Remove(p)
+		return ""
+	}
+	return id
 }
 
 func writeCachedDeviceID(id string) {
-	if id == "" {
+	if !isValidDeviceID(id) {
 		return
 	}
 	p := cachedDeviceIDPath()
@@ -367,6 +389,7 @@ func writeCachedDeviceID(id string) {
 func SetAuthorityDeviceID(id string) {
 	authorityDeviceIdMu.Lock()
 	authorityDeviceId = id
+	authorityDeviceIdChecked = true
 	authorityDeviceIdMu.Unlock()
 	if id != "" {
 		writeCachedDeviceID(id)
@@ -378,20 +401,27 @@ func SetAuthorityDeviceID(id string) {
 // GetAuthorityDeviceID returns the server-assigned authoritative device_id.
 // It prioritizes local certificate device_id when available, otherwise falls back to
 // memory cached or disk cached device_id from anonymous registration, or "" if unassigned.
+// Implements negative caching in memory to avoid repeated ENOENT disk probes on unassigned devices.
 func GetAuthorityDeviceID() string {
 	if cert, ok := GetLocalLicenseInfo(); ok && cert.DeviceID != "" {
 		return cert.DeviceID
 	}
 	authorityDeviceIdMu.RLock()
-	id := authorityDeviceId
-	authorityDeviceIdMu.RUnlock()
-	if id != "" {
+	if authorityDeviceIdChecked {
+		id := authorityDeviceId
+		authorityDeviceIdMu.RUnlock()
 		return id
 	}
+	authorityDeviceIdMu.RUnlock()
+
+	authorityDeviceIdMu.Lock()
+	defer authorityDeviceIdMu.Unlock()
+	if authorityDeviceIdChecked {
+		return authorityDeviceId
+	}
+	authorityDeviceIdChecked = true
 	if diskID := readCachedDeviceID(); diskID != "" {
-		authorityDeviceIdMu.Lock()
 		authorityDeviceId = diskID
-		authorityDeviceIdMu.Unlock()
 		return diskID
 	}
 	return ""
