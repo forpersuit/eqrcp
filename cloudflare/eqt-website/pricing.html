@@ -140,7 +140,7 @@
     <!-- Include Paddle.js SDK & Verification Component -->
     <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
     <script src="js/api-base.js"></script>
-    <script src="js/checkout-verify.js"></script>
+    <script src="js/checkout-verify.js?v=1.0.3"></script>
 </head>
 <body class="bg-background text-on-surface font-sans antialiased min-h-screen flex flex-col justify-between">
     <!-- Header -->
@@ -829,6 +829,16 @@
                     Paddle.Environment.set(PADDLE_ENV);
                     Paddle.Initialize({
                         token: PADDLE_TOKEN,
+                        checkout: {
+                            settings: {
+                                // 结账语言跟随站点语言选择器；未适配语种兜底英文，避免 Paddle
+                                // 半翻译模板（如 zh-Hans 续费同意句）中英混排。此处的 settings 会被
+                                // _ptxn 恢复路径的自动 checkout 继承（此时不走 checkout-verify.js）。
+                                locale: window.siteToPaddleLocale
+                                    ? window.siteToPaddleLocale(window.currentLang || 'en')
+                                    : 'en'
+                            }
+                        },
                         eventCallback: function(data) {
                             console.log("Paddle Event:", data);
                             if (data.name === "checkout.completed") {

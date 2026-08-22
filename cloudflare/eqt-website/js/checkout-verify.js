@@ -9,6 +9,16 @@
 
     const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+    // Map a site language value to a Paddle Checkout locale.
+    // Adapted site languages keep their own locale; any other language falls
+    // back to English so Paddle's partially-translated templates don't mix languages.
+    function siteToPaddleLocale(lang) {
+        const adapted = ['en', 'ja', 'ko', 'es', 'de', 'fr', 'zh'];
+        if (!adapted.includes(lang)) return 'en';
+        return lang === 'zh' ? 'zh-Hans' : lang;
+    }
+    window.siteToPaddleLocale = siteToPaddleLocale;
+
     class CheckoutVerifyComponent {
         constructor() {
             this.cooldownTimer = null;
@@ -50,12 +60,9 @@
             return window.currentLang || localStorage.getItem('eqt-lang') || 'en';
         }
 
-        // Map the site language selector value to a Paddle Checkout locale code.
-        // Page langs: en/ja/ko/es/de/fr/zh — only zh needs rewriting to BCP-47.
+        // Map the site language selector value to a Paddle Checkout locale.
         toPaddleLocale() {
-            const lang = this.getLang();
-            const map = { 'zh': 'zh-Hans' };
-            return map[lang] || lang;
+            return siteToPaddleLocale(this.getLang());
         }
 
         getTranslation(key, defaultVal) {
