@@ -45,14 +45,14 @@ jobs:
         run: npx wrangler deploy --env test
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID || 'b8b5c5020effb7d1ac41f586c44b6e82' }}
 
       - name: Deploy eqt-feedback-api (test)
         working-directory: cloudflare/eqt-feedback-api
         run: npx wrangler deploy --env test
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID || 'b8b5c5020effb7d1ac41f586c44b6e82' }}
 
       # ── Pages (Test) ─────────────────────────────────────────
 
@@ -61,7 +61,7 @@ jobs:
         run: npx wrangler pages deploy ./ --project-name=eqt-test --branch=dev
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID || 'b8b5c5020effb7d1ac41f586c44b6e82' }}
 
       - name: Notify via Telegram
         if: always()

@@ -114,6 +114,23 @@ jobs:
           node-version: '22'
           cache: 'npm'
           cache-dependency-path: cloudflare/eqt-drm-api/package-lock.json
+      - name: Setup offline test environment
+        run: |
+          cat << 'EOF' > .env.test
+          ENVIRONMENT=test
+          DRM_API_URL=https://lic-test.eqt.net.im
+          DRM_HOSTNAME=lic-test.eqt.net.im
+          DRM_DB_NAME=eqt-drm-db-test
+          PADDLE_API_KEY=pdl_sdbx_apikey_mock_offline_test_key_0000
+          PADDLE_SANDBOX_EQT=pdl_sdbx_apikey_mock_offline_test_key_0000
+          PADDLE_CLIENT_SIDE_API_KEY=test_mock_client_side_api_key
+          PADDLE_WEBHOOK_SECRET=pdl_ntfset_mock_offline_test_secret_0000
+          PADDLE_PRICE_ID_PLUS_YEARLY=pri_01kxymxqngex49tg65wb0701pc
+          PADDLE_PRICE_ID_PLUS_LIFETIME=pri_01kyhmkv4ppj10r4cdgw3sv48p
+          PADDLE_PRICE_ID_PRO_MONTHLY=pri_01kyhmv79rkyncryce1wjg9582
+          ADMIN_EMAIL=admin@eqt.net.im
+          ADMIN_PASSWORD=mock_admin_password
+          EOF
       - name: Install dependencies
         working-directory: cloudflare/eqt-drm-api
         run: npm ci
