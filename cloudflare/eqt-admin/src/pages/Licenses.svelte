@@ -2,11 +2,13 @@
   import { onMount, onDestroy } from 'svelte';
   import { adminFetch } from '../lib/api';
   import { t } from '../lib/i18n';
+  import { adminEnv } from '../lib/env.svelte';
   import Modal from '../components/Modal.svelte';
   import Banner from '../components/Banner.svelte';
   import Pagination from '../components/Pagination.svelte';
   import type {
     Activation,
+    BetaTester,
     GenerateLicenseResponse,
     License,
     LicenseTier
@@ -41,14 +43,23 @@
 
   let genTier = $state<LicenseTier>('PLUS');
   let genMaxDevices = $state(2);
-  /** admin = 客服补发；promo = 活动码（必须兑换窗 + 使用天数） */
-  let genSource = $state<'admin' | 'promo'>('admin');
+  /** admin = 客服补发；promo = 活动码；test = 沙箱内测专属码 */
+  let genSource = $state<'admin' | 'promo' | 'test'>('admin');
   let genExpiresInDays = $state<string>('');
   let genDurationDays = $state<string>('');
   let genBuyerEmail = $state('');
+  let genBoundDeviceId = $state('');
   let genSendEmail = $state(false);
   let lastGeneratedCode = $state<string | null>(null);
   let copyHint = $state('');
+
+  // Sandbox Beta Testers State
+  let betaTesters = $state<BetaTester[]>([]);
+  let showAddTesterModal = $state(false);
+  let newTesterDevice = $state('');
+  let newTesterEmail = $state('');
+  let newTesterNotes = $state('');
+  let quickMinting = $state(false);
 
   function shortHash(value?: string | null): string {
     if (!value) return '—';
@@ -156,6 +167,80 @@
     }
   }
 
+  async function loadBetaTesters() {
+    if (adminEnv.current !== 'test') return;
+    loadingTesters = true;
+    try {
+      const res = await adminFetch<{ success: boolean; testers: BetaTester[] }>('/api/v1/admin/sandbox/testers');
+      betaTesters = res.testers || [];
+    } catch (_) {
+    } finally {
+      loadingTesters = false;
+    }
+  }
+
+  async function handleAddTester(e: Event) {
+    e.preventDefault();
+    if (!newTesterDevice.trim() && !newTesterEmail.trim()) return;
+    try {
+      await adminFetch('/api/v1/admin/sandbox/testers', {
+        method: 'POST',
+        body: JSON.stringify({
+          device_id: newTesterDevice.trim() || undefined,
+          email: newTesterEmail.trim() || undefined,
+          notes: newTesterNotes.trim() || undefined
+        })
+      });
+      actionMsg = $t('licenses.addSuccess');
+      showAddTesterModal = false;
+      newTesterDevice = '';
+      newTesterEmail = '';
+      newTesterNotes = '';
+      await loadBetaTesters();
+    } catch (err: any) {
+      errorMsg = $t('common.failed') + ': ' + (err.message || String(err));
+    }
+  }
+
+  async function handleDeleteTester(id: number) {
+    if (!confirm($t('licenses.confirmDeleteTester'))) return;
+    try {
+      await adminFetch(`/api/v1/admin/sandbox/testers/${id}`, {
+        method: 'DELETE'
+      });
+      actionMsg = $t('licenses.deleteSuccess');
+      await loadBetaTesters();
+    } catch (err: any) {
+      errorMsg = $t('common.failed') + ': ' + (err.message || String(err));
+    }
+  }
+
+  async function handleQuickMintTestLicense(devId?: string | null, email?: string | null) {
+    quickMinting = true;
+    errorMsg = '';
+    actionMsg = '';
+    try {
+      const res = await adminFetch<any>('/api/v1/admin/sandbox/mint-test-license', {
+        method: 'POST',
+        body: JSON.stringify({
+          device_id: devId || undefined,
+          email: email || undefined,
+          expires_in_days: 7,
+          duration_days: 30
+        })
+      });
+      actionMsg = $t('licenses.quickMintSuccess', { code: res.license_code });
+      lastGeneratedCode = res.license_code;
+      await loadLicenses();
+    } catch (err: any) {
+      errorMsg = $t('common.failed') + ': ' + (err.message || String(err));
+    } finally {
+      quickMinting = false;
+    }
+  }
+
+  let loadingTesters = $state(false);
+
   async function handleGenerate(e: Event) {
     e.preventDefault();
     generating = true;
@@ -170,7 +255,7 @@
       source: genSource
     };
 
-    if (genSource === 'promo') {
+    if (genSource === 'promo' || genSource === 'test') {
       const expDays = parseInt(genExpiresInDays.trim(), 10);
       const durDays = parseInt(genDurationDays.trim(), 10);
       if (isNaN(expDays) || expDays <= 0) {
@@ -201,6 +286,10 @@
       if (genSendEmail) {
         body.send_email = true;
       }
+    }
+
+    if (genBoundDeviceId.trim()) {
+      body.bound_device_id = genBoundDeviceId.trim();
     }
 
     try {
@@ -307,6 +396,9 @@
     if (!prefillQuery) {
       loadLicenses();
     }
+    if (adminEnv.current === 'test') {
+      loadBetaTesters();
+    }
     startAutoRefresh();
   });
 
@@ -338,6 +430,79 @@
       </button>
     </div>
   </div>
+
+  {#if adminEnv.current === 'test'}
+    <div class="sandbox-testers-card card">
+      <div class="sandbox-testers-header">
+        <div>
+          <div class="sandbox-card-title">{$t('licenses.sandboxTesterCardTitle')}</div>
+          <div class="sandbox-card-desc">{$t('licenses.sandboxTesterCardDesc')}</div>
+        </div>
+        <div class="sandbox-card-actions">
+          <button class="btn btn-secondary btn-sm" onclick={() => (showAddTesterModal = true)}>
+            + {$t('licenses.addTesterBtn')}
+          </button>
+          <button
+            class="btn btn-primary btn-sm btn-quick-mint"
+            disabled={quickMinting}
+            onclick={() => handleQuickMintTestLicense('b0036718cb9a469999d2910cdf418b1f', 'tmp@301098.xyz')}
+          >
+            {quickMinting ? $t('licenses.mintingQuickTest') : $t('licenses.mintQuickTestLicense')}
+          </button>
+        </div>
+      </div>
+
+      <div class="testers-grid">
+        {#each betaTesters as tester (tester.id)}
+          <div class="tester-chip">
+            <div class="tester-info">
+              {#if tester.device_id}
+                <div class="tester-field">
+                  <span class="chip-label">DEV:</span>
+                  <code class="chip-val">{tester.device_id}</code>
+                </div>
+              {/if}
+              {#if tester.email}
+                <div class="tester-field">
+                  <span class="chip-label">EMAIL:</span>
+                  <span class="chip-val">{tester.email}</span>
+                </div>
+              {/if}
+              {#if tester.notes}
+                <div class="chip-notes">{tester.notes}</div>
+              {/if}
+            </div>
+            <div class="tester-actions">
+              <button
+                type="button"
+                class="chip-action-btn"
+                title={$t('licenses.quickFill')}
+                onclick={() => {
+                  if (tester.device_id) genBoundDeviceId = tester.device_id;
+                  if (tester.email) genBuyerEmail = tester.email;
+                  genSource = 'test';
+                  showGenerateModal = true;
+                }}
+              >
+                {$t('licenses.quickFill')}
+              </button>
+              <button
+                type="button"
+                class="chip-del-btn"
+                title={$t('common.delete')}
+                onclick={() => handleDeleteTester(tester.id)}
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        {/each}
+        {#if betaTesters.length === 0}
+          <div class="no-testers-hint">{$t('licenses.noTesters')}</div>
+        {/if}
+      </div>
+    </div>
+  {/if}
 
   <div class="filter-bar card">
     <div class="search-group">
@@ -457,6 +622,9 @@
         <select id="source-select" class="input" bind:value={genSource}>
           <option value="admin">{$t('licenses.sourceAdmin')}</option>
           <option value="promo">{$t('licenses.sourcePromo')}</option>
+          {#if adminEnv.current === 'test'}
+            <option value="test">{$t('licenses.sourceTest')}</option>
+          {/if}
         </select>
         <p class="field-hint">{$t('licenses.sourceHint')}</p>
       </div>
@@ -476,16 +644,22 @@
 
       <div class="form-group">
         <label for="exp-days">
-          {genSource === 'promo' ? $t('licenses.redeemDays') : $t('licenses.expiresDays')}
+          {genSource === 'promo' || genSource === 'test' ? $t('licenses.redeemDays') : $t('licenses.expiresDays')}
         </label>
-        <input id="exp-days" type="number" class="input" placeholder={genSource === 'promo' ? $t('licenses.redeemPlaceholder') : $t('licenses.expiresPlaceholder')} bind:value={genExpiresInDays} min="1" />
+        <input id="exp-days" type="number" class="input" placeholder={genSource === 'promo' || genSource === 'test' ? $t('licenses.redeemPlaceholder') : $t('licenses.expiresPlaceholder')} bind:value={genExpiresInDays} min="1" />
       </div>
 
       <div class="form-group">
         <label for="dur-days">
-          {genSource === 'promo' ? $t('licenses.durationDaysPromo') : $t('licenses.durationDaysAdmin')}
+          {genSource === 'promo' || genSource === 'test' ? $t('licenses.durationDaysPromo') : $t('licenses.durationDaysAdmin')}
         </label>
-        <input id="dur-days" type="number" class="input" placeholder={genSource === 'promo' ? $t('licenses.durationPromoPlaceholder') : $t('licenses.durationAdminPlaceholder')} bind:value={genDurationDays} min="0" />
+        <input id="dur-days" type="number" class="input" placeholder={genSource === 'promo' || genSource === 'test' ? $t('licenses.durationPromoPlaceholder') : $t('licenses.durationAdminPlaceholder')} bind:value={genDurationDays} min="0" />
+      </div>
+
+      <div class="form-group">
+        <label for="bound-dev">{$t('licenses.boundDeviceId')}:</label>
+        <input id="bound-dev" type="text" class="input" placeholder={$t('licenses.boundDevicePlaceholder')} bind:value={genBoundDeviceId} />
+        <p class="field-hint">{$t('licenses.boundDeviceHint')}</p>
       </div>
 
       <div class="form-group">
@@ -581,11 +755,162 @@
   </Modal>
 {/if}
 
+{#if showAddTesterModal}
+  <Modal open={true} title={$t('licenses.addTesterBtn')} maxWidth="520px" onclose={() => (showAddTesterModal = false)}>
+    <form onsubmit={handleAddTester} class="gen-form">
+      <div class="form-group">
+        <label for="tester-device">{$t('licenses.deviceIdLabel')}:</label>
+        <input id="tester-device" type="text" class="input" placeholder="e.g. b0036718cb9a469999d2910cdf418b1f" bind:value={newTesterDevice} />
+      </div>
+
+      <div class="form-group">
+        <label for="tester-email">{$t('licenses.emailLabel')}:</label>
+        <input id="tester-email" type="email" class="input" placeholder="e.g. tmp@301098.xyz" bind:value={newTesterEmail} />
+      </div>
+
+      <div class="form-group">
+        <label for="tester-notes">{$t('licenses.notesLabel')}:</label>
+        <input id="tester-notes" type="text" class="input" placeholder="e.g. Test Lab Machine A" bind:value={newTesterNotes} />
+      </div>
+    </form>
+    {#snippet footer()}
+      <button type="button" class="btn btn-secondary" onclick={() => (showAddTesterModal = false)}>{$t('common.cancel')}</button>
+      <button type="button" class="btn btn-primary" onclick={handleAddTester}>{$t('common.save')}</button>
+    {/snippet}
+  </Modal>
+{/if}
+
 <style>
   .page-container { display: flex; flex-direction: column; gap: 1.5rem; }
   .header-row { display: flex; justify-content: space-between; align-items: center; }
   h2 { font-size: 1.5rem; font-weight: 700; }
   .subtitle { font-size: 0.875rem; color: var(--text-muted); }
+
+  .sandbox-testers-card {
+    background: linear-gradient(135deg, rgba(234, 179, 8, 0.08) 0%, rgba(245, 158, 11, 0.03) 100%);
+    border: 1px solid rgba(234, 179, 8, 0.25);
+    border-radius: var(--radius-md);
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .sandbox-testers-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  .sandbox-card-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #eab308;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .sandbox-card-desc {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 0.2rem;
+  }
+  .sandbox-card-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+  }
+  .btn-quick-mint {
+    background: #eab308;
+    color: #0f172a;
+    font-weight: 700;
+    border: none;
+  }
+  .btn-quick-mint:hover:not(:disabled) {
+    background: #facc15;
+  }
+
+  .testers-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 0.75rem;
+  }
+  .tester-chip {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(234, 179, 8, 0.2);
+    border-radius: var(--radius-sm);
+    padding: 0.65rem 0.85rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .tester-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    overflow: hidden;
+  }
+  .tester-field {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.75rem;
+  }
+  .chip-label {
+    font-size: 0.65rem;
+    font-weight: 800;
+    color: #eab308;
+    letter-spacing: 0.05em;
+  }
+  .chip-val {
+    font-family: var(--font-mono);
+    color: var(--text-primary);
+    font-size: 0.75rem;
+    word-break: break-all;
+  }
+  .chip-notes {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+  .tester-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .chip-action-btn {
+    background: rgba(234, 179, 8, 0.15);
+    color: #eab308;
+    border: 1px solid rgba(234, 179, 8, 0.3);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 0.7rem;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.15s ease;
+  }
+  .chip-action-btn:hover {
+    background: rgba(234, 179, 8, 0.3);
+  }
+  .chip-del-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 2px 4px;
+    font-size: 0.8rem;
+    transition: color 0.15s ease;
+  }
+  .chip-del-btn:hover {
+    color: #ef4444;
+  }
+  .no-testers-hint {
+    grid-column: 1 / -1;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    padding: 0.5rem 0;
+  }
 
   .filter-bar { padding: 1rem 1.5rem; }
   .search-group { display: flex; gap: 0.75rem; width: 100%; align-items: center; flex-wrap: wrap; }

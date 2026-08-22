@@ -36,6 +36,7 @@ const {
   ensureLicenseUpgradesTable,
   ensureLicensePaddleTxnIndex,
   ensureLicenseSourceColumns,
+  ensureBetaTestersTable,
 } = require(authPath);
 
 const { ensureManualBlacklistTable } = require(blacklistPath);
@@ -252,6 +253,14 @@ function makeEnv(db, overrides = {}) {
     assertEqual(dbRl.prepareCount, 1, 'ensureRateLimitsTable 1st call prepares statement');
     await ensureRateLimitsTable(makeEnv(dbRl));
     assertEqual(dbRl.prepareCount, 1, 'ensureRateLimitsTable 2nd call hits cache');
+
+    // ensureBetaTestersTable
+    const dbBeta = new CountingMockD1();
+    await ensureBetaTestersTable(makeEnv(dbBeta));
+    const betaPrepares = dbBeta.prepareCount;
+    assert(betaPrepares >= 1, `ensureBetaTestersTable 1st call prepares table + seed (${betaPrepares})`);
+    await ensureBetaTestersTable(makeEnv(dbBeta));
+    assertEqual(dbBeta.prepareCount, betaPrepares, 'ensureBetaTestersTable 2nd call hits cache');
   }
 
   // ------------------------------------------------------------

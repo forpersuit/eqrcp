@@ -65,11 +65,21 @@ export interface License {
   paddle_transaction_id?: string | null;
   paddle_subscription_id?: string | null;
   source?: LicenseSource | null;
+  bound_device_id?: string | null;
   revoked_at?: string | null;
   revoke_reason?: RevokeReason | null;
   created_at: string;
   active_devices_count: number;
   activations: Activation[];
+}
+
+export interface BetaTester {
+  id: number;
+  device_id?: string | null;
+  email?: string | null;
+  notes?: string | null;
+  status: string;
+  created_at: string;
 }
 
 export interface SystemErrorLog {

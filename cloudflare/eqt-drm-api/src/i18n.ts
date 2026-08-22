@@ -54,6 +54,15 @@ export const API_I18N: Record<string, Record<string, string>> = {
     de: "Gerät erfolgreich entkoppelt",
     fr: "Appareil dissocié avec succès"
   },
+  unauthorized_test_device: {
+    zh: "此测试授权码仅限指定的测试设备激活，当前设备无权激活。",
+    en: "This test license is restricted to the authorized test device.",
+    ja: "このテスト用ライセンスは指定されたテスト端末でのみ認証可能です。",
+    ko: "이 테스트 라이선스는 지정된 테스트 기기에서만 활성화할 수 있습니다.",
+    es: "Esta licencia de prueba está restringida al dispositivo de prueba autorizado.",
+    de: "Diese Testlizenz ist auf das autorisierte Testgerät beschränkt.",
+    fr: "Cette licence de test est réservée à l'appareil de test autorisé."
+  },
   unauthorized: {
     zh: "身份验证失败，请重新登录",
     en: "Unauthorized, please sign in again.",

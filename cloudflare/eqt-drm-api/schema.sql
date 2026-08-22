@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS licenses (
     paddle_transaction_id TEXT DEFAULT NULL,
     paddle_subscription_id TEXT DEFAULT NULL,
     source TEXT DEFAULT NULL,    -- 'purchase' | 'promo' | 'admin' | 'test'
+    bound_device_id TEXT DEFAULT NULL, -- Bound test device ID for restricted beta licenses
     auto_renew INTEGER DEFAULT 1, -- 1 = auto-renewal on, 0 = canceled / off
     revoked_at TEXT DEFAULT NULL, -- ISO time when status became revoked (abuse window)
     revoke_reason TEXT DEFAULT NULL, -- 'refund' | 'chargeback' | 'subscription' | 'admin' | 'test' | …
@@ -189,6 +190,19 @@ CREATE TABLE IF NOT EXISTS paddle_processed_transactions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_processed_txns_license ON paddle_processed_transactions(license_code);
+
+-- Sandbox beta test qualifications whitelist
+CREATE TABLE IF NOT EXISTS sandbox_beta_testers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    device_id TEXT DEFAULT NULL,
+    email TEXT DEFAULT NULL,
+    notes TEXT DEFAULT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_beta_device ON sandbox_beta_testers(device_id) WHERE device_id IS NOT NULL AND device_id != '';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_beta_email ON sandbox_beta_testers(email) WHERE email IS NOT NULL AND email != '';
 
 
 

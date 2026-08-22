@@ -2620,12 +2620,17 @@ function renderAboutPanel() {
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
                         <span style="font-size: 10px; color: var(--text-secondary); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;">${t('device_id')}</span>
                         ${(state.status?.deviceID && state.status.deviceID !== '------') ? `
-                            <span class="email-copy-wrapper" data-copy-text="${escapeAttr(state.status.deviceID)}" style="cursor: pointer; position: relative; display: inline-flex; align-items: center; gap: 4px; padding: 1px 6px; border-radius: 4px; border: 1px dashed var(--accent, #156f5a); background: rgba(21, 111, 90, 0.05); transition: background 0.2s;" title="${escapeAttr(t('copy_device_id') || 'Click to copy Device ID')}">
-                                <span style="font-size: 10px; color: var(--accent, #156f5a); font-weight: 700;">${t('copy') || 'Copy'}</span>
-                                <span class="email-copy-mask" style="position: absolute; inset: 0; background: var(--accent, #156f5a); color: #ffffff; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; opacity: 0; pointer-events: none; transition: opacity 0.2s ease; z-index: 10;">
-                                    ✓ ${escapeHTML(t('copied') || 'Copied')}
+                            <button type="button" class="btn-copy-device-icon email-copy-wrapper" data-copy-text="${escapeAttr(state.status.deviceID)}" style="background: var(--bg); border: 1px solid var(--line); border-radius: 6px; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-secondary); padding: 0; position: relative; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); box-sizing: border-box;" title="${escapeAttr(t('copy_device_id') || 'Click to copy Device ID')}" aria-label="${escapeAttr(t('copy_device_id') || 'Click to copy Device ID')}">
+                                <svg class="copy-default-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transition: opacity 0.15s ease;">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                </svg>
+                                <span class="email-copy-mask" style="position: absolute; inset: 0; background: var(--accent, #156f5a); color: #ffffff; border-radius: 5px; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.2s ease; z-index: 10;">
+                                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
                                 </span>
-                            </span>
+                            </button>
                         ` : ''}
                     </div>
                     <span style="font-size: 13px; font-weight: 700; font-family: var(--font-mono); color: var(--text-primary); letter-spacing: 0.08em; user-select: text; word-break: break-all;">${escapeHTML(state.status?.deviceID || '------')}</span>

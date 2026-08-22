@@ -510,6 +510,20 @@ export async function handleDrmRoutes(
       }, net);
       const authoritativeDeviceId = regRes.device_id || (device_id || "");
 
+      // Check if license is bound to a specific test device ID
+      if (license.bound_device_id && license.bound_device_id.trim() !== "") {
+        const boundId = license.bound_device_id.trim();
+        const currentReqDevId = (device_id || "").trim();
+        if (currentReqDevId !== boundId && authoritativeDeviceId !== boundId) {
+          return new Response(JSON.stringify({
+            error: getApiTranslation("unauthorized_test_device", reqLang) || `This test license is restricted to authorized device: ${boundId}`
+          }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+      }
+
       const traceId = request.headers.get('X-Trace-Id') || null;
 
       const insRes = await env.DB.prepare(`

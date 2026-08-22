@@ -1,5 +1,5 @@
 import { Env } from '../types';
-import { requireAdminAuth } from '../utils/auth';
+import { requireAdminAuth, ensureBetaTestersTable, ensureLicenseSourceColumns } from '../utils/auth';
 import { ensureAuditLogTable } from '../utils/error-logger';
 import { activationAuditSnapshot, ensureAdminAuditLogTable, logAdminAudit } from '../utils/admin-audit';
 import { sendDRMEmail } from '../services/smtp';
@@ -147,9 +147,10 @@ export async function handleAdminRoutes(
   if ((url.pathname === "/api/v1/admin/generate" || url.pathname === "/api/v1/admin/generate-license") && request.method === "POST") {
     const denied = await requireAdminAuth(request, env, corsHeaders);
     if (denied) return denied;
+    await ensureLicenseSourceColumns(env);
 
     const body: any = await request.json();
-    const { tier, max_devices, expires_in_days, duration_days, buyer_email, send_email, source: rawSource } = body;
+    const { tier, max_devices, expires_in_days, duration_days, buyer_email, send_email, source: rawSource, bound_device_id } = body;
 
     if (tier !== "PLUS" && tier !== "PRO") {
       return new Response(JSON.stringify({ error: "Invalid tier. Must be 'PLUS' or 'PRO'" }), {
@@ -158,15 +159,17 @@ export async function handleAdminRoutes(
       });
     }
 
-    // Admin may mint promo (campaign) or admin (support/internal). Never purchase/test here.
+    // Admin may mint promo (campaign), test (sandbox beta tester), or admin (support/internal).
     const sourceRaw = String(rawSource || "admin").trim().toLowerCase();
-    const source = sourceRaw === "promo" ? "promo" : "admin";
+    const source = sourceRaw === "promo" ? "promo" : (sourceRaw === "test" || sourceRaw === "beta" ? "test" : "admin");
+    const boundDevice = (bound_device_id || "").trim() || null;
 
     const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
     const randBytes = new Uint8Array(6);
     crypto.getRandomValues(randBytes);
     const randStr = Array.from(randBytes, b => ('00' + b.toString(16)).slice(-2)).join('').toUpperCase();
-    const licenseCode = `EQT-${tier}-${todayStr}-${randStr}`;
+    const prefix = source === "test" ? `EQT-TEST-${tier}` : `EQT-${tier}`;
+    const licenseCode = `${prefix}-${todayStr}-${randStr}`;
 
     let expiresAt = "LIFETIME";
     if (expires_in_days) {
@@ -175,7 +178,7 @@ export async function handleAdminRoutes(
       expiresAt = expDate.toISOString();
     }
 
-    let maxDev = 2;
+    let maxDev = source === "test" ? 1 : 2;
     if (max_devices !== undefined && max_devices !== null && max_devices !== "") {
       const parsedMax = Number(max_devices);
       if (!Number.isFinite(parsedMax) || isNaN(parsedMax) || parsedMax < 1 || parsedMax > 100) {
@@ -191,10 +194,10 @@ export async function handleAdminRoutes(
       : null;
     const cleanEmail = (buyer_email || "").trim();
 
-    // Promo codes should have a redeem-by window; duration_days = post-activate entitlement.
-    if (source === "promo" && (!expires_in_days || Number(expires_in_days) <= 0)) {
+    // Promo and test codes should have a redeem-by window; duration_days = post-activate entitlement.
+    if ((source === "promo" || source === "test") && (!expires_in_days || Number(expires_in_days) <= 0)) {
       return new Response(JSON.stringify({
-        error: "Promo licenses require expires_in_days (redeem-by window)"
+        error: "Promo and test licenses require expires_in_days (redeem-by window)"
       }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -209,7 +212,7 @@ export async function handleAdminRoutes(
     }
 
     await env.DB.prepare(
-      "INSERT INTO licenses (license_code, tier, status, max_devices, expires_at, duration_days, buyer_email_hash, buyer_email, source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO licenses (license_code, tier, status, max_devices, expires_at, duration_days, buyer_email_hash, buyer_email, source, bound_device_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(
       licenseCode,
       tier,
@@ -220,6 +223,7 @@ export async function handleAdminRoutes(
       emailHash,
       cleanEmail || null,
       source,
+      boundDevice,
       new Date().toISOString()
     ).run();
 
@@ -1205,6 +1209,145 @@ export async function handleAdminRoutes(
     );
 
     return new Response(JSON.stringify({ success: true, entry: row }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
+  // GET /api/v1/admin/sandbox/testers
+  if (url.pathname === "/api/v1/admin/sandbox/testers" && request.method === "GET") {
+    const denied = await requireAdminAuth(request, env, corsHeaders);
+    if (denied) return denied;
+    await ensureBetaTestersTable(env);
+
+    const rows = await env.DB.prepare(
+      "SELECT * FROM sandbox_beta_testers ORDER BY id ASC"
+    ).all<any>();
+
+    return new Response(JSON.stringify({
+      success: true,
+      testers: rows.results || []
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
+  // POST /api/v1/admin/sandbox/testers
+  if (url.pathname === "/api/v1/admin/sandbox/testers" && request.method === "POST") {
+    const denied = await requireAdminAuth(request, env, corsHeaders);
+    if (denied) return denied;
+    await ensureBetaTestersTable(env);
+
+    const body: any = await request.json().catch(() => ({}));
+    const deviceId = (body.device_id || "").trim() || null;
+    const email = (body.email || "").trim() || null;
+    const notes = (body.notes || "").trim() || null;
+
+    if (!deviceId && !email) {
+      return new Response(JSON.stringify({ error: "Must specify at least device_id or email" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const now = new Date().toISOString();
+    const res = await env.DB.prepare(
+      "INSERT INTO sandbox_beta_testers (device_id, email, notes, status, created_at) VALUES (?, ?, ?, 'active', ?)"
+    ).bind(deviceId, email, notes, now).run();
+
+    return new Response(JSON.stringify({
+      success: true,
+      id: res.meta?.last_row_id || 0
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
+  // DELETE /api/v1/admin/sandbox/testers
+  if ((url.pathname === "/api/v1/admin/sandbox/testers" && request.method === "DELETE") || url.pathname.startsWith("/api/v1/admin/sandbox/testers/")) {
+    const denied = await requireAdminAuth(request, env, corsHeaders);
+    if (denied) return denied;
+    await ensureBetaTestersTable(env);
+
+    let targetId: number | null = null;
+    const match = url.pathname.match(/^\/api\/v1\/admin\/sandbox\/testers\/(\d+)$/);
+    if (match) {
+      targetId = parseInt(match[1], 10);
+    } else {
+      const body: any = await request.json().catch(() => ({}));
+      if (body.id) targetId = Number(body.id);
+    }
+
+    if (!targetId) {
+      return new Response(JSON.stringify({ error: "Missing tester id" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    await env.DB.prepare("DELETE FROM sandbox_beta_testers WHERE id = ?").bind(targetId).run();
+
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
+  // POST /api/v1/admin/sandbox/mint-test-license
+  if (url.pathname === "/api/v1/admin/sandbox/mint-test-license" && request.method === "POST") {
+    const denied = await requireAdminAuth(request, env, corsHeaders);
+    if (denied) return denied;
+    await ensureLicenseSourceColumns(env);
+    await ensureBetaTestersTable(env);
+
+    const body: any = await request.json().catch(() => ({}));
+    const tier = (body.tier === "PRO" ? "PRO" : "PLUS");
+    const deviceId = (body.device_id || "").trim() || "b0036718cb9a469999d2910cdf418b1f";
+    const email = (body.email || "").trim() || "tmp@301098.xyz";
+    const expDays = Number(body.expires_in_days || 7);
+    const durDays = Number(body.duration_days || 30);
+
+    const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    const randBytes = new Uint8Array(6);
+    crypto.getRandomValues(randBytes);
+    const randStr = Array.from(randBytes, b => ('00' + b.toString(16)).slice(-2)).join('').toUpperCase();
+    const licenseCode = `EQT-TEST-${tier}-${todayStr}-${randStr}`;
+
+    const expDate = new Date();
+    expDate.setDate(expDate.getDate() + expDays);
+    const expiresAt = expDate.toISOString();
+
+    const encoder = new TextEncoder();
+    const emailHashBuf = await crypto.subtle.digest("SHA-256", encoder.encode(email.toLowerCase()));
+    const emailHash = Array.from(new Uint8Array(emailHashBuf), x => ('00' + x.toString(16)).slice(-2)).join('');
+
+    await env.DB.prepare(`
+      INSERT INTO licenses (
+        license_code, tier, status, max_devices, expires_at, duration_days,
+        buyer_email_hash, buyer_email, source, bound_device_id, created_at
+      ) VALUES (?, ?, 'active', 1, ?, ?, ?, ?, 'test', ?, ?)
+    `).bind(
+      licenseCode,
+      tier,
+      expiresAt,
+      durDays,
+      emailHash,
+      email,
+      deviceId,
+      new Date().toISOString()
+    ).run();
+
+    return new Response(JSON.stringify({
+      success: true,
+      license_code: licenseCode,
+      tier,
+      bound_device_id: deviceId,
+      buyer_email: email,
+      expires_at: expiresAt,
+      duration_days: durDays
+    }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });

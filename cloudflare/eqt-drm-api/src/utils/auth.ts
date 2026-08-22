@@ -351,11 +351,12 @@ export async function ensureActivationDeviceIndex(env: Env): Promise<void> {
   }
 }
 
-/** Idempotent ALTERs for license origin + abuse-window timestamps. */
+/** Idempotent ALTERs for license origin + abuse-window timestamps + bound device. */
 export async function ensureLicenseSourceColumns(env: Env): Promise<void> {
   if (!env?.DB || licenseSourceColumnsEnsured.has(env.DB)) return;
   const alters = [
     "ALTER TABLE licenses ADD COLUMN source TEXT DEFAULT NULL",
+    "ALTER TABLE licenses ADD COLUMN bound_device_id TEXT DEFAULT NULL",
     "ALTER TABLE licenses ADD COLUMN revoked_at TEXT DEFAULT NULL",
     "ALTER TABLE licenses ADD COLUMN revoke_reason TEXT DEFAULT NULL",
     "ALTER TABLE licenses ADD COLUMN last_purchased_at TEXT DEFAULT NULL",
@@ -374,6 +375,54 @@ export async function ensureLicenseSourceColumns(env: Env): Promise<void> {
   }
   if (allOk) {
     licenseSourceColumnsEnsured.add(env.DB);
+  }
+}
+
+const betaTestersTableEnsured = new WeakSet<object>();
+
+export async function ensureBetaTestersTable(env: Env): Promise<void> {
+  if (!env?.DB || betaTestersTableEnsured.has(env.DB)) return;
+  try {
+    await env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS sandbox_beta_testers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        device_id TEXT DEFAULT NULL,
+        email TEXT DEFAULT NULL,
+        notes TEXT DEFAULT NULL,
+        status TEXT NOT NULL DEFAULT 'active',
+        created_at TEXT NOT NULL
+      )
+    `).run();
+    try {
+      await env.DB.prepare(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_beta_device ON sandbox_beta_testers(device_id) WHERE device_id IS NOT NULL AND device_id != ''
+      `).run();
+    } catch (_) {}
+    try {
+      await env.DB.prepare(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_beta_email ON sandbox_beta_testers(email) WHERE email IS NOT NULL AND email != ''
+      `).run();
+    } catch (_) {}
+
+    // Check if initial seeding is needed
+    const countRow = await env.DB.prepare("SELECT COUNT(*) as count FROM sandbox_beta_testers").first<{ count: number }>();
+    if (!countRow || countRow.count === 0) {
+      const now = new Date().toISOString();
+      await env.DB.batch([
+        env.DB.prepare("INSERT OR IGNORE INTO sandbox_beta_testers (device_id, email, notes, status, created_at) VALUES (?, NULL, ?, 'active', ?)").bind('b0036718cb9a469999d2910cdf418b1f', 'Default Sandbox Beta Device', now),
+        env.DB.prepare("INSERT OR IGNORE INTO sandbox_beta_testers (device_id, email, notes, status, created_at) VALUES (NULL, ?, ?, 'active', ?)").bind('tmp@301098.xyz', 'Default Sandbox Tester 1', now),
+        env.DB.prepare("INSERT OR IGNORE INTO sandbox_beta_testers (device_id, email, notes, status, created_at) VALUES (NULL, ?, ?, 'active', ?)").bind('anon@301098.xyz', 'Default Sandbox Tester 2', now),
+      ]);
+    }
+
+    betaTestersTableEnsured.add(env.DB);
+  } catch (err: any) {
+    const msg = String(err?.message || err);
+    if (/already exists/i.test(msg)) {
+      betaTestersTableEnsured.add(env.DB);
+    } else {
+      console.error("Failed to ensure sandbox_beta_testers table:", err);
+    }
   }
 }
 
