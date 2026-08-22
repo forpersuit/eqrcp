@@ -229,7 +229,7 @@ export async function handleAdminRoutes(
       const expiresStr = expiresAt === "LIFETIME" ? "Lifetime (永久生效)" : new Date(expiresAt).toLocaleDateString();
       const emailHtml = `
         <div style="font-family: sans-serif; padding: 20px; line-height: 1.6; color: #333;">
-          <h2 style="color: #10b981;">您的 EQT 专享授权激活码已发放！</h2>
+          <h2 style="color: #156f5a;">您的 EQT 专享授权激活码已发放！</h2>
           <p>管理员已成功为您创建 EQT 许可授权。以下是您的授权明细：</p>
           <table style="border-collapse: collapse; margin: 20px 0; width: 100%; max-width: 600px;">
             <tr>
@@ -238,7 +238,7 @@ export async function handleAdminRoutes(
             </tr>
             <tr>
               <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">激活码 (License Code)</td>
-              <td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 16px; font-weight: bold; color: #10b981;">${licenseCode}</td>
+              <td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 16px; font-weight: bold; color: #156f5a;">${licenseCode}</td>
             </tr>
             <tr>
               <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">有效期限 (Expires)</td>

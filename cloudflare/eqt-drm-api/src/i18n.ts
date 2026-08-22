@@ -586,7 +586,7 @@ export const PURCHASE_EMAIL_I18N: Record<string, { subject: string; title: strin
       <p style="color: #475569; font-size: 14px;">Thank you for choosing EQT Easy QR Transfer! Your paid license details:</p>
       <table style="border-collapse: collapse; margin: 20px 0; width: 100%; max-width: 600px;">
         <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9; width: 180px;">Tier</td><td style="padding: 10px; border: 1px solid #ddd;">${planName}</td></tr>
-        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">License Code</td><td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 16px; font-weight: bold; color: #10b981;">${code}</td></tr>
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">License Code</td><td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 16px; font-weight: bold; color: #156f5a;">${code}</td></tr>
         <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">Expires</td><td style="padding: 10px; border: 1px solid #ddd;">${expiresStr}</td></tr>
         <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">Max Devices</td><td style="padding: 10px; border: 1px solid #ddd;">2 Devices</td></tr>
       </table>
@@ -599,7 +599,7 @@ export const PURCHASE_EMAIL_I18N: Record<string, { subject: string; title: strin
       <p style="color: #475569; font-size: 14px;">感谢您选择 EQT Easy QR Transfer！以下是您的付费授权明细：</p>
       <table style="border-collapse: collapse; margin: 20px 0; width: 100%; max-width: 600px;">
         <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9; width: 180px;">授权级别 (Tier)</td><td style="padding: 10px; border: 1px solid #ddd;">${planName}</td></tr>
-        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">激活码 (License Code)</td><td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 16px; font-weight: bold; color: #10b981;">${code}</td></tr>
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">激活码 (License Code)</td><td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 16px; font-weight: bold; color: #156f5a;">${code}</td></tr>
         <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">有效期限 (Expires)</td><td style="padding: 10px; border: 1px solid #ddd;">${expiresStr}</td></tr>
         <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">最大激活设备数</td><td style="padding: 10px; border: 1px solid #ddd;">2 台设备</td></tr>
       </table>
@@ -612,7 +612,7 @@ export const PURCHASE_EMAIL_I18N: Record<string, { subject: string; title: strin
       <p style="color: #475569; font-size: 14px;">EQT Easy QR Transfer をお選びいただきありがとうございます。ライセンス詳細：</p>
       <table style="border-collapse: collapse; margin: 20px 0; width: 100%; max-width: 600px;">
         <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9; width: 180px;">プラン (Tier)</td><td style="padding: 10px; border: 1px solid #ddd;">${planName}</td></tr>
-        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">ライセンスコード</td><td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 16px; font-weight: bold; color: #10b981;">${code}</td></tr>
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">ライセンスコード</td><td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 16px; font-weight: bold; color: #156f5a;">${code}</td></tr>
         <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">有効期限</td><td style="padding: 10px; border: 1px solid #ddd;">${expiresStr}</td></tr>
         <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">最大台数</td><td style="padding: 10px; border: 1px solid #ddd;">2 台</td></tr>
       </table>
@@ -625,7 +625,7 @@ export const PURCHASE_EMAIL_I18N: Record<string, { subject: string; title: strin
       <p style="color: #475569; font-size: 14px;">EQT Easy QR Transfer를 선택해 주셔서 감사합니다. 라이선스 상세 정보:</p>
       <table style="border-collapse: collapse; margin: 20px 0; width: 100%; max-width: 600px;">
         <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9; width: 180px;">플랜 (Tier)</td><td style="padding: 10px; border: 1px solid #ddd;">${planName}</td></tr>
-        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">라이선스 코드</td><td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 16px; font-weight: bold; color: #10b981;">${code}</td></tr>
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">라이선스 코드</td><td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 16px; font-weight: bold; color: #156f5a;">${code}</td></tr>
         <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">만료일</td><td style="padding: 10px; border: 1px solid #ddd;">${expiresStr}</td></tr>
         <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">최대 기기 수</td><td style="padding: 10px; border: 1px solid #ddd;">2 대</td></tr>
       </table>
@@ -638,7 +638,7 @@ export const PURCHASE_EMAIL_I18N: Record<string, { subject: string; title: strin
       <p style="color: #475569; font-size: 14px;">¡Gracias por elegir EQT Easy QR Transfer! Detalles de su licencia:</p>
       <table style="border-collapse: collapse; margin: 20px 0; width: 100%; max-width: 600px;">
         <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9; width: 180px;">Plan</td><td style="padding: 10px; border: 1px solid #ddd;">${planName}</td></tr>
-        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">Código de Licencia</td><td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 16px; font-weight: bold; color: #10b981;">${code}</td></tr>
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">Código de Licencia</td><td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 16px; font-weight: bold; color: #156f5a;">${code}</td></tr>
         <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">Vencimiento</td><td style="padding: 10px; border: 1px solid #ddd;">${expiresStr}</td></tr>
         <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">Dispositivos máximos</td><td style="padding: 10px; border: 1px solid #ddd;">2 Dispositivos</td></tr>
       </table>
@@ -651,7 +651,7 @@ export const PURCHASE_EMAIL_I18N: Record<string, { subject: string; title: strin
       <p style="color: #475569; font-size: 14px;">Vielen Dank, dass Sie sich für EQT entschieden haben. Ihre Lizenzdetails:</p>
       <table style="border-collapse: collapse; margin: 20px 0; width: 100%; max-width: 600px;">
         <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9; width: 180px;">Tarif</td><td style="padding: 10px; border: 1px solid #ddd;">${planName}</td></tr>
-        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">Lizenzschlüssel</td><td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 16px; font-weight: bold; color: #10b981;">${code}</td></tr>
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">Lizenzschlüssel</td><td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 16px; font-weight: bold; color: #156f5a;">${code}</td></tr>
         <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">Ablaufdatum</td><td style="padding: 10px; border: 1px solid #ddd;">${expiresStr}</td></tr>
         <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">Max. Geräte</td><td style="padding: 10px; border: 1px solid #ddd;">2 Geräte</td></tr>
       </table>
@@ -664,7 +664,7 @@ export const PURCHASE_EMAIL_I18N: Record<string, { subject: string; title: strin
       <p style="color: #475569; font-size: 14px;">Merci d'avoir choisi EQT Easy QR Transfer ! Détails de votre licence :</p>
       <table style="border-collapse: collapse; margin: 20px 0; width: 100%; max-width: 600px;">
         <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9; width: 180px;">Forfait</td><td style="padding: 10px; border: 1px solid #ddd;">${planName}</td></tr>
-        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">Clé de licence</td><td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 16px; font-weight: bold; color: #10b981;">${code}</td></tr>
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">Clé de licence</td><td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 16px; font-weight: bold; color: #156f5a;">${code}</td></tr>
         <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">Expiration</td><td style="padding: 10px; border: 1px solid #ddd;">${expiresStr}</td></tr>
         <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">Appareils max</td><td style="padding: 10px; border: 1px solid #ddd;">2 Appareils</td></tr>
       </table>
@@ -679,7 +679,7 @@ export const RENEWAL_EMAIL_I18N: Record<string, { subject: string; title: string
     body: (code, expiresStr) => `
       <p style="color: #475569; font-size: 14px;">Paddle has completed the recurring payment. Your <strong>license code remains unchanged</strong> and your privileges have been extended:</p>
       <table style="border-collapse: collapse; margin: 20px 0; width: 100%; max-width: 600px;">
-        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9; width: 180px;">License Code</td><td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 16px; font-weight: bold; color: #10b981;">${code}</td></tr>
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9; width: 180px;">License Code</td><td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 16px; font-weight: bold; color: #156f5a;">${code}</td></tr>
         <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">New Expiration</td><td style="padding: 10px; border: 1px solid #ddd;">${expiresStr}</td></tr>
         <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">Status</td><td style="padding: 10px; border: 1px solid #ddd;">Active</td></tr>
       </table>
@@ -691,7 +691,7 @@ export const RENEWAL_EMAIL_I18N: Record<string, { subject: string; title: string
     body: (code, expiresStr) => `
       <p style="color: #475569; font-size: 14px;">Paddle 已完成本周期扣费。您的<strong>激活码不变</strong>，权益已延长：</p>
       <table style="border-collapse: collapse; margin: 20px 0; width: 100%; max-width: 600px;">
-        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9; width: 180px;">激活码</td><td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 16px; font-weight: bold; color: #10b981;">${code}</td></tr>
+        <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9; width: 180px;">激活码</td><td style="padding: 10px; border: 1px solid #ddd; font-family: monospace; font-size: 16px; font-weight: bold; color: #156f5a;">${code}</td></tr>
         <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">新有效期至</td><td style="padding: 10px; border: 1px solid #ddd;">${expiresStr}</td></tr>
         <tr><td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">状态</td><td style="padding: 10px; border: 1px solid #ddd;">Active (活跃)</td></tr>
       </table>

@@ -145,10 +145,10 @@ UPDATE licenses SET status = 'revoked' WHERE paddle_subscription_id = ?;
 | Sandbox | `PATCH https://sandbox-api.paddle.com/settings/account` | Seller API key（沙箱 `pdl_sdbx_...`） |
 | Live | `PATCH https://api.paddle.com/settings/account` | Seller API key（`pdl_live_...`） |
 
-- **局部更新**：PATCH 只改你传的字段，其余（default_checkout_url / tax mode / saved payment methods）不变；只改主题色只需发 `{"primary_checkout_color":"#39e5b6"}`。
+- **局部更新**：PATCH 只改你传的字段，其余（default_checkout_url / tax mode / saved payment methods）不变；只改主题色只需发 `{"primary_checkout_color":"#156f5a"}`。
 - **默认支付链接是必需项**：不设置时 Checkout 直接打不开，报 "Something went wrong"。沙箱可填任意 URL（含 localhost）；live 需先通过域名审核。
 - **执行脚本**：`scripts/paddle-set-checkout-theme.sh`（见脚本头注释）——一键对 sandbox + live 设主题色，可选带默认支付链接。
-- **无代码替代**：Paddle Dashboard → Checkout → Checkout settings → Primary brand color，填产品主题色 `#39e5b6`。
+- **无代码替代**：Paddle Dashboard → Checkout → Checkout settings → Primary brand color，填产品主题色 `#156f5a`。
 
 ---
 
