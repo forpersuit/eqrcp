@@ -2452,7 +2452,7 @@ func New(cfg *config.Config) (*Server, error) {
 				LicenseTier:     usage.LicenseTier,
 				UsedTransfers:   usage.UsedTransfers,
 				ClockTampered:   usage.ClockTampered,
-				LicenseLifetime: usage.LicenseTier == "PLUS" && usage.CodeDate == "LIFETIME",
+				LicenseLifetime: isPlusLifetime(usage.LicenseTier, usage.CodeDate),
 			}
 			if cookie, err := r.Cookie("eqt-lang"); err == nil && cookie.Value != "" {
 				htmlVariables.Lang = cookie.Value
@@ -2982,7 +2982,7 @@ func New(cfg *config.Config) (*Server, error) {
 			LicenseTier:     usage.LicenseTier,
 			UsedTransfers:   usage.UsedReceiveTransfers,
 			ClockTampered:   usage.ClockTampered,
-			LicenseLifetime: usage.LicenseTier == "PLUS" && usage.CodeDate == "LIFETIME",
+			LicenseLifetime: isPlusLifetime(usage.LicenseTier, usage.CodeDate),
 		}
 		if cookie, err := r.Cookie("eqt-lang"); err == nil && cookie.Value != "" {
 			htmlVariables.Lang = cookie.Value

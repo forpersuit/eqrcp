@@ -573,6 +573,27 @@ func TestDonePageListsTransferredFiles(t *testing.T) {
 	}
 }
 
+var badgeMarkupRE = regexp.MustCompile(`class="license-badge([^"]*)"[^>]*>\s*([^<]+?)\s*</span>`)
+
+func TestIsPlusLifetime(t *testing.T) {
+	cases := []struct {
+		tier, codeDate string
+		want           bool
+	}{
+		{"PLUS", "LIFETIME", true},
+		{"PLUS", "20260101", false},
+		{"PLUS", "", false},
+		{"PRO", "LIFETIME", false},
+		{"", "LIFETIME", false},
+		{"", "", false},
+	}
+	for _, tc := range cases {
+		if got := isPlusLifetime(tc.tier, tc.codeDate); got != tc.want {
+			t.Errorf("isPlusLifetime(%q, %q) = %v, want %v", tc.tier, tc.codeDate, got, tc.want)
+		}
+	}
+}
+
 func TestTierLifetimeBadgeClasses(t *testing.T) {
 	cases := []struct {
 		name            string
@@ -648,8 +669,7 @@ func TestTierLifetimeBadgeClasses(t *testing.T) {
 			html := out.String()
 
 			// Extract the license-badge span: class="license-badge[classes]" > text </span>
-			re := regexp.MustCompile(`class="license-badge([^"]*)"[^>]*>\s*([^<]+?)\s*</span>`)
-			m := re.FindStringSubmatch(html)
+			m := badgeMarkupRE.FindStringSubmatch(html)
 			if m == nil {
 				t.Fatalf("%s page missing license-badge markup", tc.template)
 			}

@@ -50,6 +50,13 @@ type ChatUsage struct {
 	LicenseTier          string `json:"licenseTier"`   // Activated license tier (e.g. PLUS, PRO)
 }
 
+// isPlusLifetime reports whether the activated license is the PLUS lifetime plan.
+// Lifetime is a PLUS-only product; a PRO certificate carrying "LIFETIME" expiry
+// is not treated as the lifetime badge.
+func isPlusLifetime(tier, codeDate string) bool {
+	return tier == "PLUS" && codeDate == "LIFETIME"
+}
+
 // ChatLimiter manages daily chat time limits and payment state.
 type ChatLimiter struct {
 	mu            sync.Mutex
