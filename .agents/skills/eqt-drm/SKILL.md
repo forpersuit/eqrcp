@@ -226,6 +226,19 @@ echo -n "your_secret_value" | npx wrangler secret put KEY_NAME
   - 页面通过 `window.EQT_IS_TEST`（`js/api-base.js` 解析）判断测试环境。
   - 当为测试环境时，Header Logo 旁动态渲染高亮 `TEST` 徽章，页面主区域顶部展示测试环境提示横幅，支持 7 种语言实时国际化切换。
 
+### 9.1 沙箱 Beta 测试白名单约束 (Sandbox Beta Tester Whitelist Constraint)
+
+> **文档 SSOT**：[`docs/test/sandbox-beta-license.md`](../../docs/test/sandbox-beta-license.md)。
+
+测试版激活的防外泄机制：白名单实时查询替代静态 `bound_device_id`，约束叠加在 source/environment 之上。
+- **触发判定 `needsSandboxConstraint(source, env, url)`**：`source === 'test'`（测试夹具码）**或** `isTestEnvironment(env, url)`（测试 Worker，覆盖 Paddle sandbox 购买码）→ 任一命中即受约束。即测试码在所有环境受约束、所有码在测试环境受约束。
+- **白名单表 `sandbox_beta_testers`**：`(device_id, email, notes, status DEFAULT 'active', created_at)`。`email` 唯一索引 + `device_id` 非唯一普通索引（一个 device 可挂多个 email）。`email` 允许空、`device_id` 允许空（未关联前可仅登记 email），但**激活时必须两条齐全**。
+- **实时校验 `assertSandboxTesterAllowed`**：`SELECT * FROM sandbox_beta_testers WHERE LOWER(email)=? AND status='active'` → 记录存在且有 `device_id` 且与**服务端权威 `device_id`**（`registerOrRefreshDevice` 返回值，绝不信任客户端自报）一致才放行，否则 403。白名单校验放在 `!isAlreadyActivated` 分支**外层**——删除登记即阻断已激活设备的再激活与 verify，实现「删设备即失效」。
+- **8 天硬上限 `applySandboxExpiry`**：`min(baseExpiresAt, created_at + 8d)`，**activate 与 verify 两条路径都必须应用**（verify 会经 `baseExpiresAt` 续签客户端证书签名，漏一处即绕过）。`LIFETIME` 码在沙箱环境同样被截断到 8 天。
+- **Admin 发码顺序「先登记后发码」**：`mint-test-license` 必须先行校验 `sandbox_beta_testers` 存在对应 `(device_id, LOWER(email), status='active')` 记录，否则 400；`expires_in_days` 默认 8、上限 8。
+- **测试入口**：`npm run test:sandbox:offline`（esbuild 三文件 + `node --experimental-sqlite`），测试组覆盖 8 天到期、删白名单阻断激活/verify、仅 email 无 device 不可激活、Paddle 购买在测试环境被截断 8 天。
+- **写 helper 时的坑**：`corsHeaders`、`net` 是 handler 局部作用域而非模块级——新 helper 若要用 CORS 头或 `activationClientMeta(request)`，须显式作为参数传入并在两处调用点传值。
+
 ---
 
 ## 10. 官网与客户门户前后端契约规范 (Website & Portal Contract Guidelines)
