@@ -2224,7 +2224,7 @@ function renderSettingsPanel() {
                         <option value="off" ${state.settings?.autoUpdateMode === 'off' ? 'selected' : ''}>${t('update_off')}</option>
                         <option value="notify" ${state.settings?.autoUpdateMode === 'notify' ? 'selected' : ''}>${t('update_notify')}</option>
                         <option value="download" ${state.settings?.autoUpdateMode === 'download' ? 'selected' : ''}>${t('update_download')}</option>
-                        <option value="silent" ${state.settings?.autoUpdateMode === 'silent' ? 'selected' : ''}>${t('update_silent')}</option>
+                        <option value="silent" ${state.settings?.autoUpdateMode === 'silent' || !state.settings?.autoUpdateMode ? 'selected' : ''}>${t('update_silent')}</option>
                     </select>
                 </div>
 
@@ -5304,7 +5304,7 @@ function applyStatusData(nextStatus) {
     const nextLicenseReady = nextStatus?.licenseReady;
 
     if (prevStatusState === 'busy' && nextStatusState !== 'busy') {
-        const updateMode = state.settings?.autoUpdateMode || 'download';
+        const updateMode = state.settings?.autoUpdateMode || 'silent';
         if (state.updateStage === 'available' && (updateMode === 'download' || updateMode === 'silent')) {
             console.log('[AutoUpdate] Transfer finished, agent returned to idle. Resuming update download.');
             triggerDownloadUpdate().catch((e) => {
@@ -6292,7 +6292,7 @@ async function runAutoUpdateCheck(force = false) {
         window.setTimeout(() => runAutoUpdateCheck(false), 900000); // 15 分钟轮询一次
     };
 
-    const mode = state.settings?.autoUpdateMode || 'download';
+    const mode = state.settings?.autoUpdateMode || 'silent';
     if (mode === 'off') {
         console.log('[AutoUpdate] Auto update mode is off, skipping check.');
         reschedule();
@@ -6433,7 +6433,7 @@ async function runManualUpdateCheck() {
                 return;
             }
 
-            const mode = state.settings?.autoUpdateMode || 'download';
+            const mode = state.settings?.autoUpdateMode || 'silent';
             if (mode === 'off' || mode === 'notify') {
                 state.updateStage = 'available';
                 state.updateStatusText = t('version_available', { version: checkRes.version });

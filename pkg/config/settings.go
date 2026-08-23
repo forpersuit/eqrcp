@@ -130,7 +130,7 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 	if v.IsSet("viewportDebug") {
 		viewportDebug = v.GetBool("viewportDebug")
 	}
-	autoUpdateMode := "download"
+	autoUpdateMode := "silent"
 	if v.IsSet("autoUpdateMode") {
 		autoUpdateMode = v.GetString("autoUpdateMode")
 	}

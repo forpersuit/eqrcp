@@ -22,7 +22,7 @@ func TestDesktopSettingsReadAndWriteChatProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if settings.ConfigPath != configPath || settings.Output != "/tmp/old" || settings.Interface != "any" || settings.Mode != "dev" || settings.Port != 19000 || settings.Browser || settings.ChatAutoSave || settings.CloseBehavior != DesktopCloseBehaviorQuit || settings.ChatSender != "Desk" || settings.ChatAvatar != "D" || settings.AutoUpdateMode != "download" || settings.UpdateChannel != "stable" {
+	if settings.ConfigPath != configPath || settings.Output != "/tmp/old" || settings.Interface != "any" || settings.Mode != "dev" || settings.Port != 19000 || settings.Browser || settings.ChatAutoSave || settings.CloseBehavior != DesktopCloseBehaviorQuit || settings.ChatSender != "Desk" || settings.ChatAvatar != "D" || settings.AutoUpdateMode != "silent" || settings.UpdateChannel != "stable" {
 		t.Fatalf("settings = %#v, want config values", settings)
 	}
 
