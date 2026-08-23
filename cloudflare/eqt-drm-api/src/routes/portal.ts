@@ -625,6 +625,33 @@ export async function handlePortalRoutes(
       }
     }
 
+    // Turning auto-renew back on must also clear the Paddle-side scheduled cancel,
+    // otherwise the subscription still dies at the end of the billing period.
+    if (targetAutoRenew === 1 && subscriptionId && isRealPaddleSubscriptionId(subscriptionId)) {
+      const paddleApiKey = env.PADDLE_API_KEY;
+      if (paddleApiKey) {
+        const isSandbox = paddleApiKey.startsWith("pdl_sdbx_");
+        const paddleBaseUrl = isSandbox ? "https://sandbox-api.paddle.com" : "https://api.paddle.com";
+        try {
+          const reactivateRes = await fetch(`${paddleBaseUrl}/subscriptions/${subscriptionId}`, {
+            method: "PATCH",
+            headers: {
+              "Authorization": `Bearer ${paddleApiKey}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              scheduled_change: null
+            })
+          });
+          if (!reactivateRes.ok) {
+            console.error(`Paddle scheduled_change clear failed: ${reactivateRes.status} ${await reactivateRes.text()}`);
+          }
+        } catch (e) {
+          console.error("Paddle scheduled_change clear warning:", e);
+        }
+      }
+    }
+
     // Update D1 database (KEEP license.status = 'active' so current paid period remains usable!)
     await env.DB.prepare(
       "UPDATE licenses SET auto_renew = ? WHERE license_code = ?"
