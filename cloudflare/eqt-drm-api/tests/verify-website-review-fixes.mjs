@@ -87,28 +87,106 @@ function extractTranslations(htmlContent) {
 function findDuplicateKeys(htmlContent) {
   const match = htmlContent.match(/const\s+translations\s*=\s*(\{[\s\S]*?\n\s*\});/);
   if (!match) return [];
-  const dictStr = match[1];
+  const src = match[1];
   const duplicates = [];
-  const langRegex = /"([a-z]{2})":\s*\{([\s\S]*?)\n\s*\}(?=,|\s*\n\s*\})/g;
-  let lMatch;
-  while ((lMatch = langRegex.exec(dictStr)) !== null) {
-    const lang = lMatch[1];
-    const body = lMatch[2];
-    const keyRegex = /"([^"\n]+)"\s*:/g;
-    const seen = new Set();
-    const langDups = [];
-    let kMatch;
-    while ((kMatch = keyRegex.exec(body)) !== null) {
-      const key = kMatch[1];
-      if (seen.has(key)) {
-        langDups.push(key);
+  
+  let i = 0;
+  const n = src.length;
+  
+  // Scope stack: each entry is { path: string, seen: Set<string>, expectingKey: boolean, isObject: boolean }
+  const stack = [];
+  let currentKey = null;
+  
+  function skipWhitespaceAndComments() {
+    while (i < n) {
+      const c = src[i];
+      if (c === ' ' || c === '\t' || c === '\r' || c === '\n') {
+        i++;
+      } else if (c === '/' && src[i + 1] === '/') {
+        i += 2;
+        while (i < n && src[i] !== '\n') i++;
+      } else if (c === '/' && src[i + 1] === '*') {
+        i += 2;
+        while (i < n && !(src[i] === '*' && src[i + 1] === '/')) i++;
+        if (i < n) i += 2;
+      } else {
+        break;
       }
-      seen.add(key);
-    }
-    if (langDups.length > 0) {
-      duplicates.push({ lang, keys: langDups });
     }
   }
+
+  function readString() {
+    const quote = src[i]; // ' or "
+    i++;
+    let str = '';
+    while (i < n) {
+      const c = src[i];
+      if (c === '\\') {
+        if (i + 1 < n) {
+          str += src[i + 1];
+          i += 2;
+        } else {
+          i++;
+        }
+      } else if (c === quote) {
+        i++;
+        return str;
+      } else {
+        str += c;
+        i++;
+      }
+    }
+    return str;
+  }
+
+  while (i < n) {
+    skipWhitespaceAndComments();
+    if (i >= n) break;
+    const c = src[i];
+    const top = stack[stack.length - 1];
+
+    if (c === '{') {
+      const parentPath = top ? (currentKey ? `${top.path}.${currentKey}` : top.path) : 'translations';
+      stack.push({ path: parentPath, seen: new Set(), expectingKey: true, isObject: true });
+      currentKey = null;
+      i++;
+    } else if (c === '}') {
+      stack.pop();
+      currentKey = null;
+      i++;
+    } else if (c === '[') {
+      stack.push({ path: top ? top.path : 'array', seen: new Set(), expectingKey: false, isObject: false });
+      i++;
+    } else if (c === ']') {
+      stack.pop();
+      i++;
+    } else if (c === ':') {
+      if (top && top.isObject && currentKey !== null) {
+        if (top.seen.has(currentKey)) {
+          duplicates.push({ scope: top.path, key: currentKey });
+        } else {
+          top.seen.add(currentKey);
+        }
+        top.expectingKey = false;
+      }
+      i++;
+    } else if (c === ',') {
+      if (top && top.isObject) {
+        top.expectingKey = true;
+        currentKey = null;
+      }
+      i++;
+    } else if (c === '"' || c === "'") {
+      const strVal = readString();
+      if (top && top.isObject && top.expectingKey) {
+        currentKey = strVal;
+      }
+    } else {
+      // Numbers, booleans, identifiers, etc.
+      i++;
+    }
+  }
+
   return duplicates;
 }
 
