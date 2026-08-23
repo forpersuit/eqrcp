@@ -84,8 +84,43 @@ function extractTranslations(htmlContent) {
   return new Function(`return (${match[1]});`)();
 }
 
+function findDuplicateKeys(htmlContent) {
+  const match = htmlContent.match(/const\s+translations\s*=\s*(\{[\s\S]*?\n\s*\});/);
+  if (!match) return [];
+  const dictStr = match[1];
+  const duplicates = [];
+  const langRegex = /"([a-z]{2})":\s*\{([\s\S]*?)\n\s*\}(?=,|\s*\n\s*\})/g;
+  let lMatch;
+  while ((lMatch = langRegex.exec(dictStr)) !== null) {
+    const lang = lMatch[1];
+    const body = lMatch[2];
+    const keyRegex = /"([^"\n]+)"\s*:/g;
+    const seen = new Set();
+    const langDups = [];
+    let kMatch;
+    while ((kMatch = keyRegex.exec(body)) !== null) {
+      const key = kMatch[1];
+      if (seen.has(key)) {
+        langDups.push(key);
+      }
+      seen.add(key);
+    }
+    if (langDups.length > 0) {
+      duplicates.push({ lang, keys: langDups });
+    }
+  }
+  return duplicates;
+}
+
 const pricingTranslations = extractTranslations(pricingHtml);
 const portalTranslations = extractTranslations(portalHtml);
+
+// C2 check: No duplicated keys in language dictionaries
+const pricingDups = findDuplicateKeys(pricingHtml);
+assert(pricingDups.length === 0, `C2: pricing.html has no duplicate translation keys (found: ${JSON.stringify(pricingDups)})`);
+
+const portalDups = findDuplicateKeys(portalHtml);
+assert(portalDups.length === 0, `C2: portal.html has no duplicate translation keys (found: ${JSON.stringify(portalDups)})`);
 
 // W1 & W8 check: status and error_code checks
 assert(emailOtpJs.includes("err.error_code === 'RATE_LIMITED'"), 'W8: email-otp.js checks RATE_LIMITED error_code');
