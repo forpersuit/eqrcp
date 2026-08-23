@@ -1,0 +1,83 @@
+# Binaries for programs and plugins
+/eqt
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.syso
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Dependency directories (remove the comment below to include it)
+# vendor/
+
+# Go workspace file
+go.work
+
+# Build directories
+bin/
+dist/
+/build/
+**/tests/compiled/
+desktop/gui/build/bin/
+desktop/gui/eqt-desktop
+docs/img/venv/
+*:Zone.Identifier
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+# 测试环境配置(含 secrets,不入库;wrangler --env test 对应)
+.env.test
+
+# Log files
+*.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+.codex
+currentStatus
+
+.kiro
+
+
+node_modules
+.wrangler/
+.codegraph
+.commandcode
+
+# Temp generated files
+docs/img/transparent1.jpg
+/doc-html
+/softcopy-pdf
+
+
+# Local agent configuration
+.agents/mcp_config.json
+.mcp.json

@@ -959,10 +959,13 @@
 
         // Setup i18n
         function initLanguage() {
-            let userLang = localStorage.getItem('eqt-lang') || localStorage.getItem('eqt_lang') || localStorage.getItem('eqt-page-lang');
+            let userLang = localStorage.getItem('eqt-lang');
             if (!userLang) {
                 const match = document.cookie.match(/eqt-lang=([^;]+)/);
                 if (match) userLang = match[1];
+            }
+            if (!userLang) {
+                userLang = localStorage.getItem('eqt_lang') || localStorage.getItem('eqt-page-lang');
             }
             if (!userLang) {
                 const nav = navigator.language.toLowerCase();
@@ -975,8 +978,6 @@
             state.lang = lang;
             document.documentElement.lang = lang;
             localStorage.setItem('eqt-lang', lang);
-            localStorage.setItem('eqt_lang', lang);
-            localStorage.setItem('eqt-page-lang', lang);
             document.cookie = `eqt-lang=${lang}; max-age=${365 * 24 * 3600}; path=/`;
             
             const dict = translations[lang] || translations['en'];

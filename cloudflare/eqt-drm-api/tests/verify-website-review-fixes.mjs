@@ -287,6 +287,19 @@ for (const l of langMatches) {
   );
 }
 
+// 9. Canonical Language Storage (eqt-lang) resolution across all pages (Rule 7)
+assert(portalHtml.includes("localStorage.setItem('eqt-lang', lang)"), 'CanonicalLang: portal.html writes eqt-lang');
+assert(pricingHtml.includes("localStorage.setItem('eqt-lang', lang)"), 'CanonicalLang: pricing.html writes eqt-lang');
+assert(indexHtml.includes("localStorage.setItem('eqt-lang'"), 'CanonicalLang: index.html writes eqt-lang');
+assert(refundHtml.includes("localStorage.setItem('eqt-lang', lang)"), 'CanonicalLang: refund.html writes eqt-lang');
+assert(privacyHtml.includes("localStorage.setItem('eqt-lang', lang)"), 'CanonicalLang: privacy.html writes eqt-lang');
+assert(termsHtml.includes("localStorage.setItem('eqt-lang', lang)"), 'CanonicalLang: terms.html writes eqt-lang');
+assert(privacyHtml.includes("localStorage.getItem('eqt-lang')"), 'CanonicalLang: privacy.html reads eqt-lang');
+assert(termsHtml.includes("localStorage.getItem('eqt-lang')"), 'CanonicalLang: terms.html reads eqt-lang');
+assert(!portalHtml.includes("localStorage.setItem('eqt_lang'"), 'CanonicalLang: portal.html does not write redundant eqt_lang');
+assert(!privacyHtml.includes("localStorage.setItem('eqt_lang'"), 'CanonicalLang: privacy.html does not write redundant eqt_lang');
+assert(!termsHtml.includes("localStorage.setItem('eqt_lang'"), 'CanonicalLang: terms.html does not write redundant eqt_lang');
+
 console.log(`\n============================================================`);
 console.log(`Results: ${passed} passed, ${failed} failed`);
 console.log(`============================================================`);
