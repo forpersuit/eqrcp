@@ -251,15 +251,25 @@
             }
         }
 
-        showStatusCard(msg, isError) {
+        showStatusCard(msg, isError, statusType) {
             const dom = this.getDom();
             if (!dom.statusCard) return;
             dom.statusCard.style.display = 'block';
             dom.statusCard.classList.remove('hidden');
-            const iconName = isError ? 'gpp_bad' : 'mark_email_read';
-            const colorClasses = isError
-                ? 'bg-red-500/15 border-red-500/40 text-red-300 shadow-[0_0_15px_rgba(239,68,68,0.2)]'
-                : 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.2)]';
+            const type = statusType || (isError ? 'error' : 'success');
+            const iconName = {
+                success: 'mark_email_read',
+                error: 'gpp_bad',
+                warning: 'schedule',
+                info: 'hourglass_top'
+            }[type] || (isError ? 'gpp_bad' : 'mark_email_read');
+
+            const colorClasses = {
+                success: 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.2)]',
+                error: 'bg-red-500/15 border-red-500/40 text-red-300 shadow-[0_0_15px_rgba(239,68,68,0.2)]',
+                warning: 'bg-amber-500/15 border-amber-500/40 text-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.2)]',
+                info: 'bg-blue-500/15 border-blue-500/40 text-blue-300 shadow-[0_0_15px_rgba(59,130,246,0.2)]'
+            }[type] || (isError ? 'bg-red-500/15 border-red-500/40 text-red-300' : 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300');
 
             dom.statusCard.innerHTML = `<div class="p-3 rounded-xl border ${colorClasses} text-xs font-medium flex items-center gap-2.5 transition-all duration-300 animate-fadeIn">
                 <span class="material-symbols-outlined text-lg shrink-0">${iconName}</span>
@@ -296,11 +306,9 @@
             const email = dom.emailInput.value.trim();
             this.isSending = true;
 
-            if (dom.sendBtn) {
-                dom.sendBtn.disabled = true;
-                dom.sendBtn.className = SEND_BTN_CLASSES.loading;
-                dom.sendBtn.innerHTML = `<span class="inline-block w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin"></span><span>${this.getTranslation('sending_code', 'Sending...')}</span>`;
-            }
+            // Instant optimistic feedback: Start 60s cooldown immediately upon click
+            this.startCooldown(60);
+            this.showStatusCard(this.getTranslation('sending_code', 'Sending verification code, please wait...'), false, 'info');
 
             try {
                 const res = await fetch(`${window.EQT_API_BASE}/api/v1/checkout/send-code`, {
@@ -308,21 +316,37 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email, lang: this.getLang() })
                 });
-                const data = await res.json();
+                let data = {};
+                try { data = await res.json(); } catch (_) { data = {}; }
                 if (!res.ok) {
-                    throw new Error(data.error || this.getTranslation('send_code_failed', 'Failed to send verification code'));
+                    const err = new Error(data.error || this.getTranslation('send_code_failed', 'Failed to send verification code'));
+                    err.status = res.status;
+                    err.error_code = data.error_code;
+                    throw err;
                 }
 
-                this.showStatusCard(this.getTranslation('code_sent_success', 'Verification code sent to your email! Please check your inbox.'), false);
-                this.startCooldown(60);
-                dom.codeInput?.focus();
+                this.showStatusCard(this.getTranslation('code_sent_success', 'Verification code sent to your email! Please check your inbox.'), false, 'success');
+                if (dom.codeInput) {
+                    dom.codeInput.disabled = false;
+                    dom.codeInput.focus();
+                }
             } catch (err) {
+                const errMsg = err.message || '';
+                const isRateLimited = err.status === 429 || err.error_code === 'RATE_LIMITED' || errMsg.includes('60') || errMsg.includes('频繁') || errMsg.includes('frequent') || errMsg.includes('frecuente');
+
                 this.triggerShake(dom.emailInput);
-                const safeMsg = this.filterFriendlyMsg(err.message, 'send_code_failed', 'Failed to send verification code. Please try again later.');
-                this.showStatusCard(safeMsg, true);
-                this.cooldownRemaining = 0;
-                this.isSending = false;
-                this.updateButtonState();
+                const safeMsg = this.filterFriendlyMsg(errMsg, 'send_code_failed', 'Failed to send verification code. Please try again later.');
+
+                if (!isRateLimited) {
+                    // Cancel cooldown immediately on actual errors (e.g. invalid domain, blacklist or network error)
+                    if (this.cooldownTimer) clearInterval(this.cooldownTimer);
+                    this.cooldownRemaining = 0;
+                    this.isSending = false;
+                    this.updateButtonState();
+                    this.showStatusCard(safeMsg, true, 'error');
+                } else {
+                    this.showStatusCard(safeMsg, true, 'warning');
+                }
             } finally {
                 this.isSending = false;
             }
@@ -330,7 +354,6 @@
 
         startCooldown(seconds) {
             this.cooldownRemaining = seconds;
-            this.isSending = false;
             this.updateButtonState();
 
             if (this.cooldownTimer) clearInterval(this.cooldownTimer);

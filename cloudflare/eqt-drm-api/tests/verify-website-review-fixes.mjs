@@ -43,6 +43,8 @@ const checkoutVerifyJs = fs.readFileSync(path.join(websiteDir, 'js/checkout-veri
 assert(checkoutVerifyJs.includes('this.isVerifying = false;'), 'W4: checkout-verify.js initializes isVerifying');
 assert(checkoutVerifyJs.includes('if (this.isVerifying) return;'), 'W4: checkout-verify.js has isVerifying re-entry guard');
 assert(checkoutVerifyJs.includes('if (this.autoVerifyDebounce)'), 'W4: checkout-verify.js clears debounce on verifyAndPay/close');
+assert(checkoutVerifyJs.includes('this.startCooldown(60);'), 'W4: checkout-verify.js starts optimistic 60s cooldown immediately');
+assert(checkoutVerifyJs.includes('if (!isRateLimited) {'), 'W4: checkout-verify.js cancels cooldown on actual errors');
 assert(checkoutVerifyJs.includes('if (!code || !/^\\d{6}$/.test(code))'), 'W11: checkout-verify.js validates 6-digit regex in verifyAndPay');
 
 // 3. Check portal.html for W1, W3, W5, W6, W8, W9
