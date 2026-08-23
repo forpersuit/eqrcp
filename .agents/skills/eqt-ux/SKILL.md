@@ -142,3 +142,21 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
 - **Chat v2 (Svelte)**:
   - 离线时额度倒计时隐藏，标题栏 badge 内容直接改为展示当前生效的 **Tier 级别**（`FREE` / `PLUS` / `PRO`），点击后打开套餐详情面板，呈现**当前套餐在 Chat 模式下的具体限制与权益内容**；在断网/离线状态下，每日免费额度、剩余时间与下方描述区域（`freeQuotaHint`）及外链全部隐藏，仅保留基础状态徽章。
 
+---
+
+## 9. 官网与客户门户静态资源缓存与共享脚本加载规范 (Website & Portal Script Versioning & Ordering)
+
+- **共享脚本修改同步 bump `?v=` 版本号 (Cache Busting Guarantee)**：
+  - 当修改 `cloudflare/eqt-website/js/` 下的共享公共脚本（如 `email-otp.js`, `checkout-verify.js`, `api-base.js`）时，**必须**同步更新所有引入该脚本的 HTML 页面（如 `pricing.html`, `portal.html`）中的 `?v=X.Y.Z` 版本号。
+  - **合理性**：Cloudflare Pages 与主流浏览器对静态 JS 采用强缓存策略；若漏改 `?v=`，存量用户与 CDN 命中旧版本缓存，会导致前端 Bug 修复或安全调整对线上用户完全不生效。
+- **严格按照依赖拓扑顺序加载脚本 (Strict Script Load Ordering)**：
+  - 静态页面引入脚本必须遵循自底向上的依赖顺序：
+    1. `js/api-base.js`（统一环境与 Host 解析）
+    2. `js/email-otp.js`（通用 OTP 发码、验码、冷却倒计时控制器）
+    3. `js/checkout-verify.js`（依赖 `window.EmailOtp` 的支付前邮箱验证组件）
+    4. 页面主体 `<script>`
+- **显式模块可用性检查与本地化降级提示 (Explicit Module Availability Check)**：
+  - 任何依赖外部共享模块的组件或页面逻辑，严禁使用虚假的 `: Object` 表达式隐式伪装降级。
+  - 必须显式检测 `window.EmailOtp && window.EmailOtp.Controller`；若未加载（网络拦截或加载异常），记录明确 console 告警，并在用户触发交互时通过多语言字典（`module_load_err`）向用户展示友好的重试提示，杜绝抛出裸 `TypeError`。
+
+
