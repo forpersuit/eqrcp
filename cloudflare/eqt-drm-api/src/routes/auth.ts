@@ -1,6 +1,6 @@
 import { Env } from '../types';
 import { extractRequestLang, getApiTranslation } from '../i18n';
-import { sendDRMEmail, buildAuthCodeEmailHtml, buildCheckoutEmailHtml, sendMailViaSmtp } from '../services/smtp';
+import { sendDRMEmail, buildAuthCodeEmailHtml, buildCheckoutEmailHtml } from '../services/smtp';
 import { logSystemError } from '../utils/error-logger';
 import { emailHash, verificationStorageKey, VerificationPurpose } from '../utils/crypto';
 import { ensureVerificationCodesCreatedAt } from '../utils/auth';
@@ -269,47 +269,9 @@ export async function handleAuthRoutes(
     ).bind(storageKey, code, expiresAt, createdAt).run();
 
     // Send mail via SMTPS with localized i18n template
-    const mailSender = env.MAIL_SENDER || "noreply@eqt.net.im";
-    const mailSenderPassword = env.MAIL_SENDER_PASSWORD;
-    const mailSendServer = env.MAIL_SEND_SERVER;
-    const mailSendPort = parseInt(env.MAIL_SEND_SAFE_PORT || "465");
-
-    if (!mailSenderPassword || !mailSendServer) {
-      console.error("Mail credentials missing: MAIL_SENDER_PASSWORD or MAIL_SEND_SERVER not configured");
-      ctx.waitUntil(logSystemError(env, 'SMTP_CONFIG_MISSING', 'ERROR', new Error("Mail sender credentials not configured in environment")));
-      return new Response(JSON.stringify({
-        error: "Email service is not configured on this server"
-      }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
-    }
-
     const targetEmail = env.TEST_MAIL_RECEIVER || email;
-    const mailObj = buildAuthCodeEmailHtml(reqLang, code);
-
-    try {
-      await sendMailViaSmtp({
-        sender: mailSender,
-        senderPass: mailSenderPassword,
-        host: mailSendServer,
-        port: mailSendPort,
-        to: targetEmail,
-        subject: mailObj.subject,
-        html: mailObj.html
-      });
-    } catch (mailErr: any) {
-      console.error("Mail Send Error:", mailErr);
-      ctx.waitUntil(logSystemError(env, 'SMTP_EMAIL_FAIL', 'WARN', mailErr, { to: targetEmail, subject: mailObj.subject }));
-      return new Response(JSON.stringify({
-        error: "Failed to send verification email: " + mailErr.message,
-        code: env.TEST_MAIL_RECEIVER ? code : undefined
-      }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
-    }
-
+    const { subject, html } = buildAuthCodeEmailHtml(reqLang, code);
+    ctx.waitUntil(sendDRMEmail(env, targetEmail, subject, html));
 
     return new Response(JSON.stringify({
       success: true,

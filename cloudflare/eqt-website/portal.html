@@ -265,6 +265,7 @@
 
     <!-- Script -->
     <script src="js/api-base.js"></script>
+    <script src="js/email-otp.js?v=1.0.6"></script>
     <script>
         // Language dictionaries
         const translations = {
@@ -893,14 +894,22 @@
             loading: 'bg-primary/20 border border-primary/40 text-primary px-4 rounded-xl font-semibold text-sm transition-all duration-300 cursor-wait opacity-90 whitespace-nowrap flex items-center justify-center gap-1.5'
         };
 
+        const portalOtp = new (window.EmailOtp ? window.EmailOtp.Controller : Object)({
+            endpointSend: '/api/v1/auth/send-code',
+            endpointVerify: '/api/v1/auth/verify-code',
+            cooldownSeconds: 60,
+            btnClasses: SEND_BTN_CLASSES,
+            getLang: () => state.lang,
+            getTranslation: (key, fallback) => (translations[state.lang] || translations.en)[key] || fallback
+        });
+
         function setSendBtnState(btn, stateType, text) {
-            if (!btn) return;
-            if (SEND_BTN_CLASSES[stateType]) {
-                btn.className = SEND_BTN_CLASSES[stateType];
-            }
-            btn.disabled = (stateType === 'cooldown' || stateType === 'loading');
-            if (text && btn.textContent !== text) {
-                btn.textContent = text;
+            if (portalOtp && portalOtp.updateSendBtn) {
+                portalOtp.updateSendBtn(btn, stateType, text);
+            } else if (btn) {
+                if (SEND_BTN_CLASSES[stateType]) btn.className = SEND_BTN_CLASSES[stateType];
+                btn.disabled = (stateType === 'cooldown' || stateType === 'loading');
+                if (text && btn.textContent !== text) btn.textContent = text;
             }
         }
 
@@ -1053,104 +1062,29 @@
             label.textContent = text;
         }
 
-        // Send validation code (passes UI language)
+        // Send validation code (passes UI language via common EmailOtp module)
         async function handleSendCode() {
-            if (state.sendCodeInFlight) return;
-
             const emailInput = document.getElementById('login-email');
-            const email = (emailInput ? emailInput.value : '').trim();
-            const dict = translations[state.lang] || translations.en;
-            
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!email || !emailRegex.test(email)) {
-                const msg = dict.toast_enter_valid_email || 'Please enter a valid email address';
-                setSendCodeStatus(msg, 'error');
-                showToast(msg, 'error');
-                if (emailInput) emailInput.focus();
-                return;
-            }
-
             const sendBtn = document.getElementById('send-code-btn');
-            state.sendCodeInFlight = true;
-            
-            // Instant optimistic feedback: Start 60s cooldown immediately upon click
-            let cooldown = 60;
-            setSendBtnState(sendBtn, 'cooldown', `${cooldown}s`);
-            setSendCodeStatus(dict.sending_code || 'Sending verification code, please wait...', 'info');
+            const codeInput = document.getElementById('login-code');
+            const submitBtn = document.getElementById('login-submit-btn');
 
-            if (state.timer) clearInterval(state.timer);
-            state.timer = setInterval(() => {
-                cooldown--;
-                if (cooldown <= 0) {
-                    clearInterval(state.timer);
-                    state.sendCodeInFlight = false;
-                    const curEmail = (document.getElementById('login-email')?.value || '').trim();
-                    const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(curEmail);
-                    setSendBtnState(sendBtn, isEmailValid ? 'active' : 'default', (translations[state.lang] || translations.en).send_code_btn || 'Send Code');
-                } else {
-                    if (sendBtn) sendBtn.textContent = `${cooldown}s`;
+            await portalOtp.sendCode({
+                email: emailInput ? emailInput.value : '',
+                sendBtn,
+                emailInput,
+                codeInput,
+                apiBase: API_BASE,
+                onStatus: (msg, type) => {
+                    setSendCodeStatus(msg, type);
+                    if (type === 'success') {
+                        showToast(translations[state.lang].toast_code_sent || 'Verification code sent to your email.');
+                        if (submitBtn) submitBtn.disabled = false;
+                    } else if (type === 'error') {
+                        showToast(msg, 'error');
+                    }
                 }
-            }, 1000);
-
-            try {
-                const res = await fetch(`${API_BASE}/api/v1/auth/send-code`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, lang: state.lang })
-                });
-                
-                let data = {};
-                try { data = await res.json(); } catch (_) { data = {}; }
-                if (!res.ok) {
-                    const err = new Error(data.error || 'Failed to send verification code');
-                    err.status = res.status;
-                    err.error_code = data.error_code;
-                    throw err;
-                }
-
-                const successMsg = `${dict.toast_code_sent || 'Verification code sent to your email.'} (${email})`;
-                setSendCodeStatus(successMsg, 'success');
-                showToast(dict.toast_code_sent || 'Verification code sent to your email.');
-                
-                // Enable inputs and focus code field automatically
-                const codeInput = document.getElementById('login-code');
-                const submitBtn = document.getElementById('login-submit-btn');
-                if (codeInput) {
-                    codeInput.disabled = false;
-                    codeInput.focus();
-                }
-                if (submitBtn) submitBtn.disabled = false;
-                
-                // If code is returned (mock testing), auto fill for debugging convenience
-                if (data.code && codeInput) {
-                    codeInput.value = data.code;
-                    console.log("[DEBUG] Autocompleted verification code:", data.code);
-                }
-
-            } catch (err) {
-                const errMsg = err.message || '';
-                const isRateLimited = err.status === 429 || err.error_code === 'RATE_LIMITED' || errMsg.includes('60') || errMsg.includes('频繁') || errMsg.includes('frequent') || errMsg.includes('frecuente');
-
-                if (emailInput) {
-                    emailInput.classList.add('border-red-500', 'ring-1', 'ring-red-500');
-                    setTimeout(() => {
-                        emailInput.classList.remove('border-red-500', 'ring-1', 'ring-red-500');
-                    }, 3000);
-                }
-
-                if (!isRateLimited) {
-                    // Cancel cooldown on actual errors (e.g. 404 No purchase record or network error)
-                    if (state.timer) clearInterval(state.timer);
-                    state.sendCodeInFlight = false;
-                    const curEmail = (document.getElementById('login-email')?.value || '').trim();
-                    const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(curEmail);
-                    setSendBtnState(sendBtn, isEmailValid ? 'active' : 'default', (translations[state.lang] || translations.en).send_code_btn || 'Send Code');
-                    setSendCodeStatus(errMsg, 'error');
-                    showToast(errMsg, 'error');
-                } else {
-                    setSendCodeStatus(errMsg || 'Request too frequent. 60s cooldown in progress.', 'warning');
-                }
-            }
+            });
         }
 
         // Login submit
@@ -1160,43 +1094,40 @@
             if (!email || !code) return;
 
             const submitBtn = document.getElementById('login-submit-btn');
-            submitBtn.disabled = true;
+            const codeInput = document.getElementById('login-code');
+            const emailInput = document.getElementById('login-email');
 
-            try {
-                const res = await fetch(`${API_BASE}/api/v1/auth/verify-code`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, code })
-                });
+            const res = await portalOtp.verifyCode({
+                email,
+                code,
+                verifyBtn: submitBtn,
+                codeInput,
+                emailInput,
+                apiBase: API_BASE,
+                onStatus: (msg, type) => {
+                    showToast(`${translations[state.lang].toast_error || 'Error:'} ${msg}`, 'error');
+                },
+                onSuccess: async (data) => {
+                    showToast(translations[state.lang].toast_login_success);
+                    
+                    // Save auth to state
+                    state.email = data.email;
+                    state.token = data.session_token;
+                    localStorage.setItem('eqt_portal_token', state.token);
+                    localStorage.setItem('eqt_portal_email', state.email);
 
-                let data = {};
-                try { data = await res.json(); } catch (_) { data = {}; }
-                if (!res.ok) {
-                    const err = new Error(data.error || 'Failed to login');
-                    err.status = res.status;
-                    err.error_code = data.error_code;
-                    throw err;
+                    // Show Dashboard
+                    document.getElementById('logged-email-text').textContent = state.email;
+                    document.getElementById('login-section').classList.add('hidden');
+                    document.getElementById('dashboard-section').classList.remove('hidden');
+
+                    // Load licenses
+                    await loadLicenses();
                 }
+            });
 
-                showToast(translations[state.lang].toast_login_success);
-                
-                // Save auth to state
-                state.email = data.email;
-                state.token = data.session_token;
-                localStorage.setItem('eqt_portal_token', state.token);
-                localStorage.setItem('eqt_portal_email', state.email);
-
-                // Show Dashboard
-                document.getElementById('logged-email-text').textContent = state.email;
-                document.getElementById('login-section').classList.add('hidden');
-                document.getElementById('dashboard-section').classList.remove('hidden');
-
-                // Load licenses
-                await loadLicenses();
-                
-            } catch (err) {
+            if (!res.ok && submitBtn) {
                 submitBtn.disabled = false;
-                showToast(`${translations[state.lang].toast_error} ${err.message}`, 'error');
             }
         }
 
@@ -2018,11 +1949,14 @@
             document.getElementById('login-email')?.addEventListener('input', (e) => {
                 const email = e.target.value.trim();
                 const sendBtn = document.getElementById('send-code-btn');
-                if (state.sendCodeInFlight || (state.timer && sendBtn?.disabled)) return;
-                if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-                    setSendBtnState(sendBtn, 'active');
+                if (portalOtp && portalOtp.syncButtonWithEmail) {
+                    portalOtp.syncButtonWithEmail(email, sendBtn);
                 } else {
-                    setSendBtnState(sendBtn, 'default');
+                    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                        setSendBtnState(sendBtn, 'active');
+                    } else {
+                        setSendBtnState(sendBtn, 'default');
+                    }
                 }
             });
 

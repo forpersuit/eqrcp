@@ -28,14 +28,18 @@
 
     class CheckoutVerifyComponent {
         constructor() {
-            this.cooldownTimer = null;
-            this.cooldownRemaining = 0;
+            this.otp = new (window.EmailOtp ? window.EmailOtp.Controller : Object)({
+                endpointSend: '/api/v1/checkout/send-code',
+                endpointVerify: '/api/v1/checkout/verify-code',
+                cooldownSeconds: 60,
+                btnClasses: SEND_BTN_CLASSES,
+                getLang: () => this.getLang(),
+                getTranslation: (key, fallback) => this.getTranslation(key, fallback)
+            });
             this.pendingPriceId = '';
             this.verifiedEmail = '';
             this.isInitialized = false;
             this.autoVerifyDebounce = null;
-            this.isSending = false;
-            this.isVerifying = false;
             this.lastClickTime = 0;
         }
 
@@ -153,7 +157,8 @@
         validateEmail() {
             const dom = this.getDom();
             const email = dom.emailInput ? dom.emailInput.value.trim() : '';
-            if (!email || !EMAIL_REGEX.test(email)) {
+            const isValid = window.EmailOtp ? window.EmailOtp.isValidEmail(email) : EMAIL_REGEX.test(email);
+            if (!email || !isValid) {
                 this.showEmailFieldError(this.getTranslation('invalid_email_err', 'Please enter a valid email address'));
                 return false;
             }
@@ -206,48 +211,23 @@
         updateButtonState() {
             const dom = this.getDom();
             const email = dom.emailInput ? dom.emailInput.value.trim() : '';
-            const isValid = EMAIL_REGEX.test(email);
+            const isValid = window.EmailOtp ? window.EmailOtp.isValidEmail(email) : EMAIL_REGEX.test(email);
 
-            if (this.isSending) return;
-
-            if (this.cooldownRemaining > 0) {
-                if (dom.sendBtn) {
-                    dom.sendBtn.disabled = true;
-                    dom.sendBtn.className = SEND_BTN_CLASSES.cooldown;
-                    const cdText = `${this.cooldownRemaining}s`;
-                    if (dom.sendBtn.textContent !== cdText) {
-                        dom.sendBtn.textContent = cdText;
-                    }
-                }
+            if (this.otp && this.otp.cooldownRemaining > 0) {
+                this.otp.updateSendBtn(dom.sendBtn, 'cooldown', `${this.otp.cooldownRemaining}s`);
                 return;
             }
 
-            const sendCodeText = this.getTranslation('send_code_btn', 'Send Code');
-
             if (!isValid) {
-                // Inactive / default state: bright legible text with glass border
-                if (dom.sendBtn) {
-                    dom.sendBtn.disabled = false;
-                    dom.sendBtn.className = SEND_BTN_CLASSES.default;
-                    if (dom.sendBtn.textContent !== sendCodeText) {
-                        dom.sendBtn.textContent = sendCodeText;
-                    }
-                }
+                if (this.otp) this.otp.updateSendBtn(dom.sendBtn, 'default', this.getTranslation('send_code_btn', 'Send Code'));
                 if (email.length > 0) {
                     this.showEmailFieldError(this.getTranslation('invalid_email_err', 'Please enter a valid email address'));
                 } else {
                     this.hideEmailFieldError();
                 }
             } else {
-                // Valid email format: enable button with vibrant accent-bright teal glow & high contrast dark text
                 this.hideEmailFieldError();
-                if (dom.sendBtn) {
-                    dom.sendBtn.disabled = false;
-                    dom.sendBtn.className = SEND_BTN_CLASSES.active;
-                    if (dom.sendBtn.textContent !== sendCodeText) {
-                        dom.sendBtn.textContent = sendCodeText;
-                    }
-                }
+                if (this.otp) this.otp.updateSendBtn(dom.sendBtn, 'active', this.getTranslation('send_code_btn', 'Send Code'));
             }
         }
 
@@ -278,98 +258,52 @@
         }
 
         triggerShake(targetEl) {
-            if (!targetEl) return;
-            targetEl.classList.remove('animate-shake');
-            void targetEl.offsetWidth; // Force reflow
-            targetEl.classList.add('animate-shake');
-            setTimeout(() => {
+            if (window.EmailOtp && window.EmailOtp.triggerShake) {
+                window.EmailOtp.triggerShake(targetEl);
+            } else if (targetEl) {
                 targetEl.classList.remove('animate-shake');
-            }, 450);
-        }
-
-        filterFriendlyMsg(rawMsg, defaultKey, defaultVal) {
-            if (!rawMsg) return this.getTranslation(defaultKey, defaultVal);
-            if (/D1_ERROR|SQLITE|UNIQUE constraint|FOREIGN KEY|syntax error|PRIMARYKEY|fatal|exception|stack|trace|TypeError|ReferenceError/i.test(rawMsg)) {
-                return this.getTranslation(defaultKey, defaultVal);
+                void targetEl.offsetWidth;
+                targetEl.classList.add('animate-shake');
+                setTimeout(() => targetEl.classList.remove('animate-shake'), 450);
             }
-            return rawMsg;
         }
 
         async sendCode() {
             const dom = this.getDom();
-            if (this.isSending) return;
+            if (this.otp.isSending) return;
             if (!this.validateEmail()) {
                 this.triggerShake(dom.emailInput);
                 return;
             }
 
             const email = dom.emailInput.value.trim();
-            this.isSending = true;
-
-            // Instant optimistic feedback: Start 60s cooldown immediately upon click
-            this.startCooldown(60);
-            this.showStatusCard(this.getTranslation('sending_code', 'Sending verification code, please wait...'), false, 'info');
-
-            try {
-                const res = await fetch(`${window.EQT_API_BASE}/api/v1/checkout/send-code`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, lang: this.getLang() })
-                });
-                let data = {};
-                try { data = await res.json(); } catch (_) { data = {}; }
-                if (!res.ok) {
-                    const err = new Error(data.error || this.getTranslation('send_code_failed', 'Failed to send verification code'));
-                    err.status = res.status;
-                    err.error_code = data.error_code;
-                    throw err;
+            await this.otp.sendCode({
+                email,
+                sendBtn: dom.sendBtn,
+                emailInput: dom.emailInput,
+                codeInput: dom.codeInput,
+                apiBase: window.EQT_API_BASE,
+                onStatus: (msg, type) => {
+                    this.showStatusCard(msg, type === 'error', type);
                 }
-
-                this.showStatusCard(this.getTranslation('code_sent_success', 'Verification code sent to your email! Please check your inbox.'), false, 'success');
-                if (dom.codeInput) {
-                    dom.codeInput.disabled = false;
-                    dom.codeInput.focus();
-                }
-            } catch (err) {
-                const errMsg = err.message || '';
-                const isRateLimited = err.status === 429 || err.error_code === 'RATE_LIMITED' || errMsg.includes('60') || errMsg.includes('频繁') || errMsg.includes('frequent') || errMsg.includes('frecuente');
-
-                this.triggerShake(dom.emailInput);
-                const safeMsg = this.filterFriendlyMsg(errMsg, 'send_code_failed', 'Failed to send verification code. Please try again later.');
-
-                if (!isRateLimited) {
-                    // Cancel cooldown immediately on actual errors (e.g. invalid domain, blacklist or network error)
-                    if (this.cooldownTimer) clearInterval(this.cooldownTimer);
-                    this.cooldownRemaining = 0;
-                    this.isSending = false;
-                    this.updateButtonState();
-                    this.showStatusCard(safeMsg, true, 'error');
-                } else {
-                    this.showStatusCard(safeMsg, true, 'warning');
-                }
-            } finally {
-                this.isSending = false;
-            }
+            });
         }
 
         startCooldown(seconds) {
-            this.cooldownRemaining = seconds;
-            this.updateButtonState();
-
-            if (this.cooldownTimer) clearInterval(this.cooldownTimer);
-
-            this.cooldownTimer = setInterval(() => {
-                this.cooldownRemaining--;
-                if (this.cooldownRemaining <= 0) {
-                    clearInterval(this.cooldownTimer);
-                    this.cooldownRemaining = 0;
+            const dom = this.getDom();
+            this.otp.startCooldown(
+                seconds,
+                (rem) => {
+                    if (dom.sendBtn) this.otp.updateSendBtn(dom.sendBtn, 'cooldown', `${rem}s`);
+                },
+                () => {
+                    this.updateButtonState();
                 }
-                this.updateButtonState();
-            }, 1000);
+            );
         }
 
         async verifyAndPay() {
-            if (this.isVerifying) return;
+            if (this.otp.isVerifying) return;
             if (this.autoVerifyDebounce) {
                 clearTimeout(this.autoVerifyDebounce);
                 this.autoVerifyDebounce = null;
@@ -385,61 +319,58 @@
             const code = dom.codeInput ? dom.codeInput.value.trim() : '';
 
             if (!code || !/^\d{6}$/.test(code)) {
-                this.showCodeFieldError(this.getTranslation('invalid_code_err', 'Please enter 6-digit code'));
+                const invalidCodeMsg = this.getTranslation('invalid_code_err', 'Please enter 6-digit code');
+                this.showCodeFieldError(invalidCodeMsg);
                 this.triggerShake(dom.codeInput);
-                this.showStatusCard(this.getTranslation('invalid_code_err', 'Please enter 6-digit code'), true);
+                this.showStatusCard(invalidCodeMsg, true, 'error');
                 return;
             }
-
-            this.isVerifying = true;
 
             if (dom.payBtn) {
                 dom.payBtn.disabled = true;
                 dom.payBtn.innerHTML = `<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span> <span>${this.getTranslation('verifying_btn', 'Verifying...')}</span>`;
             }
 
-            try {
-                const res = await fetch(`${window.EQT_API_BASE}/api/v1/checkout/verify-code`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, code })
-                });
-                const data = await res.json();
-                if (!res.ok) {
-                    throw new Error(data.error || this.getTranslation('verify_failed', 'Verification failed. Please check your code.'));
-                }
+            const res = await this.otp.verifyCode({
+                email,
+                code,
+                verifyBtn: dom.payBtn,
+                codeInput: dom.codeInput,
+                emailInput: dom.emailInput,
+                apiBase: window.EQT_API_BASE,
+                onStatus: (msg, type) => {
+                    this.showCodeFieldError(msg);
+                    this.triggerShake(dom.codeInput);
+                    this.showStatusCard(msg, true, 'error');
+                },
+                onSuccess: () => {
+                    this.verifiedEmail = email;
+                    this.close();
 
-                this.verifiedEmail = email;
-                this.close();
-
-                // Open Paddle Checkout with pre-filled verified customer email & customData fallback
-                setTimeout(() => {
-                    if (typeof Paddle !== 'undefined') {
-                        try {
-                            Paddle.Checkout.open({
-                                items: [{ priceId: this.pendingPriceId, quantity: 1 }],
-                                customer: { email: this.verifiedEmail },
-                                customData: { buyer_email: this.verifiedEmail },
-                                settings: { allowLogout: false, locale: this.toPaddleLocale() }
-                            });
-                        } catch (pErr) {
-                            console.error("Paddle Open Error:", pErr);
+                    // Open Paddle Checkout with pre-filled verified customer email & customData fallback
+                    setTimeout(() => {
+                        if (typeof Paddle !== 'undefined') {
+                            try {
+                                Paddle.Checkout.open({
+                                    items: [{ priceId: this.pendingPriceId, quantity: 1 }],
+                                    customer: { email: this.verifiedEmail },
+                                    customData: { buyer_email: this.verifiedEmail },
+                                    settings: { allowLogout: false, locale: this.toPaddleLocale() }
+                                });
+                            } catch (pErr) {
+                                console.error("Paddle Open Error:", pErr);
+                                this.open(this.pendingPriceId);
+                                this.showStatusCard(this.getTranslation('paddle_loading_err', 'Billing component is loading or blocked by network.'), true, 'error');
+                            }
+                        } else {
                             this.open(this.pendingPriceId);
-                            this.showStatusCard(this.getTranslation('paddle_loading_err', 'Billing component is loading or blocked by network.'), true);
+                            this.showStatusCard(this.getTranslation('paddle_loading_err', 'Billing component is loading or blocked by network.'), true, 'error');
                         }
-                    } else {
-                        this.open(this.pendingPriceId);
-                        this.showStatusCard(this.getTranslation('paddle_loading_err', 'Billing component is loading or blocked by network.'), true);
-                    }
-                }, 350);
+                    }, 350);
+                }
+            });
 
-            } catch (err) {
-                const safeMsg = this.filterFriendlyMsg(err.message, 'verify_failed', 'Verification failed. Please check your code.');
-                this.showCodeFieldError(safeMsg);
-                this.triggerShake(dom.codeInput);
-                this.showStatusCard(safeMsg, true);
-            } finally {
-                this.isVerifying = false;
+            if (!res.ok) {
                 if (dom.payBtn) {
                     dom.payBtn.disabled = false;
                     dom.payBtn.innerHTML = `<span>${this.getTranslation('verify_and_pay_btn', 'Verify & Proceed to Payment')}</span><span class="material-symbols-outlined text-sm">lock_open</span>`;
@@ -480,7 +411,7 @@
                 clearTimeout(this.autoVerifyDebounce);
                 this.autoVerifyDebounce = null;
             }
-            this.isVerifying = false;
+            if (this.otp) this.otp.isVerifying = false;
             const dom = this.getDom();
             if (!dom.modal) return;
             dom.modal.classList.add('opacity-0');

@@ -38,17 +38,29 @@ assert(!pricingHtml.includes('onclick="closeModal()"'), 'W7: No inline onclick="
 assert(!pricingHtml.includes('let pendingPriceId = null;'), 'W10: No unused let pendingPriceId in pricing.html');
 assert(!pricingHtml.includes('let verifiedEmail = null;'), 'W10: No unused let verifiedEmail in pricing.html');
 
-// 2. Check checkout-verify.js for isVerifying lock (W4) and 6-digit regex (W11)
+// 2. Check email-otp.js shared module & checkout-verify.js
+const emailOtpJs = fs.readFileSync(path.join(websiteDir, 'js/email-otp.js'), 'utf8');
+assert(emailOtpJs.includes('class EmailOtpController'), 'EmailOtp: defines EmailOtpController class');
+assert(emailOtpJs.includes('this.startCooldown('), 'EmailOtp: handles startCooldown');
+assert(emailOtpJs.includes('this.cancelCooldown('), 'EmailOtp: handles cancelCooldown');
+assert(emailOtpJs.includes('window.EmailOtp ='), 'EmailOtp: exports to window.EmailOtp');
+
+assert(pricingHtml.includes('js/email-otp.js'), 'pricing.html imports js/email-otp.js');
+assert(pricingHtml.includes('js/checkout-verify.js'), 'pricing.html imports js/checkout-verify.js');
+
 const checkoutVerifyJs = fs.readFileSync(path.join(websiteDir, 'js/checkout-verify.js'), 'utf8');
-assert(checkoutVerifyJs.includes('this.isVerifying = false;'), 'W4: checkout-verify.js initializes isVerifying');
-assert(checkoutVerifyJs.includes('if (this.isVerifying) return;'), 'W4: checkout-verify.js has isVerifying re-entry guard');
+assert(checkoutVerifyJs.includes('window.EmailOtp'), 'checkout-verify.js uses window.EmailOtp');
+assert(checkoutVerifyJs.includes('this.otp.sendCode'), 'checkout-verify.js delegates sendCode to this.otp');
+assert(checkoutVerifyJs.includes('this.otp.verifyCode'), 'checkout-verify.js delegates verifyCode to this.otp');
 assert(checkoutVerifyJs.includes('if (this.autoVerifyDebounce)'), 'W4: checkout-verify.js clears debounce on verifyAndPay/close');
-assert(checkoutVerifyJs.includes('this.startCooldown(60);'), 'W4: checkout-verify.js starts optimistic 60s cooldown immediately');
-assert(checkoutVerifyJs.includes('if (!isRateLimited) {'), 'W4: checkout-verify.js cancels cooldown on actual errors');
 assert(checkoutVerifyJs.includes('if (!code || !/^\\d{6}$/.test(code))'), 'W11: checkout-verify.js validates 6-digit regex in verifyAndPay');
 
-// 3. Check portal.html for W1, W3, W5, W6, W8, W9
+// 3. Check portal.html for W1, W3, W5, W6, W8, W9 & email-otp.js integration
 const portalHtml = fs.readFileSync(path.join(websiteDir, 'portal.html'), 'utf8');
+assert(portalHtml.includes('js/email-otp.js'), 'portal.html imports js/email-otp.js');
+assert(portalHtml.includes('const portalOtp = new'), 'portal.html initializes portalOtp');
+assert(portalHtml.includes('portalOtp.sendCode'), 'portal.html delegates sendCode to portalOtp');
+assert(portalHtml.includes('portalOtp.verifyCode'), 'portal.html delegates verifyCode to portalOtp');
 
 // W9 check: Canonical host redirect in head
 assert(portalHtml.includes("window.location.replace('https://www.eqt.net.im'"), 'W9: portal.html contains canonical host redirect');
@@ -62,7 +74,7 @@ assert(portalHtml.includes('const escCode = escapeHtml(lic.license_code);'), 'W6
 assert(portalHtml.includes('const escDevKey = escapeHtml(devKey);'), 'W6: portal.html escapes devKey');
 
 // W1 & W8 check: status and error_code checks
-assert(portalHtml.includes("err.error_code === 'RATE_LIMITED'"), 'W8: portal.html checks RATE_LIMITED error_code');
+assert(emailOtpJs.includes("err.error_code === 'RATE_LIMITED'"), 'W8: email-otp.js checks RATE_LIMITED error_code');
 assert(portalHtml.includes("err.error_code === 'SESSION_EXPIRED'"), 'W1: portal.html checks SESSION_EXPIRED error_code');
 
 // W3 check: pending upgrade and pagination keys exist across all 7 languages
