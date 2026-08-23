@@ -104,10 +104,9 @@ else
     WRANGLER_FLAGS="--local"
 fi
 
-# 临时置空 CLOUDFLARE_API_TOKEN，防止过期 Token 干扰 wrangler 部署，强制回归浏览器登录认证
 (
     cd "${WRANGLER_DIR}" || exit 1
-    export CLOUDFLARE_API_TOKEN=""
+    export CLOUDFLARE_API_TOKEN="${CLOUDFLARE_API_TOKEN:-}"
     npx wrangler d1 execute "${DB_NAME}" ${WRANGLER_FLAGS} --command="${SQL}"
 )
 
