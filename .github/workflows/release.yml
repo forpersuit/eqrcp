@@ -98,9 +98,9 @@ jobs:
             for file in out/*; do
               filename=$(basename "$file")
               echo "Uploading $filename to downloads/${{ github.ref_name }}/$filename ..."
-              npx wrangler r2 object put "$BUCKET/downloads/${{ github.ref_name }}/$filename" --file "$file"
+              npx wrangler r2 object put "$BUCKET/downloads/${{ github.ref_name }}/$filename" --file "$file" --remote
               echo "Uploading $filename to downloads/latest/$filename ..."
-              npx wrangler r2 object put "$BUCKET/downloads/latest/$filename" --file "$file"
+              npx wrangler r2 object put "$BUCKET/downloads/latest/$filename" --file "$file" --remote
             done
           else
             echo "CLOUDFLARE_API_TOKEN is not set, skipping R2 deployment."
@@ -109,3 +109,31 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+
+      # ── Notifications ────────────────────────────────────────
+
+      - name: Notify release success via Telegram
+        if: success()
+        run: |
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          MESSAGE="🎉 <b>[Release Succeeded]</b>
+          <b>Tag:</b> <code>${{ github.ref_name }}</code>
+          <b>Repository:</b> ${{ github.repository }}
+          <b>Workflow:</b> ${RUN_URL}"
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -d "text=$MESSAGE" \
+            -d "parse_mode=HTML" || echo "⚠️ Telegram notification failed"
+
+      - name: Notify release failure via Telegram
+        if: failure()
+        run: |
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          MESSAGE="🚨 <b>[Release Failed]</b>
+          <b>Tag:</b> <code>${{ github.ref_name }}</code>
+          <b>Repository:</b> ${{ github.repository }}
+          <b>Workflow:</b> ${RUN_URL}"
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -d "text=$MESSAGE" \
+            -d "parse_mode=HTML" || echo "⚠️ Telegram notification failed"
