@@ -116,7 +116,9 @@
         }
 
         async sendCode(params = {}) {
-            if (this.isSending) return { ok: false, aborted: true };
+            if (this.isSending || this.cooldownRemaining > 0) {
+                return { ok: false, aborted: true, cooldown: this.cooldownRemaining > 0 };
+            }
 
             const {
                 email = '',

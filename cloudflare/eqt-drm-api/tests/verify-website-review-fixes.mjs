@@ -44,21 +44,26 @@ assert(emailOtpJs.includes('class EmailOtpController'), 'EmailOtp: defines Email
 assert(emailOtpJs.includes('this.startCooldown('), 'EmailOtp: handles startCooldown');
 assert(emailOtpJs.includes('this.cancelCooldown('), 'EmailOtp: handles cancelCooldown');
 assert(emailOtpJs.includes('window.EmailOtp ='), 'EmailOtp: exports to window.EmailOtp');
+assert(emailOtpJs.includes('this.cooldownRemaining > 0'), 'F2: email-otp.js guards sendCode against cooldownRemaining');
 
 assert(pricingHtml.includes('js/email-otp.js'), 'pricing.html imports js/email-otp.js');
 assert(pricingHtml.includes('js/checkout-verify.js'), 'pricing.html imports js/checkout-verify.js');
 
 const checkoutVerifyJs = fs.readFileSync(path.join(websiteDir, 'js/checkout-verify.js'), 'utf8');
+assert(!checkoutVerifyJs.includes(': Object)'), 'F1: checkout-verify.js does not use fake Object fallback');
 assert(checkoutVerifyJs.includes('window.EmailOtp'), 'checkout-verify.js uses window.EmailOtp');
 assert(checkoutVerifyJs.includes('this.otp.sendCode'), 'checkout-verify.js delegates sendCode to this.otp');
 assert(checkoutVerifyJs.includes('this.otp.verifyCode'), 'checkout-verify.js delegates verifyCode to this.otp');
+assert(!checkoutVerifyJs.includes('startCooldown(seconds)'), 'F4: checkout-verify.js does not define unused startCooldown wrapper');
 assert(checkoutVerifyJs.includes('if (this.autoVerifyDebounce)'), 'W4: checkout-verify.js clears debounce on verifyAndPay/close');
 assert(checkoutVerifyJs.includes('if (!code || !/^\\d{6}$/.test(code))'), 'W11: checkout-verify.js validates 6-digit regex in verifyAndPay');
 
 // 3. Check portal.html for W1, W3, W5, W6, W8, W9 & email-otp.js integration
 const portalHtml = fs.readFileSync(path.join(websiteDir, 'portal.html'), 'utf8');
 assert(portalHtml.includes('js/email-otp.js'), 'portal.html imports js/email-otp.js');
-assert(portalHtml.includes('const portalOtp = new'), 'portal.html initializes portalOtp');
+assert(!portalHtml.includes(': Object)'), 'F1: portal.html does not use fake Object fallback');
+assert(!portalHtml.includes('sendCodeInFlight:'), 'F3: portal.html removes dead sendCodeInFlight state');
+assert(portalHtml.includes('portalOtp.cancelCooldown()'), 'F3: portal.html cancels cooldown on logout');
 assert(portalHtml.includes('portalOtp.sendCode'), 'portal.html delegates sendCode to portalOtp');
 assert(portalHtml.includes('portalOtp.verifyCode'), 'portal.html delegates verifyCode to portalOtp');
 

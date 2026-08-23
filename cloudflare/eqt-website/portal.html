@@ -871,10 +871,8 @@
             refundPendingCode: null,
             cancelPendingCode: null,
             unbindPendingData: null,
-            timer: null,
             refundInFlight: false,
-            cancelInFlight: false,
-            sendCodeInFlight: false
+            cancelInFlight: false
         };
 
         const langNames = {
@@ -894,14 +892,18 @@
             loading: 'bg-primary/20 border border-primary/40 text-primary px-4 rounded-xl font-semibold text-sm transition-all duration-300 cursor-wait opacity-90 whitespace-nowrap flex items-center justify-center gap-1.5'
         };
 
-        const portalOtp = new (window.EmailOtp ? window.EmailOtp.Controller : Object)({
+        if (!window.EmailOtp || !window.EmailOtp.Controller) {
+            console.error('[EQT Portal] Required EmailOtp module (js/email-otp.js) is missing.');
+        }
+
+        const portalOtp = (window.EmailOtp && window.EmailOtp.Controller) ? new window.EmailOtp.Controller({
             endpointSend: '/api/v1/auth/send-code',
             endpointVerify: '/api/v1/auth/verify-code',
             cooldownSeconds: 60,
             btnClasses: SEND_BTN_CLASSES,
             getLang: () => state.lang,
             getTranslation: (key, fallback) => (translations[state.lang] || translations.en)[key] || fallback
-        });
+        }) : null;
 
         function setSendBtnState(btn, stateType, text) {
             if (portalOtp && portalOtp.updateSendBtn) {
@@ -1064,6 +1066,10 @@
 
         // Send validation code (passes UI language via common EmailOtp module)
         async function handleSendCode() {
+            if (!portalOtp) {
+                showToast('Email verification module is not available. Please refresh the page.', 'error');
+                return;
+            }
             const emailInput = document.getElementById('login-email');
             const sendBtn = document.getElementById('send-code-btn');
             const codeInput = document.getElementById('login-code');
@@ -1089,6 +1095,10 @@
 
         // Login submit
         async function handleLogin() {
+            if (!portalOtp) {
+                showToast('Email verification module is not available. Please refresh the page.', 'error');
+                return;
+            }
             const email = document.getElementById('login-email').value.trim();
             const code = document.getElementById('login-code').value.trim();
             if (!email || !code) return;
@@ -1892,7 +1902,9 @@
             localStorage.removeItem('eqt_portal_token');
             localStorage.removeItem('eqt_portal_email');
             
-            if (state.timer) clearInterval(state.timer);
+            if (portalOtp) {
+                portalOtp.cancelCooldown();
+            }
             
             document.getElementById('login-email').value = '';
             document.getElementById('login-code').value = '';

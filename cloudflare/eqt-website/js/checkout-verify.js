@@ -28,14 +28,17 @@
 
     class CheckoutVerifyComponent {
         constructor() {
-            this.otp = new (window.EmailOtp ? window.EmailOtp.Controller : Object)({
+            if (!window.EmailOtp || !window.EmailOtp.Controller) {
+                console.error('[EQT Checkout] Required EmailOtp module (js/email-otp.js) is missing.');
+            }
+            this.otp = (window.EmailOtp && window.EmailOtp.Controller) ? new window.EmailOtp.Controller({
                 endpointSend: '/api/v1/checkout/send-code',
                 endpointVerify: '/api/v1/checkout/verify-code',
                 cooldownSeconds: 60,
                 btnClasses: SEND_BTN_CLASSES,
                 getLang: () => this.getLang(),
                 getTranslation: (key, fallback) => this.getTranslation(key, fallback)
-            });
+            }) : null;
             this.pendingPriceId = '';
             this.verifiedEmail = '';
             this.isInitialized = false;
@@ -270,13 +273,17 @@
 
         async sendCode() {
             const dom = this.getDom();
-            if (this.otp.isSending) return;
+            if (!this.otp) {
+                this.showStatusCard(this.getTranslation('module_load_err', 'Verification service unavailable. Please refresh the page.'), true, 'error');
+                return;
+            }
+            if (this.otp.isSending || this.otp.cooldownRemaining > 0) return;
             if (!this.validateEmail()) {
                 this.triggerShake(dom.emailInput);
                 return;
             }
 
-            const email = dom.emailInput.value.trim();
+            const email = dom.emailInput ? dom.emailInput.value.trim() : '';
             await this.otp.sendCode({
                 email,
                 sendBtn: dom.sendBtn,
@@ -289,20 +296,11 @@
             });
         }
 
-        startCooldown(seconds) {
-            const dom = this.getDom();
-            this.otp.startCooldown(
-                seconds,
-                (rem) => {
-                    if (dom.sendBtn) this.otp.updateSendBtn(dom.sendBtn, 'cooldown', `${rem}s`);
-                },
-                () => {
-                    this.updateButtonState();
-                }
-            );
-        }
-
         async verifyAndPay() {
+            if (!this.otp) {
+                this.showStatusCard(this.getTranslation('module_load_err', 'Verification service unavailable. Please refresh the page.'), true, 'error');
+                return;
+            }
             if (this.otp.isVerifying) return;
             if (this.autoVerifyDebounce) {
                 clearTimeout(this.autoVerifyDebounce);
