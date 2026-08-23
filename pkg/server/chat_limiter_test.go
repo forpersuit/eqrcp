@@ -49,7 +49,7 @@ func TestChatLimiter(t *testing.T) {
 
 	// Test 1: Initial status
 	usage := limiter.GetStatus()
-	today := time.Now().Format("2006-01-02")
+	today := time.Now().UTC().Format("2006-01-02")
 	if usage.Date != today {
 		t.Errorf("expected date %s, got %s", today, usage.Date)
 	}
@@ -169,7 +169,7 @@ func TestChatUsageHMACAndAntiTamper(t *testing.T) {
 	}()
 
 	limiter := &ChatLimiter{}
-	today := time.Now().Format("2006-01-02")
+	today := time.Now().UTC().Format("2006-01-02")
 
 	// 1. Save valid usage and check MAC signature is generated
 	u := ChatUsage{
@@ -213,5 +213,13 @@ func TestChatUsageHMACAndAntiTamper(t *testing.T) {
 	}
 	if checked.UsedSeconds < 300 {
 		t.Fatalf("expected UsedSeconds to be locked to exhausted (>300), got %d", checked.UsedSeconds)
+	}
+}
+
+func TestVerifySyncUsageSignature(t *testing.T) {
+	// Fake invalid signature should return false
+	isValid := VerifySyncUsageSignature("dev123", "2026-08-24", 100, 2, false, "2026-08-24T00:00:00Z", "deadbeef")
+	if isValid {
+		t.Fatalf("expected invalid signature to fail verification")
 	}
 }

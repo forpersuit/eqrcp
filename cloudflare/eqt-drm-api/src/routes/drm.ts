@@ -370,30 +370,10 @@ export async function handleDrmRoutes(
 
     const isDev = await isDeviceAuthorizedForDev(env, reg.device_id);
 
-    let usedSeconds = 0;
-    let usedTransfers = 0;
-    let quotaExceeded = false;
-
-    if (tierLabel === 'free' && reg.device_id) {
-      await ensureFreeDailyUsageTable(env);
-      const today = new Date().toISOString().slice(0, 10);
-      const usageRow = await env.DB.prepare(
-        "SELECT used_seconds, used_transfers FROM free_daily_usage WHERE device_id = ? AND usage_date = ?"
-      ).bind(reg.device_id, today).first<{ used_seconds: number; used_transfers: number }>();
-      if (usageRow) {
-        usedSeconds = usageRow.used_seconds;
-        usedTransfers = usageRow.used_transfers;
-        quotaExceeded = (usedSeconds >= 300 || usedTransfers >= 5);
-      }
-    }
-
     return new Response(JSON.stringify({
       device_id: reg.device_id,
       tier: reg.tier_label,
-      is_dev: isDev,
-      used_seconds: usedSeconds,
-      used_transfers: usedTransfers,
-      quota_exceeded: quotaExceeded
+      is_dev: isDev
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -1011,14 +991,27 @@ export async function handleDrmRoutes(
       });
     }
 
-    await ensureFreeDailyUsageTable(env);
+    // Rate-limiting check: max 30 sync attempts per device per minute
+    if (await isD1RateLimited(env, `sync-usage:${devId}`, 30, 60000)) {
+      return new Response(JSON.stringify({ error: "Rate limit exceeded", retry_after: 60 }), {
+        status: 429,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
 
-    // Check if device is marked as paid in device_registry
+    // Verify device is legitimately registered in device_registry
     const regRow = await env.DB.prepare(
       "SELECT tier_label FROM device_registry WHERE device_id = ?"
     ).bind(devId).first<{ tier_label: string }>();
 
-    if (regRow && regRow.tier_label === 'paid') {
+    if (!regRow) {
+      return new Response(JSON.stringify({ error: "Device not registered" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    if (regRow.tier_label === 'paid') {
       return new Response(JSON.stringify({
         success: true,
         device_id: devId,
@@ -1030,6 +1023,8 @@ export async function handleDrmRoutes(
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
+
+    await ensureFreeDailyUsageTable(env);
 
     const now = new Date();
     const today = now.toISOString().slice(0, 10);
@@ -1053,6 +1048,22 @@ export async function handleDrmRoutes(
     const usedTxf = currentUsage ? currentUsage.used_transfers : 0;
     const quotaExceeded = (usedSec >= 300 || usedTxf >= 5);
 
+    // Produce authoritative Ed25519 signature for sync response (§8)
+    const payloadStr = `SYNC|${devId}|${today}|${usedSec}|${usedTxf}|${quotaExceeded ? "1" : "0"}|${nowIso}`;
+    const payloadData = new TextEncoder().encode(payloadStr);
+
+    let signatureHex = "";
+    const privateKeyHex = env.ED25519_PRIVATE_KEY;
+    if (privateKeyHex) {
+      const privateKeyBytes = hexToUint8Array(privateKeyHex);
+      const pkcs8Bytes = new Uint8Array(16 + privateKeyBytes.length);
+      pkcs8Bytes.set([0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20]);
+      pkcs8Bytes.set(privateKeyBytes, 16);
+      const key = await crypto.subtle.importKey("pkcs8", pkcs8Bytes, { name: "Ed25519" }, true, ["sign"]);
+      const sigBuf = await crypto.subtle.sign("Ed25519", key, payloadData);
+      signatureHex = bufToHex(sigBuf);
+    }
+
     return new Response(JSON.stringify({
       success: true,
       device_id: devId,
@@ -1063,7 +1074,8 @@ export async function handleDrmRoutes(
       max_transfers: 5,
       quota_exceeded: quotaExceeded,
       is_paid: false,
-      server_time: nowIso
+      server_time: nowIso,
+      signature: signatureHex
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" }

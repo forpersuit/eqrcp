@@ -181,7 +181,7 @@ func getMockUsageForAcceptance() *ChatUsage {
 	switch mockEnv {
 	case "clock_tampered":
 		return &ChatUsage{
-			Date:          time.Now().Format("2006-01-02"),
+			Date:          time.Now().UTC().Format("2006-01-02"),
 			UsedSeconds:   300,
 			IsPaid:        false,
 			ClockTampered: true,
@@ -189,7 +189,7 @@ func getMockUsageForAcceptance() *ChatUsage {
 		}
 	case "inconsistent_unpaid":
 		return &ChatUsage{
-			Date:          time.Now().Format("2006-01-02"),
+			Date:          time.Now().UTC().Format("2006-01-02"),
 			UsedSeconds:   300,
 			IsPaid:        false,
 			ClockTampered: false,
@@ -197,7 +197,7 @@ func getMockUsageForAcceptance() *ChatUsage {
 		}
 	case "premium_active":
 		return &ChatUsage{
-			Date:          time.Now().Format("2006-01-02"),
+			Date:          time.Now().UTC().Format("2006-01-02"),
 			UsedSeconds:   120,
 			IsPaid:        true,
 			ClockTampered: false,
@@ -205,7 +205,7 @@ func getMockUsageForAcceptance() *ChatUsage {
 		}
 	case "free_quota":
 		return &ChatUsage{
-			Date:          time.Now().Format("2006-01-02"),
+			Date:          time.Now().UTC().Format("2006-01-02"),
 			UsedSeconds:   120,
 			IsPaid:        false,
 			ClockTampered: false,
@@ -213,7 +213,7 @@ func getMockUsageForAcceptance() *ChatUsage {
 		}
 	case "free_exceeded":
 		return &ChatUsage{
-			Date:                 time.Now().Format("2006-01-02"),
+			Date:                 time.Now().UTC().Format("2006-01-02"),
 			UsedSeconds:          300,
 			UsedTransfers:        5,
 			UsedReceiveTransfers: 5,
@@ -223,7 +223,7 @@ func getMockUsageForAcceptance() *ChatUsage {
 		}
 	case "free_exceeded_share":
 		return &ChatUsage{
-			Date:                 time.Now().Format("2006-01-02"),
+			Date:                 time.Now().UTC().Format("2006-01-02"),
 			UsedSeconds:          600,
 			UsedTransfers:        5,
 			UsedReceiveTransfers: 5,
@@ -273,7 +273,7 @@ func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 	}
 
 	netTime, isOnline := getNetworkTimeOrStartFetch()
-	today := netTime.Format("2006-01-02")
+	today := netTime.UTC().Format("2006-01-02")
 
 	if l.hasCached && l.cachedUsage.Date == today {
 		usage := l.cachedUsage
@@ -383,6 +383,7 @@ type syncUsageResponse struct {
 	QuotaExceeded bool   `json:"quota_exceeded"`
 	IsPaid        bool   `json:"is_paid"`
 	ServerTime    string `json:"server_time"`
+	Signature     string `json:"signature,omitempty"`
 	Error         string `json:"error,omitempty"`
 }
 
@@ -425,6 +426,13 @@ func SyncUsageToServer(deltaSeconds, deltaTransfers int) {
 
 		if result.IsPaid {
 			return
+		}
+
+		// Cryptographic Ed25519 signature verification against rogue server / MITM attacks
+		if result.Signature != "" {
+			if !VerifySyncUsageSignature(result.DeviceID, result.UsageDate, result.UsedSeconds, result.UsedTransfers, result.QuotaExceeded, result.ServerTime, result.Signature) {
+				return
+			}
 		}
 
 		limiterInstance.mu.Lock()

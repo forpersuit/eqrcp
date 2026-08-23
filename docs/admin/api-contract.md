@@ -511,9 +511,11 @@ Content-Type: application/json
 ```
 
 **字段说明：**
-- `device_id`：必填，设备的唯一持久标识符。
+- `device_id`：必填，设备的唯一持久标识符。必须是已在 `device_registry` 表合法注册的设备，未注册设备返回 **404** `{ "error": "Device not registered" }`。
 - `delta_seconds`：本次会话新增消耗的秒数（0 ~ 3600）。
 - `delta_transfers`：本次新增消耗的传输次数（0 ~ 100）。
+- **限流规则**：单设备 60 秒内最多 30 次同步请求，超出返回 **429** `{ "error": "Rate limit exceeded", "retry_after": 60 }`。
+- **传输配额语义**：`used_transfers` 为**合并累计桶**（Share 发送与 Receive 接收双向共享每日 5 次免费额度）。
 
 **响应（200 OK - 免费设备）：**
 ```json
@@ -527,7 +529,8 @@ Content-Type: application/json
   "max_transfers": 5,
   "quota_exceeded": false,
   "is_paid": false,
-  "server_time": "2026-08-24T01:05:00.000Z"
+  "server_time": "2026-08-24T01:05:00.000Z",
+  "signature": "3a7b...128-hex-ed25519-signature"
 }
 ```
 

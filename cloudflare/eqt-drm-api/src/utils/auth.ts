@@ -34,6 +34,7 @@ const licenseUpgradesTableEnsured = new WeakSet<object>();
 const licensePaddleTxnIndexEnsured = new WeakSet<object>();
 const drmTablesEnsured = new WeakSet<object>();
 const licenseSourceColumnsEnsured = new WeakSet<object>();
+const freeDailyUsageTableEnsured = new WeakSet<object>();
 
 /**
  * Ensure the activations table has the device_id column.
@@ -303,7 +304,7 @@ export async function ensureDrmTables(env: Env): Promise<void> {
 }
 
 export async function ensureFreeDailyUsageTable(env: Env): Promise<void> {
-  if (!env?.DB) return;
+  if (!env?.DB || freeDailyUsageTableEnsured.has(env.DB)) return;
   try {
     await env.DB.batch([
       env.DB.prepare(`
@@ -320,9 +321,12 @@ export async function ensureFreeDailyUsageTable(env: Env): Promise<void> {
       env.DB.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_free_daily_usage_dev_date ON free_daily_usage(device_id, usage_date)`),
       env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_free_daily_usage_date ON free_daily_usage(usage_date)`)
     ]);
+    freeDailyUsageTableEnsured.add(env.DB);
   } catch (err: any) {
     const msg = String(err?.message || err);
-    if (!/already exists/i.test(msg)) {
+    if (/already exists/i.test(msg)) {
+      freeDailyUsageTableEnsured.add(env.DB);
+    } else {
       console.error("Failed to ensure free_daily_usage table:", err);
     }
   }

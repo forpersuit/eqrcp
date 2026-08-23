@@ -1189,7 +1189,7 @@ func TestReceiveAllowCompletionIfStartedUnderLimit(t *testing.T) {
 
 	limiterInstance.mu.Lock()
 	limiterInstance.cachedUsage = ChatUsage{
-		Date:                 time.Now().Format("2006-01-02"),
+		Date:                 time.Now().UTC().Format("2006-01-02"),
 		UsedReceiveTransfers: 2,
 		IsPaid:               false,
 	}

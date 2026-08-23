@@ -113,6 +113,26 @@ async function runTests() {
     'Access-Control-Allow-Origin': '*'
   };
 
+  // Seed registered free device
+  d1.db.exec("INSERT INTO device_registry (device_id, tier_label, registered_at) VALUES ('test_dev_001', 'free', datetime('now'))");
+
+  // Test 0: Unregistered device must be rejected with 404 (F1 guard)
+  console.log('0. Testing unregistered device rejection...');
+  {
+    const req = new Request('https://lic.eqt.net.im/api/v1/device/sync-usage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        device_id: 'unknown_ghost_dev',
+        delta_seconds: 10,
+        delta_transfers: 1
+      })
+    });
+
+    const res = await handleDrmRoutes(req, env, { waitUntil: () => {} }, new URL(req.url), corsHeaders);
+    assertEqual(res.status, 404, 'unregistered device returns 404 Not Found');
+  }
+
   // Test 1: Sync usage for free device - initial incremental report
   console.log('1. Testing incremental daily usage sync...');
   {
@@ -133,6 +153,7 @@ async function runTests() {
     assertEqual(data.used_seconds, 45, 'used_seconds is 45');
     assertEqual(data.used_transfers, 1, 'used_transfers is 1');
     assertEqual(data.quota_exceeded, false, 'quota_exceeded is false');
+    assert(Boolean(data.signature && data.signature.length === 128), 'sync-usage response contains valid 64-byte Ed25519 hex signature');
   }
 
   // Test 2: Accumulate usage on same day

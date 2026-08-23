@@ -145,6 +145,35 @@ func VerifySyncSignature(cert LicenseCertificate) bool {
 	return ed25519.Verify(pubKey, []byte(v1PayloadStr), sigBytes)
 }
 
+// VerifySyncUsageSignature checks the cryptographic Ed25519 signature of the sync usage response (§8)
+func VerifySyncUsageSignature(deviceID, usageDate string, usedSeconds, usedTransfers int, quotaExceeded bool, serverTime, signature string) bool {
+	pubBytes, err := hex.DecodeString(defaultPublicKeyHex)
+	if err != nil || len(pubBytes) != ed25519.PublicKeySize {
+		return false
+	}
+	pubKey := ed25519.PublicKey(pubBytes)
+
+	sigBytes, err := hex.DecodeString(signature)
+	if err != nil || len(sigBytes) != ed25519.SignatureSize {
+		return false
+	}
+
+	quotaFlag := "0"
+	if quotaExceeded {
+		quotaFlag = "1"
+	}
+	payloadStr := fmt.Sprintf("SYNC|%s|%s|%d|%d|%s|%s",
+		deviceID,
+		usageDate,
+		usedSeconds,
+		usedTransfers,
+		quotaFlag,
+		serverTime,
+	)
+
+	return ed25519.Verify(pubKey, []byte(payloadStr), sigBytes)
+}
+
 // VerifyFingerprint checks if current hardware matches the certificate hashes using 3-of-2 model
 func VerifyFingerprint(cert LicenseCertificate) bool {
 	curUUID, curCPU, curDisk := GetDeviceFingerprintHashes()
