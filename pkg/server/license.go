@@ -419,6 +419,25 @@ func StartOnlineLicenseSync() {
 	}()
 }
 
+var (
+	serverDevMu         sync.RWMutex
+	serverDevAuthorized bool
+)
+
+// SetServerDevAuthorized records whether the server authorized this device for DevMode.
+func SetServerDevAuthorized(authorized bool) {
+	serverDevMu.Lock()
+	serverDevAuthorized = authorized
+	serverDevMu.Unlock()
+}
+
+// IsServerDevAuthorized reports whether the server authorized this device for DevMode.
+func IsServerDevAuthorized() bool {
+	serverDevMu.RLock()
+	defer serverDevMu.RUnlock()
+	return serverDevAuthorized
+}
+
 // VerifyAPIResponse represents the server DRM /api/v1/verify response contract.
 type VerifyAPIResponse struct {
 	Status               string `json:"status"`
@@ -435,6 +454,7 @@ type VerifyAPIResponse struct {
 	CertificateSignature string `json:"certificate_signature"`
 	CurrentTime          string `json:"current_time"`
 	SyncSignature        string `json:"signature"`
+	IsDev                bool   `json:"is_dev"`
 }
 
 var syncInFlightMu sync.Mutex
@@ -540,6 +560,7 @@ func doOnlineLicenseSync(force bool) error {
 	if !VerifySyncSignature(updatedCert) {
 		return errors.New("verification signature invalid")
 	}
+	SetServerDevAuthorized(verifyResp.IsDev)
 	cert = updatedCert
 
 	path := getLicenseFilePath()

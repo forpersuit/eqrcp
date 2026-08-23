@@ -6,7 +6,7 @@
 export type LicenseTier = 'PLUS' | 'PRO';
 export type LicenseStatus = 'active' | 'suspended' | 'revoked';
 export type ErrorLogLevel = 'ERROR' | 'WARN' | 'CRITICAL';
-export type AdminTab = 'overview' | 'audit' | 'ops' | 'licenses' | 'blacklist' | 'health' | 'metrics';
+export type AdminTab = 'overview' | 'audit' | 'ops' | 'licenses' | 'devDevices' | 'blacklist' | 'health' | 'metrics';
 export type BlacklistKind = 'email' | 'device';
 export type LicenseSource = 'purchase' | 'promo' | 'admin' | 'test';
 export type RevokeReason = 'refund' | 'chargeback' | 'subscription' | 'admin' | 'test' | 'expired';
@@ -21,6 +21,17 @@ export type AdminAuditAction =
   | 'BLACKLIST_ADD'
   | 'BLACKLIST_REMOVE';
 export type AdminAuditTargetType = 'LICENSE' | 'ACTIVATION' | 'SYSTEM' | 'BLACKLIST';
+
+/** GET/POST /api/v1/admin/dev-devices */
+export interface DevDeviceEntry {
+  id: number;
+  device_id?: string | null;
+  email?: string | null;
+  notes?: string | null;
+  is_dev: number | boolean;
+  status: string;
+  created_at: string;
+}
 
 /** GET/POST /api/v1/admin/blacklist */
 export interface ManualBlacklistEntry {

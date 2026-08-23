@@ -28,6 +28,8 @@ export interface Env {
   /** Paddle Price ID legacy overrides */
   PRICE_LIFETIME_ID?: string;
   PRICE_YEARLY_ID?: string;
+  /** Optional comma-separated list of Dev Device IDs for hard overrides */
+  DEV_DEVICE_IDS?: string;
   /** Environment mode: 'production' | 'test' | 'development' */
   ENVIRONMENT?: string;
 }

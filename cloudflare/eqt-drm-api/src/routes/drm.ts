@@ -1,7 +1,7 @@
 import { Env, MAX_YEARLY_UNBINDS, ONE_YEAR_MS } from '../types';
 import { extractRequestLang, getApiTranslation, getDeviceNoticeTemplate } from '../i18n';
 import { hexToUint8Array, bufToHex } from '../utils/crypto';
-import { ensureDeviceIdColumn, ensureActivationNetworkColumns, ensureLicenseSourceColumns, ensureBetaTestersTable } from '../utils/auth';
+import { ensureDeviceIdColumn, ensureActivationNetworkColumns, ensureLicenseSourceColumns, ensureBetaTestersTable, isDeviceAuthorizedForDev } from '../utils/auth';
 import { isTestEnvironment } from '../utils/env-guard';
 import { matchFingerprint, countMatchingFingerprints, checkAbusiveRefundBlacklist } from '../utils/blacklist';
 import { sendDRMEmail, renderEmailWrapper } from '../services/smtp';
@@ -368,9 +368,12 @@ export async function handleDrmRoutes(
       licenseCode: license_code || null
     }, net);
 
+    const isDev = await isDeviceAuthorizedForDev(env, reg.device_id);
+
     return new Response(JSON.stringify({
       device_id: reg.device_id,
-      tier: reg.tier_label
+      tier: reg.tier_label,
+      is_dev: isDev
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -739,6 +742,8 @@ export async function handleDrmRoutes(
       activatedCount += 1;
     }
 
+    const isDev = await isDeviceAuthorizedForDev(env, authoritativeDeviceId);
+
     return new Response(JSON.stringify({
       license_code: license_code,
       tier: license.tier,
@@ -752,7 +757,8 @@ export async function handleDrmRoutes(
       buyer_email: license.buyer_email || "",
       signature: signatureHex,
       last_online_sync_time: currentTime,
-      verify_signature: verifySignatureHex
+      verify_signature: verifySignatureHex,
+      is_dev: isDev
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -947,6 +953,8 @@ export async function handleDrmRoutes(
     const certificateSignatureBuf = await crypto.subtle.sign("Ed25519", key, certificatePayloadData);
     const certificateSignatureHex = bufToHex(certificateSignatureBuf);
 
+    const isDev = await isDeviceAuthorizedForDev(env, activeDeviceId || regResult.device_id);
+
     return new Response(JSON.stringify({
       status: "OK",
       license_code: license_code,
@@ -961,7 +969,23 @@ export async function handleDrmRoutes(
       buyer_email: license.buyer_email || "",
       certificate_signature: certificateSignatureHex,
       current_time: currentTime,
-      signature: verifySignatureHex
+      signature: verifySignatureHex,
+      is_dev: isDev
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
+  // 1.6 Dedicated dev device status query
+  if (url.pathname === "/api/v1/dev/check-device" && request.method === "POST") {
+    const body: any = await request.json().catch(() => ({}));
+    const devId = (body.device_id || "").trim();
+    const isDev = await isDeviceAuthorizedForDev(env, devId);
+    return new Response(JSON.stringify({
+      success: true,
+      device_id: devId,
+      is_dev: isDev
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" }

@@ -408,6 +408,16 @@ export async function ensureBetaTestersTable(env: Env): Promise<void> {
         CREATE UNIQUE INDEX IF NOT EXISTS idx_beta_email ON sandbox_beta_testers(email) WHERE email IS NOT NULL AND email != ''
       `).run();
     } catch (_) {}
+    try {
+      await env.DB.prepare(`
+        ALTER TABLE sandbox_beta_testers ADD COLUMN is_dev INTEGER NOT NULL DEFAULT 0
+      `).run();
+    } catch (_) {}
+    try {
+      await env.DB.prepare(`
+        CREATE INDEX IF NOT EXISTS idx_beta_is_dev ON sandbox_beta_testers(is_dev)
+      `).run();
+    } catch (_) {}
 
     // Seeding safety: ONLY seed default test data in test/sandbox environments!
     if (isTestEnvironment(env)) {
@@ -415,9 +425,9 @@ export async function ensureBetaTestersTable(env: Env): Promise<void> {
       if (!countRow || countRow.count === 0) {
         const now = new Date().toISOString();
         await env.DB.batch([
-          env.DB.prepare("INSERT OR IGNORE INTO sandbox_beta_testers (device_id, email, notes, status, created_at) VALUES (?, ?, ?, 'active', ?)").bind('b0036718cb9a469999d2910cdf418b1f', 'tmp@301098.xyz', 'Default Sandbox Beta Device', now),
-          env.DB.prepare("INSERT OR IGNORE INTO sandbox_beta_testers (device_id, email, notes, status, created_at) VALUES (?, ?, ?, 'active', ?)").bind('b0036718cb9a469999d2910cdf418b1f', 'anon@301098.xyz', 'Default Sandbox Beta Device (alt email)', now),
-          env.DB.prepare("INSERT OR IGNORE INTO sandbox_beta_testers (device_id, email, notes, status, created_at) VALUES (?, ?, ?, 'active', ?)").bind('sandbox_seed_device_placeholder', 'seed@301098.xyz', 'Default Sandbox Seed Pair', now),
+          env.DB.prepare("INSERT OR IGNORE INTO sandbox_beta_testers (device_id, email, notes, is_dev, status, created_at) VALUES (?, ?, ?, 1, 'active', ?)").bind('b0036718cb9a469999d2910cdf418b1f', 'tmp@301098.xyz', 'Default Sandbox Beta Device', now),
+          env.DB.prepare("INSERT OR IGNORE INTO sandbox_beta_testers (device_id, email, notes, is_dev, status, created_at) VALUES (?, ?, ?, 1, 'active', ?)").bind('b0036718cb9a469999d2910cdf418b1f', 'anon@301098.xyz', 'Default Sandbox Beta Device (alt email)', now),
+          env.DB.prepare("INSERT OR IGNORE INTO sandbox_beta_testers (device_id, email, notes, is_dev, status, created_at) VALUES (?, ?, ?, 0, 'active', ?)").bind('sandbox_seed_device_placeholder', 'seed@301098.xyz', 'Default Sandbox Seed Pair', now),
         ]);
       }
     }
@@ -430,6 +440,36 @@ export async function ensureBetaTestersTable(env: Env): Promise<void> {
     } else {
       console.error("Failed to ensure sandbox_beta_testers table:", err);
     }
+  }
+}
+
+export async function isDeviceAuthorizedForDev(
+  env: Env,
+  deviceId: string | null | undefined
+): Promise<boolean> {
+  const devId = (deviceId || "").trim().toLowerCase();
+  if (!devId) return false;
+
+  // 1. Check environment variable override
+  const envWhitelist = (env.DEV_DEVICE_IDS || "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  if (envWhitelist.includes(devId)) {
+    return true;
+  }
+
+  // 2. Check D1 database
+  if (!env.DB) return false;
+  try {
+    await ensureBetaTestersTable(env);
+    const row = await env.DB.prepare(
+      "SELECT id FROM sandbox_beta_testers WHERE LOWER(device_id) = ? AND is_dev = 1 AND status = 'active'"
+    ).bind(devId).first<{ id: number }>();
+    return !!row;
+  } catch (e) {
+    console.error("Failed to check isDeviceAuthorizedForDev:", e);
+    return false;
   }
 }
 

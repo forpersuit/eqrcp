@@ -53,15 +53,6 @@
   let lastGeneratedCode = $state<string | null>(null);
   let copyHint = $state('');
 
-  // Sandbox Beta Testers State
-  let betaTesters = $state<BetaTester[]>([]);
-  let loadingTesters = $state(false);
-  let showAddTesterModal = $state(false);
-  let newTesterDevice = $state('');
-  let newTesterEmail = $state('');
-  let newTesterNotes = $state('');
-  let quickMinting = $state(false);
-
   function shortHash(value?: string | null): string {
     if (!value) return '—';
     return value.length > 10 ? value.slice(0, 10) + '…' : value;
@@ -165,54 +156,6 @@
     if (refreshTimer) {
       clearInterval(refreshTimer);
       refreshTimer = null;
-    }
-  }
-
-  async function loadBetaTesters() {
-    if (adminEnv.current !== 'test') return;
-    loadingTesters = true;
-    try {
-      const res = await adminFetch<{ success: boolean; testers: BetaTester[] }>('/api/v1/admin/sandbox/testers');
-      betaTesters = res.testers || [];
-    } catch (_) {
-    } finally {
-      loadingTesters = false;
-    }
-  }
-
-  async function handleAddTester(e: Event) {
-    e.preventDefault();
-    if (!newTesterDevice.trim() && !newTesterEmail.trim()) return;
-    try {
-      await adminFetch('/api/v1/admin/sandbox/testers', {
-        method: 'POST',
-        body: JSON.stringify({
-          device_id: newTesterDevice.trim() || undefined,
-          email: newTesterEmail.trim() || undefined,
-          notes: newTesterNotes.trim() || undefined
-        })
-      });
-      actionMsg = $t('licenses.addSuccess');
-      showAddTesterModal = false;
-      newTesterDevice = '';
-      newTesterEmail = '';
-      newTesterNotes = '';
-      await loadBetaTesters();
-    } catch (err: any) {
-      errorMsg = $t('common.failed') + ': ' + (err.message || String(err));
-    }
-  }
-
-  async function handleDeleteTester(id: number) {
-    if (!confirm($t('licenses.confirmDeleteTester'))) return;
-    try {
-      await adminFetch(`/api/v1/admin/sandbox/testers/${id}`, {
-        method: 'DELETE'
-      });
-      actionMsg = $t('licenses.deleteSuccess');
-      await loadBetaTesters();
-    } catch (err: any) {
-      errorMsg = $t('common.failed') + ': ' + (err.message || String(err));
     }
   }
 
@@ -395,9 +338,6 @@
     if (!prefillQuery) {
       loadLicenses();
     }
-    if (adminEnv.current === 'test') {
-      loadBetaTesters();
-    }
     startAutoRefresh();
   });
 
@@ -429,99 +369,6 @@
       </button>
     </div>
   </div>
-
-  {#if adminEnv.current === 'test'}
-    <div class="sandbox-testers-card card">
-      <div class="sandbox-testers-header">
-        <div>
-          <div class="sandbox-card-title">{$t('licenses.sandboxTesterCardTitle')}</div>
-          <div class="sandbox-card-desc">{$t('licenses.sandboxTesterCardDesc')}</div>
-        </div>
-        <div class="sandbox-card-actions">
-          <button class="btn btn-secondary btn-sm" onclick={() => (showAddTesterModal = true)}>
-            + {$t('licenses.addTesterBtn')}
-          </button>
-          {#if betaTesters.length > 0}
-            <button
-              class="btn btn-primary btn-sm btn-quick-mint"
-              disabled={quickMinting}
-              onclick={() => {
-                const target = betaTesters.find(t => t.device_id && t.email) || betaTesters[0];
-                if (target) {
-                  handleQuickMintTestLicense(target.device_id || null, target.email || null);
-                } else {
-                  showAddTesterModal = true;
-                }
-              }}
-            >
-              {quickMinting ? $t('licenses.mintingQuickTest') : $t('licenses.mintQuickTestLicense')}
-            </button>
-          {/if}
-        </div>
-      </div>
-
-      <div class="testers-grid">
-        {#each betaTesters as tester (tester.id)}
-          <div class="tester-chip">
-            <div class="tester-info">
-              {#if tester.device_id}
-                <div class="tester-field">
-                  <span class="chip-label">DEV:</span>
-                  <code class="chip-val">{tester.device_id}</code>
-                </div>
-              {/if}
-              {#if tester.email}
-                <div class="tester-field">
-                  <span class="chip-label">EMAIL:</span>
-                  <span class="chip-val">{tester.email}</span>
-                </div>
-              {/if}
-              {#if tester.notes}
-                <div class="chip-notes">{tester.notes}</div>
-              {/if}
-            </div>
-            <div class="tester-actions">
-              {#if tester.device_id || tester.email}
-                <button
-                  type="button"
-                  class="chip-action-btn chip-mint-btn"
-                  title={$t('licenses.mintForTester')}
-                  disabled={quickMinting}
-                  onclick={() => handleQuickMintTestLicense(tester.device_id || null, tester.email || null)}
-                >
-                  ⚡ {$t('licenses.mintForTester')}
-                </button>
-              {/if}
-              <button
-                type="button"
-                class="chip-action-btn"
-                title={$t('licenses.quickFill')}
-                onclick={() => {
-                  if (tester.device_id) genBoundDeviceId = tester.device_id;
-                  if (tester.email) genBuyerEmail = tester.email;
-                  genSource = 'test';
-                  showGenerateModal = true;
-                }}
-              >
-                {$t('licenses.quickFill')}
-              </button>
-              <button
-                type="button"
-                class="chip-del-btn"
-                title={$t('common.delete')}
-                onclick={() => handleDeleteTester(tester.id)}
-              >
-                ✕
-              </button>
-            </div>
-          </div>
-        {/each}
-        {#if betaTesters.length === 0}
-          <div class="no-testers-hint">{$t('licenses.noTesters')}</div>
-        {/if}
-      </div>
-    </div>
-  {/if}
 
   <div class="filter-bar card">
     <div class="search-group">
@@ -789,163 +636,11 @@
   </Modal>
 {/if}
 
-{#if showAddTesterModal}
-  <Modal open={true} title={$t('licenses.addTesterBtn')} maxWidth="520px" onclose={() => (showAddTesterModal = false)}>
-    <form id="add-tester-form" onsubmit={handleAddTester} class="gen-form">
-      <div class="form-group">
-        <label for="tester-device">{$t('licenses.deviceIdLabel')}:</label>
-        <input id="tester-device" type="text" class="input" placeholder="e.g. b0036718cb9a469999d2910cdf418b1f" bind:value={newTesterDevice} />
-      </div>
-
-      <div class="form-group">
-        <label for="tester-email">{$t('licenses.emailLabel')}:</label>
-        <input id="tester-email" type="email" class="input" placeholder="e.g. tmp@301098.xyz" bind:value={newTesterEmail} />
-      </div>
-
-      <div class="form-group">
-        <label for="tester-notes">{$t('licenses.notesLabel')}:</label>
-        <input id="tester-notes" type="text" class="input" placeholder="e.g. Test Lab Machine A" bind:value={newTesterNotes} />
-      </div>
-    </form>
-    {#snippet footer()}
-      <button type="button" class="btn btn-secondary" onclick={() => (showAddTesterModal = false)}>{$t('common.cancel')}</button>
-      <button type="submit" form="add-tester-form" class="btn btn-primary">{$t('common.save')}</button>
-    {/snippet}
-  </Modal>
-{/if}
-
 <style>
   .page-container { display: flex; flex-direction: column; gap: 1.5rem; }
   .header-row { display: flex; justify-content: space-between; align-items: center; }
   h2 { font-size: 1.5rem; font-weight: 700; }
   .subtitle { font-size: 0.875rem; color: var(--text-muted); }
-
-  .sandbox-testers-card {
-    background: linear-gradient(135deg, rgba(234, 179, 8, 0.08) 0%, rgba(245, 158, 11, 0.03) 100%);
-    border: 1px solid rgba(234, 179, 8, 0.25);
-    border-radius: var(--radius-md);
-    padding: 1.25rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-  }
-  .sandbox-testers-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-  }
-  .sandbox-card-title {
-    font-size: 1rem;
-    font-weight: 700;
-    color: #eab308;
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-  }
-  .sandbox-card-desc {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-    margin-top: 0.2rem;
-  }
-  .sandbox-card-actions {
-    display: flex;
-    gap: 0.5rem;
-    align-items: center;
-  }
-  .btn-quick-mint {
-    background: #eab308;
-    color: #0f172a;
-    font-weight: 700;
-    border: none;
-  }
-  .btn-quick-mint:hover:not(:disabled) {
-    background: #facc15;
-  }
-
-  .testers-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 0.75rem;
-  }
-  .tester-chip {
-    background: rgba(15, 23, 42, 0.6);
-    border: 1px solid rgba(234, 179, 8, 0.2);
-    border-radius: var(--radius-sm);
-    padding: 0.65rem 0.85rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 0.5rem;
-  }
-  .tester-info {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    overflow: hidden;
-  }
-  .tester-field {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    font-size: 0.75rem;
-  }
-  .chip-label {
-    font-size: 0.65rem;
-    font-weight: 800;
-    color: #eab308;
-    letter-spacing: 0.05em;
-  }
-  .chip-val {
-    font-family: var(--font-mono);
-    color: var(--text-primary);
-    font-size: 0.75rem;
-    word-break: break-all;
-  }
-  .chip-notes {
-    font-size: 0.7rem;
-    color: var(--text-muted);
-    font-style: italic;
-  }
-  .tester-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-  }
-  .chip-action-btn {
-    background: rgba(234, 179, 8, 0.15);
-    color: #eab308;
-    border: 1px solid rgba(234, 179, 8, 0.3);
-    border-radius: 4px;
-    padding: 2px 6px;
-    font-size: 0.7rem;
-    cursor: pointer;
-    font-weight: 600;
-    transition: all 0.15s ease;
-  }
-  .chip-action-btn:hover {
-    background: rgba(234, 179, 8, 0.3);
-  }
-  .chip-del-btn {
-    background: transparent;
-    border: none;
-    color: var(--text-muted);
-    cursor: pointer;
-    padding: 2px 4px;
-    font-size: 0.8rem;
-    transition: color 0.15s ease;
-  }
-  .chip-del-btn:hover {
-    color: #ef4444;
-  }
-  .no-testers-hint {
-    grid-column: 1 / -1;
-    font-size: 0.8rem;
-    color: var(--text-muted);
-    padding: 0.5rem 0;
-  }
-
   .filter-bar { padding: 1rem 1.5rem; }
   .search-group { display: flex; gap: 0.75rem; width: 100%; align-items: center; flex-wrap: wrap; }
   .actions { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; }

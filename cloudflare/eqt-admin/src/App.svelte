@@ -7,6 +7,7 @@
   import ErrorAudit from './pages/ErrorAudit.svelte';
   import OpsAudit from './pages/OpsAudit.svelte';
   import Licenses from './pages/Licenses.svelte';
+  import DevDevices from './pages/DevDevices.svelte';
   import Blacklist from './pages/Blacklist.svelte';
   import SystemHealth from './pages/SystemHealth.svelte';
   import Metrics from './pages/Metrics.svelte';
@@ -105,6 +106,14 @@
 
         <button
           class="nav-item"
+          class:active={currentTab === 'devDevices'}
+          onclick={() => (currentTab = 'devDevices')}
+        >
+          <span class="nav-icon">🛠️</span> {$t('nav.devDevices')}
+        </button>
+
+        <button
+          class="nav-item"
           class:active={currentTab === 'blacklist'}
           onclick={() => (currentTab = 'blacklist')}
         >
@@ -170,6 +179,8 @@
           <OpsAudit />
         {:else if currentTab === 'licenses'}
           <Licenses prefillQuery={licenseSearchPrefill} />
+        {:else if currentTab === 'devDevices'}
+          <DevDevices />
         {:else if currentTab === 'blacklist'}
           <Blacklist />
         {:else if currentTab === 'health'}

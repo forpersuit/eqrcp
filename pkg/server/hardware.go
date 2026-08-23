@@ -480,6 +480,7 @@ func RegisterDeviceOnline() {
 	var resData struct {
 		DeviceID string `json:"device_id"`
 		Tier     string `json:"tier"`
+		IsDev    bool   `json:"is_dev"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&resData); err != nil {
 		log.Printf("[DRM] Failed to decode device registration response: %v", err)
@@ -487,6 +488,7 @@ func RegisterDeviceOnline() {
 	}
 	if resData.DeviceID != "" {
 		SetAuthorityDeviceID(resData.DeviceID)
-		log.Printf("[DRM] Anonymous free device registered successfully. Authority DeviceID: %s, Tier: %s", resData.DeviceID, resData.Tier)
+		SetServerDevAuthorized(resData.IsDev)
+		log.Printf("[DRM] Anonymous free device registered successfully. Authority DeviceID: %s, Tier: %s, IsDev: %t", resData.DeviceID, resData.Tier, resData.IsDev)
 	}
 }

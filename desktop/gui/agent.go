@@ -402,7 +402,7 @@ func convertConfigSettings(s config.DesktopSettings) DesktopSettings {
 		CloseBehavior:            s.CloseBehavior,
 		ChatSender:               s.ChatSender,
 		ChatAvatar:               s.ChatAvatar,
-		DevMode:                  s.DevMode,
+		DevMode:                  s.DevMode || server.IsServerDevAuthorized(),
 		DebugLog:                 s.DebugLog,
 		ViewportDebug:            s.ViewportDebug,
 		AutoUpdateMode:           s.AutoUpdateMode,

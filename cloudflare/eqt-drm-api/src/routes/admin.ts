@@ -1233,6 +1233,211 @@ export async function handleAdminRoutes(
     });
   }
 
+  // ── Unified Dev & Test Device Management (Production & Sandbox) ──
+  
+  // GET /api/v1/admin/dev-devices
+  if (url.pathname === "/api/v1/admin/dev-devices" && request.method === "GET") {
+    const denied = await requireAdminAuth(request, env, corsHeaders);
+    if (denied) return denied;
+    await ensureBetaTestersTable(env);
+
+    const rows = await env.DB.prepare(
+      "SELECT * FROM sandbox_beta_testers ORDER BY id ASC"
+    ).all<any>();
+
+    return new Response(JSON.stringify({
+      success: true,
+      devices: rows.results || []
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
+  // POST /api/v1/admin/dev-devices
+  if (url.pathname === "/api/v1/admin/dev-devices" && request.method === "POST") {
+    const denied = await requireAdminAuth(request, env, corsHeaders);
+    if (denied) return denied;
+    await ensureBetaTestersTable(env);
+
+    const body: any = await request.json().catch(() => ({}));
+    const targetId = body.id !== undefined && body.id !== null ? Number(body.id) : null;
+    const deviceId = (body.device_id || "").trim().toLowerCase() || null;
+    const rawEmail = (body.email || "").trim();
+    const email = rawEmail ? rawEmail.toLowerCase() : null;
+    const notes = (body.notes || "").trim() || null;
+    const isDev = body.is_dev !== undefined ? (body.is_dev ? 1 : 0) : 0;
+    const status = (body.status || "active").trim();
+
+    if (!deviceId && !email && !targetId) {
+      return new Response(JSON.stringify({ error: "Must specify device_id, email, or id" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const now = new Date().toISOString();
+    try {
+      if (targetId) {
+        let updateSql = "UPDATE sandbox_beta_testers SET status = ?, is_dev = ?";
+        const params: any[] = [status, isDev];
+        if (deviceId !== null) {
+          updateSql += ", device_id = ?";
+          params.push(deviceId);
+        }
+        if (email !== null) {
+          updateSql += ", email = ?";
+          params.push(email);
+        }
+        if (notes !== null) {
+          updateSql += ", notes = ?";
+          params.push(notes);
+        }
+        updateSql += " WHERE id = ?";
+        params.push(targetId);
+
+        await env.DB.prepare(updateSql).bind(...params).run();
+        return new Response(JSON.stringify({
+          success: true,
+          id: targetId,
+          updated: true
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      if (email) {
+        const existing = await env.DB.prepare(
+          "SELECT id FROM sandbox_beta_testers WHERE LOWER(email) = ?"
+        ).bind(email).first<{ id: number }>();
+
+        if (existing) {
+          let updateSql = "UPDATE sandbox_beta_testers SET status = ?, is_dev = ?";
+          const params: any[] = [status, isDev];
+          if (deviceId !== null) {
+            updateSql += ", device_id = ?";
+            params.push(deviceId);
+          }
+          if (notes !== null) {
+            updateSql += ", notes = ?";
+            params.push(notes);
+          }
+          updateSql += " WHERE id = ?";
+          params.push(existing.id);
+
+          await env.DB.prepare(updateSql).bind(...params).run();
+          return new Response(JSON.stringify({
+            success: true,
+            id: existing.id,
+            updated: true
+          }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+      }
+
+      const res = await env.DB.prepare(
+        "INSERT INTO sandbox_beta_testers (device_id, email, notes, is_dev, status, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+      ).bind(deviceId, email, notes, isDev, status, now).run();
+
+      return new Response(JSON.stringify({
+        success: true,
+        id: res.meta?.last_row_id || 0
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    } catch (err: any) {
+      return new Response(JSON.stringify({
+        error: "Failed to save device: " + (err.message || String(err))
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+  }
+
+  // POST /api/v1/admin/dev-devices/:id/toggle-dev
+  if (url.pathname.startsWith("/api/v1/admin/dev-devices/") && url.pathname.endsWith("/toggle-dev") && request.method === "POST") {
+    const denied = await requireAdminAuth(request, env, corsHeaders);
+    if (denied) return denied;
+    await ensureBetaTestersTable(env);
+
+    const parts = url.pathname.split("/");
+    const idStr = parts[parts.length - 2];
+    const targetId = parseInt(idStr, 10);
+    if (!targetId || isNaN(targetId)) {
+      return new Response(JSON.stringify({ error: "Invalid device record ID" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const current = await env.DB.prepare(
+      "SELECT id, is_dev FROM sandbox_beta_testers WHERE id = ?"
+    ).bind(targetId).first<{ id: number; is_dev: number }>();
+
+    if (!current) {
+      return new Response(JSON.stringify({ error: "Device record not found" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const nextIsDev = current.is_dev ? 0 : 1;
+    await env.DB.prepare("UPDATE sandbox_beta_testers SET is_dev = ? WHERE id = ?").bind(nextIsDev, targetId).run();
+
+    return new Response(JSON.stringify({
+      success: true,
+      id: targetId,
+      is_dev: Boolean(nextIsDev)
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
+  // DELETE /api/v1/admin/dev-devices/:id
+  if ((url.pathname === "/api/v1/admin/dev-devices" && request.method === "DELETE") || (url.pathname.startsWith("/api/v1/admin/dev-devices/") && request.method === "DELETE" && !url.pathname.endsWith("/toggle-dev"))) {
+    const denied = await requireAdminAuth(request, env, corsHeaders);
+    if (denied) return denied;
+    await ensureBetaTestersTable(env);
+
+    let rawIdStr = "";
+    if (url.pathname.startsWith("/api/v1/admin/dev-devices/")) {
+      rawIdStr = url.pathname.replace("/api/v1/admin/dev-devices/", "").trim();
+    } else {
+      const body: any = await request.json().catch(() => ({}));
+      rawIdStr = body.id !== undefined && body.id !== null ? String(body.id).trim() : "";
+    }
+
+    if (!/^\d+$/.test(rawIdStr) || parseInt(rawIdStr, 10) <= 0) {
+      return new Response(JSON.stringify({ error: "Invalid or missing device ID to delete" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+    const targetId = parseInt(rawIdStr, 10);
+
+    const delRes = await env.DB.prepare("DELETE FROM sandbox_beta_testers WHERE id = ?").bind(targetId).run();
+    if (!delRes.meta?.changes) {
+      return new Response(JSON.stringify({ error: "Device record not found" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    return new Response(JSON.stringify({
+      success: true,
+      deleted_id: targetId
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
   // GET /api/v1/admin/sandbox/testers
   if (url.pathname === "/api/v1/admin/sandbox/testers" && request.method === "GET") {
     const denied = await requireAdminAuth(request, env, corsHeaders);
