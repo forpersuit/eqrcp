@@ -78,6 +78,15 @@ assert(portalHtml.includes('function escapeHtml(str)'), 'W6: portal.html defines
 assert(portalHtml.includes('const escCode = escapeHtml(lic.license_code);'), 'W6: portal.html escapes license_code');
 assert(portalHtml.includes('const escDevKey = escapeHtml(devKey);'), 'W6: portal.html escapes devKey');
 
+function extractTranslations(htmlContent) {
+  const match = htmlContent.match(/const\s+translations\s*=\s*(\{[\s\S]*?\n\s*\});/);
+  if (!match) throw new Error('Could not find translations dictionary in HTML content');
+  return new Function(`return (${match[1]});`)();
+}
+
+const pricingTranslations = extractTranslations(pricingHtml);
+const portalTranslations = extractTranslations(portalHtml);
+
 // W1 & W8 check: status and error_code checks
 assert(emailOtpJs.includes("err.error_code === 'RATE_LIMITED'"), 'W8: email-otp.js checks RATE_LIMITED error_code');
 assert(portalHtml.includes("err.error_code === 'SESSION_EXPIRED'"), 'W1: portal.html checks SESSION_EXPIRED error_code');
@@ -85,10 +94,9 @@ assert(portalHtml.includes("err.error_code === 'SESSION_EXPIRED'"), 'W1: portal.
 // W3 check: pending upgrade and pagination keys exist across all 7 languages
 const langMatches = ['en', 'zh', 'ja', 'ko', 'es', 'de', 'fr'];
 for (const l of langMatches) {
-  const pendingKeyCheck = portalHtml.includes(`"${l}": {`) || portalHtml.includes(`'${l}': {`);
-  assert(pendingKeyCheck, `W3: portal.html defines language ${l}`);
-  assert(portalHtml.includes(`"pagination_prev":`), `Pagination: portal.html defines pagination_prev for ${l}`);
-  assert(portalHtml.includes(`"pagination_next":`), `Pagination: portal.html defines pagination_next for ${l}`);
+  assert(Boolean(portalTranslations[l]), `W3: portal.html defines language ${l}`);
+  assert(typeof portalTranslations[l]?.pagination_prev === 'string' && portalTranslations[l].pagination_prev.length > 0, `Pagination: portal.html defines pagination_prev for ${l}`);
+  assert(typeof portalTranslations[l]?.pagination_next === 'string' && portalTranslations[l].pagination_next.length > 0, `Pagination: portal.html defines pagination_next for ${l}`);
 }
 assert(portalHtml.includes('"pending_upgrade_banner": "終身アップグレード購入済み'), 'W3: ja pending_upgrade_banner defined');
 assert(portalHtml.includes('"pending_upgrade_banner": "평생 플랜 업그레이드 구매 완료'), 'W3: ko pending_upgrade_banner defined');
@@ -110,9 +118,16 @@ assert(pricingHtml.includes('js/email-otp.js?v=1.0.7'), 'N1: pricing.html import
 assert(pricingHtml.includes('js/checkout-verify.js?v=1.0.7'), 'N1: pricing.html imports js/checkout-verify.js?v=1.0.7');
 assert(portalHtml.includes('js/email-otp.js?v=1.0.7'), 'N1: portal.html imports js/email-otp.js?v=1.0.7');
 
+// T1 / N2 check: Strict per-language verification of module_load_err in parsed dictionary
 for (const l of langMatches) {
-  assert(pricingHtml.includes(`"module_load_err":`), `N2: pricing.html defines module_load_err for ${l}`);
-  assert(portalHtml.includes(`"module_load_err":`), `N2: portal.html defines module_load_err for ${l}`);
+  assert(
+    typeof pricingTranslations[l]?.module_load_err === 'string' && pricingTranslations[l].module_load_err.length > 0,
+    `T1/N2: pricing.html defines module_load_err for ${l}`
+  );
+  assert(
+    typeof portalTranslations[l]?.module_load_err === 'string' && portalTranslations[l].module_load_err.length > 0,
+    `T1/N2: portal.html defines module_load_err for ${l}`
+  );
 }
 assert(portalHtml.includes("portalOtp.syncButtonWithEmail('', sendBtn)"), 'N3: portal.html resets sendBtn visual state on logout');
 
