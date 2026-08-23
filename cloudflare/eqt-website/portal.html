@@ -115,17 +115,20 @@
 
             <div class="space-y-4">
                 <div>
-                    <label class="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-2" data-i18n="email_label">Email Address</label>
+                    <label for="login-email" class="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-2" data-i18n="email_label">Email Address</label>
                     <div class="relative">
                         <input id="login-email" type="email" placeholder="you@example.com" data-i18n-placeholder="email_placeholder" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all duration-300" />
                     </div>
                 </div>
 
-                <div class="flex gap-2">
-                    <div class="flex-grow">
-                        <input id="login-code" type="text" placeholder="Verification Code" data-i18n-placeholder="code_placeholder" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all duration-300" disabled />
+                <div>
+                    <label for="login-code" class="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-2" data-i18n="code_label">Verification Code</label>
+                    <div class="flex gap-2">
+                        <div class="flex-grow">
+                            <input id="login-code" type="text" placeholder="Verification Code" data-i18n-placeholder="code_placeholder" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all duration-300" disabled />
+                        </div>
+                        <button id="send-code-btn" class="bg-white/10 hover:bg-white/20 border border-white/20 text-white/90 px-4 rounded-xl font-medium text-sm transition-all duration-300 active:scale-95 whitespace-nowrap cursor-pointer" data-i18n="send_code_btn">Send Code</button>
                     </div>
-                    <button id="send-code-btn" class="bg-white/10 hover:bg-white/20 border border-white/20 text-white/90 px-4 rounded-xl font-medium text-sm transition-all duration-300 active:scale-95 whitespace-nowrap cursor-pointer" data-i18n="send_code_btn">Send Code</button>
                 </div>
 
                 <!-- Inline Send Code Status Message Banner -->
@@ -285,6 +288,7 @@
                 "login_desc": "Manage your EQT Plus keys and subscriptions",
                 "email_label": "Purchase Email Address",
                 "email_placeholder": "you@example.com",
+                "code_label": "Verification Code",
                 "code_placeholder": "Verification Code",
                 "send_code_btn": "Send Code",
                 "login_btn": "Verify & Login",
@@ -372,6 +376,7 @@
                 "login_desc": "登录购买邮箱，轻松管理您的软件订阅、专属权益与发票账单",
                 "email_label": "购买时填写的邮箱地址",
                 "email_placeholder": "you@example.com",
+                "code_label": "邮箱验证码",
                 "code_placeholder": "验证码",
                 "send_code_btn": "发送验证码",
                 "login_btn": "验证并登录",
@@ -459,6 +464,7 @@
                 "login_desc": "メールコードでログインしてライセンスを管理",
                 "email_label": "購入時のメールアドレス",
                 "email_placeholder": "you@example.com",
+                "code_label": "認証コード",
                 "code_placeholder": "認証コード",
                 "send_code_btn": "コード送信",
                 "login_btn": "認証してログイン",
@@ -544,6 +550,7 @@
                 "login_desc": "이메일 인증으로 라이선스 및 구독 관리",
                 "email_label": "구매 이메일 주소",
                 "email_placeholder": "you@example.com",
+                "code_label": "인증 코드",
                 "code_placeholder": "인증 코드",
                 "send_code_btn": "코드 전송",
                 "login_btn": "인증 및 로그인",
@@ -629,6 +636,7 @@
                 "login_desc": "Inicia sesión con tu correo para gestionar licencias",
                 "email_label": "Correo de compra",
                 "email_placeholder": "you@example.com",
+                "code_label": "Código de verificación",
                 "code_placeholder": "Código de verificación",
                 "send_code_btn": "Enviar código",
                 "login_btn": "Verificar y Entrar",
@@ -714,6 +722,7 @@
                 "login_desc": "Verwalten Sie Ihre EQT-Schlüssel und Abonnements",
                 "email_label": "Kauf-E-Mail-Adresse",
                 "email_placeholder": "you@example.com",
+                "code_label": "Bestätigungscode",
                 "code_placeholder": "Bestätigungscode",
                 "send_code_btn": "Code senden",
                 "login_btn": "Prüfen & Anmelden",
@@ -799,6 +808,7 @@
                 "login_desc": "Gérez vos clés et abonnements EQT Plus",
                 "email_label": "E-mail d'achat",
                 "email_placeholder": "you@example.com",
+                "code_label": "Code de vérification",
                 "code_placeholder": "Code de vérification",
                 "send_code_btn": "Envoyer le code",
                 "login_btn": "Vérifier & Se connecter",
@@ -963,6 +973,7 @@
 
         function setLanguage(lang) {
             state.lang = lang;
+            document.documentElement.lang = lang;
             localStorage.setItem('eqt-lang', lang);
             localStorage.setItem('eqt_lang', lang);
             localStorage.setItem('eqt-page-lang', lang);

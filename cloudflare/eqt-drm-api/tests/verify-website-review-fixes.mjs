@@ -261,6 +261,13 @@ for (const l of langMatches) {
   assert(missing.length === 0, `I18n Coverage: portal.html [${l}] defines all HTML data-i18n keys (missing: ${JSON.stringify(missing)})`);
 }
 
+// 7. A11y & SEO assertions: dynamic document.documentElement.lang and form labels
+assert(portalHtml.includes('document.documentElement.lang = lang'), 'A11y/SEO: portal.html updates document.documentElement.lang on language switch');
+assert(/<label[^>]*for=["']login-email["']/.test(portalHtml), 'A11y: portal.html has associated label[for="login-email"]');
+assert(/<label[^>]*for=["']login-code["']/.test(portalHtml), 'A11y: portal.html has associated label[for="login-code"]');
+assert(/<label[^>]*for=["']checkout-email-input["']/.test(pricingHtml), 'A11y: pricing.html has associated label[for="checkout-email-input"]');
+assert(/<label[^>]*for=["']checkout-code-input["']/.test(pricingHtml), 'A11y: pricing.html has associated label[for="checkout-code-input"]');
+
 console.log(`\n============================================================`);
 console.log(`Results: ${passed} passed, ${failed} failed`);
 console.log(`============================================================`);
