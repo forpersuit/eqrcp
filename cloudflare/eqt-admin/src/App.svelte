@@ -19,12 +19,7 @@
 
   function handleLogout() {
     clearAccessSession();
-    const accessOut = accessLogoutUrl();
-    if (accessOut) {
-      window.location.href = accessOut;
-      return;
-    }
-    authed = false;
+    window.location.href = accessLogoutUrl();
   }
 
   function navigateTo(tab: AdminTab, prefillQuery?: string) {
@@ -40,7 +35,7 @@
 </script>
 
 {#if !authed}
-  <Login />
+  <Login onSuccess={() => { authed = true; }} />
 {:else}
   <div class="admin-layout" class:sandbox-mode={adminEnv.current === 'test'}>
     <aside class="sidebar card">
@@ -156,7 +151,7 @@
             EN
           </button>
         </div>
-        <button class="btn btn-secondary btn-block logout-btn" onclick={handleLogout}>
+        <button type="button" class="btn btn-secondary btn-block logout-btn" onclick={handleLogout}>
           {$t('nav.logout')}
         </button>
       </div>

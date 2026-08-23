@@ -5,6 +5,11 @@
   import { t } from '../lib/i18n';
   import Banner from '../components/Banner.svelte';
 
+  interface Props {
+    onSuccess?: () => void;
+  }
+  let { onSuccess }: Props = $props();
+
   let errorMessage = $state('');
   let probing = $state(true);
 
@@ -12,9 +17,13 @@
     probing = true;
     errorMessage = '';
     try {
-      await adminFetch('/api/v1/admin/error-logs?limit=1');
+      await adminFetch('/api/v1/admin/health?probe=0');
       markAccessAuthenticated();
-      window.location.reload();
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        window.location.reload();
+      }
     } catch (err: any) {
       errorMessage =
         err.message ||
@@ -25,6 +34,11 @@
   }
 
   onMount(() => {
+    const isLoggedOutUrl = window.location.search.includes('logged_out');
+    if (isLoggedOutUrl) {
+      probing = false;
+      return;
+    }
     probeAccess();
   });
 </script>

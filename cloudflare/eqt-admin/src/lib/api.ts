@@ -59,12 +59,17 @@ export async function adminFetch<T = unknown>(endpoint: string, options: ApiOpti
     throw new Error(data?.error || `服务暂时不可用 (${response.status})`);
   }
 
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('text/html')) {
+    throw new Error(`API 路由未正确代理 (收到 HTML 响应，请检查 Pages Functions 部署状态)`);
+  }
+
   const data = await response.json().catch(() => null);
   if (data === null) {
     if (!response.ok) {
       throw new Error(`请求失败 (${response.status} ${response.statusText})`);
     }
-    return {} as T;
+    throw new Error(`API 响应格式异常 (非有效 JSON)`);
   }
 
   if (!response.ok || (data && typeof data === 'object' && 'error' in data && data.error)) {

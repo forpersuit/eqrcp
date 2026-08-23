@@ -16,12 +16,14 @@ export function isAuthenticated(): boolean {
   return sessionStorage.getItem(ACCESS_OK_KEY) === '1';
 }
 
-/** Access logout: send user to CF Access logout URL if team domain configured. */
-export function accessLogoutUrl(): string | null {
-  const team = (import.meta.env.VITE_CF_ACCESS_TEAM_DOMAIN || '')
+/** Access logout: send user to CF Access logout URL. */
+export function accessLogoutUrl(): string {
+  const team = (
+    import.meta.env.VITE_CF_ACCESS_TEAM_DOMAIN ||
+    'huiai.cloudflareaccess.com'
+  )
     .replace(/^https?:\/\//, '')
     .replace(/\/$/, '');
-  if (!team) return null;
   const returnTo = encodeURIComponent(window.location.origin + '/');
   return `https://${team}/cdn-cgi/access/logout?returnTo=${returnTo}`;
 }
