@@ -1267,7 +1267,9 @@ export async function handleAdminRoutes(
     const email = rawEmail ? rawEmail.toLowerCase() : null;
     const notes = (body.notes || "").trim() || null;
     const isDev = body.is_dev !== undefined ? (body.is_dev ? 1 : 0) : 0;
-    const status = (body.status || "active").trim();
+    const rawStatus = (body.status || "active").trim().toLowerCase();
+    const validStatuses = ["active", "inactive", "revoked"];
+    const status = validStatuses.includes(rawStatus) ? rawStatus : "active";
 
     if (!deviceId && !email && !targetId) {
       return new Response(JSON.stringify({ error: "Must specify device_id, email, or id" }), {
@@ -1305,6 +1307,38 @@ export async function handleAdminRoutes(
           status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
+      }
+
+      // Check duplicate device_id first to prevent multiple conflicting rows
+      if (deviceId) {
+        const existingByDevice = await env.DB.prepare(
+          "SELECT id FROM sandbox_beta_testers WHERE LOWER(device_id) = ?"
+        ).bind(deviceId).first<{ id: number }>();
+
+        if (existingByDevice) {
+          let updateSql = "UPDATE sandbox_beta_testers SET status = ?, is_dev = ?";
+          const params: any[] = [status, isDev];
+          if (email !== null) {
+            updateSql += ", email = ?";
+            params.push(email);
+          }
+          if (notes !== null) {
+            updateSql += ", notes = ?";
+            params.push(notes);
+          }
+          updateSql += " WHERE id = ?";
+          params.push(existingByDevice.id);
+
+          await env.DB.prepare(updateSql).bind(...params).run();
+          return new Response(JSON.stringify({
+            success: true,
+            id: existingByDevice.id,
+            updated: true
+          }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
       }
 
       if (email) {

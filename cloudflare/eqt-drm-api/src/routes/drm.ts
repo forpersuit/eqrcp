@@ -977,21 +977,6 @@ export async function handleDrmRoutes(
     });
   }
 
-  // 1.6 Dedicated dev device status query
-  if (url.pathname === "/api/v1/dev/check-device" && request.method === "POST") {
-    const body: any = await request.json().catch(() => ({}));
-    const devId = (body.device_id || "").trim();
-    const isDev = await isDeviceAuthorizedForDev(env, devId);
-    return new Response(JSON.stringify({
-      success: true,
-      device_id: devId,
-      is_dev: isDev
-    }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
-    });
-  }
-
   // 1.8 Unbind device from client (self-deactivation with valid fingerprints or device_id)
   if (url.pathname === "/api/v1/device/unbind" && request.method === "POST") {
     const body: any = await request.json().catch(() => ({}));

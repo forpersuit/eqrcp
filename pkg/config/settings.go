@@ -121,6 +121,9 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 	devMode := false
 	if v.IsSet("devMode") {
 		devMode = v.GetBool("devMode")
+	} else if strings.TrimSpace(v.GetString("dev")) == "liyuelong" {
+		// Backward compatibility for legacy local dev configs during migration
+		devMode = true
 	}
 	debugLog := false
 	if v.IsSet("debugLog") {

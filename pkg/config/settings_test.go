@@ -110,3 +110,39 @@ func TestDesktopSettingsWriteCreatesOutputDirIfMissing(t *testing.T) {
 		t.Fatalf("saved.Output = %q, want %q", saved.Output, missingDir)
 	}
 }
+
+func TestDesktopSettingsLegacyDevCompatibility(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "legacy_config.yml")
+	if err := os.WriteFile(configPath, []byte("dev: liyuelong\noutput: /tmp/dev\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	app := application.New()
+	app.Flags.Config = configPath
+
+	settings, err := ReadDesktopSettings(app)
+	if err != nil {
+		t.Fatalf("ReadDesktopSettings failed: %v", err)
+	}
+	if !settings.DevMode {
+		t.Fatalf("expected DevMode to be true for legacy dev: liyuelong config")
+	}
+
+	// Saving will migrate to devMode: true
+	saved, err := WriteDesktopSettings(app, settings)
+	if err != nil {
+		t.Fatalf("WriteDesktopSettings failed: %v", err)
+	}
+	if !saved.DevMode {
+		t.Fatalf("expected saved.DevMode to remain true")
+	}
+
+	// Read again to verify persisted devMode
+	reloaded, err := ReadDesktopSettings(app)
+	if err != nil {
+		t.Fatalf("Reload failed: %v", err)
+	}
+	if !reloaded.DevMode {
+		t.Fatalf("expected reloaded.DevMode to be true")
+	}
+}

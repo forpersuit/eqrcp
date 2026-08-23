@@ -446,11 +446,42 @@ GET /api/v1/admin/audit-logs?limit=50&offset=0&action=&q=
 
 Admin 解绑 **不写** `unbind_records`，故不占用用户 365 天 4 次配额。
 
-### 0.4 鉴权失败限流
+### 2.9 开发者与测试设备管理 (Unified Dev & Test Devices)
 
-同一客户端 IP（`cf-connecting-ip` 或 `X-Forwarded-For`）在约 5 分钟窗口内，**携带了错误的** `X-Admin-Secret` ≥ 10 次 → **429**  
-`{ "error": "...", "code": "ADMIN_AUTH_RATE_LIMITED" }`，`Retry-After: 300`。  
-缺 Header 的 401 **不计次**（避免登录探活误伤）。成功鉴权后清除该 IP 计数。此为 Worker 进程内限流，非全局 Cloudflare 边缘规则。
+全环境（生产与测试沙箱）通用，数据物理隔离。
+
+#### 2.9.1 获取设备列表
+```
+GET /api/v1/admin/dev-devices
+```
+- 成功 200：`{ "success": true, "devices": [ { "id": 1, "device_id": "...", "email": "...", "notes": "...", "is_dev": 1, "status": "active", "created_at": "..." } ] }`
+
+#### 2.9.2 录入或更新设备
+```
+POST /api/v1/admin/dev-devices
+Body: {
+  "id"?: number,
+  "device_id"?: string,
+  "email"?: string,
+  "notes"?: string,
+  "is_dev"?: number | boolean,
+  "status"?: "active" | "inactive" | "revoked"
+}
+```
+- 校验机制：`status` 必须为白名单枚举（默认 fallback 为 `active`）；若已存在相同 `device_id` 或 `email`，自动转为更新对应记录（`updated: true`），保证单设备唯一性。
+- 成功 200：`{ "success": true, "id": 1, "updated"?: true }`
+
+#### 2.9.3 切换 Dev 模式授权开关
+```
+POST /api/v1/admin/dev-devices/:id/toggle-dev
+```
+- 成功 200：`{ "success": true, "id": 1, "is_dev": true | false }`
+
+#### 2.9.4 删除设备记录
+```
+DELETE /api/v1/admin/dev-devices/:id
+```
+- 成功 200：`{ "success": true, "deleted_id": 1 }`
 
 ---
 

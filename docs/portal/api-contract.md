@@ -293,9 +293,18 @@ Checkout 对应：`/checkout/send-code` / `verify-code` 使用键 **`checkout:{e
 
 ---
 
-## 相关对比
-
 | 流程 | 路径 | 购买校验 | 存储键 | 码有效期 | 发码限流 | 校验失败限流 |
 | :--- | :--- | :---: | :--- | :---: | :---: | :---: |
 | Portal 登录 | `/auth/*` | 是 | `portal:{email}` | 5 min | 60s | 8 / 15min |
 | Checkout 结账 | `/checkout/*` | 否 | `checkout:{email}` | 10 min | 60s | 8 / 15min |
+
+---
+
+## 客户端 DRM 交互核心契约 (Client DRM Endpoints)
+
+| 端点 | 方法 | 鉴权/限流 | 返回字段中的 Dev 模式鉴权 |
+| :--- | :---: | :--- | :--- |
+| `/api/v1/device/register` | POST | 匿名 / 速率限制 | 返回 `{ "device_id": string, "tier": "FREE", "is_dev": boolean }` |
+| `/api/v1/activate` | POST | 硬件指纹 + License Code | 返回 `{ "license_code": string, "tier": string, "is_dev": boolean, ... }` |
+| `/api/v1/verify` | POST | 硬件指纹 + License Code | 返回 `{ "status": "active", "tier": string, "is_dev": boolean, ... }` |
+

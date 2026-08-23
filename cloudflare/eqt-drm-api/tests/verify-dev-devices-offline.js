@@ -128,7 +128,7 @@ async function runTests() {
     'Content-Type': 'application/json'
   };
 
-  console.log('--- Test Group 1: Admin Dev Devices API ---');
+  console.log('--- Test Group 1: Admin Dev Devices API & Deduplication ---');
 
   // 1. Initial GET should be empty in production
   let url = new URL('https://admin.eqt.net.im/api/v1/admin/dev-devices');
@@ -150,7 +150,8 @@ async function runTests() {
       device_id: 'd3d721780dc042beb70ca3dc836edd8e',
       email: 'dev@301098.xyz',
       notes: 'Primary Dev Machine',
-      is_dev: 1
+      is_dev: 1,
+      status: 'invalid_status_should_fallback_to_active'
     })
   });
   res = await handleAdminRoutes(req, baseEnv, dummyCtx, url, corsHeaders);
@@ -159,14 +160,37 @@ async function runTests() {
   assert(data.success && data.id > 0, 'Device inserted successfully with ID');
   const addedId = data.id;
 
-  // 3. Verify isDeviceAuthorizedForDev
+  // Verify status fell back to active in DB
+  const insertedRow = d1.db.prepare('SELECT * FROM sandbox_beta_testers WHERE id = ?').get(addedId);
+  assertEqual(insertedRow.status, 'active', 'Status correctly fell back to active');
+
+  // 3. POST again with same device_id should update instead of creating duplicate row (F3 deduplication)
+  req = new Request(url.toString(), {
+    method: 'POST',
+    headers: adminHeaders,
+    body: JSON.stringify({
+      device_id: 'd3d721780dc042beb70ca3dc836edd8e',
+      notes: 'Updated Notes (No duplicate)',
+      is_dev: 1
+    })
+  });
+  res = await handleAdminRoutes(req, baseEnv, dummyCtx, url, corsHeaders);
+  assertEqual(res.status, 200, 'Duplicate POST /dev-devices returns 200');
+  data = await res.json();
+  assertEqual(data.id, addedId, 'Returned existing ID on duplicate device_id insertion');
+  assertEqual(data.updated, true, 'Marked as updated on duplicate device_id insertion');
+
+  const countRow = d1.db.prepare('SELECT COUNT(*) as cnt FROM sandbox_beta_testers').get();
+  assertEqual(countRow.cnt, 1, 'Total rows in table remains 1 after duplicate insertion');
+
+  // 4. Verify isDeviceAuthorizedForDev
   let isDev = await isDeviceAuthorizedForDev(baseEnv, 'd3d721780dc042beb70ca3dc836edd8e');
   assertEqual(isDev, true, 'isDeviceAuthorizedForDev returns true for authorized dev device');
 
   let notDev = await isDeviceAuthorizedForDev(baseEnv, 'unauthorized_device_id');
   assertEqual(notDev, false, 'isDeviceAuthorizedForDev returns false for unauthorized device');
 
-  // 4. Toggle Dev permission
+  // 5. Toggle Dev permission
   url = new URL(`https://admin.eqt.net.im/api/v1/admin/dev-devices/${addedId}/toggle-dev`);
   req = new Request(url.toString(), {
     method: 'POST',
@@ -192,19 +216,7 @@ async function runTests() {
 
   console.log('\n--- Test Group 2: DRM Endpoints is_dev Delivery ---');
 
-  // 5. POST /api/v1/dev/check-device
-  url = new URL('https://lic.eqt.net.im/api/v1/dev/check-device');
-  req = new Request(url.toString(), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ device_id: 'd3d721780dc042beb70ca3dc836edd8e' })
-  });
-  res = await handleDrmRoutes(req, baseEnv, dummyCtx, url, corsHeaders);
-  assertEqual(res.status, 200, 'POST /dev/check-device returns 200');
-  data = await res.json();
-  assertEqual(data.is_dev, true, 'POST /dev/check-device confirms is_dev: true');
-
-  // 6. POST /api/v1/device/register
+  // 6. POST /api/v1/device/register receives is_dev: true
   url = new URL('https://lic.eqt.net.im/api/v1/device/register');
   req = new Request(url.toString(), {
     method: 'POST',
