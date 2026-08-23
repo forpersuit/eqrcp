@@ -244,6 +244,23 @@ for (const l of langMatches) {
 }
 assert(portalHtml.includes("portalOtp.syncButtonWithEmail('', sendBtn)"), 'N3: portal.html resets sendBtn visual state on logout');
 
+// 6. Check that all HTML data-i18n and data-i18n-placeholder keys in portal.html are defined across all 7 languages
+function extractHtmlI18nKeys(htmlContent) {
+  const keys = new Set();
+  const regex = /data-i18n(?:-placeholder)?=["']([^"']+)["']/g;
+  let m;
+  while ((m = regex.exec(htmlContent)) !== null) {
+    keys.add(m[1]);
+  }
+  return Array.from(keys);
+}
+
+const portalHtmlKeys = extractHtmlI18nKeys(portalHtml);
+for (const l of langMatches) {
+  const missing = portalHtmlKeys.filter(k => typeof portalTranslations[l]?.[k] !== 'string' || portalTranslations[l][k].trim() === '');
+  assert(missing.length === 0, `I18n Coverage: portal.html [${l}] defines all HTML data-i18n keys (missing: ${JSON.stringify(missing)})`);
+}
+
 console.log(`\n============================================================`);
 console.log(`Results: ${passed} passed, ${failed} failed`);
 console.log(`============================================================`);
