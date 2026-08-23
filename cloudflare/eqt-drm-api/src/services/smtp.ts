@@ -262,7 +262,7 @@ export async function sendDRMEmail(env: Env, to: string, subject: string, html: 
     }
   }
 
-  await logSystemError(env, 'SMTP_EMAIL_FAIL', 'WARN', lastErr, { to, subject });
+  await logSystemError(env, 'SMTP_EMAIL_FAIL', 'CRITICAL', lastErr, { to, subject });
   throw lastErr;
 }
 

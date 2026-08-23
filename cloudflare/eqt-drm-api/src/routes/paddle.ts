@@ -889,7 +889,7 @@ export async function handlePaddleRoutes(
     });
     } catch (webhookErr: any) {
       console.error("Paddle webhook processing error:", webhookErr);
-      ctx.waitUntil(logSystemError(env, 'PADDLE_WEBHOOK', 'ERROR', webhookErr, {
+      ctx.waitUntil(logSystemError(env, 'PADDLE_WEBHOOK', 'CRITICAL', webhookErr, {
         path: url.pathname,
         event_type: eventType,
         transaction_id: data?.id || null,

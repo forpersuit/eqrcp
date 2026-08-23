@@ -274,3 +274,17 @@ echo -n "your_secret_value" | npx wrangler secret put KEY_NAME
   - **单例与无状态缓存**：使用 `WeakMap` 缓存包装后的 proxy 实例，确保同请求同实例内幂等无开销。
   - **写操作幂等性约束 (Write Idempotency Constraint)**：重试机制对写操作 (`run`, `exec`, `batch`) 生效时，要求底层 SQL 语句必须具备幂等性（如使用 `INSERT OR REPLACE` / `INSERT OR IGNORE` / `UPSERT` / 条件 `UPDATE`），避免在网络超时抖动重试时发生重复插入或非预期的写污染。对于 `activations` INSERT，采用 SQL 条件子句 `WHERE ... AND NOT EXISTS (...)` 防范写超时重试导致的重复激活行，并在 `changes === 0` 时二次检索确认设备激活状态。对于 `device_registry` 新设备注册，采用 `INSERT OR IGNORE` 确保二次重试无异常副作用。
 
+---
+
+## 12. 资金流与履约告警防线 (Money Path Fail-Loud Telegram Alerts)
+
+- **第一性原则 (Fail-Loud Money Path)**：支付收单、授权生成、激活码邮件寄送、退款/吊销等资金与核心履约链路，绝不允许发生“静默失败”。
+- **分类升级规则 (`isMoneyPathCategory`)**：
+  - 凡命中资金流范畴（`PADDLE_WEBHOOK`、`PADDLE_PRICE_MISCONFIGURATION`、`PADDLE_AMOUNT_MISMATCH`、`SMTP_EMAIL_FAIL`、`DRM_ACTIVATE_FAIL`、`REFUND_MISS_TARGET`、`LICENSE_MINT_FAIL`）的异常，即使日志标记为 `ERROR`，在 `logSystemError` 中必须同步触发 Telegram 实时报警。
+  - 顶级未捕获异常（如 Webhook 解析/D1 写入崩毁、SMTP 多次重试彻底断连）强制升级为 `CRITICAL` 级别。
+- **Telegram 防炸与 HTML 实体转义约束**：
+  - **HTML 严格转义 (`escapeHtml`)**：Telegram Bot API 在 `parse_mode: 'HTML'` 下对未闭合或非法尖括号极度敏感，遇到 `<script>`、`<unknown_tag>` 或含有 `<` / `>` 的异常堆栈/SQL 报错时会直接返回 `400 Bad Request: can't parse entities` 导致报警静默失效。所有外来报错消息、Category、Trace ID、上下文均必须先过 `escapeHtml()` 转义。
+  - **敏感字段脱敏 (Secret Redaction)**：告警上下文中的敏感键（包含 `secret|token|password|auth|key`）必须自动截断打码，严禁将明文凭据通过 Telegram 外部接口外泄。
+  - **智能滑动窗口频控 (Sliding Window Throttling)**：对每个错误类别建立内存桶（10 分钟最多 3 次），确保首发异常 0 延迟秒级触达，同时防范连环网络雪崩打爆 Telegram Bot 调用额度。
+
+

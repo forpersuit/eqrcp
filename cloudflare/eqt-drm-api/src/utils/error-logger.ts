@@ -29,25 +29,22 @@ export async function ensureAuditLogTable(env: Env): Promise<void> {
 }
 
 // --- Alert rate limiting (in-isolate) ---
-// CRITICAL: max 1 per hour, ERROR: max 3 per hour
-const ALERT_WINDOW_CRITICAL_MS = 60 * 60 * 1000;
-const ALERT_WINDOW_ERROR_MS = 60 * 60 * 1000;
-const ALERT_MAX_CRITICAL = 1;
-const ALERT_MAX_ERROR = 3;
+// Money Path / Critical: max 3 per 10 minutes
+const ALERT_WINDOW_MONEY_PATH_MS = 10 * 60 * 1000;
+const ALERT_MAX_MONEY_PATH = 3;
 
 interface AlertBucket {
   count: number;
   windowStart: number;
 }
 
-const criticalAlertBuckets = new Map<string, AlertBucket>();
-const errorAlertBuckets = new Map<string, AlertBucket>();
+const alertBuckets = new Map<string, AlertBucket>();
 
-function isAlertRateLimited(buckets: Map<string, AlertBucket>, key: string, maxCount: number, windowMs: number): boolean {
+function isAlertRateLimited(key: string, maxCount: number, windowMs: number): boolean {
   const now = Date.now();
-  const b = buckets.get(key);
+  const b = alertBuckets.get(key);
   if (!b || now - b.windowStart > windowMs) {
-    buckets.set(key, { count: 1, windowStart: now });
+    alertBuckets.set(key, { count: 1, windowStart: now });
     return false;
   }
   if (b.count >= maxCount) return true;
@@ -55,31 +52,87 @@ function isAlertRateLimited(buckets: Map<string, AlertBucket>, key: string, maxC
   return false;
 }
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 /**
- * Send Telegram alert for CRITICAL errors.
- * Rate-limited to 1 per hour per category.
+ * Send Telegram alert for critical and money-path failures.
+ * Protected by in-memory rate limiting, sanitization, and HTML escaping.
  */
-async function sendTelegramAlert(env: Env, category: string, errorMessage: string): Promise<void> {
+export async function sendTelegramAlert(
+  env: Env,
+  category: string,
+  level: string,
+  errorMessage: string,
+  context?: any,
+  traceId?: string
+): Promise<void> {
   const token = env.TELEGRAM_BOT_TOKEN;
   const chatId = env.TELEGRAM_CHAT_ID;
   if (!token || !chatId) return;
 
-  const rateLimitKey = `critical:${category}`;
-  if (isAlertRateLimited(criticalAlertBuckets, rateLimitKey, ALERT_MAX_CRITICAL, ALERT_WINDOW_CRITICAL_MS)) {
+  const rateLimitKey = `${level}:${category}`;
+  if (isAlertRateLimited(rateLimitKey, ALERT_MAX_MONEY_PATH, ALERT_WINDOW_MONEY_PATH_MS)) {
     console.log(`Telegram alert rate-limited for ${rateLimitKey}`);
     return;
   }
 
-  const text = `🚨 [CRITICAL] ${category}\n\n${errorMessage.slice(0, 2000)}`;
+  const envTag = env.ENVIRONMENT ? `[${env.ENVIRONMENT.toUpperCase()}] ` : '';
+  const header = `🚨 <b>${envTag}[${escapeHtml(level)}] ${escapeHtml(category)}</b>`;
+  const timeStr = new Date().toISOString();
+  
+  let body = `${header}\n\n<b>Error:</b>\n<pre>${escapeHtml(errorMessage.slice(0, 1500))}</pre>`;
+
+  if (context && typeof context === 'object') {
+    try {
+      const sanitizedContext: Record<string, any> = {};
+      for (const [k, v] of Object.entries(context)) {
+        if (/secret|token|password|auth|key/i.test(k) && typeof v === 'string') {
+          sanitizedContext[k] = v.length > 8 ? `${v.slice(0, 4)}...${v.slice(-4)}` : '***';
+        } else {
+          sanitizedContext[k] = v;
+        }
+      }
+      const ctxStr = JSON.stringify(sanitizedContext, null, 2);
+      if (ctxStr && ctxStr.length > 2) {
+        body += `\n\n<b>Context:</b>\n<pre>${escapeHtml(ctxStr.slice(0, 1000))}</pre>`;
+      }
+    } catch {
+      // ignore context stringify error
+    }
+  }
+
+  if (traceId) {
+    body += `\n<b>Trace ID:</b> <code>${escapeHtml(traceId)}</code>`;
+  }
+  body += `\n<b>Time:</b> <code>${timeStr}</code>`;
+
   try {
     await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' }),
+      body: JSON.stringify({ chat_id: chatId, text: body, parse_mode: 'HTML' }),
     });
   } catch (err) {
     console.error('Failed to send Telegram alert:', err);
   }
+}
+
+/**
+ * Check if a category represents a critical money path operation
+ */
+export function isMoneyPathCategory(category: string): boolean {
+  return (
+    category.startsWith('PADDLE_') ||
+    category === 'SMTP_EMAIL_FAIL' ||
+    category === 'DRM_ACTIVATE_FAIL' ||
+    category === 'REFUND_MISS_TARGET' ||
+    category === 'LICENSE_MINT_FAIL'
+  );
 }
 
 export async function logSystemError(
@@ -102,10 +155,10 @@ export async function logSystemError(
       "INSERT INTO system_error_logs (level, category, error_message, context_json, created_at, trace_id) VALUES (?, ?, ?, ?, ?, ?)"
     ).bind(level, category, errorMsg, contextJson, new Date().toISOString(), traceId || null).run();
 
-    // Alert notification for CRITICAL errors (§7.3 告警升级机制)
-    if (level === 'CRITICAL') {
+    // Alert notification for CRITICAL errors and Money Path failures (§7.3 告警升级机制)
+    if (level === 'CRITICAL' || (level === 'ERROR' && isMoneyPathCategory(category))) {
       // Await to ensure delivery before ctx.waitUntil() releases the isolate
-      await sendTelegramAlert(env, category, errorMsg);
+      await sendTelegramAlert(env, category, level, errorMsg, context, traceId);
     }
   } catch (err) {
     console.error("Failed to log system error to D1:", err);

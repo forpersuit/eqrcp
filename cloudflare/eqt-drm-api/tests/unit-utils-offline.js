@@ -60,6 +60,12 @@ class MockD1 {
     this.lastSQL = sql;
     const self = this;
     return {
+      run: async () => {
+        self.rows.push({ sql, binds: [] });
+        return { meta: { changes: 1 } };
+      },
+      first: async () => null,
+      all: async () => ({ results: [] }),
       bind: (...binds) => {
         self.lastBinds = binds;
         return {
@@ -107,7 +113,7 @@ console.log('\n=== logSystemError ===');
     }
   }
 
-  // Test 2: Sends Telegram alert for CRITICAL level
+  // Test 2: Sends Telegram alert for CRITICAL level with escaped HTML
   {
     const db = new MockD1();
     const env = makeEnv(db);
@@ -119,17 +125,19 @@ console.log('\n=== logSystemError ===');
       telegramBody = JSON.parse(opts.body);
       return { ok: true };
     };
-    await logSystemError(env, 'SERVER_EXCEPTION', 'CRITICAL', new Error('fatal error'), {});
+    await logSystemError(env, 'SERVER_EXCEPTION', 'CRITICAL', new Error('fatal <script>error</script>'), { secret_key: 'supersecrettoken123' });
     assert(telegramCalled, 'fetch to Telegram API was called for CRITICAL');
     if (telegramBody) {
       assertEqual(telegramBody.chat_id, 'test-chat-id', 'Telegram chat_id is set');
-      assert(telegramBody.text.includes('CRITICAL'), 'Telegram message contains CRITICAL');
+      assert(telegramBody.text.includes('[CRITICAL]'), 'Telegram message contains CRITICAL');
       assert(telegramBody.text.includes('SERVER_EXCEPTION'), 'Telegram message contains category');
+      assert(telegramBody.text.includes('&lt;script&gt;'), 'Telegram message escapes HTML characters');
+      assert(!telegramBody.text.includes('supersecrettoken123'), 'Telegram message redacts sensitive secret in context');
     }
     globalThis.fetch = originalFetch;
   }
 
-  // Test 3: Rate-limits Telegram alerts to 1/h per category
+  // Test 3: Rate-limits Telegram alerts to max 3 per window per category
   {
     const db = new MockD1();
     const env = makeEnv(db);
@@ -139,11 +147,13 @@ console.log('\n=== logSystemError ===');
       fetchCount++;
       return { ok: true };
     };
-    // First call should trigger fetch
-    await logSystemError(env, 'RATE_LIMIT_TEST', 'CRITICAL', new Error('first'), {});
-    // Second call with same category should be rate-limited
-    await logSystemError(env, 'RATE_LIMIT_TEST', 'CRITICAL', new Error('second'), {});
-    assertEqual(fetchCount, 1, 'Second CRITICAL alert with same category is rate-limited (1/h)');
+    // 3 calls should trigger fetch
+    await logSystemError(env, 'RATE_LIMIT_TEST', 'CRITICAL', new Error('1'), {});
+    await logSystemError(env, 'RATE_LIMIT_TEST', 'CRITICAL', new Error('2'), {});
+    await logSystemError(env, 'RATE_LIMIT_TEST', 'CRITICAL', new Error('3'), {});
+    // 4th call with same category should be rate-limited
+    await logSystemError(env, 'RATE_LIMIT_TEST', 'CRITICAL', new Error('4'), {});
+    assertEqual(fetchCount, 3, '4th CRITICAL alert with same category is rate-limited (max 3/window)');
     globalThis.fetch = originalFetch;
   }
 
@@ -163,18 +173,31 @@ console.log('\n=== logSystemError ===');
     globalThis.fetch = originalFetch;
   }
 
-  // Test 5: Does NOT send Telegram for non-CRITICAL levels
+  // Test 5: Sends Telegram for Money Path ERROR levels (PADDLE_, SMTP_EMAIL_FAIL), but NOT for non-money-path ERROR
   {
     const db = new MockD1();
     const env = makeEnv(db);
-    let fetchCalled = false;
+    let fetchCount = 0;
+    let lastBody = null;
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = async () => {
-      fetchCalled = true;
+    globalThis.fetch = async (url, opts) => {
+      fetchCount++;
+      lastBody = JSON.parse(opts.body);
       return { ok: true };
     };
-    await logSystemError(env, 'TEST', 'ERROR', new Error('not critical'), {});
-    assert(!fetchCalled, 'No Telegram alert for ERROR level');
+    // Non-money-path ERROR -> no alert
+    await logSystemError(env, 'GENERIC_UI', 'ERROR', new Error('minor error'), {});
+    assertEqual(fetchCount, 0, 'No Telegram alert for generic non-money-path ERROR level');
+
+    // Money path ERROR (PADDLE_WEBHOOK) -> should alert
+    await logSystemError(env, 'PADDLE_WEBHOOK', 'ERROR', new Error('webhook missing table'), { transaction_id: 'txn_123' });
+    assertEqual(fetchCount, 1, 'Telegram alert sent for Money Path PADDLE_WEBHOOK ERROR');
+    assert(lastBody && lastBody.text.includes('PADDLE_WEBHOOK'), 'Message includes PADDLE_WEBHOOK category');
+
+    // Money path ERROR (SMTP_EMAIL_FAIL) -> should alert
+    await logSystemError(env, 'SMTP_EMAIL_FAIL', 'ERROR', new Error('smtp drop'), { to: 'user@test.com' });
+    assertEqual(fetchCount, 2, 'Telegram alert sent for Money Path SMTP_EMAIL_FAIL ERROR');
+
     globalThis.fetch = originalFetch;
   }
 
