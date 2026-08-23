@@ -268,6 +268,16 @@ assert(/<label[^>]*for=["']login-code["']/.test(portalHtml), 'A11y: portal.html 
 assert(/<label[^>]*for=["']checkout-email-input["']/.test(pricingHtml), 'A11y: pricing.html has associated label[for="checkout-email-input"]');
 assert(/<label[^>]*for=["']checkout-code-input["']/.test(pricingHtml), 'A11y: pricing.html has associated label[for="checkout-code-input"]');
 
+// 8. Option A Status Badge assertions: consume is_refunded and activate status_refunded
+assert(portalHtml.includes('lic.is_refunded'), 'StatusBadge: portal.html consumes lic.is_refunded');
+assert(portalHtml.includes("isRefunded ? 'status_refunded'"), 'StatusBadge: portal.html maps isRefunded to status_refunded');
+for (const l of langMatches) {
+  assert(
+    typeof portalTranslations[l]?.status_refunded === 'string' && portalTranslations[l].status_refunded.length > 0,
+    `StatusBadge: portal.html [${l}] defines non-empty status_refunded`
+  );
+}
+
 console.log(`\n============================================================`);
 console.log(`Results: ${passed} passed, ${failed} failed`);
 console.log(`============================================================`);

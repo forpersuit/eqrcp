@@ -1239,9 +1239,12 @@
                 card.className = 'bg-surface-variant/40 border border-white/10 rounded-xl p-6 space-y-4';
 
                 const dict = translations[state.lang] || translations.en;
-                const statusColor = lic.status === 'active' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-red-500/10 text-red-400 border-red-500/30';
-                const statusKey = 'status_' + lic.status;
-                const statusLabel = dict[statusKey] || lic.status.toUpperCase();
+                const isRefunded = lic.is_refunded === true || (lic.status === 'revoked' && (lic.revoke_reason === 'refund' || lic.revoke_reason === 'chargeback'));
+                const statusColor = lic.status === 'active' 
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
+                    : (isRefunded ? 'bg-amber-500/10 text-amber-400 border-amber-500/30' : 'bg-red-500/10 text-red-400 border-red-500/30');
+                const statusKey = isRefunded ? 'status_refunded' : ('status_' + lic.status);
+                const statusLabel = dict[statusKey] || (isRefunded ? 'Refunded' : lic.status.toUpperCase());
                 const sourceKey = 'source_' + (lic.source || 'admin');
                 const sourceLabel = dict[sourceKey] || (lic.source || '—');
                 const isLifetime = !lic.duration_days && (lic.expires_at === 'LIFETIME' || !lic.expires_at);
