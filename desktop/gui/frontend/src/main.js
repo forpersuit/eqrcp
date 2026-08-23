@@ -57,7 +57,6 @@ import {
     SubmitCrashReport,
     DismissCrashReport,
     DismissCrashReportPermanently,
-    DevSetUsedSeconds,
     DevForceOnlineLicenseSync,
     DevTriggerCrash,
 } from '../wailsjs/go/main/App';
@@ -2328,13 +2327,8 @@ function renderSettingsPanel() {
 
                     <!-- Module 2: Billing & Quota Debug -->
                     <div style="margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed var(--line);">
-                        <div style="font-weight: 800; font-size: 12px; color: var(--accent); margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
-                            <span>⚡</span> ${t('dev_section_billing') || 'Quota & License Testing'}
-                        </div>
-                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; width: 100%;">
-                            <button type="button" class="ghost" id="dev-reset-quota" style="padding: 7px 6px; font-size: 11px; color: var(--accent); border-color: var(--accent); border-radius: 6px; font-weight: 600;">🔄 ${t('dev_reset_quota') || 'Reset Quota'}</button>
-                            <button type="button" class="ghost" id="dev-max-quota" style="padding: 7px 6px; font-size: 11px; color: #ef4444; border-color: #ef4444; border-radius: 6px; font-weight: 600;">⚡ ${t('dev_max_quota') || 'Max Quota'}</button>
-                            <button type="button" class="ghost" id="dev-force-sync" style="padding: 7px 6px; font-size: 11px; color: #3b82f6; border-color: #3b82f6; border-radius: 6px; font-weight: 600;">☁️ ${t('dev_force_sync') || 'Online Sync'}</button>
+                        <div style="margin-bottom: 10px; width: 100%;">
+                            <button type="button" class="ghost" id="dev-force-sync" style="padding: 7px 6px; font-size: 11px; color: #3b82f6; border-color: #3b82f6; border-radius: 6px; font-weight: 600; width: 100%;">☁️ ${t('dev_force_sync') || 'Online Sync'}</button>
                         </div>
                         <div style="padding: 10px 12px; background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 10px; box-sizing: border-box; width: 100%;">
                             <div style="font-weight: 700; font-size: 11.5px; color: var(--accent); margin-bottom: 6px;">${t('dev_inject_license') || 'Inject License (Dev)'}</div>
@@ -3679,40 +3673,6 @@ function bindEvents() {
                         showToast('Failed to open log directory: ' + (error?.message || error));
                     });
                 }
-                return;
-            }
-            if (e.target.closest('#dev-reset-quota')) {
-                DevSetUsedSeconds(0).then(async (status) => {
-                    state.status = status;
-                    const rawPaths = state.sharePaths.map(item => typeof item === 'string' ? item : item.path);
-                    try {
-                        state.shareLimitNotice = await ValidateFreeTier(rawPaths);
-                    } catch (err) {
-                        state.shareLimitNotice = '';
-                    }
-                    showToast(t('dev_quota_reset_success') || 'Reset daily quota to 0s');
-                    render();
-                    openPanel('settings');
-                }).catch(error => {
-                    showToast('Failed to reset quota: ' + (error?.message || error));
-                });
-                return;
-            }
-            if (e.target.closest('#dev-max-quota')) {
-                DevSetUsedSeconds(600).then(async (status) => {
-                    state.status = status;
-                    const rawPaths = state.sharePaths.map(item => typeof item === 'string' ? item : item.path);
-                    try {
-                        state.shareLimitNotice = await ValidateFreeTier(rawPaths);
-                    } catch (err) {
-                        state.shareLimitNotice = '';
-                    }
-                    showToast(t('dev_quota_max_success') || 'Set usage to 10m (600s)');
-                    render();
-                    openPanel('settings');
-                }).catch(error => {
-                    showToast('Failed to max quota: ' + (error?.message || error));
-                });
                 return;
             }
             if (e.target.closest('#dev-force-sync')) {

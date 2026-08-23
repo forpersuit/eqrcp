@@ -1410,25 +1410,6 @@ func (a *App) RefreshLicenseStatus() (AgentStatus, error) {
 	return status, nil
 }
 
-func (a *App) DevSetUsedSeconds(seconds int) (AgentStatus, error) {
-	if !server.IsServerDevAuthorized() && os.Getenv("EQT_DEV") != "1" {
-		return AgentStatus{}, fmt.Errorf("developer options forbidden: unauthorized device")
-	}
-	a.logInfo(fmt.Sprintf("[GUI] DevSetUsedSeconds called with %d", seconds))
-	if a.agent == nil {
-		return AgentStatus{}, fmt.Errorf("agent not initialized")
-	}
-	server.SetUsedSeconds(seconds)
-	if seconds == 0 {
-		server.SetUsedTransfers(0)
-		server.SetUsedReceiveTransfers(0)
-	} else {
-		server.SetUsedTransfers(5)
-		server.SetUsedReceiveTransfers(5)
-	}
-	return a.agent.snapshotLocked(), nil
-}
-
 func (a *App) DevForceOnlineLicenseSync() (AgentStatus, error) {
 	a.logInfo("[GUI] DevForceOnlineLicenseSync: Starting manual online license verification...")
 	if a.agent == nil {
