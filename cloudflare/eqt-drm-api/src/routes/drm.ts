@@ -1055,13 +1055,17 @@ export async function handleDrmRoutes(
     let signatureHex = "";
     const privateKeyHex = env.ED25519_PRIVATE_KEY;
     if (privateKeyHex) {
-      const privateKeyBytes = hexToUint8Array(privateKeyHex);
-      const pkcs8Bytes = new Uint8Array(16 + privateKeyBytes.length);
-      pkcs8Bytes.set([0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20]);
-      pkcs8Bytes.set(privateKeyBytes, 16);
-      const key = await crypto.subtle.importKey("pkcs8", pkcs8Bytes, { name: "Ed25519" }, true, ["sign"]);
-      const sigBuf = await crypto.subtle.sign("Ed25519", key, payloadData);
-      signatureHex = bufToHex(sigBuf);
+      try {
+        const privateKeyBytes = hexToUint8Array(privateKeyHex);
+        const pkcs8Bytes = new Uint8Array(16 + privateKeyBytes.length);
+        pkcs8Bytes.set([0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20]);
+        pkcs8Bytes.set(privateKeyBytes, 16);
+        const key = await crypto.subtle.importKey("pkcs8", pkcs8Bytes, { name: "Ed25519" }, true, ["sign"]);
+        const sigBuf = await crypto.subtle.sign("Ed25519", key, payloadData);
+        signatureHex = bufToHex(sigBuf);
+      } catch (signErr) {
+        console.error("Failed to produce Ed25519 signature for sync-usage:", signErr);
+      }
     }
 
     return new Response(JSON.stringify({

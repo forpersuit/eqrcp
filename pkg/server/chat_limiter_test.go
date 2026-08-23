@@ -1,9 +1,14 @@
 package server
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -217,9 +222,58 @@ func TestChatUsageHMACAndAntiTamper(t *testing.T) {
 }
 
 func TestVerifySyncUsageSignature(t *testing.T) {
-	// Fake invalid signature should return false
-	isValid := VerifySyncUsageSignature("dev123", "2026-08-24", 100, 2, false, "2026-08-24T00:00:00Z", "deadbeef")
-	if isValid {
-		t.Fatalf("expected invalid signature to fail verification")
+	// 1. Negative cases: empty or invalid signature
+	if VerifySyncUsageSignature("dev123", "2026-08-24", 100, 2, false, "2026-08-24T00:00:00Z", "") {
+		t.Fatalf("expected empty signature to fail verification (fail-closed)")
+	}
+	if VerifySyncUsageSignature("dev123", "2026-08-24", 100, 2, false, "2026-08-24T00:00:00Z", "deadbeef") {
+		t.Fatalf("expected invalid hex signature to fail verification")
+	}
+	fake128Hex := strings.Repeat("a", 128)
+	if VerifySyncUsageSignature("dev123", "2026-08-24", 100, 2, false, "2026-08-24T00:00:00Z", fake128Hex) {
+		t.Fatalf("expected forged signature to fail verification")
+	}
+
+	// 2. Positive case: valid keypair self-signed and verified
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("failed to generate ed25519 keypair: %v", err)
+	}
+
+	oldKey := defaultPublicKeyHex
+	defaultPublicKeyHex = hex.EncodeToString(pub)
+	defer func() {
+		defaultPublicKeyHex = oldKey
+	}()
+
+	devID := "dev_mock_test_001"
+	usageDate := "2026-08-24"
+	usedSeconds := 180
+	usedTransfers := 3
+	quotaExceeded := false
+	serverTime := "2026-08-24T02:00:00Z"
+
+	payloadStr := fmt.Sprintf("SYNC|%s|%s|%d|%d|0|%s", devID, usageDate, usedSeconds, usedTransfers, serverTime)
+	sigBytes := ed25519.Sign(priv, []byte(payloadStr))
+	sigHex := hex.EncodeToString(sigBytes)
+
+	// Valid signature must pass
+	if !VerifySyncUsageSignature(devID, usageDate, usedSeconds, usedTransfers, quotaExceeded, serverTime, sigHex) {
+		t.Fatalf("expected valid signature to pass verification")
+	}
+
+	// Tampered usedSeconds must fail
+	if VerifySyncUsageSignature(devID, usageDate, 0, usedTransfers, quotaExceeded, serverTime, sigHex) {
+		t.Fatalf("expected tampered usedSeconds to fail verification")
+	}
+
+	// Tampered usageDate must fail
+	if VerifySyncUsageSignature(devID, "2026-08-25", usedSeconds, usedTransfers, quotaExceeded, serverTime, sigHex) {
+		t.Fatalf("expected tampered usageDate to fail verification")
+	}
+
+	// Tampered quotaExceeded flag must fail
+	if VerifySyncUsageSignature(devID, usageDate, usedSeconds, usedTransfers, true, serverTime, sigHex) {
+		t.Fatalf("expected tampered quotaExceeded to fail verification")
 	}
 }

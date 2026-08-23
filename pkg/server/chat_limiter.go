@@ -428,11 +428,9 @@ func SyncUsageToServer(deltaSeconds, deltaTransfers int) {
 			return
 		}
 
-		// Cryptographic Ed25519 signature verification against rogue server / MITM attacks
-		if result.Signature != "" {
-			if !VerifySyncUsageSignature(result.DeviceID, result.UsageDate, result.UsedSeconds, result.UsedTransfers, result.QuotaExceeded, result.ServerTime, result.Signature) {
-				return
-			}
+		// Cryptographic Ed25519 signature verification against rogue server / MITM attacks (fail-closed)
+		if result.Signature == "" || !VerifySyncUsageSignature(result.DeviceID, result.UsageDate, result.UsedSeconds, result.UsedTransfers, result.QuotaExceeded, result.ServerTime, result.Signature) {
+			return
 		}
 
 		limiterInstance.mu.Lock()
