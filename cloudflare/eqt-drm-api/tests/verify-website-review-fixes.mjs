@@ -25,6 +25,8 @@ function assert(condition, message) {
 const pricingHtml = fs.readFileSync(path.join(websiteDir, 'pricing.html'), 'utf8');
 const indexHtml = fs.readFileSync(path.join(websiteDir, 'index.html'), 'utf8');
 const refundHtml = fs.readFileSync(path.join(websiteDir, 'refund.html'), 'utf8');
+const privacyHtml = fs.readFileSync(path.join(websiteDir, 'privacy.html'), 'utf8');
+const termsHtml = fs.readFileSync(path.join(websiteDir, 'terms.html'), 'utf8');
 
 // W2 check: No Korean characters in ja price features
 assert(!pricingHtml.includes('"price_free_feat3": "最大5個 of 파일'), 'W2: pricing.html ja price_free_feat3 does not contain Korean 파일');
@@ -263,11 +265,13 @@ for (const l of langMatches) {
   assert(missing.length === 0, `I18n Coverage: portal.html [${l}] defines all HTML data-i18n keys (missing: ${JSON.stringify(missing)})`);
 }
 
-// 7. A11y & SEO assertions: dynamic document.documentElement.lang across all pages and form labels
+// 7. A11y & SEO assertions: dynamic document.documentElement.lang across all 6 pages and form labels
 assert(portalHtml.includes('document.documentElement.lang = lang'), 'A11y/SEO: portal.html updates document.documentElement.lang on language switch');
 assert(pricingHtml.includes('document.documentElement.lang = lang'), 'A11y/SEO: pricing.html updates document.documentElement.lang on language switch');
 assert(indexHtml.includes('document.documentElement.lang = lang'), 'A11y/SEO: index.html updates document.documentElement.lang on language switch');
 assert(refundHtml.includes('document.documentElement.lang = lang'), 'A11y/SEO: refund.html updates document.documentElement.lang on language switch');
+assert(privacyHtml.includes('document.documentElement.lang = lang'), 'A11y/SEO: privacy.html updates document.documentElement.lang on language switch');
+assert(termsHtml.includes('document.documentElement.lang = lang'), 'A11y/SEO: terms.html updates document.documentElement.lang on language switch');
 assert(/<label[^>]*for=["']login-email["']/.test(portalHtml), 'A11y: portal.html has associated label[for="login-email"]');
 assert(/<label[^>]*for=["']login-code["']/.test(portalHtml), 'A11y: portal.html has associated label[for="login-code"]');
 assert(/<label[^>]*for=["']checkout-email-input["']/.test(pricingHtml), 'A11y: pricing.html has associated label[for="checkout-email-input"]');
