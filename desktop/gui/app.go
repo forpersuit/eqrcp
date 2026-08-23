@@ -1411,6 +1411,9 @@ func (a *App) RefreshLicenseStatus() (AgentStatus, error) {
 }
 
 func (a *App) DevSetUsedSeconds(seconds int) (AgentStatus, error) {
+	if !server.IsServerDevAuthorized() && os.Getenv("EQT_DEV") != "1" {
+		return AgentStatus{}, fmt.Errorf("developer options forbidden: unauthorized device")
+	}
 	a.logInfo(fmt.Sprintf("[GUI] DevSetUsedSeconds called with %d", seconds))
 	if a.agent == nil {
 		return AgentStatus{}, fmt.Errorf("agent not initialized")
