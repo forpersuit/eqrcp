@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -144,5 +145,73 @@ func TestNetworkTimeAndAntiTamper(t *testing.T) {
 	}
 	if netTime.IsZero() {
 		t.Errorf("expected non-zero netTime")
+	}
+}
+
+func TestChatUsageHMACAndAntiTamper(t *testing.T) {
+	os.Setenv("EQT_TESTING", "true")
+	defer os.Unsetenv("EQT_TESTING")
+
+	usageFile := filepath.Join(config.DefaultConfigDir(), "chat_usage.json")
+	var backup []byte
+	backupExists := false
+	if data, err := os.ReadFile(usageFile); err == nil {
+		backup = data
+		backupExists = true
+		_ = os.Remove(usageFile)
+	}
+	defer func() {
+		if backupExists {
+			_ = os.WriteFile(usageFile, backup, 0644)
+		} else {
+			_ = os.Remove(usageFile)
+		}
+	}()
+
+	limiter := &ChatLimiter{}
+	today := time.Now().Format("2006-01-02")
+
+	// 1. Save valid usage and check MAC signature is generated
+	u := ChatUsage{
+		Date:                 today,
+		UsedSeconds:          150,
+		UsedTransfers:        2,
+		UsedReceiveTransfers: 1,
+		IsPaid:               false,
+		ClockTampered:        false,
+	}
+	limiter.saveUsageLocked(u)
+
+	// Read file directly from disk and check MAC presence
+	diskBytes, err := os.ReadFile(usageFile)
+	if err != nil {
+		t.Fatalf("failed to read usage file: %v", err)
+	}
+	var loaded ChatUsage
+	if err := json.Unmarshal(diskBytes, &loaded); err != nil {
+		t.Fatalf("failed to parse json: %v", err)
+	}
+	if loaded.MAC == "" {
+		t.Fatalf("expected MAC signature to be non-empty")
+	}
+
+	// 2. Tamper with the file (e.g. manually reducing usedSeconds to 0 without valid MAC)
+	loaded.UsedSeconds = 0
+	loaded.MAC = "fake_tampered_signature"
+	tamperedBytes, _ := json.Marshal(loaded)
+	if err := os.WriteFile(usageFile, tamperedBytes, 0644); err != nil {
+		t.Fatalf("failed to write tampered file: %v", err)
+	}
+
+	// Create new limiter instance without cache to force disk load
+	freshLimiter := &ChatLimiter{}
+	checked := freshLimiter.loadUsageLocked()
+
+	// Must detect tamper: set ClockTampered = true and UsedSeconds = 600
+	if !checked.ClockTampered {
+		t.Fatalf("expected ClockTampered to be true when MAC is tampered")
+	}
+	if checked.UsedSeconds < 300 {
+		t.Fatalf("expected UsedSeconds to be locked to exhausted (>300), got %d", checked.UsedSeconds)
 	}
 }

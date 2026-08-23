@@ -204,6 +204,20 @@ CREATE TABLE IF NOT EXISTS sandbox_beta_testers (
 CREATE INDEX IF NOT EXISTS idx_beta_device ON sandbox_beta_testers(device_id) WHERE device_id IS NOT NULL AND device_id != '';
 CREATE UNIQUE INDEX IF NOT EXISTS idx_beta_email ON sandbox_beta_testers(email) WHERE email IS NOT NULL AND email != '';
 
+-- Free-tier daily usage tracking per device for authoritative cloud quota enforcement (§8)
+CREATE TABLE IF NOT EXISTS free_daily_usage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    device_id TEXT NOT NULL,
+    usage_date TEXT NOT NULL,
+    used_seconds INTEGER NOT NULL DEFAULT 0,
+    used_transfers INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_free_daily_usage_dev_date ON free_daily_usage(device_id, usage_date);
+CREATE INDEX IF NOT EXISTS idx_free_daily_usage_date ON free_daily_usage(usage_date);
+
 
 
 

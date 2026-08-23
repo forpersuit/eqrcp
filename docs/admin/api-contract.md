@@ -491,6 +491,59 @@ DELETE /api/v1/admin/dev-devices/:id
 
 ---
 
+### 2.10 免费设备每日用量权威对账与云端配额裁决 (Authoritative Daily Free Usage Sync)
+
+防止客户端通过逆向篡改本地用量计数器无限制使用每日全功能额度（5 分钟 / 5 次）。由服务端 D1 `free_daily_usage` 作为唯一真理源（SSOT）。
+
+#### 2.10.1 上报增量用量并获取权威配额
+```
+POST /api/v1/device/sync-usage
+Content-Type: application/json
+```
+
+**Body：**
+```json
+{
+  "device_id": "d3d721780dc042beb70ca3dc836edd8e",
+  "delta_seconds": 15,
+  "delta_transfers": 1
+}
+```
+
+**字段说明：**
+- `device_id`：必填，设备的唯一持久标识符。
+- `delta_seconds`：本次会话新增消耗的秒数（0 ~ 3600）。
+- `delta_transfers`：本次新增消耗的传输次数（0 ~ 100）。
+
+**响应（200 OK - 免费设备）：**
+```json
+{
+  "success": true,
+  "device_id": "d3d721780dc042beb70ca3dc836edd8e",
+  "usage_date": "2026-08-24",
+  "used_seconds": 45,
+  "used_transfers": 1,
+  "max_seconds": 300,
+  "max_transfers": 5,
+  "quota_exceeded": false,
+  "is_paid": false,
+  "server_time": "2026-08-24T01:05:00.000Z"
+}
+```
+
+**响应（200 OK - 付费设备）：**
+```json
+{
+  "success": true,
+  "device_id": "d3d721780dc042beb70ca3dc836edd8e",
+  "is_paid": true,
+  "quota_exceeded": false,
+  "server_time": "2026-08-24T01:05:00.000Z"
+}
+```
+
+---
+
 ## 3. 前端 `adminFetch` 约定
 
 - Base：`import.meta.env.VITE_API_BASE`  

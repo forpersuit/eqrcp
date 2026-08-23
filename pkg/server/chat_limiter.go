@@ -1,6 +1,10 @@
 package server
 
 import (
+	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -48,6 +52,7 @@ type ChatUsage struct {
 	CodeDate             string `json:"codeDate"`      // Code issue date or "LIFETIME"
 	ClockTampered        bool   `json:"clockTampered"` // Locked if clock rollback is detected
 	LicenseTier          string `json:"licenseTier"`   // Activated license tier (e.g. PLUS, PRO)
+	MAC                  string `json:"mac,omitempty"` // HMAC-SHA256 integrity signature (§8)
 }
 
 // isPlusLifetime reports whether the activated license is the PLUS lifetime plan.
@@ -245,6 +250,23 @@ func writeAtomic(filename string, data []byte, perm os.FileMode) error {
 	return nil
 }
 
+func computeUsageMAC(usage ChatUsage, machineKey string) string {
+	if machineKey == "" {
+		machineKey = "EQT_DEFAULT_USAGE_KEY"
+	}
+	h := hmac.New(sha256.New, []byte("EQT_USAGE_HMAC_v1:"+machineKey))
+	payload := fmt.Sprintf("V1|%s|%d|%d|%d|%t|%t",
+		usage.Date,
+		usage.UsedSeconds,
+		usage.UsedTransfers,
+		usage.UsedReceiveTransfers,
+		usage.IsPaid,
+		usage.ClockTampered,
+	)
+	h.Write([]byte(payload))
+	return hex.EncodeToString(h.Sum(nil))
+}
+
 func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 	if mock := getMockUsageForAcceptance(); mock != nil {
 		return *mock
@@ -267,10 +289,17 @@ func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 	path := getChatUsageFilePath()
 	var usage ChatUsage
 	readOk := false
+	tampered := false
 
 	if data, err := os.ReadFile(path); err == nil && len(data) > 0 {
 		if errJson := json.Unmarshal(data, &usage); errJson == nil && usage.Date != "" {
 			readOk = true
+			machineKey := GetDeviceStableID()
+			expectedMAC := computeUsageMAC(usage, machineKey)
+			if usage.MAC != "" && usage.MAC != expectedMAC {
+				// Local usage file has been maliciously edited!
+				tampered = true
+			}
 		}
 	}
 
@@ -288,7 +317,15 @@ func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 
 	l.checkLicenseValidity(&usage)
 
-	if isOnline && !usage.IsPaid && os.Getenv("EQT_TESTING") != "true" {
+	if tampered {
+		usage.ClockTampered = true
+		usage.UsedSeconds = 600
+		usage.UsedTransfers = 5
+		usage.UsedReceiveTransfers = 5
+		if !oldTampered {
+			go SetClockTampered(true)
+		}
+	} else if isOnline && !usage.IsPaid && os.Getenv("EQT_TESTING") != "true" {
 		diff := time.Since(netTime)
 		if diff < -10*time.Minute || diff > 10*time.Minute {
 			usage.ClockTampered = true
@@ -299,7 +336,7 @@ func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 		}
 	}
 
-	if dateChanged || oldPaid != usage.IsPaid || oldTampered != usage.ClockTampered {
+	if dateChanged || oldPaid != usage.IsPaid || oldTampered != usage.ClockTampered || tampered {
 		l.saveUsageLocked(usage)
 	} else {
 		l.cachedUsage = usage
@@ -317,6 +354,9 @@ func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 }
 
 func (l *ChatLimiter) saveUsageLocked(usage ChatUsage) {
+	machineKey := GetDeviceStableID()
+	usage.MAC = computeUsageMAC(usage, machineKey)
+
 	path := getChatUsageFilePath()
 	data, err := json.Marshal(usage)
 	if err == nil {
@@ -326,6 +366,90 @@ func (l *ChatLimiter) saveUsageLocked(usage ChatUsage) {
 	l.cachedUsage = usage
 	l.hasCached = true
 	l.lastCacheTime = time.Now()
+}
+
+type syncUsageRequest struct {
+	DeviceID       string `json:"device_id"`
+	DeltaSeconds   int    `json:"delta_seconds"`
+	DeltaTransfers int    `json:"delta_transfers"`
+}
+
+type syncUsageResponse struct {
+	Success       bool   `json:"success"`
+	DeviceID      string `json:"device_id"`
+	UsageDate     string `json:"usage_date"`
+	UsedSeconds   int    `json:"used_seconds"`
+	UsedTransfers int    `json:"used_transfers"`
+	QuotaExceeded bool   `json:"quota_exceeded"`
+	IsPaid        bool   `json:"is_paid"`
+	ServerTime    string `json:"server_time"`
+	Error         string `json:"error,omitempty"`
+}
+
+// SyncUsageToServer reports usage delta and aligns with authoritative cloud quota (§8)
+func SyncUsageToServer(deltaSeconds, deltaTransfers int) {
+	if GetPaidStatus() || os.Getenv("EQT_TESTING") == "true" {
+		return
+	}
+	devID := GetDeviceStableID()
+	if devID == "" {
+		return
+	}
+	serverURL := getLicenseServer()
+	if serverURL == "" {
+		return
+	}
+
+	go func() {
+		reqBody, _ := json.Marshal(syncUsageRequest{
+			DeviceID:       devID,
+			DeltaSeconds:   deltaSeconds,
+			DeltaTransfers: deltaTransfers,
+		})
+
+		client := http.Client{Timeout: 3 * time.Second}
+		resp, err := client.Post(serverURL+"/api/v1/device/sync-usage", "application/json", bytes.NewReader(reqBody))
+		if err != nil {
+			return
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return
+		}
+
+		var result syncUsageResponse
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil || !result.Success {
+			return
+		}
+
+		if result.IsPaid {
+			return
+		}
+
+		limiterInstance.mu.Lock()
+		defer limiterInstance.mu.Unlock()
+
+		usage := limiterInstance.loadUsageLocked()
+		if usage.Date == result.UsageDate {
+			updated := false
+			if result.UsedSeconds > usage.UsedSeconds {
+				usage.UsedSeconds = result.UsedSeconds
+				updated = true
+			}
+			if result.UsedTransfers > usage.UsedTransfers {
+				usage.UsedTransfers = result.UsedTransfers
+				updated = true
+			}
+			if result.QuotaExceeded && usage.UsedSeconds < 600 {
+				usage.UsedSeconds = 600
+				updated = true
+			}
+			if updated {
+				limiterInstance.saveUsageLocked(usage)
+			}
+		}
+	}()
 }
 
 // IncrementUsage adds used seconds to the daily counter if not paid.
@@ -340,6 +464,8 @@ func (l *ChatLimiter) IncrementUsage(seconds int) (ChatUsage, bool) {
 
 	usage.UsedSeconds += seconds
 	l.saveUsageLocked(usage)
+
+	go SyncUsageToServer(seconds, 0)
 
 	limitReached := usage.UsedSeconds >= FreeChatDailySeconds
 	return usage, limitReached
@@ -456,6 +582,8 @@ func (l *ChatLimiter) IncrementTransfers(count int) (ChatUsage, bool) {
 	usage.UsedTransfers += count
 	l.saveUsageLocked(usage)
 
+	go SyncUsageToServer(0, count)
+
 	limitReached := usage.UsedTransfers >= 5
 	return usage, limitReached
 }
@@ -495,6 +623,8 @@ func (l *ChatLimiter) IncrementReceiveTransfers(count int) (ChatUsage, bool) {
 
 	usage.UsedReceiveTransfers += count
 	l.saveUsageLocked(usage)
+
+	go SyncUsageToServer(0, count)
 
 	limitReached := usage.UsedReceiveTransfers >= 5
 	return usage, limitReached

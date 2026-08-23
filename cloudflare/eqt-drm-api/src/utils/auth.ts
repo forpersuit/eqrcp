@@ -299,6 +299,33 @@ export async function ensureDrmTables(env: Env): Promise<void> {
   await ensureLicensePaddleTxnIndex(env);
   await ensurePaddleProcessedTxnTable(env);
   await ensureActivationDeviceIndex(env);
+  await ensureFreeDailyUsageTable(env);
+}
+
+export async function ensureFreeDailyUsageTable(env: Env): Promise<void> {
+  if (!env?.DB) return;
+  try {
+    await env.DB.batch([
+      env.DB.prepare(`
+        CREATE TABLE IF NOT EXISTS free_daily_usage (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            device_id TEXT NOT NULL,
+            usage_date TEXT NOT NULL,
+            used_seconds INTEGER NOT NULL DEFAULT 0,
+            used_transfers INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+      `),
+      env.DB.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_free_daily_usage_dev_date ON free_daily_usage(device_id, usage_date)`),
+      env.DB.prepare(`CREATE INDEX IF NOT EXISTS idx_free_daily_usage_date ON free_daily_usage(usage_date)`)
+    ]);
+  } catch (err: any) {
+    const msg = String(err?.message || err);
+    if (!/already exists/i.test(msg)) {
+      console.error("Failed to ensure free_daily_usage table:", err);
+    }
+  }
 }
 
 export async function ensurePaddleProcessedTxnTable(env: Env): Promise<void> {

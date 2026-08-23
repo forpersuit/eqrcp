@@ -1,7 +1,7 @@
 import { Env, MAX_YEARLY_UNBINDS, ONE_YEAR_MS } from '../types';
 import { extractRequestLang, getApiTranslation, getDeviceNoticeTemplate } from '../i18n';
 import { hexToUint8Array, bufToHex } from '../utils/crypto';
-import { ensureDeviceIdColumn, ensureActivationNetworkColumns, ensureLicenseSourceColumns, ensureBetaTestersTable, isDeviceAuthorizedForDev } from '../utils/auth';
+import { ensureDeviceIdColumn, ensureActivationNetworkColumns, ensureLicenseSourceColumns, ensureBetaTestersTable, isDeviceAuthorizedForDev, ensureFreeDailyUsageTable } from '../utils/auth';
 import { isTestEnvironment } from '../utils/env-guard';
 import { matchFingerprint, countMatchingFingerprints, checkAbusiveRefundBlacklist } from '../utils/blacklist';
 import { sendDRMEmail, renderEmailWrapper } from '../services/smtp';
@@ -370,10 +370,30 @@ export async function handleDrmRoutes(
 
     const isDev = await isDeviceAuthorizedForDev(env, reg.device_id);
 
+    let usedSeconds = 0;
+    let usedTransfers = 0;
+    let quotaExceeded = false;
+
+    if (tierLabel === 'free' && reg.device_id) {
+      await ensureFreeDailyUsageTable(env);
+      const today = new Date().toISOString().slice(0, 10);
+      const usageRow = await env.DB.prepare(
+        "SELECT used_seconds, used_transfers FROM free_daily_usage WHERE device_id = ? AND usage_date = ?"
+      ).bind(reg.device_id, today).first<{ used_seconds: number; used_transfers: number }>();
+      if (usageRow) {
+        usedSeconds = usageRow.used_seconds;
+        usedTransfers = usageRow.used_transfers;
+        quotaExceeded = (usedSeconds >= 300 || usedTransfers >= 5);
+      }
+    }
+
     return new Response(JSON.stringify({
       device_id: reg.device_id,
       tier: reg.tier_label,
-      is_dev: isDev
+      is_dev: isDev,
+      used_seconds: usedSeconds,
+      used_transfers: usedTransfers,
+      quota_exceeded: quotaExceeded
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -971,6 +991,79 @@ export async function handleDrmRoutes(
       current_time: currentTime,
       signature: verifySignatureHex,
       is_dev: isDev
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
+  // 1.7 Authoritative Cloud Free-tier Daily Usage Sync (§8)
+  if (url.pathname === "/api/v1/device/sync-usage" && request.method === "POST") {
+    const body: any = await request.json().catch(() => ({}));
+    const devId = (body.device_id || "").trim().toLowerCase();
+    const deltaSeconds = Math.max(0, Math.min(3600, Number(body.delta_seconds) || 0));
+    const deltaTransfers = Math.max(0, Math.min(100, Number(body.delta_transfers) || 0));
+
+    if (!devId) {
+      return new Response(JSON.stringify({ error: "Missing device_id" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    await ensureFreeDailyUsageTable(env);
+
+    // Check if device is marked as paid in device_registry
+    const regRow = await env.DB.prepare(
+      "SELECT tier_label FROM device_registry WHERE device_id = ?"
+    ).bind(devId).first<{ tier_label: string }>();
+
+    if (regRow && regRow.tier_label === 'paid') {
+      return new Response(JSON.stringify({
+        success: true,
+        device_id: devId,
+        is_paid: true,
+        quota_exceeded: false,
+        server_time: new Date().toISOString()
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const now = new Date();
+    const today = now.toISOString().slice(0, 10);
+    const nowIso = now.toISOString();
+
+    // Atomic UPSERT daily usage record
+    await env.DB.prepare(`
+      INSERT INTO free_daily_usage (device_id, usage_date, used_seconds, used_transfers, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(device_id, usage_date) DO UPDATE SET
+        used_seconds = used_seconds + excluded.used_seconds,
+        used_transfers = used_transfers + excluded.used_transfers,
+        updated_at = excluded.updated_at
+    `).bind(devId, today, deltaSeconds, deltaTransfers, nowIso, nowIso).run();
+
+    const currentUsage = await env.DB.prepare(
+      "SELECT used_seconds, used_transfers FROM free_daily_usage WHERE device_id = ? AND usage_date = ?"
+    ).bind(devId, today).first<{ used_seconds: number; used_transfers: number }>();
+
+    const usedSec = currentUsage ? currentUsage.used_seconds : 0;
+    const usedTxf = currentUsage ? currentUsage.used_transfers : 0;
+    const quotaExceeded = (usedSec >= 300 || usedTxf >= 5);
+
+    return new Response(JSON.stringify({
+      success: true,
+      device_id: devId,
+      usage_date: today,
+      used_seconds: usedSec,
+      used_transfers: usedTxf,
+      max_seconds: 300,
+      max_transfers: 5,
+      quota_exceeded: quotaExceeded,
+      is_paid: false,
+      server_time: nowIso
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
