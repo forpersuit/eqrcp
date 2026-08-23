@@ -168,6 +168,11 @@ echo -n "your_secret_value" | npx wrangler secret put KEY_NAME
 - **路由设计**：
   1. `/api/v1/paddle/webhook` (POST)：接收 `Paddle-Signature` 利用 HMAC-SHA256 验签。履约 `transaction.completed` 时判断 Lifetime/Yearly 或 `target_license_code` 升级参数。捕获 `transaction.refunded` 或 `subscription.canceled` 时更新状态：
      - **取消订阅语义区分**：`data.effective_from === 'immediately'` 时立即吊销授权并同步将 `device_registry` 降级为 `free`；`next_billing_period`（或默认停续）仅置 `auto_renew = 0` 并保留本期权益至 `expires_at`。
+  2. **自动续费开关必须双向同步 Paddle scheduled_change**（2026-08-23 线上复现的 bug 教训）：
+     - **关闭**（`auto_renew=0`）：调 Paddle `POST /subscriptions/{id}/cancel`（`effective_from: next_billing_period`，保留本期权益）后，再本地 D1 `auto_renew=0`。
+     - **重新开启**（`auto_renew=1`）：**必须同时**调 Paddle `PATCH /subscriptions/{id}` 传 `{"scheduled_change": null}` 移除已排定的周期末取消，再本地 `auto_renew=1`。只改 D1 会导致 UI 显示「自动续费：开启」但 Paddle 周期末仍取消订阅，续费永远不会发生。
+     - **恢复已排定取消的官方 API**：`PATCH /subscriptions/{subscription_id}` body `{"scheduled_change": null}`（与 cancel/pause 的 POST 不同，移除类变更用 PATCH）。
+     - **回归测试入口**：`npm run test:portal:toggle:offline`（esbuild bundle portal.ts + `node:sqlite`，stub `global.fetch` 断言 OFF→POST cancel、ON→PATCH `scheduled_change:null`、非 purchase 403 且不调 Paddle）。
   2. `/api/v1/paddle/license-query` (GET)：接收 `transaction_id`，供前端支付完成（`checkout.completed`）时轮询弹出新授权码。
   3. `/api/v1/verify` (POST)：客户端对账时透传 `device_id`，与云端硬件漂移容忍机制（`device_id` 匹配 + 至少 1 项非空指纹匹配）闭环对接。
 
