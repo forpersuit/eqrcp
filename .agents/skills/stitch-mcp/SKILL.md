@@ -39,5 +39,6 @@ description: Guide for utilizing Google AI Stitch MCP for landing page design, s
 - **中间件配置**：Cloudflare Pages Functions 中间件 (`_middleware.js`) 必须存放在 `cloudflare/eqt-website/functions/` 目录中，Wrangler 部署时会自动编译该子目录。
 - **Cookie 与 LocalStorage 结合**：
   - 中间件截获 `CF-IPCountry` 标头写入初始 Cookie `eqt-lang=zh`（针对 CN, HK, TW, MO 等中文地区）或 `eqt-lang=en`。
-  - 前端脚本优先读取 `localStorage`（用户显式设置），其次回退至 `eqt-lang` Cookie，最后回退至 `navigator.language`。
+  - 中间件在判断是否已存在偏好时同时识别 `eqt-lang` 与遗留 `eqt_lang` Cookie，防止覆盖旧版用户偏好并保证前端平滑迁移。
+  - 前端脚本优先读取 `localStorage`（用户显式设置），其次回退至 `eqt-lang` / `eqt_lang` Cookie，最后回退至 `navigator.language`。
   - 手动切换语种时必须同时写入 `localStorage` 与长效 `eqt-lang` Cookie（如 365 天），防止后续访问被中间件覆盖。

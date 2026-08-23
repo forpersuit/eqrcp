@@ -287,7 +287,7 @@ for (const l of langMatches) {
   );
 }
 
-// 9. Canonical Language Storage (eqt-lang) resolution across all pages (Rule 7)
+// 9. Canonical Language Storage (eqt-lang) resolution across all pages & server middleware (Rule 7)
 assert(portalHtml.includes("localStorage.setItem('eqt-lang', lang)"), 'CanonicalLang: portal.html writes eqt-lang');
 assert(pricingHtml.includes("localStorage.setItem('eqt-lang', lang)"), 'CanonicalLang: pricing.html writes eqt-lang');
 assert(indexHtml.includes("localStorage.setItem('eqt-lang'"), 'CanonicalLang: index.html writes eqt-lang');
@@ -299,6 +299,18 @@ assert(termsHtml.includes("localStorage.getItem('eqt-lang')"), 'CanonicalLang: t
 assert(!portalHtml.includes("localStorage.setItem('eqt_lang'"), 'CanonicalLang: portal.html does not write redundant eqt_lang');
 assert(!privacyHtml.includes("localStorage.setItem('eqt_lang'"), 'CanonicalLang: privacy.html does not write redundant eqt_lang');
 assert(!termsHtml.includes("localStorage.setItem('eqt_lang'"), 'CanonicalLang: terms.html does not write redundant eqt_lang');
+
+const middlewareJs = fs.readFileSync(path.join(websiteDir, 'functions/_middleware.js'), 'utf8');
+assert(middlewareJs.includes('(?:eqt-lang|eqt_lang)'), 'Middleware: _middleware.js recognizes both eqt-lang and legacy eqt_lang cookies');
+
+// Middleware cookie pattern simulation
+const cookiePattern = /\b(?:eqt-lang|eqt_lang)\s*=/;
+assert(cookiePattern.test('eqt_lang=fr'), 'Middleware: legacy eqt_lang=fr detected as existing preference');
+assert(cookiePattern.test('foo=bar; eqt_lang=de; baz=1'), 'Middleware: nested legacy eqt_lang detected');
+assert(cookiePattern.test('eqt-lang=zh'), 'Middleware: modern eqt-lang=zh detected as existing preference');
+assert(!cookiePattern.test('foo=bar; other_lang=en'), 'Middleware: unrelated cookie triggers GEO detection fallback');
+assert(!cookiePattern.test(''), 'Middleware: empty cookie triggers GEO detection fallback');
+
 
 console.log(`\n============================================================`);
 console.log(`Results: ${passed} passed, ${failed} failed`);

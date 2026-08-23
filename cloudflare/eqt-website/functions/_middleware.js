@@ -14,8 +14,8 @@ export async function onRequest(context) {
   const country = request.headers.get('CF-IPCountry') || '';
   const cookie  = request.headers.get('Cookie') || '';
 
-  // Don't override if user has already chosen a language
-  const hasLangCookie = /\beqt-lang\s*=/.test(cookie);
+  // Don't override if user has already chosen a language (supports legacy eqt_lang)
+  const hasLangCookie = /\b(?:eqt-lang|eqt_lang)\s*=/.test(cookie);
 
   if (!hasLangCookie) {
     const lang = CHINESE_REGIONS.has(country) ? 'zh' : 'en';
