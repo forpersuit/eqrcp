@@ -11,8 +11,8 @@
     "db:init:remote": "wrangler d1 execute eqt-feedback-db --remote --file=./schema.sql"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20240101.0",
+    "@cloudflare/workers-types": "^5.20260822.1",
     "typescript": "^5.3.3",
-    "wrangler": "^3.22.0"
+    "wrangler": "^4.113.0"
   }
 }
