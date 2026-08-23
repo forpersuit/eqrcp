@@ -106,7 +106,7 @@ async function runTests() {
 
   const env = {
     DB: d1,
-    ED25519_PRIVATE_KEY: '0000000000000000000000000000000000000000000000000000000000000000'
+    ED25519_PRIVATE_KEY: '2cf5baa843e935702283ad56e4c7be5a0e0be2cbef81b83d1c3a647960309995'
   };
 
   const corsHeaders = {
@@ -154,6 +154,22 @@ async function runTests() {
     assertEqual(data.used_transfers, 1, 'used_transfers is 1');
     assertEqual(data.quota_exceeded, false, 'quota_exceeded is false');
     assert(Boolean(data.signature && data.signature.length === 128), 'sync-usage response contains valid 64-byte Ed25519 hex signature');
+
+    // Cross-platform validation: verify signature using standard node:crypto Ed25519 public key
+    const pubKeyHex = '978fe821f1261dfb3f4e73aed051b75424dce9a8eb5606382f16e4a40c494376';
+    const pubKeyDer = Buffer.concat([
+      Buffer.from('302a300506032b6570032100', 'hex'),
+      Buffer.from(pubKeyHex, 'hex')
+    ]);
+    const crypto = require('crypto');
+    const pubKeyObj = crypto.createPublicKey({
+      key: pubKeyDer,
+      format: 'der',
+      type: 'spki'
+    });
+    const expectedPayload = `SYNC|${data.device_id}|${data.usage_date}|${data.used_seconds}|${data.used_transfers}|0|${data.server_time}`;
+    const verified = crypto.verify(null, Buffer.from(expectedPayload), pubKeyObj, Buffer.from(data.signature, 'hex'));
+    assertEqual(verified, true, 'cross-platform WebCrypto PKCS8 signature verifies successfully with standard Ed25519 public key');
   }
 
   // Test 2: Accumulate usage on same day

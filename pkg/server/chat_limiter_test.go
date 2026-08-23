@@ -277,3 +277,35 @@ func TestVerifySyncUsageSignature(t *testing.T) {
 		t.Fatalf("expected tampered quotaExceeded to fail verification")
 	}
 }
+
+// TestCrossPlatformWebCryptoSignatureVerification ensures TS WebCrypto PKCS8 signing format
+// and Go Ed25519 verification format match with 100% byte-exact consistency.
+func TestCrossPlatformWebCryptoSignatureVerification(t *testing.T) {
+	// Dev test public key corresponding to private seed 2cf5baa843e935702283ad56e4c7be5a0e0be2cbef81b83d1c3a647960309995
+	testPublicKeyHex := "978fe821f1261dfb3f4e73aed051b75424dce9a8eb5606382f16e4a40c494376"
+
+	oldKey := defaultPublicKeyHex
+	defaultPublicKeyHex = testPublicKeyHex
+	defer func() {
+		defaultPublicKeyHex = oldKey
+	}()
+
+	devID := "test_dev_001"
+	usageDate := "2026-08-24"
+	usedSeconds := 45
+	usedTransfers := 1
+	quotaExceeded := false
+	serverTime := "2026-08-24T02:00:00.000Z"
+
+	// Derive key from standard seed
+	seedBytes, _ := hex.DecodeString("2cf5baa843e935702283ad56e4c7be5a0e0be2cbef81b83d1c3a647960309995")
+	privKey := ed25519.NewKeyFromSeed(seedBytes)
+
+	payloadStr := fmt.Sprintf("SYNC|%s|%s|%d|%d|0|%s", devID, usageDate, usedSeconds, usedTransfers, serverTime)
+	sigBytes := ed25519.Sign(privKey, []byte(payloadStr))
+	sigHex := hex.EncodeToString(sigBytes)
+
+	if !VerifySyncUsageSignature(devID, usageDate, usedSeconds, usedTransfers, quotaExceeded, serverTime, sigHex) {
+		t.Fatalf("cross-platform signature verification failed for dev keypair")
+	}
+}

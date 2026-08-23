@@ -311,5 +311,33 @@ echo -n "your_secret_value" | npx wrangler secret put KEY_NAME
   - `DELETE /api/v1/admin/dev-devices/:id`：从白名单中删除设备记录。
 - **全环境通用**：生产环境 (`production`) 与测试沙箱 (`test`) 均具备完整的开发/测试设备管理能力，数据物理隔离。
 
+---
+
+## 14. 免费用户每日用量云端权威对账与 Ed25519 签名安全规范 (Free Daily Usage Authoritative Sync)
+
+### 14.1 防篡改体系与 Fail-Closed 验签
+- **两层防御模型**：
+  1. **本地层 (HMAC-SHA256)**：`chat_usage.json` 落盘带硬件密钥派生的 HMAC 签名，任何文本编辑器修改立即触发 `ClockTampered=true` 并锁死为超限状态（600s/5次）。
+  2. **云端层 (SSOT + Ed25519 签名)**：客户端通过 `POST /api/v1/device/sync-usage` 上报增量，D1 `free_daily_usage` 表原子累加。服务端使用 `ED25519_PRIVATE_KEY` 对 `{device_id, usage_date, used_seconds, used_transfers, quota_exceeded, server_time}` 进行签名。
+- **客户端 Fail-Closed 强制校验**：
+  - 客户端收到 sync 响应时，若 `signature` 为空或验签失败（如中间人劫持/伪服务器篡改数据），**强制直接丢弃**响应，不采纳任何云端状态，确保攻击者无法通过伪造服务器清零用量。
+
+### 14.2 部署顺序铁律与密钥配对清单 (Critical Deployment Sequence)
+- **发布顺序铁律**：**先配服务端 Secret 并部署 Worker → 再发布新版客户端**。
+  - 原因：客户端已实施 Fail-Closed 验签。若先发客户端但服务端未配置 `ED25519_PRIVATE_KEY`，服务端下发的空签名会导致客户端全部拒签，在线免费用户回退为本地离线模式。
+- **Secret 注入命令 (SSOT)**：
+  - **测试环境**（对应 `env_defaults_dev.go` 中测试公钥 `ce07f02c21cb898bf9d84c9af843dc23e830937f939d8b0a042df7210f74fe58`）：
+    ```bash
+    cd cloudflare/eqt-drm-api
+    echo -n "<test_ed25519_private_key_hex_seed>" | npx wrangler secret put ED25519_PRIVATE_KEY --env test
+    ```
+  - **生产环境**（对应 `env_defaults.go` 中生产公钥 `08443678fe8bd16e3bc306db8a08b6ea1dcf3e8edeb413f655e106374bed43ac`）：
+    ```bash
+    cd cloudflare/eqt-drm-api
+    echo -n "<prod_ed25519_private_key_hex_seed>" | npx wrangler secret put ED25519_PRIVATE_KEY
+    ```
+- **密钥格式注意**：`ED25519_PRIVATE_KEY` 必须为 **32-byte seed 的 64 位十六进制字符串**，严禁误填 Base64 编码或带 PEM 标头的格式。
+
+
 
 
