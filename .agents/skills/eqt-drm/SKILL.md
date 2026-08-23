@@ -132,6 +132,8 @@ echo -n "your_secret_value" | npx wrangler secret put KEY_NAME
 - **测试套件统一加载 `.env.test` (SSOT)**：测试命令统一采用 Node 20+ 原生 `--env-file=../../.env.test` 驱动，杜绝孤儿配置与手工 shell 注入。
 - **Wails 支持 `-tags`**：`wails dev -tags eqtdev` / `wails build -tags eqtdev` 切测试 Worker；`release.yml` 的 build 严禁加任何 tag 注入（文件内已有注释防误改）。
 - 完整搭建步骤见 `docs/deploy/test-environment.md` 与 `docs/deploy/gui-environment.md`（测试资源创建由用户按文档执行，不在代码仓库内）。
+- **生产 `logpush = true` 的 Wrangler 版本坑（2026-08-23）**：账户无 Logpush 权限（`code 10023`）。wrangler **v3 legacy 部署路径会 PUT `script-settings` 尝试开启 logpush → 生产部署失败**；wrangler **v4（versions API）不写 `script-settings` → 静默跳过**。症状：`eqt-feedback-api` 用 wrangler 3 部署失败于 `script-settings`，`eqt-drm-api` 用 wrangler 4 却成功（线上两者 `script-settings.logpush` 实测均 `false`）。修复：统一升级到 wrangler 4.x（需同步升 `@cloudflare/workers-types` 到 ^5，否则 peer 冲突）。排查「某 worker 部署失败而另一 worker 正常」时先对比两边 package.json 的 wrangler 版本。
+- **GitHub Actions Deploy 全链路失败排查（2026-08-23）**：`deploy.yml` 由 `workflow_run` 触发（仅 CI 成功且为 push 事件），任一步骤失败即整链停止（`concurrency: deploy-master` 防重）。当「静态 HTML 已上线但 worker/function 未更新」时：用 `gh run list --workflow=deploy.yml --json conclusion` 查历史，若长期 failure 则 `gh run view <id> --log` 看失败步骤；Worker 认证错误 `code 10000` 表示 `CLOUDFLARE_API_TOKEN` secret 过期。本地有效 token 在 `.env` 的 `CLOUDFLARE_USER_API_TOKEN_EQT`（User Token，`/user/tokens/verify` 会 401 属正常——无 user 级权限，但不影响资源读写在）。更新 secret：`echo "<token>" | gh secret set CLOUDFLARE_API_TOKEN`。验证 token 只读权限可 GET workers/services 列表；验证写权限用 `wrangler pages deploy ./ --project-name=eqt --branch=preview-test`（preview 分支不碰生产）。
 
 
 ---
