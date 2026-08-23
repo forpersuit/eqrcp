@@ -2351,10 +2351,16 @@ function renderSettingsPanel() {
                         ${state.devCrashMsg ? `<div style="font-size: 11px; margin-top: 8px; color: ${state.devCrashMsg.startsWith('✅') ? 'var(--accent)' : '#ef4444'};">${escapeHTML(state.devCrashMsg)}</div>` : ''}
                     </div>
 
-                    <!-- Module 4: Exit Dev Mode -->
-                    <button type="button" class="danger" id="dev-disable-mode" style="font-size: 12px; padding: 8px 12px; width: 100%; border-radius: 6px; font-weight: 700; display: block; text-align: center;">
-                        ${t('btn_exit_dev_mode') || 'Exit Developer Mode'}
-                    </button>
+                    <!-- Module 4: Exit Dev Mode or Server Managed Note -->
+                    ${state.status?.isServerDev ? `
+                        <div style="font-size: 11px; color: var(--text-secondary); padding: 8px 10px; background: var(--bg-hover); border-radius: 6px; border: 1.2px dashed var(--line); text-align: center; line-height: 1.4;">
+                            🛡️ ${t('dev_server_managed_note') || 'Authorized by Server Device Allowlist. Revoke in Admin Console to disable.'}
+                        </div>
+                    ` : `
+                        <button type="button" class="danger" id="dev-disable-mode" style="font-size: 12px; padding: 8px 12px; width: 100%; border-radius: 6px; font-weight: 700; display: block; text-align: center;">
+                            ${t('btn_exit_dev_mode') || 'Exit Developer Mode'}
+                        </button>
+                    `}
                 </div>
             </details>
             ` : ''}

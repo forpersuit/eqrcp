@@ -22,8 +22,6 @@ export function ClearHistory():Promise<void>;
 
 export function DevForceOnlineLicenseSync():Promise<main.AgentStatus>;
 
-export function DevSetUsedSeconds(arg1:number):Promise<main.AgentStatus>;
-
 export function DevTriggerCrash():Promise<main.CrashReportInfo>;
 
 export function DismissCrashReport():Promise<void>;

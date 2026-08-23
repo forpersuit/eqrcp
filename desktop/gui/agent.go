@@ -96,6 +96,7 @@ func (agent *desktopAgent) snapshotLocked() AgentStatus {
 		LicenseExpiresAt:     expiresAt,
 		BuyerEmail:           buyerEmail,
 		DeviceID:             server.GetDeviceStableID(),
+		IsServerDev:          server.IsServerDevAuthorized(),
 	}
 	if agent.busy {
 		response.State = "busy"

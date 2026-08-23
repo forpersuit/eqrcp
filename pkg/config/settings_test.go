@@ -139,4 +139,17 @@ func TestDesktopSettingsDevModeNotAllowedInConfigFile(t *testing.T) {
 	if !devSettings.DevMode {
 		t.Fatalf("expected DevMode to be true when EQT_DEV=1 is set")
 	}
+
+	// 3. Writing settings must physically purge orphan keys from config.yml
+	if _, err := WriteDesktopSettings(app, devSettings); err != nil {
+		t.Fatalf("WriteDesktopSettings failed: %v", err)
+	}
+	rawBytes, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("ReadFile failed: %v", err)
+	}
+	content := string(rawBytes)
+	if strings.Contains(content, "dev:") || strings.Contains(content, "devmode:") {
+		t.Fatalf("expected config file to purge dev/devmode keys, got content:\n%s", content)
+	}
 }

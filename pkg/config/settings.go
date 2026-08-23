@@ -10,6 +10,8 @@ import (
 
 	"eqt/pkg/application"
 	"eqt/pkg/util"
+
+	"github.com/spf13/viper"
 )
 
 type DesktopSettings struct {
@@ -240,31 +242,41 @@ func WriteDesktopSettings(app application.App, settings DesktopSettings) (Deskto
 	if err := v.ReadInConfig(); err != nil {
 		return DesktopSettings{}, fmt.Errorf("fatal error config file: %s", err)
 	}
-	v.Set("interface", settings.Interface)
-	if mode := strings.ToLower(strings.TrimSpace(settings.Mode)); mode != "" {
-		v.Set("mode", mode)
+	cleanV := viper.New()
+	cleanV.SetConfigFile(v.ConfigFileUsed())
+	cleanV.SetConfigType("yaml")
+	for _, k := range v.AllKeys() {
+		// Explicitly purge legacy orphan keys
+		if k == "dev" || k == "devmode" {
+			continue
+		}
+		cleanV.Set(k, v.Get(k))
 	}
-	v.Set("port", settings.Port)
-	v.Set("output", output)
-	v.Set("browser", settings.Browser)
-	v.Set("chatAutoSave", settings.ChatAutoSave)
-	v.Set("closeBehavior", closeBehavior)
-	v.Set("chatSender", strings.TrimSpace(settings.ChatSender))
-	v.Set("chatAvatar", strings.TrimSpace(settings.ChatAvatar))
-	v.Set("debugLog", settings.DebugLog)
-	v.Set("viewportDebug", settings.ViewportDebug)
-	v.Set("autoUpdateMode", normalizeAutoUpdateMode(settings.AutoUpdateMode))
-	v.Set("updateChannel", normalizeUpdateChannel(settings.UpdateChannel))
-	v.Set("lastUpdateCheckTime", settings.LastUpdateCheckTime)
-	v.Set("updateCheckIntervalHours", settings.UpdateCheckIntervalHours)
-	v.Set("lastSuccessfulVersion", settings.LastSuccessfulVersion)
-	v.Set("lang", settings.Lang)
-	v.Set("showHistory", settings.ShowHistory)
-	v.Set("enableChatV2", settings.EnableChatV2)
-	v.Set("enableTelemetry", settings.EnableTelemetry)
-	v.Set("chatDownloadDir", strings.TrimSpace(settings.ChatDownloadDir))
-	v.Set("logDir", strings.TrimSpace(settings.LogDir))
-	if err := v.WriteConfig(); err != nil {
+	cleanV.Set("interface", settings.Interface)
+	if mode := strings.ToLower(strings.TrimSpace(settings.Mode)); mode != "" {
+		cleanV.Set("mode", mode)
+	}
+	cleanV.Set("port", settings.Port)
+	cleanV.Set("output", output)
+	cleanV.Set("browser", settings.Browser)
+	cleanV.Set("chatAutoSave", settings.ChatAutoSave)
+	cleanV.Set("closeBehavior", closeBehavior)
+	cleanV.Set("chatSender", strings.TrimSpace(settings.ChatSender))
+	cleanV.Set("chatAvatar", strings.TrimSpace(settings.ChatAvatar))
+	cleanV.Set("debugLog", settings.DebugLog)
+	cleanV.Set("viewportDebug", settings.ViewportDebug)
+	cleanV.Set("autoUpdateMode", normalizeAutoUpdateMode(settings.AutoUpdateMode))
+	cleanV.Set("updateChannel", normalizeUpdateChannel(settings.UpdateChannel))
+	cleanV.Set("lastUpdateCheckTime", settings.LastUpdateCheckTime)
+	cleanV.Set("updateCheckIntervalHours", settings.UpdateCheckIntervalHours)
+	cleanV.Set("lastSuccessfulVersion", settings.LastSuccessfulVersion)
+	cleanV.Set("lang", settings.Lang)
+	cleanV.Set("showHistory", settings.ShowHistory)
+	cleanV.Set("enableChatV2", settings.EnableChatV2)
+	cleanV.Set("enableTelemetry", settings.EnableTelemetry)
+	cleanV.Set("chatDownloadDir", strings.TrimSpace(settings.ChatDownloadDir))
+	cleanV.Set("logDir", strings.TrimSpace(settings.LogDir))
+	if err := cleanV.WriteConfig(); err != nil {
 		return DesktopSettings{}, err
 	}
 	return ReadDesktopSettings(app)

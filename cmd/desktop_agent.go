@@ -97,6 +97,7 @@ type desktopAgentResponse struct {
 	LicenseReady     bool                     `json:"licenseReady"`
 	MaxDevices       int                      `json:"maxDevices"`
 	ActivatedDevices int                      `json:"activatedDevices"`
+	IsServerDev      bool                     `json:"isServerDev"`
 }
 
 type desktopAgentHistoryStore struct {
@@ -1698,6 +1699,7 @@ func (agent *desktopAgent) snapshotWithRevision() (desktopAgentResponse, int64) 
 		LicenseReady:     server.IsLicenseReady(),
 		MaxDevices:       maxDev,
 		ActivatedDevices: actDev,
+		IsServerDev:      server.IsServerDevAuthorized(),
 	}
 	if agent.busy {
 		response.State = "busy"

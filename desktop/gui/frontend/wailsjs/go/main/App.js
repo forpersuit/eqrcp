@@ -42,10 +42,6 @@ export function DevForceOnlineLicenseSync() {
   return window['go']['main']['App']['DevForceOnlineLicenseSync']();
 }
 
-export function DevSetUsedSeconds(arg1) {
-  return window['go']['main']['App']['DevSetUsedSeconds'](arg1);
-}
-
 export function DevTriggerCrash() {
   return window['go']['main']['App']['DevTriggerCrash']();
 }

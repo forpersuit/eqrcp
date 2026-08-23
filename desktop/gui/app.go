@@ -110,6 +110,7 @@ type AgentStatus struct {
 	LicenseExpiresAt     string       `json:"licenseExpiresAt,omitempty"`
 	BuyerEmail           string       `json:"buyerEmail,omitempty"`
 	DeviceID             string       `json:"deviceID,omitempty"`
+	IsServerDev          bool         `json:"isServerDev"`
 }
 
 type DesktopSettings struct {
