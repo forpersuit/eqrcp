@@ -208,7 +208,7 @@
             </div>
             <div class="flex gap-3">
                 <button id="confirm-cancel-btn" class="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 py-3 rounded-xl font-medium transition-all duration-300" data-i18n="cancel_btn">Cancel</button>
-                <button id="confirm-ok-btn" class="flex-1 bg-red-500 hover:bg-red-600 text-white py-3 rounded-xl font-medium transition-all duration-300 active:scale-95 shadow-lg shadow-red-500/20" data-i18n="confirm_refund_btn">Yes, Refund</button>
+                <button id="confirm-ok-btn" class="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 py-3 rounded-xl font-bold transition-all duration-300 active:scale-95 shadow-lg shadow-amber-500/20" data-i18n="confirm_refund_btn">Yes, Refund</button>
             </div>
         </div>
     </div>
@@ -216,13 +216,20 @@
     <!-- Confirm Cancel Subscription Modal (not a refund) -->
     <div id="cancel-sub-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm transition-opacity duration-300 opacity-0 pointer-events-none">
         <div class="w-full max-w-md bg-surface-variant border border-white/10 rounded-2xl p-6 space-y-6 shadow-2xl transform scale-95 transition-transform duration-300">
-            <div class="space-y-2">
-                <h3 class="text-xl font-bold text-white" data-i18n="cancel_sub_confirm_title">Cancel subscription?</h3>
-                <p class="text-on-surface-variant text-sm leading-relaxed" data-i18n="cancel_sub_confirm_desc">Canceling ends the subscription immediately and revokes this license now. This is not a refund—no money is returned. Devices lose Plus on the next online check.</p>
+            <div class="space-y-3">
+                <h3 class="text-xl font-bold text-white flex items-center gap-2">
+                    <span class="material-symbols-outlined text-red-500">dangerous</span>
+                    <span data-i18n="cancel_sub_confirm_title">Force Revoke Subscription?</span>
+                </h3>
+                <p class="text-on-surface-variant text-sm leading-relaxed" data-i18n="cancel_sub_confirm_desc">Canceling will terminate your subscription immediately and revoke this license key. All bound devices will revert to the Free version on their next online sync. This is NOT a refund (no money is returned) and is irreversible—repurchase is required to restore.</p>
+                <div class="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-xs text-red-300 leading-relaxed flex items-start gap-2">
+                    <span class="material-symbols-outlined text-base shrink-0 text-red-400 mt-0.5">info</span>
+                    <span data-i18n="cancel_sub_warning">If you need a refund, please go back and use "Request Refund" (within 14 days of purchase).</span>
+                </div>
             </div>
             <div class="flex gap-3">
                 <button id="cancel-sub-dismiss-btn" class="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 py-3 rounded-xl font-medium transition-all duration-300" data-i18n="cancel_btn">Back</button>
-                <button id="cancel-sub-ok-btn" class="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 py-3 rounded-xl font-bold transition-all duration-300 active:scale-95 shadow-lg shadow-amber-500/20" data-i18n="confirm_cancel_sub_btn">Yes, Cancel Subscription</button>
+                <button id="cancel-sub-ok-btn" class="flex-1 bg-red-500 hover:bg-red-600 text-white py-3 rounded-xl font-bold transition-all duration-300 active:scale-95 shadow-lg shadow-red-500/20" data-i18n="confirm_force_cancel_btn">Yes, Force Revoke</button>
             </div>
         </div>
     </div>
@@ -316,9 +323,11 @@
 
                 "cancel_subscription": "Cancel subscription",
                 "cancel_sub_pending": "Canceling subscription...",
-                "cancel_sub_confirm_title": "Cancel subscription?",
-                "cancel_sub_confirm_desc": "This ends the subscription immediately and revokes the license now. This is not a refund—no money is returned. Devices lose Plus on the next online check.",
-                "confirm_cancel_sub_btn": "Yes, cancel subscription",
+                "cancel_sub_confirm_title": "Force Revoke Subscription?",
+                "cancel_sub_confirm_desc": "Canceling will terminate your subscription immediately and revoke this license key. All bound devices will revert to the Free version on their next online sync. This is NOT a refund (no money is returned) and is irreversible—repurchase is required to restore.",
+                "cancel_sub_warning": "If you need a refund, please go back and use \"Request Refund\" (within 14 days of purchase).",
+                "confirm_force_cancel_btn": "Confirm Force Revocation",
+                "confirm_cancel_sub_btn": "Confirm Force Revocation",
                 "toast_cancel_sub_success": "Subscription canceled. License revoked.",
                 "refund_pending": "Refund Processing...",
                 "refund_confirm_title": "Confirm Refund",
@@ -402,9 +411,11 @@
 
                 "cancel_subscription": "取消订阅",
                 "cancel_sub_pending": "正在取消订阅...",
-                "cancel_sub_confirm_title": "确认取消订阅？",
-                "cancel_sub_confirm_desc": "取消后订阅立即结束，授权码将立刻吊销。这不是退款，不会退回款项。已激活设备将在下次联网对账时降为免费版。",
-                "confirm_cancel_sub_btn": "确认取消订阅",
+                "cancel_sub_confirm_title": "强制失效订阅？",
+                "cancel_sub_confirm_desc": "取消订阅将立即终止订阅并吊销此激活码，绑定的所有设备将在下次联网对账时降为免费版。这不是退款，不会退回任何款项，且此操作不可撤销——恢复需重新购买。",
+                "cancel_sub_warning": "如需退款，请返回并使用「申请退款」（购买后 14 天内）。",
+                "confirm_force_cancel_btn": "确认强制失效",
+                "confirm_cancel_sub_btn": "确认强制失效",
                 "toast_cancel_sub_success": "订阅已取消，授权已吊销。",
                 "refund_pending": "正在处理退款...",
                 "refund_confirm_title": "确认申请退款？",
@@ -488,9 +499,11 @@
 
                 "cancel_subscription": "サブスク解約",
                 "cancel_sub_pending": "解約処理中...",
-                "cancel_sub_confirm_title": "サブスクリプションを解約しますか？",
-                "cancel_sub_confirm_desc": "解約すると直ちに終了し、ライセンスは即時失効します。返金ではありません。次回オンライン同期で無料版に戻ります。",
-                "confirm_cancel_sub_btn": "解約する",
+                "cancel_sub_confirm_title": "サブスクリプションを強制失効しますか？",
+                "cancel_sub_confirm_desc": "解約するとサブスクリプションは直ちに終了し、ライセンスは即座に失効します。紐付けられたすべての端末は次回オンライン同期時に無料版へダウングレードされます。これは返金ではありません（返金は行われません）。また、この操作は取り消せません（復元には再購入が必要です）。",
+                "cancel_sub_warning": "返金をご希望の場合は、戻って「返金を申請」（購入後14日以内）をご利用ください。",
+                "confirm_force_cancel_btn": "強制失効を確定",
+                "confirm_cancel_sub_btn": "強制失効を確定",
                 "toast_cancel_sub_success": "解約しました。ライセンスは失効しています。",
                 "refund_pending": "返金処理中...",
                 "refund_confirm_title": "返金を申請しますか？",
@@ -572,9 +585,11 @@
 
                 "cancel_subscription": "구독 취소",
                 "cancel_sub_pending": "구독 취소 중...",
-                "cancel_sub_confirm_title": "구독을 취소하시겠습니까?",
-                "cancel_sub_confirm_desc": "구독이 즉시 종료되고 라이선스가 바로 해제됩니다. 환불이 아닙니다. 다음 온라인 동기화 시 무료 버전으로 전환됩니다.",
-                "confirm_cancel_sub_btn": "구독 취소 확인",
+                "cancel_sub_confirm_title": "구독을 강제 만료하시겠습니까?",
+                "cancel_sub_confirm_desc": "구독을 취소하면 즉시 종료되고 이 라이선스 키가 즉각 해제됩니다. 연결된 모든 기기는 다음 온라인 동기화 시 무료 버전으로 전환됩니다. 이는 환불이 아니며(환불 금액 없음), 취소 후 되돌릴 수 없습니다(복구하려면 재구매 필요).",
+                "cancel_sub_warning": "환불을 원하시면 뒤로 돌아가 '환불 신청'(구매 후 14일 이내)을 이용해 주세요.",
+                "confirm_force_cancel_btn": "강제 만료 확정",
+                "confirm_cancel_sub_btn": "강제 만료 확정",
                 "toast_cancel_sub_success": "구독이 취소되었고 라이선스가 해제되었습니다.",
                 "refund_pending": "환불 처리 중...",
                 "refund_confirm_title": "환불을 신청하시겠습니까?",
@@ -656,9 +671,11 @@
 
                 "cancel_subscription": "Cancelar suscripción",
                 "cancel_sub_pending": "Cancelando suscripción...",
-                "cancel_sub_confirm_title": "¿Cancelar suscripción?",
-                "cancel_sub_confirm_desc": "La suscripción termina de inmediato y la licencia se revoca ahora. No es un reembolso. Los dispositivos pasan a gratis en la próxima sincronización.",
-                "confirm_cancel_sub_btn": "Sí, cancelar suscripción",
+                "cancel_sub_confirm_title": "¿Revocar suscripción obligatoriamente?",
+                "cancel_sub_confirm_desc": "Cancelar terminará la suscripción de inmediato y revocará esta clave de licencia. Todos los dispositivos vinculados volverán a la versión gratuita en la próxima sincronización en línea. Esto NO es un reembolso (no se devuelve dinero) y es irreversible: se requiere volver a comprar para restaurar.",
+                "cancel_sub_warning": "Si necesita un reembolso, regrese y use «Solicitar reembolso» (dentro de los 14 días posteriores a la compra).",
+                "confirm_force_cancel_btn": "Confirmar revocación forzada",
+                "confirm_cancel_sub_btn": "Confirmar revocación forzada",
                 "toast_cancel_sub_success": "Suscripción cancelada. Licencia revocada.",
                 "refund_pending": "Procesando reembolso...",
                 "refund_confirm_title": "¿Confirmar reembolso?",
@@ -740,9 +757,11 @@
 
                 "cancel_subscription": "Abo kündigen",
                 "cancel_sub_pending": "Abo wird gekündigt...",
-                "cancel_sub_confirm_title": "Abo kündigen?",
-                "cancel_sub_confirm_desc": "Das Abo endet sofort und die Lizenz wird jetzt widerrufen. Keine Erstattung. Geräte werden beim nächsten Online-Check zur Free-Version.",
-                "confirm_cancel_sub_btn": "Ja, Abo kündigen",
+                "cancel_sub_confirm_title": "Abonnement zwangsweise widerrufen?",
+                "cancel_sub_confirm_desc": "Durch das Kündigen wird das Abonnement sofort beendet und dieser Lizenzschlüssel widerrufen. Alle verknüpften Geräte werden bei der nächsten Online-Prüfung auf die kostenlose Version zurückgesetzt. Dies ist KEINE Rückerstattung (kein Geld zurück) und unwiderruflich – zur Wiederherstellung ist ein Neukauf erforderlich.",
+                "cancel_sub_warning": "Wenn Sie eine Rückerstattung wünschen, gehen Sie bitte zurück und nutzen Sie «Rückerstattung beantragen» (innerhalb von 14 Tagen nach dem Kauf).",
+                "confirm_force_cancel_btn": "Zwangsweisen Widerruf bestätigen",
+                "confirm_cancel_sub_btn": "Zwangsweisen Widerruf bestätigen",
                 "toast_cancel_sub_success": "Abo gekündigt. Lizenz widerrufen.",
                 "refund_pending": "Rückerstattung wird bearbeitet...",
                 "refund_confirm_title": "Rückerstattung bestätigen?",
@@ -824,9 +843,11 @@
 
                 "cancel_subscription": "Annuler l'abonnement",
                 "cancel_sub_pending": "Annulation en cours...",
-                "cancel_sub_confirm_title": "Annuler l'abonnement ?",
-                "cancel_sub_confirm_desc": "L'abonnement se termine immédiatement et la licence est révoquée maintenant. Ce n'est pas un remboursement. Les appareils repassent en gratuit à la prochaine synchronisation.",
-                "confirm_cancel_sub_btn": "Oui, annuler l'abonnement",
+                "cancel_sub_confirm_title": "Révoquer l'abonnement de force ?",
+                "cancel_sub_confirm_desc": "L'annulation mettra fin à l'abonnement immédiatement et révoquera cette clé de licence. Tous les appareils associés repasseront en version gratuite lors de la prochaine synchronisation en ligne. Ce n'est PAS un remboursement (aucun montant retourné) et c'est irréversible : un nouvel achat est requis pour restaurer.",
+                "cancel_sub_warning": "Si vous souhaitez un remboursement, veuillez revenir en arrière et utiliser « Demander un remboursement » (dans les 14 jours suivant l'achat).",
+                "confirm_force_cancel_btn": "Confirmer la révocation forcée",
+                "confirm_cancel_sub_btn": "Confirmer la révocation forcée",
                 "toast_cancel_sub_success": "Abonnement annulé. Licence révoquée.",
                 "refund_pending": "Remboursement en cours...",
                 "refund_confirm_title": "Confirmer le remboursement ?",
@@ -1320,13 +1341,23 @@
                     `;
                 }
 
-                // Invoice / auto-renew toggle / refund / upgrade (API sets invoiceable / refundable)
+                // Invoice / auto-renew toggle / refund / cancel subscription (API sets invoiceable / refundable / cancellable)
                 const actionBtns = [];
+                const canCancel = lic.cancellable === true;
                 const canInvoice = lic.invoiceable === true && !!lic.paddle_transaction_id;
                 const canRefund = lic.status === 'active' && lic.refundable === true;
                 const canToggleAutoRenew = lic.status === 'active' && lic.auto_renew_toggleable === true;
                 // Upgrade feature is parked (后续推进项, 2026-08-04): hidden from UI, backend kept for future.
                 const canUpgrade = false;
+
+                if (canCancel) {
+                    actionBtns.push(`
+                        <button class="cancel-sub-trigger-btn flex items-center gap-1 bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white border border-red-500/20 hover:border-red-500 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300 active:scale-95" data-license="${escCode}">
+                            <span class="material-symbols-outlined text-sm">dangerous</span>
+                            <span>${escapeHtml(dict.cancel_subscription || 'Cancel subscription')}</span>
+                        </button>
+                    `);
+                }
 
                 if (canUpgrade) {
                     if (lic.is_in_refund_window) {
@@ -1374,18 +1405,9 @@
                 }
                 if (canRefund) {
                     actionBtns.push(`
-                        <button class="refund-trigger-btn flex items-center gap-1 bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white border border-red-500/20 hover:border-red-500 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300 active:scale-95" data-license="${escCode}">
+                        <button class="refund-trigger-btn flex items-center gap-1 bg-amber-500/10 hover:bg-amber-500 text-amber-400 hover:text-slate-950 border border-amber-500/30 hover:border-amber-500 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300 active:scale-95" data-license="${escCode}">
                             <span class="material-symbols-outlined text-sm">history_toggle_off</span>
-                            <span>${escapeHtml(translations[state.lang].request_refund)}</span>
-                        </button>
-                    `);
-                }
-                const canCancel = lic.cancellable === true;
-                if (canCancel) {
-                    actionBtns.push(`
-                        <button class="cancel-sub-trigger-btn flex items-center gap-1 bg-amber-500/10 hover:bg-amber-500 text-amber-400 hover:text-slate-950 border border-amber-500/30 hover:border-amber-500 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-300 active:scale-95" data-license="${escCode}">
-                            <span class="material-symbols-outlined text-sm">cancel_schedule_send</span>
-                            <span>${escapeHtml(dict.cancel_subscription || 'Cancel subscription')}</span>
+                            <span>${escapeHtml(dict.request_refund || translations[state.lang].request_refund || 'Request Refund')}</span>
                         </button>
                     `);
                 }
