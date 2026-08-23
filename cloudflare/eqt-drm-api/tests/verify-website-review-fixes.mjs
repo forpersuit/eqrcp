@@ -105,6 +105,17 @@ assert(portalHtml.includes('function initPaginationListeners()'), 'Pagination: p
 assert(portalHtml.includes('state.page = maxPage;'), 'Pagination: portal.html includes self-healing fallback to maxPage');
 assert(portalHtml.includes('return await loadLicenses();'), 'Pagination: portal.html reloads licenses after self-healing page clamp');
 
+// 5. Check N1, N2, N3 review findings
+assert(pricingHtml.includes('js/email-otp.js?v=1.0.7'), 'N1: pricing.html imports js/email-otp.js?v=1.0.7');
+assert(pricingHtml.includes('js/checkout-verify.js?v=1.0.7'), 'N1: pricing.html imports js/checkout-verify.js?v=1.0.7');
+assert(portalHtml.includes('js/email-otp.js?v=1.0.7'), 'N1: portal.html imports js/email-otp.js?v=1.0.7');
+
+for (const l of langMatches) {
+  assert(pricingHtml.includes(`"module_load_err":`), `N2: pricing.html defines module_load_err for ${l}`);
+  assert(portalHtml.includes(`"module_load_err":`), `N2: portal.html defines module_load_err for ${l}`);
+}
+assert(portalHtml.includes("portalOtp.syncButtonWithEmail('', sendBtn)"), 'N3: portal.html resets sendBtn visual state on logout');
+
 console.log(`\n============================================================`);
 console.log(`Results: ${passed} passed, ${failed} failed`);
 console.log(`============================================================`);

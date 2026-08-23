@@ -265,7 +265,7 @@
 
     <!-- Script -->
     <script src="js/api-base.js"></script>
-    <script src="js/email-otp.js?v=1.0.6"></script>
+    <script src="js/email-otp.js?v=1.0.7"></script>
     <script>
         // Language dictionaries
         const translations = {
@@ -345,6 +345,7 @@
                 "toast_code_sent": "Verification code sent to your email.",
                 "toast_enter_valid_email": "Please enter a valid email address",
                 "sending_code": "Sending...",
+                "module_load_err": "Email verification service unavailable. Please refresh the page.",
                 "toast_login_success": "Successfully logged in!",
                 "toast_refund_success": "Refund adjustment created successfully!",
                 "toast_error": "An error occurred:",
@@ -430,6 +431,7 @@
                 "toast_code_sent": "验证码已发送至您的邮箱，请注意查收。",
                 "toast_enter_valid_email": "请输入有效的电子邮箱地址",
                 "sending_code": "发送中...",
+                "module_load_err": "验证服务暂不可用，请刷新页面后重试。",
                 "toast_login_success": "登录成功！",
                 "toast_refund_success": "退款成功！授权已被吊销。",
                 "toast_error": "发生错误：",
@@ -513,6 +515,7 @@
                 "upgrade_to_lifetime": "終身版にアップグレード",
                 "upgrade_blocked_refund_window": "購入後14日間の返金期間中はアップグレードできません。変更をご希望の場合は先に返金を申請し、改めて終身版をご購入ください。",
                 "toast_code_sent": "認証コードをメールに送信しました。",
+                "module_load_err": "認証サービスを利用できません。ページを更新してください。",
                 "toast_login_success": "ログインに成功しました！",
                 "toast_refund_success": "返金申請が完了しました。",
                 "toast_error": "エラーが発生しました:",
@@ -596,6 +599,7 @@
                 "upgrade_to_lifetime": "평생 플랜으로 업그레이드",
                 "upgrade_blocked_refund_window": "구매 후 14일 환불 기간 동안에는 업그레이드할 수 없습니다. 변경을 원하시면 먼저 환불 후 평생 플랜을 구매해 주세요.",
                 "toast_code_sent": "이메일로 인증 코드가 전송되었습니다.",
+                "module_load_err": "인증 서비스를 사용할 수 없습니다. 페이지를 새로고침해 주세요.",
                 "toast_login_success": "로그인 성공!",
                 "toast_refund_success": "환불 신청이 완료되었습니다.",
                 "toast_error": "오류 발생:",
@@ -679,6 +683,7 @@
                 "upgrade_to_lifetime": "Actualizar a Lifetime",
                 "upgrade_blocked_refund_window": "No disponible durante el periodo de reembolso de 14 días. Solicite un reembolso primero y luego compre Lifetime.",
                 "toast_code_sent": "Código enviado a tu correo.",
+                "module_load_err": "Servicio de verificación no disponible. Por favor, actualice la página.",
                 "toast_login_success": "¡Sesión iniciada con éxito!",
                 "toast_refund_success": "Reembolso procesado correctamente.",
                 "toast_error": "Ocurrió un error:",
@@ -762,6 +767,7 @@
                 "upgrade_to_lifetime": "Auf Lifetime upgraden",
                 "upgrade_blocked_refund_window": "Upgrade innerhalb der 14-tägigen Rückgabefrist nicht möglich. Bitte erst Rückerstattung anfordern und dann Lifetime kaufen.",
                 "toast_code_sent": "Bestätigungscode an Ihre E-Mail gesendet.",
+                "module_load_err": "Verifizierungsdienst nicht verfügbar. Bitte aktualisieren Sie die Seite.",
                 "toast_login_success": "Erfolgreich angemeldet!",
                 "toast_refund_success": "Rückerstattung erfolgreich erstellt.",
                 "toast_error": "Ein Fehler ist aufgetreten:",
@@ -845,6 +851,7 @@
                 "upgrade_to_lifetime": "Passer à la version à vie",
                 "upgrade_blocked_refund_window": "Mise à niveau indisponible pendant la période de remboursement de 14 jours. Veuillez d'abord demander un remboursement puis acheter la version à vie.",
                 "toast_code_sent": "Code de vérification envoyé à votre e-mail.",
+                "module_load_err": "Service de vérification indisponible. Veuillez actualiser la page.",
                 "toast_login_success": "Connexion réussie !",
                 "toast_refund_success": "Remboursement traité avec succès.",
                 "toast_error": "Une erreur s'est produite :",
@@ -1067,7 +1074,7 @@
         // Send validation code (passes UI language via common EmailOtp module)
         async function handleSendCode() {
             if (!portalOtp) {
-                showToast('Email verification module is not available. Please refresh the page.', 'error');
+                showToast((translations[state.lang] || translations.en).module_load_err || 'Email verification service unavailable. Please refresh the page.', 'error');
                 return;
             }
             const emailInput = document.getElementById('login-email');
@@ -1096,7 +1103,7 @@
         // Login submit
         async function handleLogin() {
             if (!portalOtp) {
-                showToast('Email verification module is not available. Please refresh the page.', 'error');
+                showToast((translations[state.lang] || translations.en).module_load_err || 'Email verification service unavailable. Please refresh the page.', 'error');
                 return;
             }
             const email = document.getElementById('login-email').value.trim();
@@ -1902,17 +1909,23 @@
             localStorage.removeItem('eqt_portal_token');
             localStorage.removeItem('eqt_portal_email');
             
+            const emailInput = document.getElementById('login-email');
+            const codeInput = document.getElementById('login-code');
+            const submitBtn = document.getElementById('login-submit-btn');
+            if (emailInput) emailInput.value = '';
+            if (codeInput) {
+                codeInput.value = '';
+                codeInput.disabled = true;
+            }
+            if (submitBtn) submitBtn.disabled = true;
+
+            const sendBtn = document.getElementById('send-code-btn');
             if (portalOtp) {
                 portalOtp.cancelCooldown();
+                portalOtp.syncButtonWithEmail('', sendBtn);
+            } else if (sendBtn) {
+                setSendBtnState(sendBtn, 'default', (translations[state.lang] || translations.en).send_code_btn);
             }
-            
-            document.getElementById('login-email').value = '';
-            document.getElementById('login-code').value = '';
-            document.getElementById('login-code').disabled = true;
-            document.getElementById('login-submit-btn').disabled = true;
-            
-            const sendBtn = document.getElementById('send-code-btn');
-            setSendBtnState(sendBtn, 'default', (translations[state.lang] || translations.en).send_code_btn);
 
             document.getElementById('dashboard-section').classList.add('hidden');
             document.getElementById('login-section').classList.remove('hidden');
