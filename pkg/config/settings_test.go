@@ -111,38 +111,32 @@ func TestDesktopSettingsWriteCreatesOutputDirIfMissing(t *testing.T) {
 	}
 }
 
-func TestDesktopSettingsLegacyDevCompatibility(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "legacy_config.yml")
-	if err := os.WriteFile(configPath, []byte("dev: liyuelong\noutput: /tmp/dev\n"), 0644); err != nil {
+func TestDesktopSettingsDevModeNotAllowedInConfigFile(t *testing.T) {
+	// 1. Config with dev / devMode should NOT enable DevMode
+	configPath := filepath.Join(t.TempDir(), "hacked_config.yml")
+	if err := os.WriteFile(configPath, []byte("dev: liyuelong\ndevMode: true\noutput: /tmp/dev\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
 	app := application.New()
 	app.Flags.Config = configPath
 
+	_ = os.Unsetenv("EQT_DEV")
 	settings, err := ReadDesktopSettings(app)
 	if err != nil {
 		t.Fatalf("ReadDesktopSettings failed: %v", err)
 	}
-	if !settings.DevMode {
-		t.Fatalf("expected DevMode to be true for legacy dev: liyuelong config")
+	if settings.DevMode {
+		t.Fatalf("expected DevMode to be false even if devMode/dev is set in config.yml")
 	}
 
-	// Saving will migrate to devMode: true
-	saved, err := WriteDesktopSettings(app, settings)
+	// 2. Only EQT_DEV=1 environment variable activates DevMode locally
+	t.Setenv("EQT_DEV", "1")
+	devSettings, err := ReadDesktopSettings(app)
 	if err != nil {
-		t.Fatalf("WriteDesktopSettings failed: %v", err)
+		t.Fatalf("ReadDesktopSettings with EQT_DEV failed: %v", err)
 	}
-	if !saved.DevMode {
-		t.Fatalf("expected saved.DevMode to remain true")
-	}
-
-	// Read again to verify persisted devMode
-	reloaded, err := ReadDesktopSettings(app)
-	if err != nil {
-		t.Fatalf("Reload failed: %v", err)
-	}
-	if !reloaded.DevMode {
-		t.Fatalf("expected reloaded.DevMode to be true")
+	if !devSettings.DevMode {
+		t.Fatalf("expected DevMode to be true when EQT_DEV=1 is set")
 	}
 }

@@ -41,6 +41,12 @@
 - **用途**：仅供 Cloudflare Pages 同源 Function (`functions/api/[[path]].ts`) 读取，用于将管理台请求动态分发路由至生产 Worker (`https://lic.eqt.net.im`) 或测试 Worker (`https://lic-test.eqt.net.im`)。
 - **安全与鉴权机制**：`X-EQT-Environment` 标头**仅作反代路由选择，不作为任何鉴权凭证**。所有管理端 API 的访问权限恒由 Cloudflare Access Zero Trust JWT / `X-Admin-Secret` 强制鉴权校验。
 
+### 0.5 鉴权失败限流
+
+同一客户端 IP（`cf-connecting-ip` 或 `X-Forwarded-For`）在约 5 分钟窗口内，**携带了错误的** `X-Admin-Secret` ≥ 10 次 → **429**  
+`{ "error": "...", "code": "ADMIN_AUTH_RATE_LIMITED" }`，`Retry-After: 300`。  
+缺 Header 的 401 **不计次**（避免登录探活误伤）。成功鉴权后清除该 IP 计数。此为 Worker 进程内限流，非全局 Cloudflare 边缘规则。
+
 ---
 
 ## 1. 数据模型（管理端可见字段）

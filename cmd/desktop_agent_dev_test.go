@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"eqt/pkg/application"
@@ -16,6 +17,11 @@ func devTestAgent(t *testing.T, dev bool) *desktopAgent {
 	t.Helper()
 	tempHome := t.TempDir()
 	t.Setenv("HOME", tempHome)
+	if dev {
+		t.Setenv("EQT_DEV", "1")
+	} else {
+		_ = os.Unsetenv("EQT_DEV")
+	}
 
 	base := application.Flags{}
 	agent := newDesktopAgent(base)

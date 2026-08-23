@@ -737,7 +737,7 @@ func (agent *desktopAgent) handleFile(w http.ResponseWriter, r *http.Request) {
 // this so they are inert in normal customer deployments.
 func (agent *desktopAgent) devModeEnabled() bool {
 	settings, err := agent.readSettings()
-	return err == nil && (settings.DevMode || settings.DebugLog)
+	return err == nil && (settings.DevMode || settings.DebugLog || server.IsServerDevAuthorized() || os.Getenv("EQT_DEV") == "1")
 }
 
 // requireDevMode rejects cross-origin callers and non-dev runs with 403.
