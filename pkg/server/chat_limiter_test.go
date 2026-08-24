@@ -309,3 +309,95 @@ func TestCrossPlatformWebCryptoSignatureVerification(t *testing.T) {
 		t.Fatalf("cross-platform signature verification failed for dev keypair")
 	}
 }
+
+// TestNetworkTimeColdStartAndCacheInvalidation tests the cold-start optimistic branch,
+// the offline fallback branch, and the cache invalidation trigger.
+func TestNetworkTimeColdStartAndCacheInvalidation(t *testing.T) {
+	// Temporarily disable EQT_TESTING to exercise real branch logic
+	origTesting := os.Getenv("EQT_TESTING")
+	_ = os.Setenv("EQT_TESTING", "false")
+	defer func() {
+		if origTesting != "" {
+			_ = os.Setenv("EQT_TESTING", origTesting)
+		} else {
+			_ = os.Unsetenv("EQT_TESTING")
+		}
+	}()
+
+	// Save original global state
+	netTimeMu.Lock()
+	origOffset := netTimeOffset
+	origCached := netTimeCached
+	origLastCheck := netTimeLastCheck
+	origIsChecking := netTimeIsChecking
+	origFirstFetch := netTimeFirstFetch
+	netTimeMu.Unlock()
+
+	defer func() {
+		netTimeMu.Lock()
+		netTimeOffset = origOffset
+		netTimeCached = origCached
+		netTimeLastCheck = origLastCheck
+		netTimeIsChecking = origIsChecking
+		netTimeFirstFetch = origFirstFetch
+		netTimeMu.Unlock()
+	}()
+
+	// 1. Scenario A: Cold-start initial in-flight fetch (isChecking=true, firstFetch=true, cached=false)
+	// Must optimistically return isOnline=true to prevent cold-start false quota lockout.
+	netTimeMu.Lock()
+	netTimeCached = false
+	netTimeIsChecking = true
+	netTimeFirstFetch = true
+	netTimeLastCheck = time.Time{}
+	netTimeMu.Unlock()
+
+	_, isOnlineA := getNetworkTimeOrStartFetch()
+	if !isOnlineA {
+		t.Errorf("Scenario A: expected isOnline=true during initial cold-start in-flight check, got false")
+	}
+
+	// 2. Scenario B: Subsequent retry in-flight (isChecking=true, firstFetch=false, cached=false)
+	// Must return isOnline=false when subsequent fetch is pending without cache.
+	netTimeMu.Lock()
+	netTimeCached = false
+	netTimeIsChecking = true
+	netTimeFirstFetch = false
+	netTimeMu.Unlock()
+
+	_, isOnlineB := getNetworkTimeOrStartFetch()
+	if isOnlineB {
+		t.Errorf("Scenario B: expected isOnline=false during subsequent un-cached check, got true")
+	}
+
+	// 3. Scenario C: Cached network time (cached=true, within 1h)
+	// Must return isOnline=true with applied offset.
+	testOffset := 5 * time.Minute
+	netTimeMu.Lock()
+	netTimeCached = true
+	netTimeOffset = testOffset
+	netTimeLastCheck = time.Now()
+	netTimeIsChecking = false
+	netTimeFirstFetch = false
+	netTimeMu.Unlock()
+
+	nowEst, isOnlineC := getNetworkTimeOrStartFetch()
+	if !isOnlineC {
+		t.Errorf("Scenario C: expected isOnline=true when network time is cached")
+	}
+	diff := time.Until(nowEst)
+	if diff < 4*time.Minute || diff > 6*time.Minute {
+		t.Errorf("Scenario C: expected estimated time offset near ~5m, got diff %v", diff)
+	}
+
+	// 4. Scenario D: InvalidateCache resets hasCached
+	limiter := &ChatLimiter{
+		hasCached:     true,
+		lastCacheTime: time.Now(),
+	}
+	limiter.invalidateCache()
+	if limiter.hasCached {
+		t.Errorf("Scenario D: expected hasCached=false after invalidateCache(), got true")
+	}
+}
+

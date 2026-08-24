@@ -101,8 +101,7 @@ jobs:
 
       - name: Deploy eqt-website to Pages
         working-directory: cloudflare/eqt-website
-        # functions/ 由 Wrangler 自动识别（部署的是整个项目目录 ./）
-        # 与 eqt-admin 不同——eqt-admin 部署的是 dist/，需要显式复制 functions/
+        # 静态文件由 Wrangler 部署（根目录下无 functions/ 路由）
         run: npx wrangler pages deploy ./ --project-name=eqt --branch=master
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -110,6 +109,7 @@ jobs:
 
       - name: Deploy eqt-admin to Pages
         working-directory: cloudflare/eqt-admin
+        # 部署前端构建产物 dist/，Wrangler 自动从 eqt-admin 根目录识别 functions/ 代理路由
         run: npx wrangler pages deploy dist --project-name=eqt-admin --branch=master
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
