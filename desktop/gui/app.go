@@ -205,6 +205,25 @@ func (a *App) startup(ctx context.Context) {
 		}
 	})
 
+	// 注册 Dev 开发者状态变更监听，当设备被云端识别为 Dev 设备时，即刻同步配置并通知前端呈现 Dev 菜单
+	server.RegisterDevStatusCallback(func(isDev bool) {
+		if isDev {
+			if a.agent != nil {
+				settings, err := a.agent.readSettings()
+				if err == nil && !settings.DevMode {
+					settings.DevMode = true
+					_, _ = a.agent.writeSettings(settings)
+				}
+			}
+			if a.logger != nil {
+				a.logger.SetEnabled(true)
+			}
+		}
+		if a.ctx != nil {
+			wailsruntime.EventsEmit(a.ctx, "eqt:dev-mode-changed", isDev)
+		}
+	})
+
 	// 检查是否有未上传的崩溃转储，通知前端弹窗
 	if crash.HasPendingDump() {
 		wailsruntime.LogInfo(ctx, "[CrashReport] Pending crash dump found, notifying frontend")

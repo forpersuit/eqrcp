@@ -2307,9 +2307,9 @@ function renderSettingsPanel() {
                             </div>
 
                             <div style="font-weight: 700; font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">${t('dev_available_log_files') || 'Available log files:'}</div>
-                            <div class="dev-log-files-list" style="display: flex; flex-direction: column; gap: 6px;">
+                            <div class="dev-log-files-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto; padding-right: 4px; border: 1px solid var(--line); border-radius: 6px; padding: 6px; background: var(--bg);">
                                 ${(state.logFiles && state.logFiles.length > 0) ? state.logFiles.map(file => `
-                                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; font-size: 11.5px;">
+                                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; background: var(--card-bg, #ffffff); border: 1px solid var(--line); border-radius: 6px; font-size: 11.5px;">
                                         <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;">
                                             <span style="font-weight: 600; color: var(--text-primary); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">📄 ${escapeHTML(file.name)}</span>
                                             <span style="font-size: 10px; color: var(--text-secondary); font-family: var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHTML(file.path)}">${escapeHTML(file.path)} (${escapeHTML(file.size)})</span>
@@ -6257,6 +6257,16 @@ async function checkPendingCrashReport() {
 }
 
 EventsOn('eqt:crash-report-pending', checkPendingCrashReport);
+
+EventsOn('eqt:dev-mode-changed', async (isDev) => {
+    if (state.settings) {
+        state.settings.devMode = Boolean(isDev);
+    }
+    try {
+        state.settings = await ReadSettings();
+    } catch (_) {}
+    render();
+});
 
 window.addEventListener('beforeunload', stopChatUsage);
 

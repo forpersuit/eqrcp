@@ -1158,3 +1158,37 @@ func TestLicenseReadyStateManagement(t *testing.T) {
 
 	ResetPaidStatusCallbacksForTest()
 }
+
+func TestRegisterDevStatusCallback(t *testing.T) {
+	SetServerDevAuthorized(false)
+	ch := make(chan bool, 5)
+
+	RegisterDevStatusCallback(func(isDev bool) {
+		ch <- isDev
+	})
+
+	// Initial registration immediate callback should emit false
+	select {
+	case isDev := <-ch:
+		if isDev {
+			t.Errorf("expected initial callback to be false, got true")
+		}
+	case <-time.After(1 * time.Second):
+		t.Error("timeout waiting for initial RegisterDevStatusCallback")
+	}
+
+	// Change to true should trigger callback
+	SetServerDevAuthorized(true)
+	select {
+	case isDev := <-ch:
+		if !isDev {
+			t.Errorf("expected changed callback to be true, got false")
+		}
+	case <-time.After(1 * time.Second):
+		t.Error("timeout waiting for changed RegisterDevStatusCallback")
+	}
+
+	// Reset
+	SetServerDevAuthorized(false)
+}
+

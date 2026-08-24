@@ -451,13 +451,36 @@ func StartOnlineLicenseSync() {
 var (
 	serverDevMu         sync.RWMutex
 	serverDevAuthorized bool
+	devStatusCallbacks  []func(isDev bool)
 )
+
+// RegisterDevStatusCallback registers a callback invoked whenever the server dev authorization status changes.
+func RegisterDevStatusCallback(cb func(isDev bool)) {
+	serverDevMu.Lock()
+	devStatusCallbacks = append(devStatusCallbacks, cb)
+	isDev := serverDevAuthorized
+	serverDevMu.Unlock()
+	if cb != nil {
+		cb(isDev)
+	}
+}
 
 // SetServerDevAuthorized records whether the server authorized this device for DevMode.
 func SetServerDevAuthorized(authorized bool) {
 	serverDevMu.Lock()
+	changed := serverDevAuthorized != authorized
 	serverDevAuthorized = authorized
+	cbs := make([]func(isDev bool), len(devStatusCallbacks))
+	copy(cbs, devStatusCallbacks)
 	serverDevMu.Unlock()
+
+	if changed {
+		for _, cb := range cbs {
+			if cb != nil {
+				go cb(authorized)
+			}
+		}
+	}
 }
 
 // IsServerDevAuthorized reports whether the server authorized this device for DevMode.
