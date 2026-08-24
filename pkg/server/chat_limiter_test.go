@@ -672,4 +672,3 @@ func TestClockDriftPreservedAcrossSaveAndCacheHit(t *testing.T) {
 		t.Errorf("expected ClockDrift=true preserved in memory cache after saveUsageLocked, got false")
 	}
 }
-
