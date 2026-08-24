@@ -207,7 +207,7 @@ npx wrangler r2 bucket delete eqt-crash-reports-test
 | 2 | wrangler 命令带 `--env test` 了吗? | 想测测试 → 必须带;**不带 = 生产** |
 | 3 | D1/R2 资源名是 `-test` 后缀吗? | 是测试 → 必须 `eqt-drm-db-test` / `eqt-crash-reports-test` |
 | 4 | Paddle 密钥是 sandbox 还是 live? | 测试 → `pdl_sdbx_`;生产 → `pdl_live_` |
-| 5 | ED25519 secret 是纯 hex(64 字符)吗? | 是;贴 base64 PKCS8 会产生垃圾私钥(见 §7) |
+| 5 | ED25519 secret 是纯 hex(64 字符)且配对吗? | 是(纯 hex);且与对应环境内嵌公钥配对(测试文件中的密钥对仅供格式验证,勿作部署 secret) |
 | 6 | GUI 构建带 `-tags eqtdev` 了吗? | 想连测试 → 必须带;**不带 = 生产** |
 | 7 | 生产库操作前备份了吗? | `npx wrangler d1 export eqt-drm-db --remote --output=/tmp/eqt-drm-db.sql`(wrangler 4.x 已无 `d1 backup`) |
 
@@ -219,7 +219,7 @@ npx wrangler r2 bucket delete eqt-crash-reports-test
 |---|---|---|
 | 测试 worker 抢占了生产路由 | 生产域名 404/异常 | 检查 `[env.test]` 是否 `routes = []` + `workers_dev = true`,修正后重部署 + `wrangler rollback` 生产 |
 | 测试 worker 配了 live 密钥 | 测试激活码 `source='purchase'` | `secret put PADDLE_API_KEY --env test` 换回 sandbox |
-| `ED25519_PRIVATE_KEY` 误贴 base64 PKCS8 | 激活签名不被任何公钥验证(不报错) | 换成 32-byte seed 的 hex;GUI 公钥须与 seed 派生公钥一致 |
+| `ED25519_PRIVATE_KEY` 误贴 base64 PKCS8 或误用单测代码私钥 | 激活签名不被任何公钥验证(验签全拒/测试降级) | 换成 32-byte seed 的 hex;确保与客户端内嵌公钥(`08443678...`/`ce07f0...`)配对,单测代码密钥仅供格式验证 |
 | 探针/E2E 写进了生产 D1 | 生产库出现 `source='test'` 或 `EQT-*E2E*` 码 | 按 §5.2 删除 |
 | GUI 测试构建忘了 `-tags eqtdev` | 激活码发往生产 lic.eqt.net.im | 加 tag 重新构建;误激活只影响测试,不影响生产数据 |
 
@@ -232,5 +232,7 @@ npx wrangler r2 bucket delete eqt-crash-reports-test
 | DRM API 测试基地址 | `https://eqt-drm-api-test.leeyelon.workers.dev` |
 | Feedback 测试基地址 | `https://eqt-feedback-api-test.leeyelon.workers.dev` |
 | GUI 切测试 | `wails dev -tags eqtdev` |
-| 测试密钥对 | seed `2cf5baa8...`(hex)/ 公钥 `ce07f0...`(见 `.env.test` 尾部注释) |
+| 测试密钥对 | seed `2cf5baa8...`(hex)/ 公钥 `ce07f0...`(见 `.env.test` 尾部注释，测试文件中的密钥对仅供格式验证，部署 secret 必须用与各自内嵌公钥配对的私钥) |
 | 完整搭建 | [test-environment.md](./test-environment.md) |
+| 上线后代理验证 | `curl -s https://<admin-domain>/api/v1/admin/health?probe=0`（应返回 JSON 而非 HTML） |
+
