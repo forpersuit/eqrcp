@@ -79,29 +79,49 @@ func getChatUsageFilePath() string {
 
 func fetchNetworkTime() (time.Time, error) {
 	client := http.Client{
-		Timeout: 2 * time.Second,
+		Timeout: 3 * time.Second,
 	}
-	// 1. 优先使用当前 DRM 激活所用的许可证服务器
-	url := getLicenseServer()
-	resp, err := client.Head(url)
-	if err != nil {
-		// 2. 备选全球高可用 CDN 域名
-		resp, err = client.Head("https://www.cloudflare.com")
+	endpoints := []string{
+		getLicenseServer(),
+		"https://www.cloudflare.com",
+		"https://www.aliyun.com",
+		"https://www.qq.com",
+		"http://connect.rom.miui.com/generate_204",
 	}
-	if err != nil {
-		// 3. 备选国内高可用域名
-		resp, err = client.Head("https://www.baidu.com")
-	}
-	if err != nil {
-		return time.Time{}, err
-	}
-	defer resp.Body.Close()
 
-	dateStr := resp.Header.Get("Date")
-	if dateStr == "" {
-		return time.Time{}, fmt.Errorf("no Date header")
+	for _, endpoint := range endpoints {
+		req, err := http.NewRequest("HEAD", endpoint, nil)
+		if err != nil {
+			continue
+		}
+		req.Header.Set("User-Agent", "EQT-Client/1.0")
+
+		resp, err := client.Do(req)
+		if err != nil {
+			reqGet, errGet := http.NewRequest("GET", endpoint, nil)
+			if errGet == nil {
+				reqGet.Header.Set("User-Agent", "EQT-Client/1.0")
+				reqGet.Header.Set("Range", "bytes=0-0")
+				resp, err = client.Do(reqGet)
+			}
+		}
+		if err != nil || resp == nil {
+			continue
+		}
+		dateStr := resp.Header.Get("Date")
+		resp.Body.Close()
+		if dateStr == "" {
+			continue
+		}
+		t, err := time.Parse(time.RFC1123, dateStr)
+		if err != nil {
+			t, err = time.Parse(time.RFC1123Z, dateStr)
+		}
+		if err == nil && !t.IsZero() {
+			return t, nil
+		}
 	}
-	return time.Parse(time.RFC1123, dateStr)
+	return time.Time{}, fmt.Errorf("all network time endpoints failed")
 }
 
 var (
@@ -343,12 +363,16 @@ func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 		}
 	} else if isOnline && !usage.IsPaid && os.Getenv("EQT_TESTING") != "true" {
 		diff := time.Since(netTime)
-		if diff < -10*time.Minute || diff > 10*time.Minute {
+		if diff < -60*time.Minute || diff > 60*time.Minute {
 			usage.ClockTampered = true
 			usage.IsPaid = false
 			if !oldTampered {
 				go SetClockTampered(true)
 			}
+		} else if usage.ClockTampered {
+			// Self-healing: if network time is currently synced and within reasonable bounds, resolve past false positive
+			usage.ClockTampered = false
+			go SetClockTampered(false)
 		}
 	}
 

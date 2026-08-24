@@ -400,4 +400,3 @@ func TestNetworkTimeColdStartAndCacheInvalidation(t *testing.T) {
 		t.Errorf("Scenario D: expected hasCached=false after invalidateCache(), got true")
 	}
 }
-

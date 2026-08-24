@@ -1401,9 +1401,14 @@ func (a *App) RefreshLicenseStatus() (AgentStatus, error) {
 		return AgentStatus{}, fmt.Errorf("agent not initialized")
 	}
 	// Prefer online truth (unbind/revoke). Network errors fall back to offline lease via local verify.
-	if err := server.ForceOnlineLicenseSync(); err != nil {
-		a.logInfo(fmt.Sprintf("[GUI] RefreshLicenseStatus online sync: %v; applying local offline verify", err))
-		server.VerifyLocalLicense()
+	if _, ok := server.GetLocalLicenseInfo(); ok {
+		if err := server.ForceOnlineLicenseSync(); err != nil {
+			a.logInfo(fmt.Sprintf("[GUI] RefreshLicenseStatus online sync: %v; applying local offline verify", err))
+			server.VerifyLocalLicense()
+		}
+	} else {
+		// For free tier devices, execute online device sync to check for remote DevMode authorization.
+		server.RegisterDeviceOnline()
 	}
 	a.agent.mu.Lock()
 	status := a.agent.snapshotLocked()

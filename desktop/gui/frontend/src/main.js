@@ -3682,9 +3682,12 @@ function bindEvents() {
                 return;
             }
             if (e.target.closest('#dev-force-sync')) {
-                DevForceOnlineLicenseSync().then((status) => {
+                DevForceOnlineLicenseSync().then(async (status) => {
                     state.status = status;
                     syncLicenseFromStatus(state.status);
+                    try {
+                        state.settings = await ReadSettings();
+                    } catch (_) {}
                     showToast(t('dev_sync_success') || 'Online license sync completed');
                     render();
                     openPanel('settings');
@@ -3693,10 +3696,12 @@ function bindEvents() {
                     try {
                         state.status = await RefreshLicenseStatus();
                         syncLicenseFromStatus(state.status);
+                        state.settings = await ReadSettings();
                     } catch (e) {
                         try {
                             state.status = await AgentStatus();
                             syncLicenseFromStatus(state.status);
+                            state.settings = await ReadSettings();
                         } catch (_) {}
                     }
                     render();
@@ -5852,6 +5857,9 @@ function triggerManualRefresh() {
         lastRefreshTime = Date.now();
         state.status = status;
         syncLicenseFromStatus(status);
+        try {
+            state.settings = await ReadSettings();
+        } catch (_) {}
         showToast(t('refresh_success') || 'License status refreshed successfully.');
     }).catch(function(e) {
         lastRefreshTime = Date.now();
