@@ -232,7 +232,7 @@ assert(portalHtml.includes('return await loadLicenses();'), 'Pagination: portal.
 
 // 5. Check N1, N2, N3 review findings
 assert(pricingHtml.includes('js/email-otp.js?v=1.0.7'), 'N1: pricing.html imports js/email-otp.js?v=1.0.7');
-assert(pricingHtml.includes('js/checkout-verify.js?v=1.0.7'), 'N1: pricing.html imports js/checkout-verify.js?v=1.0.7');
+assert(pricingHtml.includes('js/checkout-verify.js?v=1.0.8'), 'N1: pricing.html imports js/checkout-verify.js?v=1.0.8');
 assert(portalHtml.includes('js/email-otp.js?v=1.0.7'), 'N1: portal.html imports js/email-otp.js?v=1.0.7');
 
 // T1 / N2 check: Strict per-language verification of module_load_err in parsed dictionary

@@ -296,6 +296,13 @@
             });
         }
 
+        resetPayBtn() {
+            const dom = this.getDom();
+            if (!dom.payBtn) return;
+            dom.payBtn.disabled = false;
+            dom.payBtn.innerHTML = `<span>${this.getTranslation('verify_and_pay_btn', 'Verify & Proceed to Payment')}</span><span class="material-symbols-outlined text-sm">lock_open</span>`;
+        }
+
         async verifyAndPay() {
             if (!this.otp) {
                 this.showStatusCard(this.getTranslation('module_load_err', 'Verification service unavailable. Please refresh the page.'), true, 'error');
@@ -321,6 +328,7 @@
                 this.showCodeFieldError(invalidCodeMsg);
                 this.triggerShake(dom.codeInput);
                 this.showStatusCard(invalidCodeMsg, true, 'error');
+                this.resetPayBtn();
                 return;
             }
 
@@ -343,6 +351,7 @@
                 },
                 onSuccess: () => {
                     this.verifiedEmail = email;
+                    this.resetPayBtn();
                     this.close();
 
                     // Open Paddle Checkout with pre-filled verified customer email & customData fallback
@@ -368,16 +377,12 @@
                 }
             });
 
-            if (!res.ok) {
-                if (dom.payBtn) {
-                    dom.payBtn.disabled = false;
-                    dom.payBtn.innerHTML = `<span>${this.getTranslation('verify_and_pay_btn', 'Verify & Proceed to Payment')}</span><span class="material-symbols-outlined text-sm">lock_open</span>`;
-                }
-            }
+            this.resetPayBtn();
         }
 
         updateI18n() {
             this.updateButtonState();
+            this.resetPayBtn();
         }
 
         open(priceId) {
@@ -395,6 +400,7 @@
             this.hideEmailFieldError();
             this.hideCodeFieldError();
             this.updateButtonState();
+            this.resetPayBtn();
 
             dom.modal.classList.remove('hidden');
             setTimeout(() => {
@@ -410,6 +416,7 @@
                 this.autoVerifyDebounce = null;
             }
             if (this.otp) this.otp.isVerifying = false;
+            this.resetPayBtn();
             const dom = this.getDom();
             if (!dom.modal) return;
             dom.modal.classList.add('opacity-0');
