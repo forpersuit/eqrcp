@@ -413,9 +413,14 @@ export async function handlePortalRoutes(
       }
     }
 
-    // Promo / admin / non-purchase: never refundable via portal
+    // Promo / admin / non-purchase / zero-payment: never refundable via portal
     if (!isLicenseRefundable({ ...license, source })) {
-      return new Response(JSON.stringify({ error: getApiTranslation("refund_not_allowed_for_source", reqLang) }), {
+      const isZeroPayment = license.paid_amount !== undefined && license.paid_amount !== null && Number(license.paid_amount) <= 0;
+      const errKey = isZeroPayment ? "refund_zero_amount" : "refund_not_allowed_for_source";
+      return new Response(JSON.stringify({
+        error: getApiTranslation(errKey, reqLang),
+        error_code: isZeroPayment ? "REFUND_NOT_ALLOWED_ZERO_AMOUNT" : "REFUND_NOT_ALLOWED_FOR_SOURCE"
+      }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -460,6 +465,22 @@ export async function handlePortalRoutes(
       }
 
       const txData: any = await txRes.json();
+      const totals = txData.data.details?.totals || {};
+      const grandTotal = Number(totals.grand_total ?? totals.total ?? 0);
+
+      // Cache paid_amount into database
+      await env.DB.prepare("UPDATE licenses SET paid_amount = ? WHERE license_code = ?").bind(grandTotal, license_code).run().catch(() => {});
+
+      if (grandTotal <= 0) {
+        return new Response(JSON.stringify({
+          error: getApiTranslation("refund_zero_amount", reqLang),
+          error_code: "REFUND_NOT_ALLOWED_ZERO_AMOUNT"
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
       const lineItems = txData.data.details?.line_items || [];
       if (lineItems.length === 0) {
         throw new Error("No line items found in transaction to refund");

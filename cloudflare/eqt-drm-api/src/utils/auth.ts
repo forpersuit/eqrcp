@@ -249,6 +249,7 @@ export async function ensureDrmTables(env: Env): Promise<void> {
             revoked_at TEXT DEFAULT NULL,
             revoke_reason TEXT DEFAULT NULL,
             last_purchased_at TEXT DEFAULT NULL,
+            paid_amount REAL DEFAULT NULL,
             created_at TEXT NOT NULL
         )
       `),
@@ -392,6 +393,7 @@ export async function ensureLicenseSourceColumns(env: Env): Promise<void> {
     "ALTER TABLE licenses ADD COLUMN revoked_at TEXT DEFAULT NULL",
     "ALTER TABLE licenses ADD COLUMN revoke_reason TEXT DEFAULT NULL",
     "ALTER TABLE licenses ADD COLUMN last_purchased_at TEXT DEFAULT NULL",
+    "ALTER TABLE licenses ADD COLUMN paid_amount REAL DEFAULT NULL",
   ];
   let allOk = true;
   for (const sql of alters) {

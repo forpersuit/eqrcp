@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS licenses (
     revoked_at TEXT DEFAULT NULL, -- ISO time when status became revoked (abuse window)
     revoke_reason TEXT DEFAULT NULL, -- 'refund' | 'chargeback' | 'subscription' | 'admin' | 'test' | …
     last_purchased_at TEXT DEFAULT NULL, -- ISO time of initial purchase or latest renewal
+    paid_amount REAL DEFAULT NULL, -- Total amount charged in Paddle transaction (0 = coupon/trial, >0 = paid)
     created_at TEXT NOT NULL
 );
 

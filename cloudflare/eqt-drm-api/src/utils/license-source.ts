@@ -83,10 +83,15 @@ export function isLicenseRefundable(license: {
   paddle_transaction_id?: string | null;
   created_at?: string | null;
   last_purchased_at?: string | null;
+  paid_amount?: number | null;
 }): boolean {
   if ((license.status || '') !== 'active') return false;
   const source = normalizeLicenseSource(license.source, license.paddle_transaction_id);
   if (source !== 'purchase') {
+    return false;
+  }
+  // Zero-payment ($0 / 100% coupon / trial) transactions have no captured payment to refund
+  if (license.paid_amount !== undefined && license.paid_amount !== null && Number(license.paid_amount) <= 0) {
     return false;
   }
   // Enforce 14-day refund window from last_purchased_at (renewal) or created_at (original)

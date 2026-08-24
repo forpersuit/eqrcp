@@ -225,6 +225,15 @@ export const API_I18N: Record<string, Record<string, string>> = {
     de: "Rückerstattung eingeleitet. Ihre Lizenz wurde widerrufen.",
     fr: "Remboursement initié. Votre licence a été révoquée."
   },
+  refund_zero_amount: {
+    zh: "该订单实付金额为 0 元，无需退款。如需终止授权请使用「强制废除」。",
+    en: "Orders with $0 payment cannot be refunded. To terminate your license, please use 'Force Revoke'.",
+    ja: "支払金額が0円の注文は返金できません。ライセンスを無効化する場合は「強制失効」をご利用ください。",
+    ko: "결제 금액이 0원인 주문은 환불할 수 없습니다. 라이선스를 해지하려면 '강제 폐기'를 이용해 주세요.",
+    es: "Los pedidos con un pago de $0 no se pueden reembolsar. Para terminar su licencia, utilice 'Revocar forzadamente'.",
+    de: "Bestellungen mit 0 $ Zahlung können nicht erstattet werden. Um Ihre Lizenz zu beenden, nutzen Sie bitte 'Erzwungener Widerruf'.",
+    fr: "Les commandes avec un paiement de 0 $ ne peuvent pas être remboursées. Pour révoquer votre licence, veuillez utiliser 'Révocation forcée'."
+  },
   /** Synthetic / e2e transaction IDs (txn_test_*, etc.) — local revoke only, no Paddle money movement. */
   refund_test_local_success: {
     zh: "测试订单已本地吊销（无真实支付渠道退款）",

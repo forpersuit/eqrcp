@@ -338,6 +338,14 @@ echo -n "your_secret_value" | npx wrangler secret put KEY_NAME
     ```
 - **密钥格式注意**：`ED25519_PRIVATE_KEY` 必须为 **32-byte seed 的 64 位十六进制字符串**，严禁误填 Base64 编码或带 PEM 标头的格式。
 
+---
 
+## 15. 0 元订单 / 100% 优惠券退款防呆与屏蔽规范 (Zero-Payment Refund Shielding)
 
-
+- **第一性原理与 Paddle 限制**：
+  - Paddle Billing 的 `/adjustments` 退款接口只接受实付捕获金额 > 0 的交易。对于实付 `$0.00` 的订单（如 100% 优惠券、内测 0 元订单），调用 Paddle 退款接口会返回 `adjustment_transaction_without_captured_payment` 错误。
+- **端到端屏蔽方案**：
+  - **数据层**：`licenses` 表维护 `paid_amount REAL DEFAULT NULL`。Paddle Webhook 在初始发放、续费及升级时持久化实付总金额（`totals.grand_total ?? totals.total`）。
+  - **规则层 (`isLicenseRefundable`)**：若 `paid_amount !== null && Number(paid_amount) <= 0`，判定 `refundable: false`。
+  - **Portal 页面前端**：许可证列表仅在 `lic.status === 'active' && lic.refundable === true` 时渲染「申请退款」按钮；0 元订单完全隐藏退款入口。
+  - **API 服务端前置拦截**：`POST /api/v1/user/refund` 接口前置检查 `isLicenseRefundable` 及 Paddle 交易详情中的总金额，对 $0 订单直接返回 400 与友好提示 `REFUND_NOT_ALLOWED_ZERO_AMOUNT`，严禁向 Paddle 发起无效调整，避免产生无意义的系统异常日志与 Telegram 告警。

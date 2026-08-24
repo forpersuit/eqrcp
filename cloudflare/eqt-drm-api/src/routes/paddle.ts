@@ -344,6 +344,10 @@ export async function handlePaddleRoutes(
               newExpires = new Date(base + YEARLY_MS).toISOString();
             }
 
+            const totals = data.totals || {};
+            const totalRaw = totals.grand_total ?? totals.total;
+            const paidAmount = (totalRaw !== undefined && totalRaw !== null && Number.isFinite(Number(totalRaw))) ? Number(totalRaw) : null;
+
             await env.DB.batch([
               env.DB.prepare(`
                 UPDATE licenses SET
@@ -352,6 +356,7 @@ export async function handlePaddleRoutes(
                   duration_days = NULL,
                   paddle_transaction_id = ?,
                   last_purchased_at = ?,
+                  paid_amount = ?,
                   revoked_at = NULL,
                   revoke_reason = NULL,
                   buyer_email = COALESCE(NULLIF(buyer_email, ''), ?),
@@ -361,6 +366,7 @@ export async function handlePaddleRoutes(
                 newExpires,
                 transactionId,
                 new Date(nowMs).toISOString(),
+                paidAmount,
                 buyerEmail || null,
                 buyerEmailHash || null,
                 targetLic.license_code
@@ -422,6 +428,10 @@ export async function handlePaddleRoutes(
             newExpires = "LIFETIME";
           }
 
+          const totals = data.totals || {};
+          const totalRaw = totals.grand_total ?? totals.total;
+          const paidAmount = (totalRaw !== undefined && totalRaw !== null && Number.isFinite(Number(totalRaw))) ? Number(totalRaw) : null;
+
           // Point paddle_transaction_id at latest paid txn (idempotency + refund of current period)
           await env.DB.batch([
             env.DB.prepare(`
@@ -431,6 +441,7 @@ export async function handlePaddleRoutes(
                 duration_days = NULL,
                 paddle_transaction_id = ?,
                 last_purchased_at = ?,
+                paid_amount = ?,
                 revoked_at = NULL,
                 revoke_reason = NULL,
                 buyer_email = COALESCE(NULLIF(buyer_email, ''), ?),
@@ -440,6 +451,7 @@ export async function handlePaddleRoutes(
               newExpires,
               transactionId,
               new Date().toISOString(),
+              paidAmount,
               buyerEmail || null,
               buyerEmailHash || null,
               subLicense.license_code
@@ -489,13 +501,17 @@ export async function handlePaddleRoutes(
 
       // Write to DB。Paddle 履约生成的激活码来源一律为 purchase (购买渠道)。
       const source = "purchase";
+      const totals = data.totals || {};
+      const totalRaw = totals.grand_total ?? totals.total;
+      const paidAmount = (totalRaw !== undefined && totalRaw !== null && Number.isFinite(Number(totalRaw))) ? Number(totalRaw) : null;
+
       await env.DB.batch([
         env.DB.prepare(`
           INSERT INTO licenses (
             license_code, tier, status, max_devices, expires_at, duration_days,
             buyer_email_hash, buyer_email, paddle_transaction_id, paddle_subscription_id,
-            source, created_at, last_purchased_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            source, created_at, last_purchased_at, paid_amount
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).bind(
           licenseCode,
           tier,
@@ -509,7 +525,8 @@ export async function handlePaddleRoutes(
           subscriptionId,
           source,
           nowIso,
-          nowIso
+          nowIso,
+          paidAmount
         ),
         env.DB.prepare(`
           INSERT OR IGNORE INTO paddle_processed_transactions (transaction_id, license_code, action, created_at)
