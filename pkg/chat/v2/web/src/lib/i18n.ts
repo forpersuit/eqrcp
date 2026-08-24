@@ -38,6 +38,15 @@ export const translations: Record<string, Record<Lang, string>> = {
     de: 'Tägliches Gratis-Chat-Kontingent. Zählt nur mit Remote-Peer. Danach: Anhänge 100KB/s und ≤4MB; Text bleibt frei.',
     fr: 'Quota chat gratuit du jour. Compte seulement avec un pair distant. Après: pièces jointes 100KB/s et ≤4Mo; le texte reste libre.'
   },
+  clockDriftNotice: {
+    zh: '系统时间与网络时间不一致，请校准系统时间。',
+    en: 'System clock differs from network time. Please calibrate your system time.',
+    ja: 'システム時計がネットワーク時刻とずれています。システム時刻を調整してください。',
+    ko: '시스템 시계가 네트워크 시간과 다릅니다. 시스템 시간을 조정하세요.',
+    es: 'El reloj del sistema difiere de la hora de la red. Ajuste la hora del sistema.',
+    de: 'Die Systemuhr weicht von der Netzwerkzeit ab. Bitte Systemzeit kalibrieren.',
+    fr: "L'horloge système diffère de l'heure du réseau. Veuillez calibrer l'heure."
+  },
   quotaExhaustedBroadcast: {
     zh: '今日免费 Chat 额度已用尽：附件限速 100KB/s，单文件不超过 4MB。文本消息不受影响。',
     en: 'Daily free chat quota exhausted: attachments limited to 100KB/s, max file 4MB. Text is unaffected.',

@@ -337,6 +337,7 @@ func (s *Server) Chat() error {
 				IsPaid:       usage.IsPaid,
 				UsedSeconds:  usage.UsedSeconds,
 				DailySeconds: FreeChatDailySeconds,
+				ClockDrift:   usage.ClockDrift,
 			}
 		},
 		HostToken: func() string {

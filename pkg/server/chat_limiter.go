@@ -26,6 +26,12 @@ const (
 	FreeChatMaxAttachmentBytes = bandwidth.DefaultFreeChatMaxAttachmentBytes
 	// FreeChatDegradedBytesPerSec is the attachment transfer cap after free chat quota is exhausted.
 	FreeChatDegradedBytesPerSec = bandwidth.DefaultFreeChatDegradedBytesPerSec
+	// lastSeenTolerance is the allowed backward clock variance for the free-tier
+	// anti-rollback anchor (mirrors the paid certificate LastSeenLocalTime rule).
+	lastSeenTolerance = 10 * time.Minute
+	// clockDriftThreshold is the informational-only guard band for surfacing a
+	// "system time out of sync" hint. It never locks quota.
+	clockDriftThreshold = 60 * time.Minute
 )
 
 // FreeChatDegraded reports whether free chat should run in attachment-degraded mode.
@@ -47,12 +53,14 @@ type ChatUsage struct {
 	UsedTransfers        int    `json:"usedTransfers"`        // Daily transfers count (Share)
 	UsedReceiveTransfers int    `json:"usedReceiveTransfers"` // Daily Receive transfers count
 	IsPaid               bool   `json:"isPaid"`
-	LastTime             int64  `json:"lastTime"`      // Last running timestamp in seconds
-	RedeemedAt           string `json:"redeemedAt"`    // ISO format activation time
-	CodeDate             string `json:"codeDate"`      // Code issue date or "LIFETIME"
-	ClockTampered        bool   `json:"clockTampered"` // Locked if clock rollback is detected
-	LicenseTier          string `json:"licenseTier"`   // Activated license tier (e.g. PLUS, PRO)
-	MAC                  string `json:"mac,omitempty"` // HMAC-SHA256 integrity signature (§8)
+	LastTime             int64  `json:"lastTime"`             // Last running timestamp in seconds
+	RedeemedAt           string `json:"redeemedAt"`           // ISO format activation time
+	CodeDate             string `json:"codeDate"`             // Code issue date or "LIFETIME"
+	ClockTampered        bool   `json:"clockTampered"`        // Locked if clock rollback is detected
+	LastSeen             string `json:"lastSeen"`             // UTC RFC3339 local anti-rollback anchor (§6)
+	ClockDrift           bool   `json:"clockDrift,omitempty"` // Informational: system clock vs network time deviated (never persisted)
+	LicenseTier          string `json:"licenseTier"`          // Activated license tier (e.g. PLUS, PRO)
+	MAC                  string `json:"mac,omitempty"`        // HMAC-SHA256 integrity signature (§8)
 }
 
 // isPlusLifetime reports whether the activated license is the PLUS lifetime plan.
@@ -198,6 +206,50 @@ func getNetworkTimeOrStartFetch() (time.Time, bool) {
 	return now, isFirst
 }
 
+// netTimeNow returns network-corrected time when authoritatively cached, else local wall clock.
+func netTimeNow() time.Time {
+	netTimeMu.Lock()
+	defer netTimeMu.Unlock()
+	if netTimeCached {
+		return time.Now().Add(netTimeOffset)
+	}
+	return time.Now()
+}
+
+// isNetTimeCached reports whether network time is authoritatively calibrated
+// (as opposed to the optimistic cold-start guess, which is raw local time).
+func isNetTimeCached() bool {
+	netTimeMu.Lock()
+	defer netTimeMu.Unlock()
+	return netTimeCached
+}
+
+// rollbackDetected reports whether the persisted last-seen anchor lies beyond the
+// tolerance window in the future relative to refTime — i.e. the local clock moved
+// backward since the anchor was written (the classic "regain daily quota" rollback).
+func rollbackDetected(usage *ChatUsage, refTime time.Time) bool {
+	if usage.LastSeen == "" {
+		return false
+	}
+	lastSeen, err := time.Parse(time.RFC3339, usage.LastSeen)
+	if err != nil {
+		return false
+	}
+	return refTime.Before(lastSeen.Add(-lastSeenTolerance))
+}
+
+// lastSeenAge returns how long ago the persisted anchor was written.
+func lastSeenAge(refTime time.Time, lastSeenStr string) time.Duration {
+	if lastSeenStr == "" {
+		return 365 * 24 * time.Hour
+	}
+	lastSeen, err := time.Parse(time.RFC3339, lastSeenStr)
+	if err != nil {
+		return 365 * 24 * time.Hour
+	}
+	return refTime.Sub(lastSeen)
+}
+
 func (l *ChatLimiter) invalidateCache() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -289,7 +341,9 @@ func writeAtomic(filename string, data []byte, perm os.FileMode) error {
 	return nil
 }
 
-func computeUsageMAC(usage ChatUsage, machineKey string) string {
+// computeUsageMACV1 verifies the legacy V1 payload written by builds before the
+// anti-rollback anchor existed, so existing on-disk files upgrade without a false tamper lock.
+func computeUsageMACV1(usage ChatUsage, machineKey string) string {
 	if machineKey == "" {
 		machineKey = "EQT_DEFAULT_USAGE_KEY"
 	}
@@ -306,6 +360,24 @@ func computeUsageMAC(usage ChatUsage, machineKey string) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
+func computeUsageMAC(usage ChatUsage, machineKey string) string {
+	if machineKey == "" {
+		machineKey = "EQT_DEFAULT_USAGE_KEY"
+	}
+	h := hmac.New(sha256.New, []byte("EQT_USAGE_HMAC_v1:"+machineKey))
+	payload := fmt.Sprintf("V2|%s|%d|%d|%d|%t|%t|%s",
+		usage.Date,
+		usage.UsedSeconds,
+		usage.UsedTransfers,
+		usage.UsedReceiveTransfers,
+		usage.IsPaid,
+		usage.ClockTampered,
+		usage.LastSeen,
+	)
+	h.Write([]byte(payload))
+	return hex.EncodeToString(h.Sum(nil))
+}
+
 func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 	if mock := getMockUsageForAcceptance(); mock != nil {
 		return *mock
@@ -317,6 +389,12 @@ func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 	if l.hasCached && l.cachedUsage.Date == today {
 		usage := l.cachedUsage
 		l.checkLicenseValidity(&usage)
+		// Keep the persisted anchor fresh during active runtime so an idle-then-rollback
+		// across midnight is still caught (throttled to 1 write/min, mirroring paid certs).
+		if lastSeenAge(netTimeNow(), usage.LastSeen) >= 1*time.Minute {
+			usage.LastSeen = netTimeNow().UTC().Format(time.RFC3339)
+			l.saveUsageLocked(usage)
+		}
 		return usage
 	}
 
@@ -329,8 +407,7 @@ func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 		if errJson := json.Unmarshal(data, &usage); errJson == nil && usage.Date != "" {
 			readOk = true
 			machineKey := GetDeviceStableID()
-			expectedMAC := computeUsageMAC(usage, machineKey)
-			if usage.MAC != "" && usage.MAC != expectedMAC {
+			if usage.MAC != "" && usage.MAC != computeUsageMAC(usage, machineKey) && usage.MAC != computeUsageMACV1(usage, machineKey) {
 				// Local usage file has been maliciously edited!
 				tampered = true
 			}
@@ -346,12 +423,38 @@ func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 		dateChanged = true
 	}
 
+	// Anti-rollback anchor reference: network-corrected time when authoritative,
+	// otherwise local wall clock (the optimistic cold-start guess is raw local time).
+	refTime := netTime
+
 	oldPaid := usage.IsPaid
 	oldTampered := usage.ClockTampered
 
 	l.checkLicenseValidity(&usage)
 
-	if tampered {
+	// Informational clock-drift hint only — never locks quota. Surfaced to the UI as
+	// "system time out of sync" so a genuinely wrong clock is not penalized.
+	drift := false
+	if isOnline && os.Getenv("EQT_TESTING") != "true" {
+		if diff := time.Since(netTime); diff < -clockDriftThreshold || diff > clockDriftThreshold {
+			drift = true
+		}
+	}
+
+	// Local anti-rollback anchor: a clock rolled back between writes (to regain the
+	// daily quota) puts refTime before the persisted last-seen moment. This is the
+	// free-tier counterpart of the paid certificate LastSeenLocalTime check.
+	rollback := rollbackDetected(&usage, refTime)
+	if rollback {
+		usage.ClockTampered = true
+		usage.IsPaid = false
+		usage.UsedSeconds = 600
+		usage.UsedTransfers = 5
+		usage.UsedReceiveTransfers = 5
+		if !oldTampered {
+			go SetClockTampered(true)
+		}
+	} else if tampered {
 		usage.ClockTampered = true
 		usage.UsedSeconds = 600
 		usage.UsedTransfers = 5
@@ -359,22 +462,22 @@ func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 		if !oldTampered {
 			go SetClockTampered(true)
 		}
-	} else if isOnline && !usage.IsPaid && os.Getenv("EQT_TESTING") != "true" {
-		diff := time.Since(netTime)
-		if diff < -60*time.Minute || diff > 60*time.Minute {
-			usage.ClockTampered = true
-			usage.IsPaid = false
-			if !oldTampered {
-				go SetClockTampered(true)
-			}
-		} else if usage.ClockTampered {
-			// Self-healing: if network time is currently synced and within reasonable bounds, resolve past false positive
+	} else if usage.ClockTampered && !tampered && !rollback && !usage.IsPaid && isNetTimeCached() && os.Getenv("EQT_TESTING") != "true" {
+		// Self-healing only against authoritatively calibrated network time — the
+		// optimistic cold-start path must never clear a real tamper flag. A resolved
+		// false positive clears the flag without restoring already-burned quota.
+		if diff := time.Since(netTime); diff >= -clockDriftThreshold && diff <= clockDriftThreshold {
 			usage.ClockTampered = false
 			go SetClockTampered(false)
 		}
 	}
 
-	if dateChanged || oldPaid != usage.IsPaid || oldTampered != usage.ClockTampered || tampered {
+	// Refresh the anchor on the returned/cached value; the periodic-save throttle
+	// decides whether it also reaches disk this pass.
+	anchorDue := usage.LastSeen == "" || lastSeenAge(refTime, usage.LastSeen) >= 1*time.Minute
+	usage.LastSeen = refTime.UTC().Format(time.RFC3339)
+
+	if dateChanged || oldPaid != usage.IsPaid || oldTampered != usage.ClockTampered || tampered || rollback || anchorDue {
 		l.saveUsageLocked(usage)
 	} else {
 		l.cachedUsage = usage
@@ -382,10 +485,20 @@ func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 		l.lastCacheTime = time.Now()
 	}
 
+	// Cache may have been written via the save path (which strips ClockDrift); restore
+	// the live hint so GetStatus polls keep surfacing it until the next reload.
+	l.cachedUsage.ClockDrift = drift
+	usage.ClockDrift = drift
 	return usage
 }
 
 func (l *ChatLimiter) saveUsageLocked(usage ChatUsage) {
+	// Refresh the anti-rollback anchor on every persisted write so a later rollback
+	// is caught against the most recent honest wall-clock moment.
+	usage.LastSeen = netTimeNow().UTC().Format(time.RFC3339)
+	// ClockDrift is a live, derived hint; never persist or MAC it.
+	usage.ClockDrift = false
+
 	machineKey := GetDeviceStableID()
 	usage.MAC = computeUsageMAC(usage, machineKey)
 
@@ -589,6 +702,13 @@ func (l *ChatLimiter) SetPaidDetails(paid bool, redeemedAt string, codeDate stri
 // GetUsedSeconds returns the current daily chat usage seconds.
 func GetUsedSeconds() int {
 	return limiterInstance.GetStatus().UsedSeconds
+}
+
+// GetClockDrift reports whether the local system clock deviates from the
+// authoritative network time beyond the tolerance threshold. Informational
+// only: the quota is never locked for drift, the UI shows a hint instead.
+func GetClockDrift() bool {
+	return limiterInstance.GetStatus().ClockDrift
 }
 
 // SetUsedSeconds updates the daily used seconds.

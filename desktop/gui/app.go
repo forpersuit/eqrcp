@@ -99,6 +99,7 @@ type AgentStatus struct {
 	Version              string       `json:"version"`
 	AgentStartedAt       time.Time    `json:"agentStartedAt"`
 	ClockTampered        bool         `json:"clockTampered"`
+	ClockDrift           bool         `json:"clockDrift"`
 	IsPaid               bool         `json:"isPaid"`
 	LicenseTier          string       `json:"licenseTier"`
 	LicenseReady         bool         `json:"licenseReady"`

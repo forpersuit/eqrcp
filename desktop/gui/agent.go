@@ -85,6 +85,7 @@ func (agent *desktopAgent) snapshotLocked() AgentStatus {
 		Version:              version.String(),
 		AgentStartedAt:       agent.startedAt,
 		ClockTampered:        server.GetClockTamperedStatus(),
+		ClockDrift:           server.GetClockDrift(),
 		IsPaid:               server.GetPaidStatus(),
 		LicenseTier:          server.GetLicenseTier(),
 		LicenseReady:         server.IsLicenseReady(),

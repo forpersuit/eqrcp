@@ -34,6 +34,7 @@ type ChatQuotaInfo struct {
 	IsPaid       bool `json:"isPaid"`
 	UsedSeconds  int  `json:"usedSeconds"`
 	DailySeconds int  `json:"dailySeconds"`
+	ClockDrift   bool `json:"clockDrift,omitempty"`
 }
 
 // Config controls the experimental chat v2 handler.

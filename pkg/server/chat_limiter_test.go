@@ -400,3 +400,246 @@ func TestNetworkTimeColdStartAndCacheInvalidation(t *testing.T) {
 		t.Errorf("Scenario D: expected hasCached=false after invalidateCache(), got true")
 	}
 }
+
+// TestLastSeenRollbackLocksFreeUser ensures a free user who rolls the system clock
+// backward between writes (to regain the daily quota) is caught by the lastSeen anchor
+// and locked into the exhausted state — the free-tier counterpart of the paid rule.
+func TestLastSeenRollbackLocksFreeUser(t *testing.T) {
+	os.Setenv("EQT_TESTING", "true")
+	defer os.Unsetenv("EQT_TESTING")
+	ResetPaidStatusCallbacksForTest()
+	defer ResetPaidStatusCallbacksForTest()
+
+	usageFile := filepath.Join(config.DefaultConfigDir(), "chat_usage.json")
+	var backup []byte
+	backupExists := false
+	if data, err := os.ReadFile(usageFile); err == nil {
+		backup = data
+		backupExists = true
+		_ = os.Remove(usageFile)
+	}
+	defer func() {
+		if backupExists {
+			_ = os.WriteFile(usageFile, backup, 0644)
+		} else {
+			_ = os.Remove(usageFile)
+		}
+	}()
+
+	today := time.Now().UTC().Format("2006-01-02")
+	// Anchor written ~15 minutes in the future: the local clock moved backward since the
+	// last honest write, far beyond the 10-minute tolerance.
+	futureSeen := time.Now().UTC().Add(15 * time.Minute).Format(time.RFC3339)
+
+	u := ChatUsage{
+		Date:          today,
+		UsedSeconds:   0,
+		IsPaid:        false,
+		ClockTampered: false,
+		LastSeen:      futureSeen,
+	}
+	machineKey := GetDeviceStableID()
+	u.MAC = computeUsageMAC(u, machineKey)
+	data, err := json.Marshal(u)
+	if err != nil {
+		t.Fatalf("failed to marshal usage: %v", err)
+	}
+	if err := os.WriteFile(usageFile, data, 0644); err != nil {
+		t.Fatalf("failed to write usage file: %v", err)
+	}
+
+	fresh := &ChatLimiter{}
+	checked := fresh.loadUsageLocked()
+
+	if !checked.ClockTampered {
+		t.Fatalf("expected ClockTampered=true after lastSeen rollback, got false")
+	}
+	if checked.UsedSeconds < 300 {
+		t.Fatalf("expected UsedSeconds locked to exhausted (>300), got %d", checked.UsedSeconds)
+	}
+	if checked.IsPaid {
+		t.Fatalf("expected IsPaid=false after lastSeen rollback")
+	}
+}
+
+// TestUsageMACV1MigrationNoFalseLock ensures a legacy V1 usage file (written before the
+// lastSeen anchor existed) loads without a false tamper lock and is upgraded to a V2 MAC.
+func TestUsageMACV1MigrationNoFalseLock(t *testing.T) {
+	os.Setenv("EQT_TESTING", "true")
+	defer os.Unsetenv("EQT_TESTING")
+	ResetPaidStatusCallbacksForTest()
+	defer ResetPaidStatusCallbacksForTest()
+
+	usageFile := filepath.Join(config.DefaultConfigDir(), "chat_usage.json")
+	var backup []byte
+	backupExists := false
+	if data, err := os.ReadFile(usageFile); err == nil {
+		backup = data
+		backupExists = true
+		_ = os.Remove(usageFile)
+	}
+	defer func() {
+		if backupExists {
+			_ = os.WriteFile(usageFile, backup, 0644)
+		} else {
+			_ = os.Remove(usageFile)
+		}
+	}()
+
+	today := time.Now().UTC().Format("2006-01-02")
+	u := ChatUsage{
+		Date:          today,
+		UsedSeconds:   120,
+		UsedTransfers: 2,
+		IsPaid:        false,
+		ClockTampered: false,
+		// LastSeen intentionally empty: legacy V1 payload.
+	}
+	machineKey := GetDeviceStableID()
+	u.MAC = computeUsageMACV1(u, machineKey)
+	data, err := json.Marshal(u)
+	if err != nil {
+		t.Fatalf("failed to marshal usage: %v", err)
+	}
+	if err := os.WriteFile(usageFile, data, 0644); err != nil {
+		t.Fatalf("failed to write usage file: %v", err)
+	}
+
+	fresh := &ChatLimiter{}
+	checked := fresh.loadUsageLocked()
+
+	// Legacy V1 file must load without a false tamper lock and keep its usage.
+	if checked.ClockTampered {
+		t.Fatalf("expected no false tamper lock on V1 migration, got ClockTampered=true")
+	}
+	if checked.UsedSeconds != 120 {
+		t.Fatalf("expected used seconds preserved at 120 on V1 migration, got %d", checked.UsedSeconds)
+	}
+	if checked.LastSeen == "" {
+		t.Fatalf("expected lastSeen anchor initialized on V1 migration")
+	}
+
+	// The anchor is initialized and persisted with a fresh V2 MAC.
+	diskBytes, err := os.ReadFile(usageFile)
+	if err != nil {
+		t.Fatalf("failed to read usage file after migration: %v", err)
+	}
+	var loaded ChatUsage
+	if err := json.Unmarshal(diskBytes, &loaded); err != nil {
+		t.Fatalf("failed to parse migrated file: %v", err)
+	}
+	if loaded.LastSeen == "" {
+		t.Fatalf("expected persisted lastSeen after V1 migration")
+	}
+	if loaded.MAC != computeUsageMAC(loaded, machineKey) {
+		t.Fatalf("expected persisted MAC upgraded to V2 after migration")
+	}
+}
+
+// TestSelfHealColdStartGuard ensures the tamper-flag self-heal only fires against
+// authoritatively calibrated network time — never on the optimistic cold-start guess,
+// which is raw local time and could wrongly clear a real tamper flag.
+func TestSelfHealColdStartGuard(t *testing.T) {
+	origTesting := os.Getenv("EQT_TESTING")
+	_ = os.Setenv("EQT_TESTING", "false")
+	defer func() {
+		if origTesting != "" {
+			_ = os.Setenv("EQT_TESTING", origTesting)
+		} else {
+			_ = os.Unsetenv("EQT_TESTING")
+		}
+	}()
+	ResetPaidStatusCallbacksForTest()
+	defer ResetPaidStatusCallbacksForTest()
+
+	// Save and restore the global network-time state.
+	netTimeMu.Lock()
+	origOffset := netTimeOffset
+	origCached := netTimeCached
+	origLastCheck := netTimeLastCheck
+	origIsChecking := netTimeIsChecking
+	origFirstFetch := netTimeFirstFetch
+	netTimeMu.Unlock()
+	defer func() {
+		netTimeMu.Lock()
+		netTimeOffset = origOffset
+		netTimeCached = origCached
+		netTimeLastCheck = origLastCheck
+		netTimeIsChecking = origIsChecking
+		netTimeFirstFetch = origFirstFetch
+		netTimeMu.Unlock()
+	}()
+
+	// Simulate a tamper previously recorded by the license single-source-of-truth.
+	paidStateMu.Lock()
+	cachedIsTampered = true
+	paidStateMu.Unlock()
+	defer func() {
+		paidStateMu.Lock()
+		cachedIsTampered = false
+		paidStateMu.Unlock()
+	}()
+
+	usageFile := filepath.Join(config.DefaultConfigDir(), "chat_usage.json")
+	var backup []byte
+	backupExists := false
+	if data, err := os.ReadFile(usageFile); err == nil {
+		backup = data
+		backupExists = true
+		_ = os.Remove(usageFile)
+	}
+	defer func() {
+		if backupExists {
+			_ = os.WriteFile(usageFile, backup, 0644)
+		} else {
+			_ = os.Remove(usageFile)
+		}
+	}()
+
+	writeUsage := func() {
+		today := time.Now().UTC().Format("2006-01-02")
+		u := ChatUsage{
+			Date:          today,
+			UsedSeconds:   300,
+			IsPaid:        false,
+			ClockTampered: true,
+			LastSeen:      time.Now().UTC().Add(-1 * time.Minute).Format(time.RFC3339),
+		}
+		machineKey := GetDeviceStableID()
+		u.MAC = computeUsageMAC(u, machineKey)
+		data, _ := json.Marshal(u)
+		_ = os.WriteFile(usageFile, data, 0644)
+	}
+
+	// Scenario 1: cold-start optimistic path — network time NOT yet cached. A real tamper
+	// flag must be preserved, not cleared against a raw local-time guess.
+	netTimeMu.Lock()
+	netTimeCached = false
+	netTimeIsChecking = true
+	netTimeFirstFetch = true
+	netTimeLastCheck = time.Time{}
+	netTimeMu.Unlock()
+	writeUsage()
+
+	fresh := &ChatLimiter{}
+	checked := fresh.loadUsageLocked()
+	if !checked.ClockTampered {
+		t.Fatalf("Scenario 1: expected tamper flag preserved during cold-start (no self-heal), got cleared")
+	}
+
+	// Scenario 2: authoritative network time within drift threshold → the flag clears.
+	netTimeMu.Lock()
+	netTimeCached = true
+	netTimeOffset = 0
+	netTimeIsChecking = false
+	netTimeFirstFetch = false
+	netTimeLastCheck = time.Now()
+	netTimeMu.Unlock()
+	writeUsage()
+
+	fresh2 := &ChatLimiter{}
+	checked2 := fresh2.loadUsageLocked()
+	if checked2.ClockTampered {
+		t.Fatalf("Scenario 2: expected tamper flag self-healed under authoritative network time, got still-tampered")
+	}
+}

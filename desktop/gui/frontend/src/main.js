@@ -2524,7 +2524,16 @@ function computeLicensePlanState() {
         }
     }
 
-    return { isPaid, license, plan, expiryText, redeemDetail, expiryDetail, freeQuotaPills, warningBox };
+    let driftNotice = '';
+    if (state.status?.clockDrift && !state.status.clockTampered) {
+        driftNotice = `
+            <div class="notice compact" style="margin-bottom: 16px; font-size: 13px; line-height: 1.4; background: #fff8e1; color: #b45309;">
+                ${t('clock_drift_notice')}
+            </div>
+        `;
+    }
+
+    return { isPaid, license, plan, expiryText, redeemDetail, expiryDetail, freeQuotaPills, warningBox, driftNotice };
 }
 
 function renderLicensePlanBlock() {
@@ -2580,10 +2589,11 @@ function renderLicensePlanBlock() {
 }
 
 function renderLicensePanel() {
-    const { warningBox } = computeLicensePlanState();
+    const { warningBox, driftNotice } = computeLicensePlanState();
     return `
         <div class="license-panel">
             ${warningBox}
+            ${driftNotice}
             <div style="max-width: 480px; width: 100%; margin: 0 auto;">
                 ${renderLicensePlanBlock()}
             </div>

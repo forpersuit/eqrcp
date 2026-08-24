@@ -72,6 +72,7 @@
   let dailySeconds = 300;
   let remainingSeconds = 300;
   let freeDegraded = false;
+  let clockDrift = false;
   let quotaPollTimer: ReturnType<typeof setInterval> | null = null;
   let copied = false;
   
@@ -168,6 +169,9 @@
       freeDegraded = data.freeDegraded;
     } else {
       freeDegraded = !isPaid && remainingSeconds <= 0;
+    }
+    if (typeof data.clockDrift === 'boolean') {
+      clockDrift = data.clockDrift;
     }
   }
 
@@ -1515,6 +1519,9 @@
                   <span>{freeDegraded ? t.freeQuotaAttachmentPolicy : formatQuotaClock(remainingSeconds)}</span>
                 </div>
                 <p style="margin: 8px 0 0; font-size: 11px; line-height: 1.45; color: #666;">{t.freeQuotaHint}</p>
+                {#if clockDrift}
+                  <p style="margin: 8px 0 0; font-size: 11px; line-height: 1.45; color: #b45309;">{getTranslation('clockDriftNotice', currentLang)}</p>
+                {/if}
                 {#if !isEmbedded}
                   <a
                     href="https://eqt.net.im/pricing.html"
