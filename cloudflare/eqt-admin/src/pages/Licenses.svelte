@@ -39,6 +39,7 @@
   let showRevokeConfirm = $state(false);
   let showUnbindConfirm = $state(false);
   let generating = $state(false);
+  let quickMinting = $state(false);
   let actionBusy = $state(false);
 
   let genTier = $state<LicenseTier>('PLUS');

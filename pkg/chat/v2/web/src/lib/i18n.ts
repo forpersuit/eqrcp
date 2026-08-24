@@ -544,24 +544,6 @@ export const translations: Record<string, Record<Lang, string>> = {
     de: 'Text kopieren',
     fr: 'Copier le texte'
   },
-  textCopied: {
-    zh: '文本已复制',
-    en: 'Text copied',
-    ja: 'テキストをコピーしました',
-    ko: '텍스트가 복사되었습니다',
-    es: 'Texto copiado',
-    de: 'Text kopiert',
-    fr: 'Texte copié'
-  },
-  copyFailed: {
-    zh: '复制失败',
-    en: 'Copy failed',
-    ja: 'コピーに失敗しました',
-    ko: '복사 실패',
-    es: 'Error al copiar',
-    de: 'Kopieren fehlgeschlagen',
-    fr: 'Échec de la copie'
-  },
   cancelUpload: {
     zh: '取消上传',
     en: 'Cancel Upload',

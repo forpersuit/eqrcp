@@ -52,6 +52,7 @@ export type EventType =
   | 'transfer_completed'
   | 'transfer_failed'
   | 'transfer_cancelled'
+  | 'request_file_data'
   | 'error'
   | 'history_page';
 
@@ -75,6 +76,10 @@ export interface Message {
   recalled?: boolean;
   senderId?: string;
   sender: string;
+  oldSender?: string;
+  targetSender?: string;
+  deviceAvatar?: string;
+  deviceLabel?: string;
   avatar?: string;
   theme?: string;
   type: MessageType;
@@ -117,9 +122,12 @@ export interface TransferEvent {
   bytesDone?: number;
   bytesTotal?: number;
   percent?: number;
+  progress?: number;
+  speed?: number;
+  startTime?: number;
   state: TransferState;
   error?: string;
-  updatedAt: string;
+  updatedAt?: string;
 }
 
 export interface ErrorPayload {

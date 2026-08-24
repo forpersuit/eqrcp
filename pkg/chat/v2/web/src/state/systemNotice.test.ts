@@ -4,7 +4,7 @@
  * Run: node --experimental-strip-types src/state/systemNotice.test.ts
  */
 
-import { displayFileName, shouldSurfaceNotice } from './systemNotice.ts';
+import { displayFileName, shouldSurfaceNotice } from './systemNotice';
 
 function assert(cond: boolean, msg: string): void {
   if (!cond) throw new Error(msg);

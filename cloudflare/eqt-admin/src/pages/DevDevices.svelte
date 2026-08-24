@@ -185,10 +185,10 @@
   </div>
 
   {#if actionMsg}
-    <Banner type="success" message={actionMsg} onClose={() => (actionMsg = '')} />
+    <Banner type="ok" message={actionMsg} onclose={() => (actionMsg = '')} />
   {/if}
   {#if errorMsg}
-    <Banner type="error" message={errorMsg} onClose={() => (errorMsg = '')} />
+    <Banner type="error" message={errorMsg} onclose={() => (errorMsg = '')} />
   {/if}
 
   <div class="toolbar card">

@@ -121,15 +121,16 @@ export const chatActions = {
       const existing = map[event.id];
       const startTime = existing?.startTime || Date.now();
       let speed = existing?.speed || 0;
-      if (event.state === 'running' && event.bytesDone > 0) {
+      const bytesDone = event.bytesDone ?? 0;
+      if (event.state === 'running' && bytesDone > 0) {
         const elapsedSec = (Date.now() - startTime) / 1000;
         if (elapsedSec > 0.5) {
-          speed = event.bytesDone / elapsedSec;
+          speed = bytesDone / elapsedSec;
         }
-      } else if (event.state === 'completed' && event.bytesDone > 0) {
+      } else if (event.state === 'completed' && bytesDone > 0) {
         const elapsedSec = (Date.now() - startTime) / 1000;
         if (elapsedSec > 0) {
-          speed = event.bytesDone / elapsedSec;
+          speed = bytesDone / elapsedSec;
         }
       }
       return {
