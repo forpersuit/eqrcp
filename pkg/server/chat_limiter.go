@@ -110,6 +110,7 @@ var (
 	netTimeCached     bool
 	netTimeLastCheck  time.Time
 	netTimeIsChecking bool
+	netTimeFirstFetch bool = true
 )
 
 // getNetworkTimeOrStartFetch returns the best estimation of network time and online reachability status.
@@ -133,8 +134,10 @@ func getNetworkTimeOrStartFetch() (time.Time, bool) {
 			netTimeMu.Unlock()
 			return now.Add(offset), true
 		}
+		isFirst := netTimeFirstFetch
 		netTimeMu.Unlock()
-		return now, false
+		// While the initial fetch is in flight, optimistically assume reachable to prevent false cold-start quota lockout
+		return now, isFirst
 	}
 
 	if !netTimeCached && !netTimeLastCheck.IsZero() && now.Sub(netTimeLastCheck) < 1*time.Minute {
@@ -143,18 +146,25 @@ func getNetworkTimeOrStartFetch() (time.Time, bool) {
 	}
 
 	netTimeIsChecking = true
+	isFirst := netTimeFirstFetch
 	netTimeMu.Unlock()
 
 	go func() {
 		netTime, err := fetchNetworkTime()
 		netTimeMu.Lock()
-		defer netTimeMu.Unlock()
 		netTimeIsChecking = false
 		netTimeLastCheck = time.Now()
+		netTimeFirstFetch = false
 		if err == nil {
 			netTimeOffset = time.Until(netTime)
 			netTimeCached = true
+		} else {
+			netTimeCached = false
 		}
+		netTimeMu.Unlock()
+
+		// Invalidate limiter cached usage to reflect fresh network time alignment
+		limiterInstance.invalidateCache()
 	}()
 
 	netTimeMu.Lock()
@@ -162,7 +172,13 @@ func getNetworkTimeOrStartFetch() (time.Time, bool) {
 	if netTimeCached {
 		return now.Add(netTimeOffset), true
 	}
-	return now, false
+	return now, isFirst
+}
+
+func (l *ChatLimiter) invalidateCache() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.hasCached = false
 }
 
 func (l *ChatLimiter) checkLicenseValidity(usage *ChatUsage) {

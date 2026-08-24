@@ -18,4 +18,3 @@ var chatCmd = &cobra.Command{
 	Args:    cobra.NoArgs,
 	RunE:    chatCmdFunc,
 }
-
