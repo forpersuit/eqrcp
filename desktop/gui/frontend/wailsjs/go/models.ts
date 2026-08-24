@@ -93,6 +93,7 @@ export namespace main {
 	    // Go type: time
 	    agentStartedAt: any;
 	    clockTampered: boolean;
+	    clockDrift: boolean;
 	    isPaid: boolean;
 	    licenseTier: string;
 	    licenseReady: boolean;
@@ -121,6 +122,7 @@ export namespace main {
 	        this.version = source["version"];
 	        this.agentStartedAt = this.convertValues(source["agentStartedAt"], null);
 	        this.clockTampered = source["clockTampered"];
+	        this.clockDrift = source["clockDrift"];
 	        this.isPaid = source["isPaid"];
 	        this.licenseTier = source["licenseTier"];
 	        this.licenseReady = source["licenseReady"];
