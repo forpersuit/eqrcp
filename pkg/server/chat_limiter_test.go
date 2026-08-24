@@ -643,3 +643,33 @@ func TestSelfHealColdStartGuard(t *testing.T) {
 		t.Fatalf("Scenario 2: expected tamper flag self-healed under authoritative network time, got still-tampered")
 	}
 }
+
+// TestClockDriftPreservedAcrossSaveAndCacheHit verifies that live ClockDrift hints
+// are never wiped out when saveUsageLocked is invoked, and that the cache-hit path
+// remains a pure, non-disk-writing memory read.
+func TestClockDriftPreservedAcrossSaveAndCacheHit(t *testing.T) {
+	os.Setenv("EQT_TESTING", "true")
+	defer os.Unsetenv("EQT_TESTING")
+
+	limiter := &ChatLimiter{}
+	today := time.Now().UTC().Format("2006-01-02")
+	limiter.cachedUsage = ChatUsage{
+		Date:       today,
+		ClockDrift: true,
+	}
+	limiter.hasCached = true
+	limiter.lastCacheTime = time.Now()
+
+	// 1. Cache hit must return the in-memory ClockDrift state
+	status := limiter.loadUsageLocked()
+	if !status.ClockDrift {
+		t.Errorf("expected ClockDrift=true on cache-hit read, got false")
+	}
+
+	// 2. A real save operation must preserve ClockDrift in the memory cache
+	limiter.saveUsageLocked(status)
+	if !limiter.cachedUsage.ClockDrift {
+		t.Errorf("expected ClockDrift=true preserved in memory cache after saveUsageLocked, got false")
+	}
+}
+

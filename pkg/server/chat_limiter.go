@@ -389,12 +389,6 @@ func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 	if l.hasCached && l.cachedUsage.Date == today {
 		usage := l.cachedUsage
 		l.checkLicenseValidity(&usage)
-		// Keep the persisted anchor fresh during active runtime so an idle-then-rollback
-		// across midnight is still caught (throttled to 1 write/min, mirroring paid certs).
-		if lastSeenAge(netTimeNow(), usage.LastSeen) >= 1*time.Minute {
-			usage.LastSeen = netTimeNow().UTC().Format(time.RFC3339)
-			l.saveUsageLocked(usage)
-		}
 		return usage
 	}
 
@@ -493,6 +487,11 @@ func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 }
 
 func (l *ChatLimiter) saveUsageLocked(usage ChatUsage) {
+	drift := usage.ClockDrift
+	if !drift && l.cachedUsage.ClockDrift {
+		drift = l.cachedUsage.ClockDrift
+	}
+
 	// Refresh the anti-rollback anchor on every persisted write so a later rollback
 	// is caught against the most recent honest wall-clock moment.
 	usage.LastSeen = netTimeNow().UTC().Format(time.RFC3339)
@@ -509,6 +508,7 @@ func (l *ChatLimiter) saveUsageLocked(usage ChatUsage) {
 	}
 
 	l.cachedUsage = usage
+	l.cachedUsage.ClockDrift = drift
 	l.hasCached = true
 	l.lastCacheTime = time.Now()
 }
