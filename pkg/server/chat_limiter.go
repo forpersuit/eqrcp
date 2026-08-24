@@ -456,7 +456,7 @@ func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 		if !oldTampered {
 			go SetClockTampered(true)
 		}
-	} else if usage.ClockTampered && !tampered && !rollback && !usage.IsPaid && isNetTimeCached() && os.Getenv("EQT_TESTING") != "true" {
+	} else if usage.ClockTampered && !tampered && !rollback && isNetTimeCached() && os.Getenv("EQT_TESTING") != "true" {
 		// Self-healing only against authoritatively calibrated network time — the
 		// optimistic cold-start path must never clear a real tamper flag. A resolved
 		// false positive clears the flag without restoring already-burned quota.
