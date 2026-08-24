@@ -170,20 +170,12 @@ export function SetRightClickIntegrationEnabled(arg1) {
   return window['go']['main']['App']['SetRightClickIntegrationEnabled'](arg1);
 }
 
-export function SetStartupEnabled(arg1) {
-  return window['go']['main']['App']['SetStartupEnabled'](arg1);
-}
-
 export function Share(arg1) {
   return window['go']['main']['App']['Share'](arg1);
 }
 
 export function ShutdownAgent() {
   return window['go']['main']['App']['ShutdownAgent']();
-}
-
-export function StartupStatus() {
-  return window['go']['main']['App']['StartupStatus']();
 }
 
 export function StopChat() {

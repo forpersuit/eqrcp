@@ -36,9 +36,6 @@ const chatSaveRetentionDays = 7
 var (
 	cmdInstallDesktopIntegration   = cmd.InstallDesktopIntegration
 	cmdUninstallDesktopIntegration = cmd.UninstallDesktopIntegration
-	cmdInstallDesktopStartup       = cmd.InstallDesktopStartup
-	cmdUninstallDesktopStartup     = cmd.UninstallDesktopStartup
-	cmdDesktopStartupStatus        = cmd.DesktopStartupStatus
 	cmdDesktopIntegrationStatus    = cmd.DesktopIntegrationStatus
 )
 
@@ -1111,28 +1108,6 @@ func (a *App) SetRightClickIntegrationEnabled(enabled bool) (DesktopIntegrationS
 	return a.RightClickIntegrationStatus()
 }
 
-func (a *App) StartupStatus() (DesktopIntegrationStatus, error) {
-	status, err := cmdDesktopStartupStatus()
-	if err != nil {
-		return DesktopIntegrationStatus{}, err
-	}
-	output := fmt.Sprintf("%s\n%s", version.String(), status)
-	return parseDesktopStartupStatus(output), nil
-}
-
-func (a *App) SetStartupEnabled(enabled bool) (DesktopIntegrationStatus, error) {
-	var err error
-	if enabled {
-		err = cmdInstallDesktopStartup()
-	} else {
-		err = cmdUninstallDesktopStartup()
-	}
-	if err != nil {
-		return DesktopIntegrationStatus{}, err
-	}
-	return a.StartupStatus()
-}
-
 func (a *App) runEqtDesktopCommand(args ...string) (string, error) {
 	cli, err := findEqtCLI()
 	if err != nil {
@@ -1520,28 +1495,6 @@ func parseDesktopIntegrationStatus(output string) DesktopIntegrationStatus {
 	}
 	status.Enabled = strings.Contains(output, ": installed") && !strings.Contains(output, ": needs repair") && !strings.Contains(output, ": not installed")
 	status.NeedsRepair = strings.Contains(output, ": needs repair")
-	return status
-}
-
-func parseDesktopStartupStatus(output string) DesktopIntegrationStatus {
-	status := DesktopIntegrationStatus{
-		Supported: !strings.Contains(output, "not implemented"),
-		Detail:    output,
-	}
-	if !status.Supported {
-		return status
-	}
-	for _, line := range strings.Split(output, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "- Agent startup:") {
-			value := strings.TrimSpace(strings.TrimPrefix(trimmed, "- Agent startup:"))
-			status.Enabled = value == "enabled"
-			status.NeedsRepair = value == "needs repair"
-			return status
-		}
-	}
-	status.Enabled = strings.Contains(output, "Agent startup: enabled")
-	status.NeedsRepair = strings.Contains(output, "Agent startup: needs repair")
 	return status
 }
 

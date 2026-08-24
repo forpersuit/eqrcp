@@ -104,16 +104,11 @@ Evidence to capture:
 - [ ] Confirm Explorer entries and `Send to > Share with eqt` are installed.
 - [ ] Disable `Windows right-click share and receive`.
 - [ ] Confirm Explorer entries and Send To script are removed.
-- [ ] Enable `Start EQT at login`.
-- [ ] Confirm `desktop startup-status` reports enabled.
-- [ ] Disable `Start EQT at login`.
-- [ ] Confirm `desktop startup-status` reports disabled.
 
 Evidence to capture:
 
 - Settings panel screenshot with each toggle state.
 - `desktop status` output after enable and disable.
-- `desktop startup-status` output after enable and disable.
 
 ## Deferred Batch 3: Background Lifecycle And Runtime Diagnostics
 
@@ -129,16 +124,6 @@ E:\developer\results\eqt.exe desktop agent-stop
 - [ ] Agent not running case.
 - [ ] Agent running with matching version case.
 - [ ] Agent running with version mismatch case shows `needs restart`.
-
-- [ ] Validate startup commands:
-
-```powershell
-E:\developer\results\eqt.exe desktop startup-status
-E:\developer\results\eqt.exe desktop startup-enable
-E:\developer\results\eqt.exe desktop startup-status
-E:\developer\results\eqt.exe desktop startup-disable
-E:\developer\results\eqt.exe desktop startup-status
-```
 
 Evidence to capture:
 
@@ -171,11 +156,10 @@ Evidence to capture:
 - `desktop agent-status` before/after stop and repeat.
 - Task Manager or `Get-Process` snapshots during repeated right-click actions.
 
-## Deferred Batch 5: Startup Autostart Repair And Notifications
+## Deferred Batch 5: Notifications
 
-- [ ] Enable startup and confirm current-user Run key registration.
-- [ ] Sign out/sign in, confirm agent autostarts.
-- [ ] Validate startup repair detection when executable path changes.
+The login autostart validation items were removed on 2026-08-24 with the startup feature.
+
 - [ ] Validate notifications for:
 - [ ] QR ready.
 - [ ] Transfer started.
@@ -186,7 +170,6 @@ Evidence to capture:
 
 Evidence to capture:
 
-- `desktop status` and `startup-status` output after each startup state change.
 - Screenshots or logs for notification events.
 
 ## Cleanup

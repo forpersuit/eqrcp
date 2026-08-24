@@ -212,12 +212,13 @@ Plan recorded 2026-05-18. Progress markers: `[ ]` pending, `[~]` in progress,
 - [x] B3 Linux Wails：复用现有 `webkit2_41` build tag 支持，docs 补充
       `tar.gz / AppImage / deb` 三种打包选项的说明；AppImage 工具链
       具体接入留到 C1 (release.yml) 里再决定。
-- [~] B4 `cmd/desktop_integration.go` 的 install/uninstall/startup/status：
-      Linux 用 `.desktop` 文件 + `~/.config/autostart`，
-      macOS 用 `LaunchAgents plist` + Finder Services。
-  - [x] B4a 自启动跨平台：Linux `~/.config/autostart/eqt-agent.desktop`
-        + macOS `~/Library/LaunchAgents/io.github.forpersuit.eqt-agent.plist`
-        实现完成（install / uninstall / status 三个分支），含 round-trip 测试。
+- [~] B4 `cmd/desktop_integration.go` 的 install/uninstall/status：
+      Linux 用 `.desktop` 文件，macOS 用 LaunchAgents plist + Finder Services。
+  - [x] B4a ~~自启动跨平台：Linux `~/.config/autostart/eqt-agent.desktop`
+        + macOS `~/Library/LaunchAgents/io.github.forpersuit.eqt-agent.plist`~~
+        —— 2026-08-24 移除：启动注册的 PowerShell `-ExecutionPolicy Bypass`
+        中转是 Defender `Behavior:Win32/DefenseEvasion.A!ml` 触发源，
+        用户确认放弃开机启动。
   - [ ] B4b Linux 文件管理器集成 (Nautilus 优先，KDE/Thunar 后续)
   - [ ] B4c macOS Finder Quick Actions / Services（需 C3 签名先到位）
 

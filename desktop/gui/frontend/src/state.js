@@ -8,7 +8,6 @@ export const state = {
     statusLoaded: false,
     settings: null,
     rightClickIntegration: null,
-    startupIntegration: null,
     appInfo: null,
     activePanel: '',
     error: '',

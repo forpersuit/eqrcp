@@ -86,13 +86,9 @@ export function SetPaidStatus(arg1:boolean,arg2:string,arg3:string,arg4:string):
 
 export function SetRightClickIntegrationEnabled(arg1:boolean):Promise<main.DesktopIntegrationStatus>;
 
-export function SetStartupEnabled(arg1:boolean):Promise<main.DesktopIntegrationStatus>;
-
 export function Share(arg1:Array<string>):Promise<main.AgentStatus>;
 
 export function ShutdownAgent():Promise<void>;
-
-export function StartupStatus():Promise<main.DesktopIntegrationStatus>;
 
 export function StopChat():Promise<void>;
 

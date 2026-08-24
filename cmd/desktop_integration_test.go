@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -132,19 +131,6 @@ func TestDesktopStatusCommandIncludesVersion(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "eqt ") {
 		t.Fatalf("desktop status output = %q, want version header", out.String())
-	}
-}
-
-func TestDesktopStartupStatusCommandIncludesVersion(t *testing.T) {
-	var out bytes.Buffer
-	desktopStartupStatusCmd.SetOut(&out)
-	desktopStartupStatusCmd.SetErr(&out)
-
-	if err := desktopStartupStatusCmd.RunE(desktopStartupStatusCmd, nil); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(out.String(), "eqt ") {
-		t.Fatalf("desktop startup-status output = %q, want version header", out.String())
 	}
 }
 
@@ -296,96 +282,18 @@ func TestFormatWindowsDesktopIntegrationStatusStaleAgentVersion(t *testing.T) {
 	}
 }
 
-func TestWindowsAgentStartupCommand(t *testing.T) {
-	got := windowsAgentStartupCommand(`C:\tools\eqt.exe`)
-	for _, want := range []string{
-		"powershell.exe",
-		"Start-Process",
-		"-WindowStyle Hidden",
-		`C:\tools\eqt.exe`,
-		"'desktop'",
-		"'agent'",
-	} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("windowsAgentStartupCommand() = %q, want to contain %q", got, want)
-		}
-	}
-}
-
-func TestFormatWindowsDesktopStartupStatusDisabled(t *testing.T) {
-	got, err := formatWindowsDesktopStartupStatus(windowsDesktopStartupStatusEnv{
-		executable: func() (string, error) {
-			return `C:\tools\eqt.exe`, nil
-		},
-		queryRegValue: func(key string, name string) (string, error) {
-			return "", errors.New("missing registry value")
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, want := range []string{
-		"Windows desktop agent startup status",
-		"- Agent startup: disabled",
-		windowsStartupRunKey,
-		windowsStartupValueName,
-		"eqt desktop startup-enable",
-	} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("startup status = %q, want to contain %q", got, want)
-		}
-	}
-}
-
-func TestFormatWindowsDesktopStartupStatusEnabled(t *testing.T) {
+func TestWindowsShellCommandNoPowerShell(t *testing.T) {
 	exe := `C:\tools\eqt.exe`
-	got, err := formatWindowsDesktopStartupStatus(windowsDesktopStartupStatusEnv{
-		executable: func() (string, error) {
-			return exe, nil
-		},
-		queryRegValue: func(key string, name string) (string, error) {
-			if key != windowsStartupRunKey || name != windowsStartupValueName {
-				return "", errors.New("unexpected registry query")
-			}
-			return windowsAgentStartupCommand(exe), nil
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, want := range []string{
-		"- Agent startup: enabled",
-		"command: " + windowsAgentStartupCommand(exe),
-	} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("startup status = %q, want to contain %q", got, want)
+	// 自启动功能移除后，shell 右键命令必须是直接调用二进制，禁止出现
+	// PowerShell 中转或 -ExecutionPolicy Bypass（Defender Behavior:Win32/DefenseEvasion.A!ml 触发源）。
+	got := windowsShellCommand(exe, exe, "share", "file")
+	for _, forbidden := range []string{"powershell", "PowerShell", "Bypass", "Start-Process", "WindowStyle"} {
+		if strings.Contains(got, forbidden) {
+			t.Fatalf("windowsShellCommand() = %q, must not contain %q", got, forbidden)
 		}
 	}
-	if strings.Contains(got, "needs repair") {
-		t.Fatalf("startup status = %q, should not need repair", got)
-	}
-}
-
-func TestFormatWindowsDesktopStartupStatusNeedsRepair(t *testing.T) {
-	got, err := formatWindowsDesktopStartupStatus(windowsDesktopStartupStatusEnv{
-		executable: func() (string, error) {
-			return `C:\tools\eqt.exe`, nil
-		},
-		queryRegValue: func(key string, name string) (string, error) {
-			return windowsAgentStartupCommand(`C:\old\eqt.exe`), nil
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, want := range []string{
-		"- Agent startup: needs repair",
-		`expected: ` + windowsAgentStartupCommand(`C:\tools\eqt.exe`),
-		"repair: run `eqt desktop startup-enable`",
-	} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("startup status = %q, want to contain %q", got, want)
-		}
+	if !strings.Contains(got, exe) {
+		t.Fatalf("windowsShellCommand() = %q, want to contain %q", got, exe)
 	}
 }
 
@@ -405,197 +313,3 @@ func (fakeFileInfo) Mode() os.FileMode  { return 0644 }
 func (fakeFileInfo) ModTime() time.Time { return time.Time{} }
 func (fakeFileInfo) IsDir() bool        { return false }
 func (fakeFileInfo) Sys() any           { return nil }
-
-// --- B4a: Linux + macOS autostart ---
-
-func TestLinuxAutostartContentRoundTrip(t *testing.T) {
-	exe := "/opt/eqt/eqt"
-	content := linuxAutostartContent(exe)
-	if !strings.Contains(content, "[Desktop Entry]") {
-		t.Fatalf("missing [Desktop Entry] header: %s", content)
-	}
-	if !strings.Contains(content, "Type=Application") {
-		t.Fatalf("missing Type=Application: %s", content)
-	}
-	got := parseDesktopEntryExec(content)
-	want := exe + " desktop agent"
-	if got != want {
-		t.Fatalf("parseDesktopEntryExec() = %q, want %q", got, want)
-	}
-}
-
-func TestParseDesktopEntryExecMissingExec(t *testing.T) {
-	if got := parseDesktopEntryExec("[Desktop Entry]\nType=Application\n"); got != "" {
-		t.Fatalf("parseDesktopEntryExec() = %q, want empty", got)
-	}
-}
-
-func TestInstallUninstallLinuxDesktopStartupRoundTrip(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("XDG_CONFIG_HOME not honoured on windows")
-	}
-	tmp := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", tmp)
-
-	if err := installLinuxDesktopStartup(); err != nil {
-		t.Fatalf("install returned %v", err)
-	}
-	path, err := linuxAutostartPath()
-	if err != nil {
-		t.Fatalf("path %v", err)
-	}
-	if !strings.HasPrefix(path, tmp) {
-		t.Fatalf("path %q not under XDG_CONFIG_HOME %q", path, tmp)
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("autostart file missing after install: %v", err)
-	}
-	if !strings.Contains(string(data), "Exec=") {
-		t.Fatalf("autostart file content unexpected: %s", data)
-	}
-
-	if err := uninstallLinuxDesktopStartup(); err != nil {
-		t.Fatalf("uninstall returned %v", err)
-	}
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Fatalf("autostart file still present after uninstall: err=%v", err)
-	}
-
-	if err := uninstallLinuxDesktopStartup(); err != nil {
-		t.Fatalf("second uninstall returned %v", err)
-	}
-}
-
-func TestFormatLinuxDesktopStartupStatusStates(t *testing.T) {
-	exe := "/bin/eqt"
-	expectedExec := exe + " desktop agent"
-
-	cases := []struct {
-		name     string
-		readErr  error
-		fileBody string
-		wantSub  string
-	}{
-		{name: "not installed", readErr: os.ErrNotExist, wantSub: "state: not installed"},
-		{name: "installed", fileBody: "[Desktop Entry]\nExec=" + expectedExec + "\n", wantSub: "state: installed"},
-		{name: "needs repair", fileBody: "[Desktop Entry]\nExec=/other/eqt desktop agent\n", wantSub: "state: needs repair"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			env := linuxStartupStatusEnv{
-				executable: func() (string, error) { return exe, nil },
-				pathFn:     func() (string, error) { return "/tmp/eqt.desktop", nil },
-				readFile: func(string) ([]byte, error) {
-					if tc.readErr != nil {
-						return nil, tc.readErr
-					}
-					return []byte(tc.fileBody), nil
-				},
-			}
-			out, err := formatLinuxDesktopStartupStatus(env)
-			if err != nil {
-				t.Fatalf("format returned %v", err)
-			}
-			if !strings.Contains(out, tc.wantSub) {
-				t.Fatalf("status missing %q: %s", tc.wantSub, out)
-			}
-		})
-	}
-}
-
-func TestDarwinAutostartContentRoundTrip(t *testing.T) {
-	exe := "/Applications/eqt.app/Contents/MacOS/eqt"
-	content := darwinAutostartContent(exe)
-	if !strings.Contains(content, "<key>Label</key>") {
-		t.Fatalf("missing Label key: %s", content)
-	}
-	if !strings.Contains(content, "<string>"+darwinLaunchAgentLabel+"</string>") {
-		t.Fatalf("missing label value: %s", content)
-	}
-	if got := parseLaunchAgentFirstProgram(content); got != exe {
-		t.Fatalf("parseLaunchAgentFirstProgram() = %q, want %q", got, exe)
-	}
-}
-
-func TestParseLaunchAgentFirstProgramXMLEscapes(t *testing.T) {
-	content := darwinAutostartContent("/path/A & B/eqt")
-	if got := parseLaunchAgentFirstProgram(content); got != "/path/A & B/eqt" {
-		t.Fatalf("round-trip mismatch: got %q", got)
-	}
-}
-
-func TestInstallUninstallDarwinDesktopStartupRoundTrip(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("HOME not honoured on windows")
-	}
-	tmp := t.TempDir()
-	t.Setenv("HOME", tmp)
-
-	if err := installDarwinDesktopStartup(); err != nil {
-		t.Fatalf("install returned %v", err)
-	}
-	path, err := darwinAutostartPath()
-	if err != nil {
-		t.Fatalf("path %v", err)
-	}
-	if !strings.HasPrefix(path, tmp) {
-		t.Fatalf("path %q not under HOME %q", path, tmp)
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("LaunchAgent missing after install: %v", err)
-	}
-	if !strings.Contains(string(data), "<key>RunAtLoad</key>") {
-		t.Fatalf("plist content unexpected: %s", data)
-	}
-
-	if err := uninstallDarwinDesktopStartup(); err != nil {
-		t.Fatalf("uninstall returned %v", err)
-	}
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Fatalf("plist still present after uninstall: err=%v", err)
-	}
-
-	if err := uninstallDarwinDesktopStartup(); err != nil {
-		t.Fatalf("second uninstall returned %v", err)
-	}
-}
-
-func TestFormatDarwinDesktopStartupStatusStates(t *testing.T) {
-	exe := "/Applications/eqt.app/Contents/MacOS/eqt"
-	installed := darwinAutostartContent(exe)
-	stale := darwinAutostartContent("/old/eqt")
-
-	cases := []struct {
-		name     string
-		readErr  error
-		fileBody string
-		wantSub  string
-	}{
-		{name: "not installed", readErr: os.ErrNotExist, wantSub: "state: not installed"},
-		{name: "installed", fileBody: installed, wantSub: "state: installed"},
-		{name: "needs repair", fileBody: stale, wantSub: "state: needs repair"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			env := darwinStartupStatusEnv{
-				executable: func() (string, error) { return exe, nil },
-				pathFn:     func() (string, error) { return "/tmp/eqt.plist", nil },
-				readFile: func(string) ([]byte, error) {
-					if tc.readErr != nil {
-						return nil, tc.readErr
-					}
-					return []byte(tc.fileBody), nil
-				},
-			}
-			out, err := formatDarwinDesktopStartupStatus(env)
-			if err != nil {
-				t.Fatalf("format returned %v", err)
-			}
-			if !strings.Contains(out, tc.wantSub) {
-				t.Fatalf("status missing %q: %s", tc.wantSub, out)
-			}
-		})
-	}
-}

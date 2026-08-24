@@ -22,37 +22,14 @@ func TestParseDesktopIntegrationStatus(t *testing.T) {
 	}
 }
 
-func TestParseDesktopStartupStatus(t *testing.T) {
-	status := parseDesktopStartupStatus("Windows desktop agent startup status\n- Agent startup: enabled")
-	if !status.Supported || !status.Enabled || status.NeedsRepair {
-		t.Fatalf("status = %#v, want enabled", status)
-	}
-
-	status = parseDesktopStartupStatus("Windows desktop agent startup status\n- Agent startup: needs repair")
-	if !status.Supported || status.Enabled || !status.NeedsRepair {
-		t.Fatalf("status = %#v, want repair state", status)
-	}
-
-	status = parseDesktopStartupStatus("Windows desktop agent startup status\n- Agent startup: disabled")
-	if !status.Supported || status.Enabled || status.NeedsRepair {
-		t.Fatalf("status = %#v, want disabled", status)
-	}
-}
-
 func TestDesktopIntegrationCommands(t *testing.T) {
 	oldInstallInt := cmdInstallDesktopIntegration
 	oldUninstallInt := cmdUninstallDesktopIntegration
-	oldInstallStart := cmdInstallDesktopStartup
-	oldUninstallStart := cmdUninstallDesktopStartup
-	oldStartStatus := cmdDesktopStartupStatus
 	oldIntStatus := cmdDesktopIntegrationStatus
 
 	defer func() {
 		cmdInstallDesktopIntegration = oldInstallInt
 		cmdUninstallDesktopIntegration = oldUninstallInt
-		cmdInstallDesktopStartup = oldInstallStart
-		cmdUninstallDesktopStartup = oldUninstallStart
-		cmdDesktopStartupStatus = oldStartStatus
 		cmdDesktopIntegrationStatus = oldIntStatus
 	}()
 
@@ -64,18 +41,6 @@ func TestDesktopIntegrationCommands(t *testing.T) {
 	cmdUninstallDesktopIntegration = func() error {
 		calls = append(calls, "UninstallDesktopIntegration")
 		return nil
-	}
-	cmdInstallDesktopStartup = func() error {
-		calls = append(calls, "InstallDesktopStartup")
-		return nil
-	}
-	cmdUninstallDesktopStartup = func() error {
-		calls = append(calls, "UninstallDesktopStartup")
-		return nil
-	}
-	cmdDesktopStartupStatus = func() (string, error) {
-		calls = append(calls, "DesktopStartupStatus")
-		return "Windows desktop agent startup status\n- Agent startup: enabled", nil
 	}
 	cmdDesktopIntegrationStatus = func() (string, error) {
 		calls = append(calls, "DesktopIntegrationStatus")
@@ -89,20 +54,11 @@ func TestDesktopIntegrationCommands(t *testing.T) {
 	if _, err := app.SetRightClickIntegrationEnabled(false); err != nil {
 		t.Fatalf("SetRightClickIntegrationEnabled(false) error = %v", err)
 	}
-	if status, err := app.SetStartupEnabled(true); err != nil || !status.Enabled {
-		t.Fatalf("SetStartupEnabled(true) = %#v, %v", status, err)
-	}
-	if _, err := app.SetStartupEnabled(false); err != nil {
-		t.Fatalf("SetStartupEnabled(false) error = %v", err)
-	}
 
 	got := strings.Join(calls, "\n")
 	for _, want := range []string{
 		"InstallDesktopIntegration",
 		"UninstallDesktopIntegration",
-		"InstallDesktopStartup",
-		"UninstallDesktopStartup",
-		"DesktopStartupStatus",
 		"DesktopIntegrationStatus",
 	} {
 		if !strings.Contains(got, want) {

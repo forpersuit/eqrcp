@@ -272,7 +272,7 @@ Status: in progress.
 These features should start after Phase 3 and Phase 4 validation are stable:
 
 - Tray icon: expose status, open current QR page, stop current task, and stop agent from a small desktop surface.
-- Startup registration: initial Windows current-user login startup is implemented with `eqt desktop startup-enable`, `eqt desktop startup-disable`, and `eqt desktop startup-status`. `eqt desktop status` also reports whether startup is disabled, enabled, or needs repair.
+- Startup registration: REMOVED on 2026-08-24. The login autostart feature (`eqt desktop startup-enable`/`startup-disable`/`startup-status`, Windows Run key, freedesktop autostart, macOS LaunchAgent) was removed because its hidden PowerShell launcher triggered Defender `Behavior:Win32/DefenseEvasion.A!ml`. The desktop agent now runs only while the GUI or an explicit `eqt desktop agent-start` keeps it alive.
 - Notifications: initial lightweight notifications are implemented for QR-ready, real transfer started, completed, failed, stopped, and replaced states. Real started/completed/stopped notifications are driven by server transfer state rather than only by agent task lifecycle. Windows uses built-in PowerShell/.NET balloon notifications without adding a GUI dependency.
 - Persistent transfer history: initial bounded recent task persistence is implemented. Next refinements are configurable retention and optional history export/open-folder actions.
 - Settings surface: initial browser-based settings surface is implemented on the local agent page. It can read and update output directory, interface, port, and browser-open preference through `/settings`, backed by the existing per-user config file. The browser-open preference is now used by desktop share/receive flows and desktop agent tasks.
@@ -281,14 +281,14 @@ These features should start after Phase 3 and Phase 4 validation are stable:
 - Port `0` remains the recommended default because it lets the OS choose an available port. Fixed ports are supported for predictable URLs, but transfers fail visibly if the chosen port is already occupied.
 - When no output directory is configured, desktop settings resolve to the current user's `Downloads` directory if it exists, otherwise the user's home directory. Saving an empty output value writes that resolved user-directory default instead of leaving receive behavior dependent on the process working directory.
 - The config file stays in the current user's config directory. This remains the right default for installer builds because installation directories are often read-only, shared by multiple users, and unsuitable for mutable per-user preferences.
-- The Wails GUI settings surface now exposes `Windows right-click share and receive` and `Start EQT at login` toggles. These wrap the existing `eqt desktop install/uninstall/status` and `startup-enable/startup-disable/startup-status` command paths instead of duplicating platform registry or autostart logic inside the GUI.
+- The Wails GUI settings surface now exposes a `Windows right-click share and receive` toggle, wrapping the existing `eqt desktop install/uninstall/status` command path instead of duplicating platform registry logic inside the GUI. The `Start EQT at login` toggle was removed together with the startup feature.
 - Agent restart: the browser status page includes `Restart Agent`, which asks the current process to stop and launch a fresh background agent from the same executable.
 - Transfer pages opened by the desktop agent now show a compact agent status pill in the top-right corner. It uses green, red, or gray state coloring for reachable, offline, and idle/restarting states. If the per-task QR service disappears after agent restart or replacement, the page falls back to the agent `/status` endpoint, shows whether the agent is reachable, and renders the task's final agent state when it can still find the task in current or history.
 - Agent restart now synchronously finalizes the active task into persisted history before the old agent exits, so an already-open task page can still use `Transfer again` after the new agent starts.
 
 Next priorities:
 
-1. Build Windows binaries and run the deferred Windows validation batch, including the new GUI toggles for right-click integration and login startup.
+1. Build Windows binaries and run the deferred Windows validation batch, including the right-click integration toggle.
 2. Tighten tray semantics: distinguish closing the GUI from stopping the background agent, rename current-task actions so they also fit chat sessions, and disable unavailable tray actions when the agent is idle.
 3. Improve notification backends without making notifications part of the transfer-critical path. Keep Linux/macOS on OS notification channels and prefer Windows Toast when packaging metadata makes it reliable, with the current balloon path as fallback.
 4. Add history refinements: configurable retention and open/export actions for saved history.

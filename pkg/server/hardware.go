@@ -53,29 +53,7 @@ func hashValue(val string) string {
 func GetBoardUUID() string {
 	var raw string
 	if runtime.GOOS == "windows" {
-		// 1. Try powershell CIM instance
-		raw = runCommand("powershell", "-Command", "(Get-CimInstance Win32_ComputerSystemProduct).UUID")
-		if raw == "" {
-			// 2. Try wmic fallback
-			out := runCommand("wmic", "path", "win32_computersystemproduct", "get", "uuid")
-			lines := strings.Split(out, "\n")
-			for _, line := range lines {
-				line = strings.TrimSpace(line)
-				if line != "" && !strings.EqualFold(line, "uuid") {
-					raw = line
-					break
-				}
-			}
-		}
-		if raw == "" {
-			// 3. Try registry fallback MachineGuid
-			out := runCommand("reg", "query", `HKLM\SOFTWARE\Microsoft\Cryptography`, "/v", "MachineGuid")
-			// Parse registry output
-			parts := strings.Fields(out)
-			if len(parts) >= 3 {
-				raw = parts[len(parts)-1]
-			}
-		}
+		raw = queryWindowsBoardUUID()
 	} else if runtime.GOOS == "linux" {
 		// 1. Try reading standard DMI uuid
 		if data, err := os.ReadFile("/sys/class/dmi/id/product_uuid"); err == nil {
@@ -101,18 +79,7 @@ func GetBoardUUID() string {
 func GetCPUSerial() string {
 	var raw string
 	if runtime.GOOS == "windows" {
-		raw = runCommand("powershell", "-Command", "(Get-CimInstance Win32_Processor).ProcessorId")
-		if raw == "" {
-			out := runCommand("wmic", "cpu", "get", "processorid")
-			lines := strings.Split(out, "\n")
-			for _, line := range lines {
-				line = strings.TrimSpace(line)
-				if line != "" && !strings.EqualFold(line, "processorid") {
-					raw = line
-					break
-				}
-			}
-		}
+		raw = queryWindowsCPUSerial()
 	} else if runtime.GOOS == "linux" {
 		if data, err := os.ReadFile("/proc/cpuinfo"); err == nil {
 			lines := strings.Split(string(data), "\n")
@@ -134,20 +101,7 @@ func GetCPUSerial() string {
 func GetSystemDiskSerial() string {
 	var raw string
 	if runtime.GOOS == "windows" {
-		// Try system drive physical disk serial via Powershell
-		raw = runCommand("powershell", "-Command", "(Get-PhysicalDisk | Where-Object {$_.IsSystem -eq $true}).SerialNumber")
-		if raw == "" {
-			// Try wmic drive index 0
-			out := runCommand("wmic", "diskdrive", "where", "index=0", "get", "serialnumber")
-			lines := strings.Split(out, "\n")
-			for _, line := range lines {
-				line = strings.TrimSpace(line)
-				if line != "" && !strings.EqualFold(line, "serialnumber") {
-					raw = line
-					break
-				}
-			}
-		}
+		raw = queryWindowsDiskSerial()
 	} else if runtime.GOOS == "linux" {
 		// Read serial for sda or nvme0n1. Find likely system disk block names
 		sysBlock := "/sys/block"

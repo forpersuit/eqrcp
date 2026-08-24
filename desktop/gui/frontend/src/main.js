@@ -42,11 +42,9 @@ import {
     RightClickIntegrationStatus,
     Share,
     SetRightClickIntegrationEnabled,
-    SetStartupEnabled,
     ActivateLicense,
     ResetLicense,
     RefreshLicenseStatus,
-    StartupStatus,
     StopChat,
     StopCurrent,
     SetAutoStop,
@@ -2066,16 +2064,6 @@ function renderSettingsPanel() {
                         ${renderSwitch('settings-right-click', state.rightClickIntegration?.enabled, state.rightClickIntegration?.supported === false)}
                     </div>
                 </div>
-                <div class="setting-row">
-                    <div class="setting-copy">
-                        <strong>${t('startup_title')}</strong>
-                        <span id="startup-status-text">${escapeHTML(integrationStatusText(state.startupIntegration, t('startup_desc')))}</span>
-                    </div>
-                    <div class="setting-control-stack" id="startup-control">
-                        ${renderStatusBadge(state.startupIntegration)}
-                        ${renderSwitch('settings-startup', state.startupIntegration?.enabled, state.startupIntegration?.supported === false)}
-                    </div>
-                </div>
             </section>
 
             <section class="settings-section">
@@ -3917,10 +3905,6 @@ function bindEvents() {
                 toggleRightClickIntegration(e);
                 return;
             }
-            if (e.target.id === 'settings-startup') {
-                toggleStartupIntegration(e);
-                return;
-            }
             if (e.target.id === 'dev-debug-log') {
                 if (!state.settings) state.settings = {};
                 state.settings.debugLog = Boolean(e.target.checked);
@@ -4717,51 +4701,26 @@ async function toggleRightClickIntegration(event) {
     event.currentTarget.disabled = true;
     try {
         state.rightClickIntegration = await SetRightClickIntegrationEnabled(enabled);
-        updateIntegrationRow('right-click');
+        updateIntegrationRow();
     } catch (error) {
         const errMsg = error?.message || String(error);
         event.currentTarget.checked = !enabled;
         event.currentTarget.disabled = false;
-        updateIntegrationRow('right-click');
+        updateIntegrationRow();
         const prefix = t('integration_toggle_failed') || 'Failed to update system integration';
         showToast(`${prefix}: ${errMsg}`);
     }
 }
 
-async function toggleStartupIntegration(event) {
-    const enabled = Boolean(event.currentTarget?.checked);
-    event.currentTarget.disabled = true;
-    try {
-        state.startupIntegration = await SetStartupEnabled(enabled);
-        updateIntegrationRow('startup');
-    } catch (error) {
-        const errMsg = error?.message || String(error);
-        event.currentTarget.checked = !enabled;
-        event.currentTarget.disabled = false;
-        updateIntegrationRow('startup');
-        const prefix = t('integration_toggle_failed') || 'Failed to update system integration';
-        showToast(`${prefix}: ${errMsg}`);
-    }
-}
-
-function updateIntegrationRow(kind) {
-    const config = kind === 'startup'
-        ? {
-            status: state.startupIntegration,
-            text: '#startup-status-text',
-            control: '#startup-control',
-            switchId: 'settings-startup',
-            fallback: 'Starts the background transfer service when you sign in.',
-            handler: toggleStartupIntegration,
-        }
-        : {
-            status: state.rightClickIntegration,
-            text: '#right-click-status-text',
-            control: '#right-click-control',
-            switchId: 'settings-right-click',
-            fallback: 'Adds Explorer actions for sharing selected files and receiving into a folder.',
-            handler: toggleRightClickIntegration,
-        };
+function updateIntegrationRow() {
+    const config = {
+        status: state.rightClickIntegration,
+        text: '#right-click-status-text',
+        control: '#right-click-control',
+        switchId: 'settings-right-click',
+        fallback: 'Adds Explorer actions for sharing selected files and receiving into a folder.',
+        handler: toggleRightClickIntegration,
+    };
     const text = document.querySelector(config.text);
     if (text) {
         text.textContent = integrationStatusText(config.status, config.fallback);
@@ -5224,22 +5183,13 @@ async function loadSettings() {
 }
 
 async function loadIntegrationStatusData() {
-    const [rightClick, startup] = await Promise.all([
-        RightClickIntegrationStatus().catch((error) => ({
-            supported: false,
-            enabled: false,
-            needsRepair: false,
-            detail: String(error?.message || error),
-        })),
-        StartupStatus().catch((error) => ({
-            supported: false,
-            enabled: false,
-            needsRepair: false,
-            detail: String(error?.message || error),
-        })),
-    ]);
+    const rightClick = await RightClickIntegrationStatus().catch((error) => ({
+        supported: false,
+        enabled: false,
+        needsRepair: false,
+        detail: String(error?.message || error),
+    }));
     state.rightClickIntegration = rightClick;
-    state.startupIntegration = startup;
 }
 
 async function loadStatusData() {
