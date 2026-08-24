@@ -401,7 +401,19 @@ func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 		if errJson := json.Unmarshal(data, &usage); errJson == nil && usage.Date != "" {
 			readOk = true
 			machineKey := GetDeviceStableID()
-			if usage.MAC != "" && usage.MAC != computeUsageMAC(usage, machineKey) && usage.MAC != computeUsageMACV1(usage, machineKey) {
+			macValid := false
+			if usage.MAC == "" {
+				macValid = true
+			} else if usage.MAC == computeUsageMAC(usage, machineKey) || usage.MAC == computeUsageMACV1(usage, machineKey) {
+				macValid = true
+			} else if machineKey != "" && (usage.MAC == computeUsageMAC(usage, "") || usage.MAC == computeUsageMACV1(usage, "")) {
+				// Valid migration: written with default key before device_id was registered
+				macValid = true
+			} else if machineKey == "" && (usage.MAC == computeUsageMAC(usage, "EQT_DEFAULT_USAGE_KEY") || usage.MAC == computeUsageMACV1(usage, "EQT_DEFAULT_USAGE_KEY")) {
+				macValid = true
+			}
+
+			if !macValid {
 				// Local usage file has been maliciously edited!
 				tampered = true
 			}
@@ -458,11 +470,17 @@ func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 		}
 	} else if usage.ClockTampered && !tampered && !rollback && isNetTimeCached() && os.Getenv("EQT_TESTING") != "true" {
 		// Self-healing only against authoritatively calibrated network time — the
-		// optimistic cold-start path must never clear a real tamper flag. A resolved
-		// false positive clears the flag without restoring already-burned quota.
+		// optimistic cold-start path must never clear a real tamper flag.
 		if diff := time.Since(netTime); diff >= -clockDriftThreshold && diff <= clockDriftThreshold {
 			usage.ClockTampered = false
-			go SetClockTampered(false)
+			if oldTampered {
+				go SetClockTampered(false)
+			}
+			if usage.UsedSeconds >= 600 {
+				usage.UsedSeconds = 0
+				usage.UsedTransfers = 0
+				usage.UsedReceiveTransfers = 0
+			}
 		}
 	}
 

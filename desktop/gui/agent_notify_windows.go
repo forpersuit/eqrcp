@@ -3,12 +3,8 @@
 package main
 
 import (
-	"fmt"
 	"os"
-	"os/exec"
-	"strings"
 
-	"eqt/pkg/util"
 	toast "git.sr.ht/~jackmordaunt/go-toast/v2"
 )
 
@@ -27,23 +23,5 @@ func notifyDesktop(title string, message string) error {
 		Body:     message,
 		Duration: toast.Short,
 	}
-	if err := notification.Push(); err == nil {
-		return nil
-	}
-	return notifyDesktopWindowsBalloon(title, message)
-}
-
-func notifyDesktopWindowsBalloon(title string, message string) error {
-	script := fmt.Sprintf(
-		`Add-Type -AssemblyName System.Windows.Forms; Add-Type -AssemblyName System.Drawing; $n = New-Object System.Windows.Forms.NotifyIcon; $n.Icon = [System.Drawing.SystemIcons]::Information; $n.BalloonTipTitle = %s; $n.BalloonTipText = %s; $n.Visible = $true; $n.ShowBalloonTip(5000); Start-Sleep -Seconds 6; $n.Dispose()`,
-		powershellString(title),
-		powershellString(message),
-	)
-	cmd := exec.Command("powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-Command", script)
-	util.HideCommand(cmd)
-	return cmd.Start()
-}
-
-func powershellString(value string) string {
-	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
+	return notification.Push()
 }
