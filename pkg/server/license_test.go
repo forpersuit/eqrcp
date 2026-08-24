@@ -1191,4 +1191,3 @@ func TestRegisterDevStatusCallback(t *testing.T) {
 	// Reset
 	SetServerDevAuthorized(false)
 }
-

@@ -80,6 +80,9 @@ func getChatUsageFilePath() string {
 func fetchNetworkTime() (time.Time, error) {
 	client := http.Client{
 		Timeout: 3 * time.Second,
+		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+		},
 	}
 	endpoints := []string{
 		getLicenseServer(),
@@ -314,11 +317,6 @@ func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 	if l.hasCached && l.cachedUsage.Date == today {
 		usage := l.cachedUsage
 		l.checkLicenseValidity(&usage)
-		if !usage.IsPaid && !isOnline && os.Getenv("EQT_TESTING") != "true" {
-			usage.UsedSeconds = 600
-			usage.UsedTransfers = 5
-			usage.UsedReceiveTransfers = 5
-		}
 		return usage
 	}
 
@@ -382,12 +380,6 @@ func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 		l.cachedUsage = usage
 		l.hasCached = true
 		l.lastCacheTime = time.Now()
-	}
-
-	if !usage.IsPaid && !isOnline && os.Getenv("EQT_TESTING") != "true" {
-		usage.UsedSeconds = 600
-		usage.UsedTransfers = 5
-		usage.UsedReceiveTransfers = 5
 	}
 
 	return usage
