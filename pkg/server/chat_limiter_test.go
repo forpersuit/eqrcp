@@ -672,3 +672,202 @@ func TestClockDriftPreservedAcrossSaveAndCacheHit(t *testing.T) {
 		t.Errorf("expected ClockDrift=true preserved in memory cache after saveUsageLocked, got false")
 	}
 }
+
+// TestLegacyLockoutResidueClearedOnline ensures the 600-second offline-lockout residue
+// persisted by builds before 62190e4 is cleared (and persisted as cleared) once network
+// time is calibrated and no cheating flag is set — instead of pinning the free tier at
+// "quota exhausted" until the date rolls over.
+func TestLegacyLockoutResidueClearedOnline(t *testing.T) {
+	origTesting := os.Getenv("EQT_TESTING")
+	_ = os.Setenv("EQT_TESTING", "false")
+	defer func() {
+		if origTesting != "" {
+			_ = os.Setenv("EQT_TESTING", origTesting)
+		} else {
+			_ = os.Unsetenv("EQT_TESTING")
+		}
+	}()
+	ResetPaidStatusCallbacksForTest()
+	defer ResetPaidStatusCallbacksForTest()
+
+	// Save and restore the global network-time state.
+	netTimeMu.Lock()
+	origOffset := netTimeOffset
+	origCached := netTimeCached
+	origLastCheck := netTimeLastCheck
+	origIsChecking := netTimeIsChecking
+	origFirstFetch := netTimeFirstFetch
+	netTimeMu.Unlock()
+	defer func() {
+		netTimeMu.Lock()
+		netTimeOffset = origOffset
+		netTimeCached = origCached
+		netTimeLastCheck = origLastCheck
+		netTimeIsChecking = origIsChecking
+		netTimeFirstFetch = origFirstFetch
+		netTimeMu.Unlock()
+	}()
+
+	// Authoritatively calibrated network time: cache valid within 1h, zero offset.
+	netTimeMu.Lock()
+	netTimeCached = true
+	netTimeOffset = 0
+	netTimeLastCheck = time.Now()
+	netTimeIsChecking = false
+	netTimeFirstFetch = false
+	netTimeMu.Unlock()
+
+	usageFile := filepath.Join(config.DefaultConfigDir(), "chat_usage.json")
+	var backup []byte
+	backupExists := false
+	if data, err := os.ReadFile(usageFile); err == nil {
+		backup = data
+		backupExists = true
+		_ = os.Remove(usageFile)
+	}
+	defer func() {
+		if backupExists {
+			_ = os.WriteFile(usageFile, backup, 0644)
+		} else {
+			_ = os.Remove(usageFile)
+		}
+	}()
+
+	today := time.Now().UTC().Format("2006-01-02")
+	u := ChatUsage{
+		Date:                 today,
+		UsedSeconds:          600,
+		UsedTransfers:        5,
+		UsedReceiveTransfers: 5,
+		IsPaid:               false,
+		ClockTampered:        false,
+		// LastSeen left empty: the pre-62190e4 lockout wrote no anchor.
+	}
+	machineKey := GetDeviceStableID()
+	u.MAC = computeUsageMAC(u, machineKey)
+	data, err := json.Marshal(u)
+	if err != nil {
+		t.Fatalf("failed to marshal usage: %v", err)
+	}
+	if err := os.WriteFile(usageFile, data, 0644); err != nil {
+		t.Fatalf("failed to write usage file: %v", err)
+	}
+
+	fresh := &ChatLimiter{}
+	checked := fresh.loadUsageLocked()
+
+	if checked.UsedSeconds != 0 {
+		t.Fatalf("expected stale lockout residue cleared to 0, got %d", checked.UsedSeconds)
+	}
+	if checked.UsedTransfers != 0 || checked.UsedReceiveTransfers != 0 {
+		t.Fatalf("expected transfers cleared, got send=%d receive=%d", checked.UsedTransfers, checked.UsedReceiveTransfers)
+	}
+	if checked.ClockTampered {
+		t.Fatalf("expected no tamper flag on residue clear, got true")
+	}
+
+	diskBytes, err := os.ReadFile(usageFile)
+	if err != nil {
+		t.Fatalf("failed to read usage file after clear: %v", err)
+	}
+	var persisted ChatUsage
+	if err := json.Unmarshal(diskBytes, &persisted); err != nil {
+		t.Fatalf("failed to parse persisted file: %v", err)
+	}
+	if persisted.UsedSeconds != 0 {
+		t.Fatalf("expected cleared residue persisted to disk, got %d", persisted.UsedSeconds)
+	}
+	if persisted.MAC != computeUsageMAC(persisted, machineKey) {
+		t.Fatalf("expected persisted MAC recomputed after residue clear")
+	}
+}
+
+// TestLegacyLockoutResidueKeptWhenUncalibrated ensures the stale lockout residue is NOT
+// cleared while network time is uncalibrated — the branch must never grant quota back on
+// the optimistic local-clock guess, matching the self-heal cold-start guard.
+func TestLegacyLockoutResidueKeptWhenUncalibrated(t *testing.T) {
+	origTesting := os.Getenv("EQT_TESTING")
+	_ = os.Setenv("EQT_TESTING", "false")
+	defer func() {
+		if origTesting != "" {
+			_ = os.Setenv("EQT_TESTING", origTesting)
+		} else {
+			_ = os.Unsetenv("EQT_TESTING")
+		}
+	}()
+	ResetPaidStatusCallbacksForTest()
+	defer ResetPaidStatusCallbacksForTest()
+
+	// Save and restore the global network-time state.
+	netTimeMu.Lock()
+	origOffset := netTimeOffset
+	origCached := netTimeCached
+	origLastCheck := netTimeLastCheck
+	origIsChecking := netTimeIsChecking
+	origFirstFetch := netTimeFirstFetch
+	netTimeMu.Unlock()
+	defer func() {
+		netTimeMu.Lock()
+		netTimeOffset = origOffset
+		netTimeCached = origCached
+		netTimeLastCheck = origLastCheck
+		netTimeIsChecking = origIsChecking
+		netTimeFirstFetch = origFirstFetch
+		netTimeMu.Unlock()
+	}()
+
+	// Network time uncalibrated: no cache, but a recent failed check within 1min so
+	// getNetworkTimeOrStartFetch returns offline without spawning a real HTTP fetch.
+	netTimeMu.Lock()
+	netTimeCached = false
+	netTimeOffset = 0
+	netTimeLastCheck = time.Now()
+	netTimeIsChecking = false
+	netTimeFirstFetch = false
+	netTimeMu.Unlock()
+
+	usageFile := filepath.Join(config.DefaultConfigDir(), "chat_usage.json")
+	var backup []byte
+	backupExists := false
+	if data, err := os.ReadFile(usageFile); err == nil {
+		backup = data
+		backupExists = true
+		_ = os.Remove(usageFile)
+	}
+	defer func() {
+		if backupExists {
+			_ = os.WriteFile(usageFile, backup, 0644)
+		} else {
+			_ = os.Remove(usageFile)
+		}
+	}()
+
+	today := time.Now().UTC().Format("2006-01-02")
+	u := ChatUsage{
+		Date:                 today,
+		UsedSeconds:          600,
+		UsedTransfers:        5,
+		UsedReceiveTransfers: 5,
+		IsPaid:               false,
+		ClockTampered:        false,
+	}
+	machineKey := GetDeviceStableID()
+	u.MAC = computeUsageMAC(u, machineKey)
+	data, err := json.Marshal(u)
+	if err != nil {
+		t.Fatalf("failed to marshal usage: %v", err)
+	}
+	if err := os.WriteFile(usageFile, data, 0644); err != nil {
+		t.Fatalf("failed to write usage file: %v", err)
+	}
+
+	fresh := &ChatLimiter{}
+	checked := fresh.loadUsageLocked()
+
+	if checked.UsedSeconds != 600 {
+		t.Fatalf("expected stale residue kept while uncalibrated, got %d", checked.UsedSeconds)
+	}
+	if checked.ClockTampered {
+		t.Fatalf("expected no tamper flag while uncalibrated, got true")
+	}
+}

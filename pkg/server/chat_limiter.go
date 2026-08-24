@@ -396,6 +396,7 @@ func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 	var usage ChatUsage
 	readOk := false
 	tampered := false
+	lockResidueCleared := false
 
 	if data, err := os.ReadFile(path); err == nil && len(data) > 0 {
 		if errJson := json.Unmarshal(data, &usage); errJson == nil && usage.Date != "" {
@@ -482,6 +483,19 @@ func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 				usage.UsedReceiveTransfers = 0
 			}
 		}
+	} else if !usage.ClockTampered && !tampered && !rollback && isNetTimeCached() && os.Getenv("EQT_TESTING") != "true" && usage.UsedSeconds >= 600 {
+		// Migration for the removed offline lockout (62190e4): builds before it
+		// persisted an artificial 600-second lock to disk, and that residue reads
+		// back as quota-exhausted even when online. With calibrated network time and
+		// no cheating flag (a real rollback/tamper sets ClockTampered), 600+ used
+		// seconds can only be stale lock residue — clear it so today's free quota
+		// works again instead of waiting for the date rollover.
+		if diff := time.Since(netTime); diff >= -clockDriftThreshold && diff <= clockDriftThreshold {
+			usage.UsedSeconds = 0
+			usage.UsedTransfers = 0
+			usage.UsedReceiveTransfers = 0
+			lockResidueCleared = true
+		}
 	}
 
 	// Refresh the anchor on the returned/cached value; the periodic-save throttle
@@ -489,7 +503,7 @@ func (l *ChatLimiter) loadUsageLocked() ChatUsage {
 	anchorDue := usage.LastSeen == "" || lastSeenAge(refTime, usage.LastSeen) >= 1*time.Minute
 	usage.LastSeen = refTime.UTC().Format(time.RFC3339)
 
-	if dateChanged || oldPaid != usage.IsPaid || oldTampered != usage.ClockTampered || tampered || rollback || anchorDue {
+	if dateChanged || oldPaid != usage.IsPaid || oldTampered != usage.ClockTampered || tampered || rollback || lockResidueCleared || anchorDue {
 		l.saveUsageLocked(usage)
 	} else {
 		l.cachedUsage = usage
