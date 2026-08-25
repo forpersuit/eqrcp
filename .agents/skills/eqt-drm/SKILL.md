@@ -347,5 +347,7 @@ echo -n "your_secret_value" | npx wrangler secret put KEY_NAME
 - **端到端屏蔽方案**：
   - **数据层**：`licenses` 表维护 `paid_amount REAL DEFAULT NULL`。Paddle Webhook 在初始发放、续费及升级时从 `data.details?.totals`（兼容 `data.totals`）持久化实付总金额（`totals.grand_total ?? totals.total`）。
   - **规则层 (`isLicenseRefundable`)**：若 `paid_amount !== null && Number(paid_amount) <= 0`，判定 `refundable: false`。
+  - **Webhook 履约校验 (A1 Gate)**：`validatePaidAmount` 通过 `data.details?.totals` 严格校验实付金额。非法的 0 元订单（`grand_total <= 0` 且无有效单价）将在 Webhook 阶段直接拒绝发码并返回 400 `AMOUNT_VALIDATION_FAILED`，防止恶意构造 0 元交易刷取授权。
   - **Portal 页面前端**：许可证列表仅在 `lic.status === 'active' && lic.refundable === true` 时渲染「申请退款」按钮；0 元订单完全隐藏退款入口。
   - **API 服务端前置拦截**：`POST /api/v1/user/refund` 接口前置检查 `isLicenseRefundable` 及 Paddle 交易详情中的总金额，对 $0 订单直接返回 400 与友好提示 `REFUND_NOT_ALLOWED_ZERO_AMOUNT`，严禁向 Paddle 发起无效调整，避免产生无意义的系统异常日志与 Telegram 告警。
+  - **存量过渡与按需自愈 (Lazy Cache & Self-Healing)**：历史存量订单在修复前 `paid_amount` 为 `NULL`，前端列表暂保留退款入口；当用户发起退款请求时，服务端通过实时查询 Paddle API 校验 `grand_total`，若判定为 0 元则即时更新写入 `paid_amount = 0` 缓存并拦截（400），实现存量数据的按需自愈。

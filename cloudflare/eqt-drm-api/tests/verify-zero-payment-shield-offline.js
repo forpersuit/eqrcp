@@ -371,12 +371,12 @@ async function run() {
       }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
     if (urlStr.includes(`/transactions/${txnPaid}`)) {
-      // Missing details.totals, but has positive line_items unit_price
+      // Missing details.totals, but has realistic line_items with price.unit_price.amount
       return new Response(JSON.stringify({
         data: {
           id: txnPaid,
           details: {
-            line_items: [{ id: 'item_2', unit_price: { amount: '2999' } }]
+            line_items: [{ id: 'item_2', price: { unit_price: { amount: '2999' } } }]
           }
         }
       }), { status: 200, headers: { 'Content-Type': 'application/json' } });

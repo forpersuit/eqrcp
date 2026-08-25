@@ -478,7 +478,7 @@ export async function handlePortalRoutes(
           let sum = 0;
           let hasItemAmount = false;
           for (const item of lineItems) {
-            const itemTotal = item.totals?.grand_total ?? item.totals?.total ?? item.unit_price?.amount;
+            const itemTotal = item.totals?.grand_total ?? item.totals?.total ?? item.price?.unit_price?.amount ?? item.unit_price?.amount;
             if (itemTotal !== undefined && itemTotal !== null && Number.isFinite(Number(itemTotal))) {
               sum += Number(itemTotal);
               hasItemAmount = true;
