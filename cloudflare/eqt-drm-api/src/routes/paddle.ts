@@ -63,7 +63,7 @@ function validatePaidAmount(data: any, matchedPriceId: string): { ok: boolean; r
     return { ok: false, reason: `explicit quantity 0 for price ${matchedPriceId}` };
   }
 
-  const totals = data.totals || {};
+  const totals = data.details?.totals || data.totals || {};
   const totalRaw = totals.grand_total ?? totals.total;
   if (totalRaw !== undefined && totalRaw !== null && Number.isFinite(Number(totalRaw))) {
     if (Number(totalRaw) <= 0) {
@@ -344,7 +344,7 @@ export async function handlePaddleRoutes(
               newExpires = new Date(base + YEARLY_MS).toISOString();
             }
 
-            const totals = data.totals || {};
+            const totals = data.details?.totals || data.totals || {};
             const totalRaw = totals.grand_total ?? totals.total;
             const paidAmount = (totalRaw !== undefined && totalRaw !== null && Number.isFinite(Number(totalRaw))) ? Number(totalRaw) : null;
 
@@ -428,7 +428,7 @@ export async function handlePaddleRoutes(
             newExpires = "LIFETIME";
           }
 
-          const totals = data.totals || {};
+          const totals = data.details?.totals || data.totals || {};
           const totalRaw = totals.grand_total ?? totals.total;
           const paidAmount = (totalRaw !== undefined && totalRaw !== null && Number.isFinite(Number(totalRaw))) ? Number(totalRaw) : null;
 
@@ -501,7 +501,7 @@ export async function handlePaddleRoutes(
 
       // Write to DB。Paddle 履约生成的激活码来源一律为 purchase (购买渠道)。
       const source = "purchase";
-      const totals = data.totals || {};
+      const totals = data.details?.totals || data.totals || {};
       const totalRaw = totals.grand_total ?? totals.total;
       const paidAmount = (totalRaw !== undefined && totalRaw !== null && Number.isFinite(Number(totalRaw))) ? Number(totalRaw) : null;
 

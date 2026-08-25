@@ -465,13 +465,37 @@ export async function handlePortalRoutes(
       }
 
       const txData: any = await txRes.json();
-      const totals = txData.data.details?.totals || {};
-      const grandTotal = Number(totals.grand_total ?? totals.total ?? 0);
+      const totals = txData.data?.details?.totals || txData.data?.totals || {};
+      const totalRaw = totals.grand_total ?? totals.total;
 
-      // Cache paid_amount into database
-      await env.DB.prepare("UPDATE licenses SET paid_amount = ? WHERE license_code = ?").bind(grandTotal, license_code).run().catch(() => {});
+      let grandTotal: number | null = null;
+      if (totalRaw !== undefined && totalRaw !== null && Number.isFinite(Number(totalRaw))) {
+        grandTotal = Number(totalRaw);
+      } else {
+        // Fallback: check line_items if totals is unavailable
+        const lineItems = txData.data?.details?.line_items || txData.data?.line_items || [];
+        if (lineItems.length > 0) {
+          let sum = 0;
+          let hasItemAmount = false;
+          for (const item of lineItems) {
+            const itemTotal = item.totals?.grand_total ?? item.totals?.total ?? item.unit_price?.amount;
+            if (itemTotal !== undefined && itemTotal !== null && Number.isFinite(Number(itemTotal))) {
+              sum += Number(itemTotal);
+              hasItemAmount = true;
+            }
+          }
+          if (hasItemAmount) {
+            grandTotal = sum;
+          }
+        }
+      }
 
-      if (grandTotal <= 0) {
+      // Cache paid_amount into database if deterministically known
+      if (grandTotal !== null) {
+        await env.DB.prepare("UPDATE licenses SET paid_amount = ? WHERE license_code = ?").bind(grandTotal, license_code).run().catch(() => {});
+      }
+
+      if (grandTotal !== null && grandTotal <= 0) {
         return new Response(JSON.stringify({
           error: getApiTranslation("refund_zero_amount", reqLang),
           error_code: "REFUND_NOT_ALLOWED_ZERO_AMOUNT"
