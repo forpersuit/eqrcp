@@ -584,6 +584,7 @@
                 quota_info: '当前为免费版，今日剩余全功能额度：{remaining} 次',
                 quota_exceeded: '今日免费全功能额度已用尽，如需继续使用请在客户端激活 Plus 授权。',
                 btn_retry: '返回重试',
+                btn_dismiss: '关闭',
                 err_reason_network: '网络连接已中断。请确保两台设备都连接到同一个 Wi-Fi（局域网），并且接收端电脑上已启动 EQT。',
                 err_reason_too_large: '文件太大，超出了传输限制。',
                 err_reason_server: '接收端电脑保存文件失败。磁盘可能已满，或者写权限被拒绝。',
@@ -612,6 +613,7 @@
                 err_failed: 'Transfer failed. Keep this page open and try again.',
                 fail_header: 'Transfer Failed',
                 btn_retry: 'Go Back & Retry',
+                btn_dismiss: 'Dismiss',
                 err_reason_network: 'Network connection interrupted. Please ensure both devices are connected to the same Wi-Fi (LAN), and EQT is running on the receiving computer.',
                 err_reason_too_large: 'The file is too large and exceeds the transfer limit.',
                 err_reason_server: 'The receiving computer failed to save the file. Disk might be full or write permission denied.',
@@ -649,6 +651,7 @@
                 err_failed: '転送に失敗しました。このページを開いたままにして再試行してください。',
                 fail_header: '転送に失敗しました',
                 btn_retry: '戻って再試行',
+                btn_dismiss: '閉じる',
                 err_reason_network: 'ネットワーク接続が切断されました。両方のデバイスが同じWi-Fi（LAN）に接続されていること、および受信側コンピュータでEQTが実行されていることを確認してください。',
                 err_reason_too_large: 'ファイルが大きすぎるため、転送制限を超えています。',
                 err_reason_server: '受信側コンピュータがファイルの保存に失敗しました。ディスクがいっぱいか、書き込み権限がない可能性があります。',
@@ -686,6 +689,7 @@
                 err_failed: '전송에 실패했습니다. 이 페이지를 열어두고 다시 시도하십시오.',
                 fail_header: '전송 실패',
                 btn_retry: '돌아가서 다시 시도',
+                btn_dismiss: '닫기',
                 err_reason_network: '네트워크 연결이 끊어졌습니다. 두 기기가 모두 동일한 Wi-Fi(LAN)에 연결되어 있고 수신 컴퓨터에서 EQT가 실행 중인지 확인하십시오.',
                 err_reason_too_large: '파일이 너무 커서 전송 제한을 초과합니다.',
                 err_reason_server: '수신 컴퓨터에서 파일을 저장하지 못했습니다. 디스크가 가득 찼거나 쓰기 권한이 없을 수 있습니다.',
@@ -723,6 +727,7 @@
                 err_failed: 'Error de transferencia. Mantenga esta página abierta e inténtelo de nuevo.',
                 fail_header: 'Error de transferencia',
                 btn_retry: 'Volver y reintentar',
+                btn_dismiss: 'Cerrar',
                 err_reason_network: 'Conexión de red interrumpida. Asegúrese de que ambos dispositivos estén conectados a la misma red Wi-Fi (LAN) y de que EQT se esté ejecutando en el ordenador receptor.',
                 err_reason_too_large: 'El archivo es demasiado grande y supera el límite de transferencia.',
                 err_reason_server: 'El ordenador receptor no pudo guardar el archivo. Es posible que el disco esté lleno o que no tenga permisos de escritura.',
@@ -760,6 +765,7 @@
                 err_failed: 'Übertragung fehlgeschlagen. Bitte lassen Sie diese Seite geöffnet und versuchen Sie es erneut.',
                 fail_header: 'Übertragung fehlgeschlagen',
                 btn_retry: 'Zurück & erneut versuchen',
+                btn_dismiss: 'Schließen',
                 err_reason_network: 'Netzwerkverbindung unterbrochen. Bitte stellen Sie sicher, dass beide Geräte mit demselben Wi-Fi (LAN) verbunden sind und EQT auf dem Empfängercomputer ausgeführt wird.',
                 err_reason_too_large: 'Die Datei ist zu groß und überschreitet das Übertragungslimit.',
                 err_reason_server: 'Der Empfängercomputer konnte die Datei nicht speichern. Möglicherweise ist die Festplatte voll oder die Schreibberechtigung wurde verweigert.',
@@ -797,6 +803,7 @@
                 err_failed: 'Échec du transfert. Veuillez garder cette page ouverte et réessayer.',
                 fail_header: 'Échec du transfert',
                 btn_retry: 'Retourner & réessayer',
+                btn_dismiss: 'Fermer',
                 err_reason_network: 'Connexion réseau interrompue. Veuillez vous assurer que les dos appareils sont connectés au même réseau Wi-Fi (LAN) et que EQT est en cours d\'exécution sur l\'ordinateur destinataire.',
                 err_reason_too_large: 'Le fichier est trop volumineux et dépasse la limite de transfert.',
                 err_reason_server: 'L\'ordinateur destinataire n\'a pas réussi à enregistrer le fichier. Le disque est peut-être plein ou l\'autorisation d\'écriture a été refusée.',
@@ -1784,10 +1791,6 @@
             return '';
         });
 
-        restoreDraft();
-        applyLanguage();
-        resizeTextArea();
-
         var quotaTipCountdown = 5;
         var quotaTipTimer = null;
         var quotaTipDismissed = false;
@@ -1840,6 +1843,10 @@
                 }, 300);
             }
         }
+
+        restoreDraft();
+        applyLanguage();
+        resizeTextArea();
 
         function updateLimitUI(count) {
             var oldTransfers = usedTransfers;
@@ -1918,29 +1925,35 @@
                         } else {
                             var remaining = Math.max(0, 5 - usedTransfers);
                             var text = t('quota_info').replace('{remaining}', remaining);
+                            var dismissText = t('btn_dismiss') || 'Dismiss';
                             var tipWrapper = document.getElementById('quota-tip-wrapper');
                             if (tipWrapper) {
-                                // 如果倒计时 pill 已存在，就地更新语言文案，保持倒计时动画继续
+                                // 如果倒计时 pill 已存在，就地更新语言文案与按钮提示，保持倒计时动画继续
                                 var tipTextEl = document.getElementById('quota-tip-text');
                                 if (tipTextEl) {
                                     tipTextEl.textContent = text;
+                                }
+                                var closeBtnEl = document.getElementById('quota-tip-close');
+                                if (closeBtnEl) {
+                                    closeBtnEl.setAttribute('title', dismissText);
+                                    closeBtnEl.setAttribute('aria-label', dismissText);
                                 }
                             } else {
                                 bannerEl.style.display = 'block';
                                 bannerEl.style.opacity = '1';
                                 bannerEl.style.transform = 'none';
                                 bannerEl.innerHTML = '<div class="quota-tip-wrapper" id="quota-tip-wrapper">' +
-                                    '<span class="quota-tip-pill">' +
-                                        '<div class="countdown-circle-container" style="position: relative; width: 14px; height: 14px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;">' +
+                                    '<div class="quota-tip-pill">' +
+                                        '<span class="countdown-circle-container" style="position: relative; width: 14px; height: 14px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;">' +
                                             '<svg width="14" height="14" viewBox="0 0 20 20" style="transform: rotate(-90deg); width: 100%; height: 100%;">' +
                                                 '<circle cx="10" cy="10" r="8.5" fill="none" stroke="var(--accent-strong)" stroke-width="2" style="opacity: 0.2;"></circle>' +
                                                 '<circle id="quota-tip-circle" cx="10" cy="10" r="8.5" fill="none" stroke="var(--accent-strong)" stroke-width="2" stroke-dasharray="53.4" stroke-dashoffset="' + (53.4 * (1 - quotaTipCountdown / 5)) + '" style="transition: stroke-dashoffset 1s linear;"></circle>' +
                                             '</svg>' +
                                             '<span id="quota-tip-num" style="position: absolute; font-size: 8px; font-weight: bold; font-family: monospace; line-height: 1; color: var(--accent-strong);">' + quotaTipCountdown + '</span>' +
-                                        '</div>' +
+                                        '</span>' +
                                         '<span id="quota-tip-text">' + text + '</span>' +
-                                        '<button type="button" class="quota-tip-close" id="quota-tip-close" title="Dismiss">&times;</button>' +
-                                    '</span>' +
+                                        '<button type="button" class="quota-tip-close" id="quota-tip-close" title="' + dismissText + '" aria-label="' + dismissText + '">&times;</button>' +
+                                    '</div>' +
                                 '</div>';
                                 var closeBtn = document.getElementById('quota-tip-close');
                                 if (closeBtn) {
