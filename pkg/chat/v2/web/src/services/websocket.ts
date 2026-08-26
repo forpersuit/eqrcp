@@ -124,14 +124,13 @@ export class ChatWebSocketClient {
         } else if (document.visibilityState === 'visible') {
           this.isSuspended = false;
           this.pendingHeartbeatSince = 0;
-          const isSocketOpen = Boolean(this.ws && this.ws.readyState === WebSocket.OPEN);
-          if (isSocketOpen) {
+          if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             this.pendingHeartbeatSince = Date.now();
             this.sendCommand({
               type: 'heartbeat',
               commandId: `hb-probe-${Date.now()}`
             });
-          } else if (shouldReconnectOnVisible({ isManualClosed: this.isManualClosed, isSocketOpen })) {
+          } else if (shouldReconnectOnVisible({ isManualClosed: this.isManualClosed, readyState: this.ws?.readyState })) {
             this.reconnectAttempts = 0;
             this.reconnectDelay = 1000;
             this.connect();

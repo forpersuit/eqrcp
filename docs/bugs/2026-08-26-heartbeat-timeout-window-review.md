@@ -219,10 +219,12 @@ go test ./pkg/chat/v2/session
 - **全链路测试通过**：`npm test`（6 个测试文件）与 `npm run check`（0 错误 0 警告除已有 a11y）全部通过。
 - **审查结论**：10.3 提出的 2 项设计与测试改进已全量落实并闭环。
 
-### 10.5 复核补充发现（审查 71bba25 识别）
+### 10.5 复核补充发现与闭环（v1.36.8 → v1.36.9）
 
-- **`shouldReconnectOnVisible` 提取时丢失「排除 CONNECTING」语义（低严重度，不阻塞）**：
-  - 原 visible 分支（909924d 起）的 else-if 明确要求 `!this.ws || CLOSED || CLOSING`，即 **CONNECTING（握手进行中）时不触发重连**，等待原有 `onopen`；
-  - 新纯函数 `shouldReconnectOnVisible({ isManualClosed, isSocketOpen })` 只排除 OPEN 与 manual 关闭：`this.ws` 处于 CONNECTING 时 `isSocketOpen === false` → 返回 true → `connect()` 会对正在握手的 socket 解绑 + close + 重新 new，多一次冗余握手；
-  - 实测影响无：`npm test` 全绿、`svelte-check` 106 文件 0 错误；server 端对未完成握手无已注册状态，abort 后自愈，实际无感。但语义与原实现不同，若要保持「握手窗口内不打断」，应让纯函数接收 ws 状态枚举（CONNECTING/OPEN/CLOSED/CLOSING）对齐原 else-if，或接受当前「重连幂等」语义并注记；
-  - 现实触发窗口极窄（仅 `connect()` 同步 `new WebSocket` 之后、握手完成前切 visible），判定为记录项而非缺陷。
+- **`shouldReconnectOnVisible` 状态对齐（排除 CONNECTING 握手态）**：
+  - 状态：✅ 已修。
+  - 修复说明：已重构 `shouldReconnectOnVisible({ isManualClosed, readyState })`，直接对齐 `WebSocket.readyState` 枚举：
+    - `readyState === 0`（CONNECTING）或 `1`（OPEN）时返回 `false`（等待既有握手/通信，绝不打断）；
+    - `readyState === 2`（CLOSING）、`3`（CLOSED）或 `undefined`（无连接）且非 manual closed 时返回 `true`（触发重连）；
+  - 测试断言：在 [`visibilityPolicy.test.ts`](file:///home/yelon/develop/me/eqrcp/pkg/chat/v2/web/src/services/visibilityPolicy.test.ts) 中增加对 `CONNECTING (0)`、`CLOSING (2)`、`CLOSED (3)`、`OPEN (1)`、`undefined` 的全覆盖自动化断言，并已纳入 `npm test`。
+- **全链路结论**：从第 1 节到第 10 节的所有审查项已 100% 达成理论与工程闭环，无任何遗留或语义漂移。

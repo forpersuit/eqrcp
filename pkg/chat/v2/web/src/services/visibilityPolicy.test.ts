@@ -23,15 +23,27 @@ assert(shouldCloseSocketOnHidden('web') === true, 'web browser client must activ
 
 // 2. Visible foreground reconnect tests
 assert(
-  shouldReconnectOnVisible({ isManualClosed: false, isSocketOpen: false }) === true,
-  'visible + dead socket reconnects'
+  shouldReconnectOnVisible({ isManualClosed: false, readyState: undefined }) === true,
+  'visible + no socket reconnects'
 );
 assert(
-  shouldReconnectOnVisible({ isManualClosed: false, isSocketOpen: true }) === false,
+  shouldReconnectOnVisible({ isManualClosed: false, readyState: 3 /* CLOSED */ }) === true,
+  'visible + closed socket reconnects'
+);
+assert(
+  shouldReconnectOnVisible({ isManualClosed: false, readyState: 2 /* CLOSING */ }) === true,
+  'visible + closing socket reconnects'
+);
+assert(
+  shouldReconnectOnVisible({ isManualClosed: false, readyState: 1 /* OPEN */ }) === false,
   'visible + live socket no-op'
 );
 assert(
-  shouldReconnectOnVisible({ isManualClosed: true, isSocketOpen: false }) === false,
+  shouldReconnectOnVisible({ isManualClosed: false, readyState: 0 /* CONNECTING */ }) === false,
+  'visible + connecting socket waits for handshake without interrupting'
+);
+assert(
+  shouldReconnectOnVisible({ isManualClosed: true, readyState: 3 /* CLOSED */ }) === false,
   'manual leave/kick must not auto-reconnect on visible'
 );
 

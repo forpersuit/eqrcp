@@ -12,13 +12,20 @@ export function shouldCloseSocketOnHidden(peer?: string | null): boolean {
   return !isDesktopPeer(peer);
 }
 
-/** When page becomes visible again, determine whether to trigger automatic reconnect. */
+/** When page becomes visible again, determine whether to trigger automatic reconnect.
+ * Reconnects if socket is missing/undefined, CLOSING (2), or CLOSED (3).
+ * Waits without interruption if socket is CONNECTING (0) or OPEN (1).
+ */
 export function shouldReconnectOnVisible(opts: {
   isManualClosed: boolean;
-  isSocketOpen: boolean;
+  readyState?: number;
 }): boolean {
   if (opts.isManualClosed) return false;
-  if (opts.isSocketOpen) return false;
+  // 0: CONNECTING, 1: OPEN
+  if (opts.readyState === 0 || opts.readyState === 1) {
+    return false;
+  }
+  // undefined (no socket), 2 (CLOSING), 3 (CLOSED)
   return true;
 }
 
