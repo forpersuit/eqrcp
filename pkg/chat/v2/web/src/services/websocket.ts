@@ -17,7 +17,6 @@ export class ChatWebSocketClient {
   private reconnectDelay = 1000; // start with 1s
   private heartbeatIntervalId: any = null;
   private heartbeatWorker: Worker | null = null;
-  private lastHeartbeatAck = Date.now();
   private pendingHeartbeatSince = 0;
   private isManualClosed = false;
   private clientToken = '';
@@ -105,7 +104,6 @@ export class ChatWebSocketClient {
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
           this.pendingHeartbeatSince = 0;
-          this.lastHeartbeatAck = Date.now();
           if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             this.sendCommand({
               type: 'heartbeat',
@@ -202,7 +200,6 @@ export class ChatWebSocketClient {
     };
 
     this.ws.onmessage = (event) => {
-      this.lastHeartbeatAck = Date.now();
       this.pendingHeartbeatSince = 0;
       try {
         const payload: EventEnvelope = JSON.parse(event.data);
@@ -325,7 +322,6 @@ export class ChatWebSocketClient {
         break;
 
       case 'heartbeat':
-        this.lastHeartbeatAck = Date.now();
         break;
 
       case 'message_added':
@@ -456,7 +452,6 @@ export class ChatWebSocketClient {
 
   private startHeartbeat(): void {
     this.stopHeartbeat();
-    this.lastHeartbeatAck = Date.now();
     this.pendingHeartbeatSince = 0;
 
     const heartbeatTick = () => {
