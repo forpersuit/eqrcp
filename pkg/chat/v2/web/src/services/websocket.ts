@@ -20,7 +20,6 @@ export class ChatWebSocketClient {
   private lastHeartbeatAck = Date.now();
   private pendingHeartbeatSince = 0;
   private isManualClosed = false;
-  private isSuspended = false;
   private clientToken = '';
   private pendingLogs: string[] = [];
 
@@ -105,7 +104,6 @@ export class ChatWebSocketClient {
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
-          this.isSuspended = false;
           this.pendingHeartbeatSince = 0;
           this.lastHeartbeatAck = Date.now();
           if (this.ws && this.ws.readyState === WebSocket.OPEN) {
@@ -222,10 +220,6 @@ export class ChatWebSocketClient {
     this.ws.onclose = (event) => {
       chatActions.setConnectionState('disconnected');
       this.stopHeartbeat();
-      if (this.isSuspended) {
-        this.sendLog(`[SYSTEM] WebSocket closed due to suspension, omitting reconnection.`);
-        return;
-      }
       // Another tab/window of the same browser took over this peer in the room.
       // Stop auto-reconnect to avoid fights; user can resume via explicit button.
       if (event.reason === 'replaced_by_peer') {
@@ -470,14 +464,19 @@ export class ChatWebSocketClient {
         return;
       }
 
-      // If a heartbeat probe was sent and no response (or other message) was received within 15s, connection is dead.
-      if (this.pendingHeartbeatSince > 0 && Date.now() - this.pendingHeartbeatSince > 15000) {
-        chatActions.addDebugNotice('Heartbeat timeout (15s after ping). Re-establishing connection.');
-        this.pendingHeartbeatSince = 0;
-        this.ws?.close();
+      // Check in-flight heartbeat probe
+      if (this.pendingHeartbeatSince > 0) {
+        // If an in-flight heartbeat probe has not received any response or message for >= 15s, connection is dead.
+        if (Date.now() - this.pendingHeartbeatSince >= 15000) {
+          chatActions.addDebugNotice('Heartbeat timeout (15s unanswered). Re-establishing connection.');
+          this.pendingHeartbeatSince = 0;
+          this.ws?.close();
+        }
+        // An unanswered probe is already in flight; do not send duplicate pings or overwrite timestamp.
         return;
       }
 
+      // No in-flight heartbeat: record timestamp and send heartbeat probe.
       this.pendingHeartbeatSince = Date.now();
       this.sendCommand({
         type: 'heartbeat',

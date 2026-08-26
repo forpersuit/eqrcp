@@ -40,6 +40,10 @@ func NewSession(token string) *Session {
 	}
 }
 
+func isDesktopPeer(peer string) bool {
+	return strings.EqualFold(strings.TrimSpace(peer), "desktop")
+}
+
 // Register adds a client to the session, replays missed events, and broadcasts presence.
 //
 // Same-browser / same-device policy: peer is the device identity. At most one
@@ -60,7 +64,7 @@ func (s *Session) Register(c *Client, afterSeq, joinSeq int64) {
 	var parentLabel string
 	if c.Join != "" {
 		for _, client := range s.clients {
-			if client.LocalJoin == c.Join && client.ID != c.ID && client.Peer != "desktop" {
+			if client.LocalJoin == c.Join && client.ID != c.ID && !isDesktopPeer(client.Peer) {
 				parentLabel = client.Label
 				break
 			}
@@ -96,13 +100,13 @@ func (s *Session) Register(c *Client, afterSeq, joinSeq int64) {
 			sysMsg = "{oldSender} 修改用户名为 {sender}"
 		} else if oldClient.Avatar != c.Avatar {
 			sysMsg = "{sender} 修改了头像"
-		} else if c.Peer != "desktop" {
+		} else if !isDesktopPeer(c.Peer) {
 			sysMsg = "{sender} 已重新连接"
 		}
 	} else {
 		if parentLabel != "" {
 			sysMsg = fmt.Sprintf("{sender} 通过 %s 加入了会话", parentLabel)
-		} else if c.Peer != "desktop" {
+		} else if !isDesktopPeer(c.Peer) {
 			sysMsg = "{sender} 已加入会话"
 		}
 	}
@@ -137,7 +141,7 @@ func (s *Session) Unregister(c *Client) {
 		c.Close()
 		s.broadcastPresence()
 
-		if !hasOther && !s.DisableSystemMessages && !c.Kicked && c.Peer != "desktop" {
+		if !hasOther && !s.DisableSystemMessages && !c.Kicked && !isDesktopPeer(c.Peer) {
 			s.broadcastSystemMessage("{sender} 已断开连接", c.Theme, c, "")
 		}
 
@@ -293,7 +297,7 @@ func (s *Session) HasRemoteClient() bool {
 		if c == nil {
 			continue
 		}
-		if !strings.EqualFold(strings.TrimSpace(c.Peer), "desktop") {
+		if !isDesktopPeer(c.Peer) {
 			return true
 		}
 	}
@@ -342,12 +346,7 @@ func (s *Session) AssignTheme(c *Client, info protocol.ClientInfo) {
 		s.clientThemeJoins = make(map[string]string)
 	}
 
-	isDesktop := false
-	if strings.EqualFold(strings.TrimSpace(info.Peer), "desktop") || strings.EqualFold(strings.TrimSpace(c.Peer), "desktop") {
-		isDesktop = true
-	}
-
-	if isDesktop {
+	if isDesktopPeer(info.Peer) || isDesktopPeer(c.Peer) {
 		s.clientThemes[c.Peer] = "theme-0"
 		c.Theme = "theme-0"
 		return
@@ -460,11 +459,11 @@ func (s *Session) isTransferEventVisibleTo(c *Client, event protocol.EventEnvelo
 					return true
 				}
 				// Otherwise, limit progress updates to the uploader, downloader, desktop, or empty targets
-				return c.Peer == msg.SenderID || c.Peer == event.Transfer.ClientID || c.Peer == "desktop" || c.Peer == ""
+				return c.Peer == msg.SenderID || c.Peer == event.Transfer.ClientID || isDesktopPeer(c.Peer) || c.Peer == ""
 			}
 		}
 		// If not registered yet in message store, fallback to client/desktop bounds
-		return c.Peer == event.Transfer.ClientID || c.Peer == "desktop" || c.Peer == ""
+		return c.Peer == event.Transfer.ClientID || isDesktopPeer(c.Peer) || c.Peer == ""
 	}
 	return true
 }
@@ -545,7 +544,7 @@ func (s *Session) isEventVisibleTo(c *Client, event protocol.EventEnvelope) bool
 
 	if event.Message != nil && event.Message.Type == protocol.MessageFile && event.Message.Uploading {
 		// Limit uploading file messages to sender, desktop, or empty targets
-		return c.Peer == event.Message.SenderID || c.Peer == "desktop" || c.Peer == ""
+		return c.Peer == event.Message.SenderID || isDesktopPeer(c.Peer) || c.Peer == ""
 	}
 
 	return true

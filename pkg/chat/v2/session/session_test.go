@@ -409,3 +409,27 @@ func TestDesktopHostSuppressesJoinAndDisconnectNotices(t *testing.T) {
 		}
 	}
 }
+
+func TestDesktopHostCaseInsensitiveSuppression(t *testing.T) {
+	sess := NewSession("desktop-case-room")
+	sess.DisableSystemMessages = false
+
+	// Register desktop host with mixed case and whitespace
+	host := NewClient(protocol.ClientInfo{Label: "EQT User", Peer: " Desktop "}, nil)
+	sess.Register(host, 0, 0)
+
+	events := sess.MessageStore.GetSince(0)
+	for _, ev := range events {
+		if ev.Message != nil && ev.Message.Type == protocol.MessageSystem {
+			t.Fatalf("mixed case desktop peer should not generate system messages on join, got: %s", ev.Message.Text)
+		}
+	}
+
+	sess.Unregister(host)
+	eventsAfterLeave := sess.MessageStore.GetSince(0)
+	for _, ev := range eventsAfterLeave {
+		if ev.Message != nil && ev.Message.Type == protocol.MessageSystem {
+			t.Fatalf("mixed case desktop peer should not generate disconnect system messages, got: %s", ev.Message.Text)
+		}
+	}
+}
