@@ -135,7 +135,13 @@ export class ChatWebSocketClient {
 
   public connect(): void {
     if (this.ws) {
-      this.ws.close();
+      const oldWs = this.ws;
+      oldWs.onopen = null;
+      oldWs.onmessage = null;
+      oldWs.onerror = null;
+      oldWs.onclose = null;
+      oldWs.close();
+      this.ws = null;
     }
 
     this.isManualClosed = false;
@@ -155,9 +161,11 @@ export class ChatWebSocketClient {
   }
 
   private setupHandlers(): void {
-    if (!this.ws) return;
+    const ws = this.ws;
+    if (!ws) return;
 
-    this.ws.onopen = () => {
+    ws.onopen = () => {
+      if (this.ws !== ws) return;
       chatActions.addDebugNotice('WebSocket connection established.');
       this.reconnectAttempts = 0;
       this.reconnectDelay = 1000;
@@ -213,7 +221,8 @@ export class ChatWebSocketClient {
       this.flushPendingLogs();
     };
 
-    this.ws.onmessage = (event) => {
+    ws.onmessage = (event) => {
+      if (this.ws !== ws) return;
       this.pendingHeartbeatSince = 0;
       try {
         const payload: EventEnvelope = JSON.parse(event.data);
@@ -223,12 +232,14 @@ export class ChatWebSocketClient {
       }
     };
 
-    this.ws.onerror = (err) => {
+    ws.onerror = (err) => {
+      if (this.ws !== ws) return;
       chatActions.addDebugNotice('WebSocket encountered an error.');
       this.sendLog(`[SYSTEM] WebSocket encountered an error.`);
     };
 
-    this.ws.onclose = (event) => {
+    ws.onclose = (event) => {
+      if (this.ws !== ws) return;
       chatActions.setConnectionState('disconnected');
       this.stopHeartbeat();
       if (this.isSuspended) {
@@ -710,7 +721,15 @@ export class ChatWebSocketClient {
   public close(): void {
     this.isManualClosed = true;
     this.stopHeartbeat();
-    this.ws?.close();
+    if (this.ws) {
+      const oldWs = this.ws;
+      oldWs.onopen = null;
+      oldWs.onmessage = null;
+      oldWs.onerror = null;
+      oldWs.onclose = null;
+      oldWs.close();
+      this.ws = null;
+    }
   }
 
   public leaveSession(): void {

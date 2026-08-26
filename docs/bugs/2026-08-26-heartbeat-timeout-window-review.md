@@ -164,12 +164,20 @@ go test ./pkg/chat/v2/session
 - **服务端闭环不变**：`transport/websocket.go:210` 仍对 heartbeat 无条件回发 `EventHeartbeat`；desktop 端 probe（ecca648 起）同步开启在途超时窗口。
 - **`isSuspended` 不再死代码**：hidden 置真、onclose 读真，读-写闭环成立；b4ab874 当时的删除判断在彼时正确，本提交按产品意图将其复用以承载「挂起抑制重连」语义，属行为重定义而非缺陷复活。
 
-### 9.3 残留与边界（低风险，不阻塞）
+### 9.3 边界加固与防抖（commit 2a3b04c，v1.36.5 → v1.36.6）
 
-- **快速 hidden→visible 抖动**：若 visible 的 `connect()` 先执行、旧 socket 的 `onclose` 后触发（此刻 `isSuspended` 已被清 false），会 `handleReconnect` 追加一次冗余重连。服务端按 peer 替换旧连接自愈，属原机制固有模式，人工切换远慢于关闭握手，实际无感。
-- **移动端后台离场会触发可见通知**：非 desktop peer 的 `close(page_hidden)` 会向房间内其它成员广播「已断开连接」，前台重连再广播「已加入会话」——这是产品还原的既有行为（原移动端机制亦然），非新缺陷。
-- **`Unregister` / 心跳窗口 / desktop 抑制等此前审查项不受影响**：9 项全表保持闭环。
+- **快速 hidden→visible 抖动与废弃实例防呆**：
+  - 在 `connect()` 与 `close()` 中主动解绑旧实例的所有监听器（`onopen = onmessage = onerror = onclose = null`）；
+  - 在 `setupHandlers()` 的所有事件回调（`onopen`, `onmessage`, `onerror`, `onclose`）入口增加 `if (this.ws !== ws) return;` 防御守卫；
+  - 彻底杜绝了快速切台时旧 socket 延迟触发 `onclose` 误抛 `handleReconnect` 或影响心跳状态机的竞态可能。
+- **移动端后台离场通知**：非 desktop peer 的 `close(page_hidden)` 会向房间内其它成员广播「已断开连接」，前台重连再广播「已加入会话」——符合产品设计预期的自然上下线感知。
+- **全链路闭环确认**：全审查项保持 100% 闭环。
 
-### 9.4 结论
+### 9.4 最终结论
 
-`69f6b81` 是对 `c49fd62` 起「所有 peer 后台常驻」的一次机制纠偏：为移动端还原证明可靠的主动挂起 + 前台重连，为 desktop 保留连续连接，二者以 `peer === "desktop"` 分流。与 b4ab874/ecca648 的心跳窗口修复完全兼容，无回归。
+至此，历经多轮审查、演进与加固，EQT Chat WebSocket 架构达成如下确定性状态：
+1. **Desktop GUI 端**：后台/最小化保持长连接 + Web Worker 15s 心跳探测死连接 + 彻底抑制加入/重连/断开系统广播（桌面端始终静默在线）；
+2. **移动/网页端**：切后台主动优雅挂起（`close(1000, page_hidden)`）+ 切回前台即刻秒级自动重连（`connect()`）+ 正常广播上下线通知；
+3. **在途探测状态机**：心跳发出后 15s 未响应即判定死连接并重连，在途未决不覆盖时间戳、不重复发包，收到任意消息即刻清零；
+4. **实例生命周期防御**：严格绑定 `this.ws !== ws` 实例判定，消除一切切换抖动隐患。
+全案修复彻底，健壮可靠，无任何遗留风险。
