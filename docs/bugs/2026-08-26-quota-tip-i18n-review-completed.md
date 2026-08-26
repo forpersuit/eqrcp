@@ -1,5 +1,7 @@
 # ecbb497 代码审查：接收额度提示 5 秒倒计时自动关闭与 i18n 切换滞后修复
 
+> 状态：✅ 已闭环（Completed）—— 本轮审查（ecbb497）及其后续修复提交（5da651c）已全部合入并经浏览器实测核验，全部发现项（A/B/C）闭环，无遗留缺陷。核验过程见第七节。
+>
 > 审查日期：2026-08-26
 > 审查对象：commit `ecbb497` — "Add 5s countdown dismiss to receive quota tip and fix i18n lag"
 > 涉及文件：`pkg/pages/upload.tmpl.html`、`pkg/version/version.go`、`.agents/skills/eqt-ux/SKILL.md`
