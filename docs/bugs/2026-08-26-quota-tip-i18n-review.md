@@ -74,3 +74,29 @@ go test ./pkg/chat/v2/...    # 后端思路不受本前端模板改动影响
 ## 六、结论
 
 本次提交功能正确：倒计时自动关闭、exceeded 防呆、i18n 切换重绘三处逻辑经逐行推演与浏览器实测均符合预期，**无功能性缺陷**。三项低优先建议（A 瞬时 NaN 注入 / B span>div 合规 / C title 硬编码）不影响运行，可择机在后续模板改动中顺手修正，无需回退或立即热修。
+
+---
+
+## 七、修复核验与闭环（2026-08-26，commit 5da651c）
+
+> 同日提交 `5da651c` "Fix quota tip DOM nesting, i18n title, and init var ordering"（版本保持 v1.36.10，未递增）针对上文第三节的 A/B/C 三项发现逐一修复。复核查验如下。
+
+### 7.1 三项发现全部闭环
+
+| 上轮发现 | 修复状态 | 核验 |
+| :--- | :--- | :--- |
+| A. 首次注入瞬时 NaN（`quotaTipCountdown` 声明晚于首次 `applyLanguage()`） | ✅ 已修 | 将 `restoreDraft(); applyLanguage(); resizeTextArea();` 整体下移至 `var quotaTipCountdown = 5` 赋值与 `function updateLimitUI` 声明之后（当前行 1847–1849，`rg` 实测）；首次 `applyLanguage()` 执行时 `quotaTipCountdown` 已是 5，注入的 `stroke-dashoffset` 直接为 `0`、`#quota-tip-num` 为 `5`。浏览器实测 `strokeDashoffset="0"`、`numText="5"`，无 NaN。**且 `restoreDraft → applyLanguage` 相对顺序保持不变**（先恢复草稿、应用再 `renderFiles`，避免恢复内容漏渲染），无回归 |
+| B. `span > div` 非合规嵌套 | ✅ 已修 | 外层 `.quota-tip-pill` 由 `<span>` 改 `<div>`，内层 `.countdown-circle-container` 由 `<div style="display:flex">` 改 `<span style="display:inline-flex">`。浏览器实测最终 DOM 为 `DIV.quota-tip-pill > [SPAN.countdown-circle-container, SPAN#quota-tip-text, BUTTON#quota-tip-close]`，全为合法 flow/phrasing 结构，validator 不再报 non-conforming；CSS 按类匹配，胶囊样式不受标签类型影响 |
+| C. 关闭按钮 `title="Dismiss"` 硬编码英文 | ✅ 已修 | 新增 `btn_dismiss` 键并补齐 zh/en/ja/ko/es/de/fr 共 7 语言（`rg -c` 实测 7/7，与 `btn_retry` 语言集一致）；注入时 `title`/`aria-label` 均写入 `dismissText`，就地更新分支同步 `setAttribute`；`t('btn_dismiss') || 'Dismiss'` 兜底防空。浏览器实测 `closeTitle="关闭"`、`closeAria="关闭"` |
+
+### 7.2 新审查观察（信息项，无需修改）
+
+- **版本号未递增**：`5da651c` 保持 v1.36.10。属 UI 结构/文案行为修复，patch 递增在项目惯例中为可选，无强制。
+- **`dismissText` 属性注入无转义**：`title`/`aria-label` 直接拼接 `dismissText`。内容来源为受控 i18n 字典固定字面量（七语言值均无双引号/尖括号），无注入路径；若未来引入用户自定义文案则需补 HTML 转义，当前无需。
+- **init 依赖成立**：`accumulatedFiles`(996)/`selectedFileContainer`(1002)/`errorBox`(1004)/`submitButton`(998)/`isUploading`(1053) 等 top-level 变量均先行初始化于 1847 的初始调用，`restoreDraft`/`saveDraft`/`resizeTextArea`/`updateLimitUI`/`renderFiles` 均为函数声明（提升），时序无缺口。
+
+### 7.3 终态确认
+
+- 上轮全部发现项（A/B/C）100% 闭环，修复未引入回归：init 顺序依赖、`restoreDraft → applyLanguage` 相对顺序、CSS 类选择器均核验无损。
+- 浏览器实测（chrome-devtools-mcp）最终 DOM 结构合法、初始状态无 NaN、i18n 生效。
+- 审查结论：修复完全闭环，无遗留缺陷。
