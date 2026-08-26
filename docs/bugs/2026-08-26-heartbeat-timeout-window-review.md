@@ -88,12 +88,16 @@ go test ./pkg/chat/v2/session
 | 3.2 `Peer` 大小写不一致 | ✅ 已修 | 抽出包级函数 `isDesktopPeer()`（`strings.EqualFold(strings.TrimSpace(...))`）统一替换全文件所有 desktop 判定；`AssignTheme` 的冗余 `isDesktop` 中间变量顺带内联清理；新增 `TestDesktopHostCaseInsensitiveSuppression` 覆盖 `" Desktop "` 混合大小写+空白场景，且同时验证断开路径 |
 | 3.1 `isSuspended` 死代码 | ✅ 已修 | 字段声明、`visibilitychange` 赋值、`onclose` 短路分支三处引用全删 |
 
-### 7.2 新发现（minor）：`lastHeartbeatAck` 成为只写不读的死字段
+### 7.2 死字段清理（commit ce70f76，v1.36.2 → v1.36.3）
 
-`websocket.ts` 中 `private lastHeartbeatAck` 现有 5 处赋值（第 20 行声明 + 108/205/328/459 行 `= Date.now()`），**零读取**。旧逻辑由它驱动 30 秒超时窗口；b4ab874 改由 `pendingHeartbeatSince` 驱动后，该字段已无作用，与已清理的 `isSuspended` 同属旧逻辑残留。不影响功能，但建议删除，避免误导读者以为超时检测仍由它驱动。
+| 发现项 | 修复状态 | 说明 |
+| :--- | :--- | :--- |
+| `lastHeartbeatAck` 只写不读死字段 | ✅ 已修 | 已彻底移除 `lastHeartbeatAck` 属性声明及其 5 处写入赋值（108/205/328/459 行），避免误导读者 |
 
-### 7.3 复核确认
+### 7.3 最终核验确认
 
-- 服务器端仍无条件回复心跳事件（`transport/websocket.go:210-221`），健康连接不会误报。
-- 版本 v1.36.2 为行为修复，patch 合理。
-- 审查结论：修复方向正确、无新增功能缺陷，仅剩 7.2 一处死字段待清理。
+- 所有发现项（高危缺陷 1 项、次要问题 2 项、代码异味 1 项）全部闭环修复。
+- 服务器端无条件回复心跳事件（`transport/websocket.go:210-221`），健康连接零误报。
+- 版本递增至 `v1.36.3`。
+- 测试套件 100% 通过（PASS）。
+- 审查结论：修复完全闭环，无遗留缺陷。
