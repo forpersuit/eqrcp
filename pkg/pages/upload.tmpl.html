@@ -324,6 +324,42 @@
             color: var(--danger);
             box-shadow: 0 4px 12px rgba(180, 35, 24, 0.03);
         }
+        .quota-tip-wrapper {
+            display: flex;
+            justify-content: center;
+            width: 100%;
+        }
+        .quota-tip-pill {
+            background: rgba(15, 118, 110, 0.08);
+            border: 1px solid rgba(15, 118, 110, 0.2);
+            color: var(--accent-strong);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px 6px 12px;
+            border-radius: 999px;
+            font-size: 12px;
+            line-height: 1.4;
+            font-weight: 500;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+            max-width: 100%;
+        }
+        .quota-tip-close {
+            background: transparent;
+            border: none;
+            color: var(--accent-strong);
+            cursor: pointer;
+            font-weight: bold;
+            margin-left: 4px;
+            padding: 0 4px;
+            font-size: 14px;
+            line-height: 1;
+            opacity: 0.7;
+            transition: opacity 0.15s ease;
+        }
+        .quota-tip-close:hover {
+            opacity: 1;
+        }
 
         /* 核心区域一：文件上传卡片边框区域 */
         .file-section-card {
@@ -859,6 +895,12 @@
             var langSelect = document.getElementById('page-lang-select');
             if (langSelect) {
                 langSelect.value = currentLang;
+            }
+            if (typeof updateLimitUI === 'function') {
+                updateLimitUI(usedTransfers);
+            }
+            if (typeof renderFiles === 'function') {
+                renderFiles();
             }
         }
 
@@ -1746,6 +1788,59 @@
         applyLanguage();
         resizeTextArea();
 
+        var quotaTipCountdown = 5;
+        var quotaTipTimer = null;
+        var quotaTipDismissed = false;
+
+        function startQuotaTipCountdown() {
+            if (quotaTipTimer) {
+                clearInterval(quotaTipTimer);
+            }
+            quotaTipCountdown = 5;
+            renderQuotaTipCountdown();
+            quotaTipTimer = setInterval(function() {
+                quotaTipCountdown -= 1;
+                if (quotaTipCountdown <= 0) {
+                    dismissQuotaTip();
+                } else {
+                    renderQuotaTipCountdown();
+                }
+            }, 1000);
+        }
+
+        function renderQuotaTipCountdown() {
+            var circle = document.getElementById('quota-tip-circle');
+            if (circle) {
+                circle.style.strokeDashoffset = (53.4 * (1 - quotaTipCountdown / 5)).toString();
+            }
+            var num = document.getElementById('quota-tip-num');
+            if (num) {
+                num.textContent = quotaTipCountdown;
+            }
+        }
+
+        function dismissQuotaTip() {
+            quotaTipDismissed = true;
+            if (quotaTipTimer) {
+                clearInterval(quotaTipTimer);
+                quotaTipTimer = null;
+            }
+            var bannerEl = document.getElementById('quota-banner');
+            if (bannerEl && !bannerEl.querySelector('.quota-banner-card.exceeded')) {
+                bannerEl.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+                bannerEl.style.opacity = '0';
+                bannerEl.style.transform = 'translateY(-4px)';
+                setTimeout(function() {
+                    if (quotaTipDismissed && bannerEl && !bannerEl.querySelector('.quota-banner-card.exceeded')) {
+                        bannerEl.style.display = 'none';
+                        bannerEl.innerHTML = '';
+                        bannerEl.style.opacity = '1';
+                        bannerEl.style.transform = 'none';
+                    }
+                }, 300);
+            }
+        }
+
         function updateLimitUI(count) {
             var oldTransfers = usedTransfers;
             usedTransfers = count;
@@ -1787,40 +1882,79 @@
             var bannerEl = document.getElementById('quota-banner');
             if (bannerEl) {
                 if (!isPaidMode) {
-                    bannerEl.style.display = 'block';
                     if (isCountExceeded && isSizeExceeded) {
                         var text = t('err_free_limit_both_global');
+                        bannerEl.style.display = 'block';
+                        bannerEl.style.opacity = '1';
+                        bannerEl.style.transform = 'none';
                         bannerEl.innerHTML = '<div class="quota-banner-card exceeded">' +
                             '<span>' + text + '</span>' +
                             '</div>';
                     } else if (isCountExceeded) {
                         var text = t('err_free_limit_files_global');
+                        bannerEl.style.display = 'block';
+                        bannerEl.style.opacity = '1';
+                        bannerEl.style.transform = 'none';
                         bannerEl.innerHTML = '<div class="quota-banner-card exceeded">' +
                             '<span>' + text + '</span>' +
                             '</div>';
                     } else if (isSizeExceeded) {
                         var text = t('err_free_limit_size_global');
+                        bannerEl.style.display = 'block';
+                        bannerEl.style.opacity = '1';
+                        bannerEl.style.transform = 'none';
                         bannerEl.innerHTML = '<div class="quota-banner-card exceeded">' +
                             '<span>' + text + '</span>' +
                             '</div>';
-                     } else if (isLimitActive) {
-                         // 次数已用尽，但当前文件没有超标，显示一般超限警告（此时允许在规格内传输，不卡关）
-//                          var text = t('quota_exceeded');
-//                          bannerEl.innerHTML = '<div class="quota-banner-card exceeded">' +
-//                              '<span>' + text + '</span>' +
-//                              '</div>';
-                         bannerEl.innerHTML = '';
+                    } else if (isLimitActive) {
+                        // 次数已用尽，但当前文件没有超标，不打扰
+                        bannerEl.innerHTML = '';
+                        bannerEl.style.display = 'none';
                     } else {
                         // 在全功能可用额度内 (remaining >= 1)
-                        var remaining = Math.max(0, 5 - usedTransfers);
-                        var text = t('quota_info').replace('{remaining}', remaining);
-                        bannerEl.innerHTML = '<div class="quota-banner-card">' +
-                            '<span style="font-size: 16px;">ℹ️</span>' +
-                            '<span>' + text + '</span>' +
-                            '</div>';
+                        if (quotaTipDismissed) {
+                            bannerEl.style.display = 'none';
+                            bannerEl.innerHTML = '';
+                        } else {
+                            var remaining = Math.max(0, 5 - usedTransfers);
+                            var text = t('quota_info').replace('{remaining}', remaining);
+                            var tipWrapper = document.getElementById('quota-tip-wrapper');
+                            if (tipWrapper) {
+                                // 如果倒计时 pill 已存在，就地更新语言文案，保持倒计时动画继续
+                                var tipTextEl = document.getElementById('quota-tip-text');
+                                if (tipTextEl) {
+                                    tipTextEl.textContent = text;
+                                }
+                            } else {
+                                bannerEl.style.display = 'block';
+                                bannerEl.style.opacity = '1';
+                                bannerEl.style.transform = 'none';
+                                bannerEl.innerHTML = '<div class="quota-tip-wrapper" id="quota-tip-wrapper">' +
+                                    '<span class="quota-tip-pill">' +
+                                        '<div class="countdown-circle-container" style="position: relative; width: 14px; height: 14px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;">' +
+                                            '<svg width="14" height="14" viewBox="0 0 20 20" style="transform: rotate(-90deg); width: 100%; height: 100%;">' +
+                                                '<circle cx="10" cy="10" r="8.5" fill="none" stroke="var(--accent-strong)" stroke-width="2" style="opacity: 0.2;"></circle>' +
+                                                '<circle id="quota-tip-circle" cx="10" cy="10" r="8.5" fill="none" stroke="var(--accent-strong)" stroke-width="2" stroke-dasharray="53.4" stroke-dashoffset="' + (53.4 * (1 - quotaTipCountdown / 5)) + '" style="transition: stroke-dashoffset 1s linear;"></circle>' +
+                                            '</svg>' +
+                                            '<span id="quota-tip-num" style="position: absolute; font-size: 8px; font-weight: bold; font-family: monospace; line-height: 1; color: var(--accent-strong);">' + quotaTipCountdown + '</span>' +
+                                        '</div>' +
+                                        '<span id="quota-tip-text">' + text + '</span>' +
+                                        '<button type="button" class="quota-tip-close" id="quota-tip-close" title="Dismiss">&times;</button>' +
+                                    '</span>' +
+                                '</div>';
+                                var closeBtn = document.getElementById('quota-tip-close');
+                                if (closeBtn) {
+                                    closeBtn.addEventListener('click', dismissQuotaTip);
+                                }
+                                if (!quotaTipTimer) {
+                                    startQuotaTipCountdown();
+                                }
+                            }
+                        }
                     }
                 } else {
                     bannerEl.style.display = 'none';
+                    bannerEl.innerHTML = '';
                 }
             }
 

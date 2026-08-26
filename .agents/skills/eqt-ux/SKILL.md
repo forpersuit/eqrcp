@@ -39,6 +39,9 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
   - **实践**：状态更新时优先判断并更新 `textContent`、`disabled` 或 `classList`，保持按钮内层 DOM 树的稳定性；同时为输入框配备 `keydown` (Enter) 快捷触发。
 - **红点与阶段文本就地补丁 (Incremental Badges)**：
   - 自动更新检测阶段变化（后台完成下载变为 `ready`）时，不触发全屏重绘，直接通过 `updateSettingsBadgeUI()` 为 `#open-settings` 增量 append/remove `.badge-dot` 节点。
+- **多语言切换与动态 DOM 状态即时同步 (i18n Dynamic Sync)**：
+  - 在 `applyLanguage()` 中，除了替换带有 `[data-i18n]` 静态属性的节点外，必须显式调用动态渲染函数（如 `updateLimitUI`、`renderFiles`）。
+  - **避坑原则**：严禁让动态生成的提示（如免费配额 Banner、文件超限 Badge）依赖下一次心跳轮询才被动更新语言，避免用户感知到数秒的多语言刷新延迟；若存在倒计时中的浮层/胶囊，切换语种时应就地替换文本，保持倒计时动画与秒数平滑连续。
 
 ---
 
