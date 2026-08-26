@@ -1,5 +1,7 @@
 # c49fd62 代码审查：心跳超时检测窗口缺陷与 desktop 通知抑制
 
+> 状态：✅ 已闭环（Completed）—— 本次审查（c49fd62）及其全部后续修复（b4ab874 / ce70f76 / ecca648 / v1.36.4 / 69f6b81 / 909924d / ee3e3f9 / 7209d49）已全部合入并经复核查验，无遗留缺陷。最终结论见第 10.5 节。
+>
 > 审查日期：2026-08-26
 > 审查对象：commit `c49fd62` — "Suppress desktop host join/disconnect notices and harden heartbeat timeout detection"
 > 涉及文件：`pkg/chat/v2/session/session.go`、`pkg/chat/v2/session/session_test.go`、`pkg/chat/v2/web/src/services/websocket.ts`、`pkg/version/version.go`
