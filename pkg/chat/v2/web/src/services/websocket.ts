@@ -2,6 +2,13 @@ import { get } from 'svelte/store';
 import type { CommandEnvelope, EventEnvelope } from './types';
 import { chatActions, messages, historyHasMore, historyOldestSeq, historyLoading } from '../state/chatStore';
 import { resolveConnectAfterSeq } from './reconnectSeq';
+import {
+  isDesktopPeer,
+  shouldCloseSocketOnHidden,
+  shouldReconnectOnVisible,
+  shouldDiscardSupersededSocketEvent,
+  evaluateHeartbeatTick
+} from './visibilityPolicy';
 
 /** Default page size; must stay aligned with session.DefaultHistoryPageSize. */
 export const HISTORY_PAGE_SIZE = 100;
@@ -106,7 +113,7 @@ export class ChatWebSocketClient {
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
           // Desktop GUI host stays active when minimized or hidden; never close connection actively.
-          if (this.clientPeer === 'desktop') {
+          if (!shouldCloseSocketOnHidden(this.clientPeer)) {
             return;
           }
           this.isSuspended = true;
@@ -117,13 +124,14 @@ export class ChatWebSocketClient {
         } else if (document.visibilityState === 'visible') {
           this.isSuspended = false;
           this.pendingHeartbeatSince = 0;
-          if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+          const isSocketOpen = Boolean(this.ws && this.ws.readyState === WebSocket.OPEN);
+          if (isSocketOpen) {
             this.pendingHeartbeatSince = Date.now();
             this.sendCommand({
               type: 'heartbeat',
               commandId: `hb-probe-${Date.now()}`
             });
-          } else if (!this.isManualClosed && (!this.ws || this.ws.readyState === WebSocket.CLOSED || this.ws.readyState === WebSocket.CLOSING)) {
+          } else if (shouldReconnectOnVisible({ isManualClosed: this.isManualClosed, isSocketOpen })) {
             this.reconnectAttempts = 0;
             this.reconnectDelay = 1000;
             this.connect();
@@ -165,14 +173,14 @@ export class ChatWebSocketClient {
     if (!ws) return;
 
     ws.onopen = () => {
-      if (this.ws !== ws) return;
+      if (shouldDiscardSupersededSocketEvent(this.ws, ws)) return;
       chatActions.addDebugNotice('WebSocket connection established.');
       this.reconnectAttempts = 0;
       this.reconnectDelay = 1000;
       chatActions.setReconnectExhausted(false);
       
       let preferredTheme = localStorage.getItem('eqt_chat_theme') || this.themeParam || 'theme-0';
-      if (this.clientPeer === 'desktop') {
+      if (isDesktopPeer(this.clientPeer)) {
         preferredTheme = 'theme-0';
       }
 
@@ -222,7 +230,7 @@ export class ChatWebSocketClient {
     };
 
     ws.onmessage = (event) => {
-      if (this.ws !== ws) return;
+      if (shouldDiscardSupersededSocketEvent(this.ws, ws)) return;
       this.pendingHeartbeatSince = 0;
       try {
         const payload: EventEnvelope = JSON.parse(event.data);
@@ -233,13 +241,13 @@ export class ChatWebSocketClient {
     };
 
     ws.onerror = (err) => {
-      if (this.ws !== ws) return;
+      if (shouldDiscardSupersededSocketEvent(this.ws, ws)) return;
       chatActions.addDebugNotice('WebSocket encountered an error.');
       this.sendLog(`[SYSTEM] WebSocket encountered an error.`);
     };
 
     ws.onclose = (event) => {
-      if (this.ws !== ws) return;
+      if (shouldDiscardSupersededSocketEvent(this.ws, ws)) return;
       chatActions.setConnectionState('disconnected');
       this.stopHeartbeat();
       if (this.isSuspended) {
@@ -488,14 +496,15 @@ export class ChatWebSocketClient {
         return;
       }
 
-      // Check in-flight heartbeat probe
-      if (this.pendingHeartbeatSince > 0) {
-        // If an in-flight heartbeat probe has not received any response or message for >= 15s, connection is dead.
-        if (Date.now() - this.pendingHeartbeatSince >= 15000) {
-          chatActions.addDebugNotice('Heartbeat timeout (15s unanswered). Re-establishing connection.');
-          this.pendingHeartbeatSince = 0;
-          this.ws?.close();
-        }
+      const decision = evaluateHeartbeatTick(Date.now(), this.pendingHeartbeatSince, 15000);
+      if (decision.action === 'trigger_timeout_reconnect') {
+        chatActions.addDebugNotice('Heartbeat timeout (15s unanswered). Re-establishing connection.');
+        this.sendLog(`[SYSTEM] Heartbeat response timed out after ${Date.now() - this.pendingHeartbeatSince}ms. Reconnecting.`);
+        this.pendingHeartbeatSince = 0;
+        this.ws?.close();
+        return;
+      }
+      if (decision.action === 'wait_in_flight') {
         // An unanswered probe is already in flight; do not send duplicate pings or overwrite timestamp.
         return;
       }

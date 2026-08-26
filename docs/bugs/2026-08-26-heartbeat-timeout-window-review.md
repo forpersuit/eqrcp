@@ -204,9 +204,17 @@ go test ./pkg/chat/v2/session
 - `npm test` 全绿：6 个测试文件全部断言通过，`composerKey.test.ts` 此前已存在，脚本引用完好。
 - 镜像与生产比对一致：`shouldDiscardSupersededSocketEvent`（`currentWs !== eventWs` → 丢弃）、`evaluateHeartbeatTick`（无在途→发包；在途 <15s→等候；在途 ≥15s→超时重连）与 `websocket.ts` 实际状态机吻合。
 
-### 10.3 审查发现
+### 10.3 审查发现与闭环修复（v1.36.7 → v1.36.8）
 
-1. **契约与实现不一致（desktop 大小写）**：`shouldCloseSocketOnHidden('Desktop') === false` 把契约定义为「desktop 大小写不敏感」，但生产 `websocket.ts:109` 是严格 `this.clientPeer === 'desktop'`（case-sensitive）——peer 若为 `Desktop` 会走挂起关闭路径，与断言相反。现实影响小（GUI 侧 peer 由注入侧固定小写），但契约名不副实。建议：前端 visibility 分支对齐 Go 端 `isDesktopPeer`（EqualFold+TrimSpace），或删除该大小写断言并在注释注明输入约定。
-2. **镜像测试局限**：`visibilityPolicy.test.ts` 未 import 生产函数，断言的是复制出的决策副本（documentation-as-test）——生产逻辑变更时测试不会失败（Rule 9：can't fail when business logic changes）。发现 1 即该模式漂移的实证。建议：将 `evaluateHeartbeatTick` 等决策逻辑提取为生产可导入纯函数并直接断言，或注明这些是「规格快照」而非「实现验证」。
+1. **契约与实现不一致（desktop 大小写）**：
+   - 状态：✅ 已修。
+   - 修复说明：在生产纯函数模块 `visibilityPolicy.ts` 中统一定义 `isDesktopPeer(peer)`（`(peer || '').trim().toLowerCase() === 'desktop'`），并在 `websocket.ts` 的 `visibilitychange`、`setupHandlers` 主题设置等所有分支中统一调用，彻底对齐 Go 端 `isDesktopPeer`（EqualFold+TrimSpace）的大小写不敏感语义。
+2. **镜像测试局限（测试直接导入生产实现）**：
+   - 状态：✅ 已修。
+   - 修复说明：已正式抽取生产纯策略模块 [`src/services/visibilityPolicy.ts`](file:///home/yelon/develop/me/eqrcp/pkg/chat/v2/web/src/services/visibilityPolicy.ts)；`websocket.ts`（生产代码）与 `visibilityPolicy.test.ts`（测试代码）统一 import 同一份生产纯函数源码，杜绝「镜像测试/副本测试」脱节风险，严格遵守 Rule 9。
 
-> 说明：9.4 结论的「无任何遗留风险」指功能性运行风险；10.3 的两项属测试契约与实现的一致性问题，非功能缺陷，不阻塞。
+### 10.4 终态确认
+
+- **生产与测试同源**：`visibilityPolicy.ts` 被 `websocket.ts` 与 `visibilityPolicy.test.ts` 共同引用，契约与实现 100% 同构。
+- **全链路测试通过**：`npm test`（6 个测试文件）与 `npm run check`（0 错误 0 警告除已有 a11y）全部通过。
+- **审查结论**：10.3 提出的 2 项设计与测试改进已全量落实并闭环。

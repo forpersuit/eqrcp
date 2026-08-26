@@ -3,41 +3,13 @@
  * Run: node --experimental-strip-types src/services/visibilityPolicy.test.ts
  */
 
-/** When page becomes hidden: Desktop GUI stays connected; Mobile/web actively suspends socket. */
-function shouldCloseSocketOnHidden(peer: string): boolean {
-  if (peer.trim().toLowerCase() === 'desktop') {
-    return false;
-  }
-  return true;
-}
-
-/** When page becomes visible again, reconnect if socket is dead/closing and not manual-closed. */
-function shouldReconnectOnVisible(opts: {
-  isManualClosed: boolean;
-  wsOpen: boolean;
-}): boolean {
-  if (opts.isManualClosed) return false;
-  if (opts.wsOpen) return false;
-  return true;
-}
-
-/** Guard against events from superseded/discarded WebSocket instances. */
-function shouldDiscardSupersededSocketEvent(currentWs: any, eventWs: any): boolean {
-  return currentWs !== eventWs;
-}
-
-/** In-flight heartbeat state machine decision. */
-function evaluateHeartbeatTick(now: number, pendingHeartbeatSince: number, timeoutMs = 15000): {
-  action: 'send_heartbeat' | 'wait_in_flight' | 'trigger_timeout_reconnect';
-} {
-  if (pendingHeartbeatSince > 0) {
-    if (now - pendingHeartbeatSince >= timeoutMs) {
-      return { action: 'trigger_timeout_reconnect' };
-    }
-    return { action: 'wait_in_flight' };
-  }
-  return { action: 'send_heartbeat' };
-}
+import {
+  isDesktopPeer,
+  shouldCloseSocketOnHidden,
+  shouldReconnectOnVisible,
+  shouldDiscardSupersededSocketEvent,
+  evaluateHeartbeatTick
+} from './visibilityPolicy.ts';
 
 function assert(cond: boolean, msg: string): void {
   if (!cond) throw new Error(msg);
@@ -51,15 +23,15 @@ assert(shouldCloseSocketOnHidden('web') === true, 'web browser client must activ
 
 // 2. Visible foreground reconnect tests
 assert(
-  shouldReconnectOnVisible({ isManualClosed: false, wsOpen: false }) === true,
+  shouldReconnectOnVisible({ isManualClosed: false, isSocketOpen: false }) === true,
   'visible + dead socket reconnects'
 );
 assert(
-  shouldReconnectOnVisible({ isManualClosed: false, wsOpen: true }) === false,
+  shouldReconnectOnVisible({ isManualClosed: false, isSocketOpen: true }) === false,
   'visible + live socket no-op'
 );
 assert(
-  shouldReconnectOnVisible({ isManualClosed: true, wsOpen: false }) === false,
+  shouldReconnectOnVisible({ isManualClosed: true, isSocketOpen: false }) === false,
   'manual leave/kick must not auto-reconnect on visible'
 );
 
