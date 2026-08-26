@@ -905,6 +905,7 @@ func (agent *desktopAgent) notifyRecordLocked(record TaskRecord) {
 	if title == "" || message == "" {
 		return
 	}
+	// Use custom/mock notifier if injected (e.g. during testing), otherwise fall back to native desktop notification
 	if agent.notifier != nil {
 		_ = agent.notifier(title, message)
 	} else {
@@ -933,6 +934,7 @@ func (agent *desktopAgent) notifyTransferStatusLocked(record TaskRecord) {
 		return
 	}
 	agent.notified[record.ID][key] = true
+	// Use custom/mock notifier if injected (e.g. during testing), otherwise fall back to native desktop notification
 	if agent.notifier != nil {
 		_ = agent.notifier(title, message)
 	} else {
