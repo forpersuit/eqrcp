@@ -19,6 +19,7 @@ export class ChatWebSocketClient {
   private heartbeatWorker: Worker | null = null;
   private pendingHeartbeatSince = 0;
   private isManualClosed = false;
+  private isSuspended = false;
   private clientToken = '';
   private pendingLogs: string[] = [];
 
@@ -99,10 +100,22 @@ export class ChatWebSocketClient {
     this.clientToken = savedToken;
     localStorage.setItem('chat_token', savedToken);
 
-    // Page visibility: keep connection alive in background, probe or reconnect on foreground visibility.
+    // Page visibility: Desktop stays active continuously; Mobile actively closes socket with 1000 page_hidden
+    // on backgrounding to avoid OS timer throttling/half-open socket lag, and reconnects immediately on foreground.
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') {
+        if (document.visibilityState === 'hidden') {
+          // Desktop GUI host stays active when minimized or hidden; never close connection actively.
+          if (this.clientPeer === 'desktop') {
+            return;
+          }
+          this.isSuspended = true;
+          if (this.ws) {
+            this.sendLog(`[SYSTEM] Page hidden/suspended, closing WebSocket client actively.`);
+            this.ws.close(1000, "page_hidden");
+          }
+        } else if (document.visibilityState === 'visible') {
+          this.isSuspended = false;
           this.pendingHeartbeatSince = 0;
           if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             this.pendingHeartbeatSince = Date.now();
@@ -218,6 +231,10 @@ export class ChatWebSocketClient {
     this.ws.onclose = (event) => {
       chatActions.setConnectionState('disconnected');
       this.stopHeartbeat();
+      if (this.isSuspended) {
+        this.sendLog(`[SYSTEM] WebSocket closed due to suspension, omitting reconnection.`);
+        return;
+      }
       // Another tab/window of the same browser took over this peer in the room.
       // Stop auto-reconnect to avoid fights; user can resume via explicit button.
       if (event.reason === 'replaced_by_peer') {
