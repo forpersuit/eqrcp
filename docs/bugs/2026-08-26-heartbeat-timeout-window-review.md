@@ -101,3 +101,36 @@ go test ./pkg/chat/v2/session
 - 版本递增至 `v1.36.3`。
 - 测试套件 100% 通过（PASS）。
 - 审查结论：修复完全闭环，无遗留缺陷。
+
+---
+
+## 八、 终态复审（b4ab874 + ce70f76 之后的综合审查，2026-08-26）
+
+> 复审对象：当前 HEAD 代码态（`b4ab874` + `ce70f76`）。对终态代码做一次独立综合复查。
+> 验证命令：`go test ./pkg/chat/v2/session/ ./pkg/chat/v2/transport/` → 全部 PASS。
+
+### 8.1 终态新发现与修复
+
+| 编号 | 发现 | 严重度 | 状态 | 修复说明 |
+| :--- | :--- | :--- | :--- | :--- |
+| A | `session.go` `Register()` 的 `parentLabel != ""` 分支缺少 `isDesktopPeer` 抑制：desktop peer 若带 `?join=` 扫码加入（parentLabel 非空），仍会广播 `"{sender} 通过 X 加入了会话"`，与同函数其余分支"desktop 不产生系统消息"的意图不一致 | 轻微（低触发概率，desktop host 通常不带 join） | ✅ 已修 | 已将整个加入分支统一包裹在 `else if !isDesktopPeer(c.Peer)` 内，并增加 `TestDesktopHostWithJoinSuppression` 单元测试 |
+| B | `websocket.ts` `visibilitychange` visible 时发送 `hb-probe` 后仅重置 `pendingHeartbeatSince = 0`，未记录时间戳：若连接 half-open（readyState 仍 OPEN 但实际已死），probe 本身不参与超时检测，须等下一个 15s tick 换发常规心跳并落时间戳、再 15s 才判定断开，最坏延迟一个 tick | 轻微（弱设计，非 bug） | ✅ 已修 | 已在发送 `hb-probe` 时同步设置 `this.pendingHeartbeatSince = Date.now()`，使切回前台的探测即刻启动 15 秒超时判定窗口 |
+
+### 8.2 全量发现项状态总表
+
+| 发现项 | 状态 | 处理提交 |
+| :--- | :--- | :--- |
+| 2.3 心跳窗口=tick 周期 + 每 tick 覆盖 pending（高危） | ✅ 已修 | b4ab874（方案 A：在途不重发、不覆盖时间戳） |
+| 3.1 `isSuspended` 死代码 | ✅ 已修 | b4ab874 |
+| 3.2 `Peer` 大小写/空白比较不一致 | ✅ 已修 | b4ab874（抽 `isDesktopPeer` 统一替换） |
+| `lastHeartbeatAck` 只写不读死字段 | ✅ 已修 | ce70f76 |
+| 8.1-A `Register` Join 分支 desktop 抑制遗漏 | ✅ 已修 | v1.36.4 |
+| 8.1-B foreground probe 开启超时窗口 | ✅ 已修 | v1.36.4 |
+
+### 8.3 终态正面确认
+
+- **心跳时序正确**：每个 tick 只在无在途探针时发包并记录时间戳；在途未决时不重复发包、不覆盖时间戳 —— 修复了原"每 tick 无条件覆盖 pending、检测依赖定时器漂移"的高危缺陷；前台探针（hb-probe）也立即开启在途超时窗口。
+- **双向活性成立**：任意 server→client 消息（含 heartbeat 回复）均重置 `pendingHeartbeatSince`，连接活着即视为 alive。
+- **服务端闭环**：`transport/websocket.go:210` 对 `CommandHeartbeat` 无条件回发 `EventHeartbeat`，健康连接零误报。
+- **`isDesktopPeer` 完备性**：所有路径（包括 join / reconnect / unregister / visibility）均彻底抑制 desktop 主机产生系统通知。
+- **结论**：全部审查项（含初审、复核与终态复审发现）已 100% 闭环修复，代码稳健一致。

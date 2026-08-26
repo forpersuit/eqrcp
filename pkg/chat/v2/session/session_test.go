@@ -433,3 +433,23 @@ func TestDesktopHostCaseInsensitiveSuppression(t *testing.T) {
 		}
 	}
 }
+
+func TestDesktopHostWithJoinSuppression(t *testing.T) {
+	sess := NewSession("desktop-join-room")
+	sess.DisableSystemMessages = false
+
+	// Register a mobile host first that provides localJoin
+	parent := NewClient(protocol.ClientInfo{Label: "Mobile Alpha", Peer: "peer-alpha", LocalJoin: "qr-token-123"}, nil)
+	sess.Register(parent, 0, 0)
+
+	// Now register a desktop peer that happens to have Join="qr-token-123"
+	desktopClient := NewClient(protocol.ClientInfo{Label: "EQT Desktop", Peer: "desktop", Join: "qr-token-123"}, nil)
+	sess.Register(desktopClient, 0, 0)
+
+	events := sess.MessageStore.GetSince(0)
+	for _, ev := range events {
+		if ev.Message != nil && ev.Message.Type == protocol.MessageSystem && ev.Message.SenderID == "desktop" {
+			t.Fatalf("desktop peer with join token should not generate join system messages, got: %s", ev.Message.Text)
+		}
+	}
+}

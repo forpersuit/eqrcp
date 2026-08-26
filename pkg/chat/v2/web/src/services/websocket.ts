@@ -105,6 +105,7 @@ export class ChatWebSocketClient {
         if (document.visibilityState === 'visible') {
           this.pendingHeartbeatSince = 0;
           if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.pendingHeartbeatSince = Date.now();
             this.sendCommand({
               type: 'heartbeat',
               commandId: `hb-probe-${Date.now()}`

@@ -103,10 +103,10 @@ func (s *Session) Register(c *Client, afterSeq, joinSeq int64) {
 		} else if !isDesktopPeer(c.Peer) {
 			sysMsg = "{sender} 已重新连接"
 		}
-	} else {
+	} else if !isDesktopPeer(c.Peer) {
 		if parentLabel != "" {
 			sysMsg = fmt.Sprintf("{sender} 通过 %s 加入了会话", parentLabel)
-		} else if !isDesktopPeer(c.Peer) {
+		} else {
 			sysMsg = "{sender} 已加入会话"
 		}
 	}
