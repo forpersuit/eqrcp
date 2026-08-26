@@ -2179,6 +2179,15 @@ function renderSettingsPanel() {
                 </div>
                 <div class="setting-row">
                     <div class="setting-copy">
+                        <strong>${t('system_notifications')}</strong>
+                        <span>${t('system_notifications_desc')}</span>
+                    </div>
+                    <div class="setting-control-stack">
+                        ${renderSwitch('settings-notification', state.settings?.enableNotification !== false)}
+                    </div>
+                </div>
+                <div class="setting-row">
+                    <div class="setting-copy">
                         <strong>${t('show_history_title')}</strong>
                         <span>${t('show_history_desc')}</span>
                     </div>
@@ -3862,7 +3871,7 @@ function bindEvents() {
                 state.devLicenseCode = String(e.target.value || '');
                 return;
             }
-            if (e.target.matches('#settings-interface, #settings-port, #settings-browser, #settings-chat-autosave, #settings-chat-download-dir, #settings-chat-v2, #settings-close-behavior, #settings-auto-update-mode, #settings-update-interval, #settings-lang, #settings-show-history')) {
+            if (e.target.matches('#settings-interface, #settings-port, #settings-browser, #settings-chat-autosave, #settings-chat-download-dir, #settings-chat-v2, #settings-close-behavior, #settings-auto-update-mode, #settings-update-interval, #settings-lang, #settings-show-history, #settings-telemetry, #settings-notification')) {
                 syncSettingsFromDOM();
                 return;
             }
@@ -3957,7 +3966,7 @@ function bindEvents() {
                 }
                 return;
             }
-            if (e.target.matches('#settings-interface, #settings-port, #settings-browser, #settings-chat-autosave, #settings-chat-download-dir, #settings-chat-v2, #settings-close-behavior, #settings-auto-update-mode, #settings-update-interval, #settings-lang, #settings-show-history')) {
+            if (e.target.matches('#settings-interface, #settings-port, #settings-browser, #settings-chat-autosave, #settings-chat-download-dir, #settings-chat-v2, #settings-close-behavior, #settings-auto-update-mode, #settings-update-interval, #settings-lang, #settings-show-history, #settings-telemetry, #settings-notification')) {
                 syncSettingsFromDOM();
                 handleAutoSaveSettings().then(() => {
                     if (e.target.id === 'settings-auto-update-mode') {
@@ -4595,6 +4604,7 @@ function syncSettingsFromDOM() {
     const updateInterval = document.querySelector('#settings-update-interval');
     const lang = document.querySelector('#settings-lang');
     const showHistory = document.querySelector('#settings-show-history');
+    const notifSwitch = document.querySelector('#settings-notification');
     const telemetrySwitch = document.querySelector('#settings-telemetry');
 
 
@@ -4622,6 +4632,7 @@ function syncSettingsFromDOM() {
     if (updateInterval) state.settings.updateCheckIntervalHours = Number(updateInterval.value);
     if (lang) state.settings.lang = lang.value;
     if (showHistory) state.settings.showHistory = showHistory.checked;
+    if (notifSwitch) state.settings.enableNotification = notifSwitch.checked;
     if (telemetrySwitch) state.settings.enableTelemetry = telemetrySwitch.checked;
 
 

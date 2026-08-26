@@ -153,3 +153,37 @@ func TestDesktopSettingsDevModeNotAllowedInConfigFile(t *testing.T) {
 		t.Fatalf("expected config file to purge dev/devmode keys, got content:\n%s", content)
 	}
 }
+
+func TestDesktopSettingsEnableNotification(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.yml")
+	app := application.New()
+	app.Flags.Config = configPath
+
+	// Default should be true
+	settings, err := ReadDesktopSettings(app)
+	if err != nil {
+		t.Fatalf("ReadDesktopSettings failed: %v", err)
+	}
+	if !settings.EnableNotification {
+		t.Fatalf("expected EnableNotification default to be true, got false")
+	}
+
+	// Write false
+	settings.EnableNotification = false
+	saved, err := WriteDesktopSettings(app, settings)
+	if err != nil {
+		t.Fatalf("WriteDesktopSettings failed: %v", err)
+	}
+	if saved.EnableNotification {
+		t.Fatalf("saved.EnableNotification = true, want false")
+	}
+
+	// Read again to verify persistence
+	reloaded, err := ReadDesktopSettings(app)
+	if err != nil {
+		t.Fatalf("reloaded ReadDesktopSettings failed: %v", err)
+	}
+	if reloaded.EnableNotification {
+		t.Fatalf("reloaded.EnableNotification = true, want false")
+	}
+}

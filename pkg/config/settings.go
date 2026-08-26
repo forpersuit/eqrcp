@@ -38,6 +38,7 @@ type DesktopSettings struct {
 	ShowHistory              bool                     `json:"showHistory"`
 	EnableChatV2             bool                     `json:"enableChatV2"`
 	EnableTelemetry          bool                     `json:"enableTelemetry"`
+	EnableNotification       bool                     `json:"enableNotification"`
 	ChatDownloadDir          string                   `json:"chatDownloadDir"`
 	LogDir                   string                   `json:"logDir"`
 }
@@ -162,6 +163,14 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 	if v.IsSet("enableTelemetry") {
 		enableTelemetry = v.GetBool("enableTelemetry")
 	}
+	enableNotification := true
+	if v.IsSet("enableNotification") {
+		enableNotification = v.GetBool("enableNotification")
+	} else if v.IsSet("notification") {
+		enableNotification = v.GetBool("notification")
+	} else if v.IsSet("enableNotifications") {
+		enableNotification = v.GetBool("enableNotifications")
+	}
 	chatDownloadDir := v.GetString("chatDownloadDir")
 	logDir := v.GetString("logDir")
 	return DesktopSettings{
@@ -188,9 +197,30 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 		ShowHistory:              showHistory,
 		EnableChatV2:             enableChatV2,
 		EnableTelemetry:          enableTelemetry,
+		EnableNotification:       enableNotification,
 		ChatDownloadDir:          chatDownloadDir,
 		LogDir:                   logDir,
 	}, nil
+}
+
+// IsNotificationEnabled checks if system notifications for share/receive are enabled in user configuration (defaults to true).
+func IsNotificationEnabled() bool {
+	if raw := os.Getenv("EQT_ENABLE_NOTIFICATION"); raw != "" {
+		return strings.EqualFold(raw, "true") || raw == "1"
+	}
+	v := GetViperInstance(application.App{})
+	if err := v.ReadInConfig(); err == nil {
+		if v.IsSet("enableNotification") {
+			return v.GetBool("enableNotification")
+		}
+		if v.IsSet("notification") {
+			return v.GetBool("notification")
+		}
+		if v.IsSet("enableNotifications") {
+			return v.GetBool("enableNotifications")
+		}
+	}
+	return true
 }
 
 // IsTelemetryEnabled checks if telemetry / anonymous device registration is enabled in user configuration (defaults to true).
@@ -274,6 +304,7 @@ func WriteDesktopSettings(app application.App, settings DesktopSettings) (Deskto
 	cleanV.Set("showHistory", settings.ShowHistory)
 	cleanV.Set("enableChatV2", settings.EnableChatV2)
 	cleanV.Set("enableTelemetry", settings.EnableTelemetry)
+	cleanV.Set("enableNotification", settings.EnableNotification)
 	cleanV.Set("chatDownloadDir", strings.TrimSpace(settings.ChatDownloadDir))
 	cleanV.Set("logDir", strings.TrimSpace(settings.LogDir))
 	if err := cleanV.WriteConfig(); err != nil {

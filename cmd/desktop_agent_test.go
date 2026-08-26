@@ -310,6 +310,47 @@ func TestDesktopAgentIgnoresNotificationErrors(t *testing.T) {
 	}
 }
 
+func TestDesktopAgentNotificationDisabledInSettings(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.yml")
+	flags := application.Flags{Config: configPath}
+	agent := newDesktopAgent(flags)
+
+	// Disable notification in settings
+	_, err := agent.writeSettings(config.DesktopSettings{
+		Interface:          "any",
+		Output:             t.TempDir(),
+		CloseBehavior:      config.DesktopCloseBehaviorTray,
+		EnableNotification: false,
+	})
+	if err != nil {
+		t.Fatalf("writeSettings failed: %v", err)
+	}
+
+	notifications := make(chan string, 4)
+	agent.notifier = func(title string, message string) error {
+		notifications <- title + ": " + message
+		return nil
+	}
+
+	agent.mu.Lock()
+	agent.current = &desktopAgentTaskRecord{ID: 10, Action: "share", Paths: []string{"a.txt"}, State: "running"}
+	agent.notifyRecordLocked(*agent.current)
+	agent.notifyTransferStatusLocked(desktopAgentTaskRecord{
+		ID:            10,
+		Action:        "share",
+		Paths:         []string{"a.txt"},
+		TransferState: "transferring",
+	})
+	agent.mu.Unlock()
+
+	select {
+	case got := <-notifications:
+		t.Fatalf("unexpected notification when EnableNotification is false: %q", got)
+	default:
+		// Success: no notification sent
+	}
+}
+
 func TestDesktopAgentQueuesTaskWhileBusy(t *testing.T) {
 	block := make(chan struct{})
 	started := make(chan struct{})

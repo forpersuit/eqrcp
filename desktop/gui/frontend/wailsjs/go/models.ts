@@ -306,6 +306,7 @@ export namespace main {
 	    showHistory: boolean;
 	    enableChatV2: boolean;
 	    enableTelemetry: boolean;
+	    enableNotification: boolean;
 	    chatDownloadDir: string;
 	    logDir: string;
 	
@@ -337,6 +338,7 @@ export namespace main {
 	        this.showHistory = source["showHistory"];
 	        this.enableChatV2 = source["enableChatV2"];
 	        this.enableTelemetry = source["enableTelemetry"];
+	        this.enableNotification = source["enableNotification"];
 	        this.chatDownloadDir = source["chatDownloadDir"];
 	        this.logDir = source["logDir"];
 	    }

@@ -1430,8 +1430,15 @@ func (agent *desktopAgent) observeChatStatus(taskID int, status server.ChatStatu
 	agent.touchLocked()
 }
 
+func (agent *desktopAgent) isNotificationEnabled() bool {
+	if s, err := agent.readSettings(); err == nil {
+		return s.EnableNotification
+	}
+	return true
+}
+
 func (agent *desktopAgent) notifyRecordLocked(record desktopAgentTaskRecord) {
-	if agent.notifier == nil {
+	if agent.notifier == nil || !agent.isNotificationEnabled() {
 		return
 	}
 	title, message := desktopAgentNotification(record)
@@ -1442,7 +1449,7 @@ func (agent *desktopAgent) notifyRecordLocked(record desktopAgentTaskRecord) {
 }
 
 func (agent *desktopAgent) notifyTransferStatusLocked(record desktopAgentTaskRecord) {
-	if agent.notifier == nil {
+	if agent.notifier == nil || !agent.isNotificationEnabled() {
 		return
 	}
 	key := record.TransferState

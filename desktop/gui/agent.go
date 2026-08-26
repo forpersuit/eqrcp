@@ -416,6 +416,7 @@ func convertConfigSettings(s config.DesktopSettings) DesktopSettings {
 		ShowHistory:              s.ShowHistory,
 		EnableChatV2:             s.EnableChatV2,
 		EnableTelemetry:          s.EnableTelemetry,
+		EnableNotification:       s.EnableNotification,
 		ChatDownloadDir:          s.ChatDownloadDir,
 		LogDir:                   s.LogDir,
 	}
@@ -454,6 +455,7 @@ func convertAppSettings(s DesktopSettings) config.DesktopSettings {
 		ShowHistory:              s.ShowHistory,
 		EnableChatV2:             s.EnableChatV2,
 		EnableTelemetry:          s.EnableTelemetry,
+		EnableNotification:       s.EnableNotification,
 		ChatDownloadDir:          s.ChatDownloadDir,
 		LogDir:                   s.LogDir,
 	}
@@ -887,7 +889,17 @@ func (agent *desktopAgent) observeChatStatus(taskID int, status server.ChatStatu
 	agent.touchLocked()
 }
 
+func (agent *desktopAgent) isNotificationEnabled() bool {
+	if s, err := agent.readSettings(); err == nil {
+		return s.EnableNotification
+	}
+	return true
+}
+
 func (agent *desktopAgent) notifyRecordLocked(record TaskRecord) {
+	if !agent.isNotificationEnabled() {
+		return
+	}
 	title, message := desktopAgentNotification(record)
 	if title == "" || message == "" {
 		return
@@ -896,6 +908,9 @@ func (agent *desktopAgent) notifyRecordLocked(record TaskRecord) {
 }
 
 func (agent *desktopAgent) notifyTransferStatusLocked(record TaskRecord) {
+	if !agent.isNotificationEnabled() {
+		return
+	}
 	key := record.TransferState
 	switch key {
 	case "transferring", "completed", "stopped", "failed":

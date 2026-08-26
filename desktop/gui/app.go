@@ -134,6 +134,7 @@ type DesktopSettings struct {
 	ShowHistory              bool              `json:"showHistory"`
 	EnableChatV2             bool              `json:"enableChatV2"`
 	EnableTelemetry          bool              `json:"enableTelemetry"`
+	EnableNotification       bool              `json:"enableNotification"`
 	ChatDownloadDir          string            `json:"chatDownloadDir"`
 	LogDir                   string            `json:"logDir"`
 }
