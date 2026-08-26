@@ -176,7 +176,7 @@ go test ./pkg/chat/v2/session
   - 初稿误标 commit `2a3b04c`，`git cat-file` 核对该 hash 不存在，实际提交为 `909924d`，本次修正（1. 第 9.3 标题）；
   - `svelte-check --tsconfig ./tsconfig.app.json`：105 文件 0 错误（3 个 a11y 警告来自 MessageList/MessageComposer，与本次无关）；
   - 逐路径复核无回归：挂起路径（hidden 原生 `close(1000, page_hidden)` 不解绑）、死连接检测（heartbeatTick 的 `ws?.close()` 不解绑，onclose→handleReconnect 保留）、kicked/left/replaced 各分支均不受守卫影响；`close()` 解绑后不再触发 `setConnectionState('disconnected')`，唯一调用点 `App.svelte` onDestroy（组件销毁）后 UI 不再渲染，无实际影响；
-  - **测试覆盖缺口**：守卫逻辑（superseded socket 延迟触发 onclose 被丢弃）尚无自动化断言，`resumeConnection.test.ts` 仅覆盖 resume 前置条件；此类浏览器事件时序以 `/chrome-test` 手动 E2E 验证为主，风险可接受。
+  - **测试自动化覆盖**：已在 `visibilityPolicy.test.ts` 中新增对废弃实例守卫断言（`shouldDiscardSupersededSocketEvent`）、分 peer 后台挂起断言（`shouldCloseSocketOnHidden`）与在途心跳状态机断言（`evaluateHeartbeatTick`），并统一接入前端 `npm test` 套件。
 
 ### 9.4 最终结论
 

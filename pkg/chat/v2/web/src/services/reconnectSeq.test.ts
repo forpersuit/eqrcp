@@ -1,4 +1,4 @@
-import { resolveConnectAfterSeq } from './reconnectSeq';
+import { resolveConnectAfterSeq } from './reconnectSeq.ts';
 
 function assertEqual(actual: number, expected: number, label: string): void {
   if (actual !== expected) {
