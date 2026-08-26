@@ -218,3 +218,11 @@ go test ./pkg/chat/v2/session
 - **生产与测试同源**：`visibilityPolicy.ts` 被 `websocket.ts` 与 `visibilityPolicy.test.ts` 共同引用，契约与实现 100% 同构。
 - **全链路测试通过**：`npm test`（6 个测试文件）与 `npm run check`（0 错误 0 警告除已有 a11y）全部通过。
 - **审查结论**：10.3 提出的 2 项设计与测试改进已全量落实并闭环。
+
+### 10.5 复核补充发现（审查 71bba25 识别）
+
+- **`shouldReconnectOnVisible` 提取时丢失「排除 CONNECTING」语义（低严重度，不阻塞）**：
+  - 原 visible 分支（909924d 起）的 else-if 明确要求 `!this.ws || CLOSED || CLOSING`，即 **CONNECTING（握手进行中）时不触发重连**，等待原有 `onopen`；
+  - 新纯函数 `shouldReconnectOnVisible({ isManualClosed, isSocketOpen })` 只排除 OPEN 与 manual 关闭：`this.ws` 处于 CONNECTING 时 `isSocketOpen === false` → 返回 true → `connect()` 会对正在握手的 socket 解绑 + close + 重新 new，多一次冗余握手；
+  - 实测影响无：`npm test` 全绿、`svelte-check` 106 文件 0 错误；server 端对未完成握手无已注册状态，abort 后自愈，实际无感。但语义与原实现不同，若要保持「握手窗口内不打断」，应让纯函数接收 ws 状态枚举（CONNECTING/OPEN/CLOSED/CLOSING）对齐原 else-if，或接受当前「重连幂等」语义并注记；
+  - 现实触发窗口极窄（仅 `connect()` 同步 `new WebSocket` 之后、握手完成前切 visible），判定为记录项而非缺陷。
