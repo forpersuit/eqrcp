@@ -61,6 +61,7 @@ func TestDesktopAgentAcceptsTaskAndReportsStatus(t *testing.T) {
 	done := make(chan desktopAgentTask, 1)
 	notifications := make(chan string, 4)
 	agent := newDesktopAgent(application.Flags{})
+	agent.notifyEnabled = true
 	agent.notifier = func(title string, message string) error {
 		notifications <- title + ": " + message
 		return nil
@@ -131,6 +132,7 @@ func TestDesktopAgentRecordsNotificationStates(t *testing.T) {
 func TestDesktopAgentObservesTransferStatus(t *testing.T) {
 	notifications := make(chan string, 4)
 	agent := newDesktopAgent(application.Flags{})
+	agent.notifyEnabled = true
 	agent.notifier = func(title string, message string) error {
 		notifications <- title + ": " + message
 		return nil
@@ -242,6 +244,7 @@ func TestDesktopAgentRecordsFailedTransferState(t *testing.T) {
 func TestDesktopAgentTransferNotificationsAreDeduped(t *testing.T) {
 	notifications := make(chan string, 4)
 	agent := newDesktopAgent(application.Flags{})
+	agent.notifyEnabled = true
 	agent.notifier = func(title string, message string) error {
 		notifications <- title + ": " + message
 		return nil
@@ -315,23 +318,13 @@ func TestDesktopAgentNotificationDisabledInSettings(t *testing.T) {
 	flags := application.Flags{Config: configPath}
 	agent := newDesktopAgent(flags)
 
-	// Disable notification in settings
-	_, err := agent.writeSettings(config.DesktopSettings{
-		Interface:          "any",
-		Output:             t.TempDir(),
-		CloseBehavior:      config.DesktopCloseBehaviorTray,
-		EnableNotification: false,
-	})
-	if err != nil {
-		t.Fatalf("writeSettings failed: %v", err)
-	}
-
 	notifications := make(chan string, 4)
 	agent.notifier = func(title string, message string) error {
 		notifications <- title + ": " + message
 		return nil
 	}
 
+	// 1. By default, notification is disabled
 	agent.mu.Lock()
 	agent.current = &desktopAgentTaskRecord{ID: 10, Action: "share", Paths: []string{"a.txt"}, State: "running"}
 	agent.notifyRecordLocked(*agent.current)
@@ -345,9 +338,33 @@ func TestDesktopAgentNotificationDisabledInSettings(t *testing.T) {
 
 	select {
 	case got := <-notifications:
-		t.Fatalf("unexpected notification when EnableNotification is false: %q", got)
+		t.Fatalf("unexpected notification when EnableNotification is default false: %q", got)
 	default:
 		// Success: no notification sent
+	}
+
+	// 2. Enable notification in settings
+	_, err := agent.writeSettings(config.DesktopSettings{
+		Interface:          "any",
+		Output:             t.TempDir(),
+		CloseBehavior:      config.DesktopCloseBehaviorTray,
+		EnableNotification: true,
+	})
+	if err != nil {
+		t.Fatalf("writeSettings failed: %v", err)
+	}
+
+	agent.mu.Lock()
+	agent.notifyRecordLocked(*agent.current)
+	agent.mu.Unlock()
+
+	select {
+	case got := <-notifications:
+		if !strings.Contains(got, "eqt transfer ready") {
+			t.Fatalf("expected 'eqt transfer ready', got %q", got)
+		}
+	default:
+		t.Fatal("expected notification when EnableNotification is true, got none")
 	}
 }
 

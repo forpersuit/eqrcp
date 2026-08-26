@@ -2183,7 +2183,7 @@ function renderSettingsPanel() {
                         <span>${t('system_notifications_desc')}</span>
                     </div>
                     <div class="setting-control-stack">
-                        ${renderSwitch('settings-notification', state.settings?.enableNotification !== false)}
+                        ${renderSwitch('settings-notification', Boolean(state.settings?.enableNotification))}
                     </div>
                 </div>
                 <div class="setting-row">

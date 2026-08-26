@@ -159,23 +159,23 @@ func TestDesktopSettingsEnableNotification(t *testing.T) {
 	app := application.New()
 	app.Flags.Config = configPath
 
-	// Default should be true
+	// Default should be false
 	settings, err := ReadDesktopSettings(app)
 	if err != nil {
 		t.Fatalf("ReadDesktopSettings failed: %v", err)
 	}
-	if !settings.EnableNotification {
-		t.Fatalf("expected EnableNotification default to be true, got false")
+	if settings.EnableNotification {
+		t.Fatalf("expected EnableNotification default to be false, got true")
 	}
 
-	// Write false
-	settings.EnableNotification = false
+	// Write true
+	settings.EnableNotification = true
 	saved, err := WriteDesktopSettings(app, settings)
 	if err != nil {
 		t.Fatalf("WriteDesktopSettings failed: %v", err)
 	}
-	if saved.EnableNotification {
-		t.Fatalf("saved.EnableNotification = true, want false")
+	if !saved.EnableNotification {
+		t.Fatalf("saved.EnableNotification = false, want true")
 	}
 
 	// Read again to verify persistence
@@ -183,7 +183,7 @@ func TestDesktopSettingsEnableNotification(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reloaded ReadDesktopSettings failed: %v", err)
 	}
-	if reloaded.EnableNotification {
-		t.Fatalf("reloaded.EnableNotification = true, want false")
+	if !reloaded.EnableNotification {
+		t.Fatalf("reloaded.EnableNotification = false, want true")
 	}
 }

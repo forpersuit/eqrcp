@@ -140,7 +140,7 @@ func newDesktopAgent(baseFlags application.Flags) *desktopAgent {
 		historyPath:   defaultDesktopAgentHistoryPath(),
 		notified:      map[int]map[string]bool{},
 		subscribers:   map[chan struct{}]struct{}{},
-		notifyEnabled: true,
+		notifyEnabled: false,
 	}
 	if s, err := agent.readSettings(); err == nil {
 		agent.notifyEnabled = s.EnableNotification

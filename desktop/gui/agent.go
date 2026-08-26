@@ -59,7 +59,7 @@ func newDesktopAgent(ctx context.Context) *desktopAgent {
 		historyPath:   defaultDesktopAgentHistoryPath(),
 		notified:      map[int]map[string]bool{},
 		ctx:           ctx,
-		notifyEnabled: true,
+		notifyEnabled: false,
 		notifier:      notifyDesktop,
 	}
 	if s, err := agent.readSettings(); err == nil {

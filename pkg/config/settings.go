@@ -163,7 +163,7 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 	if v.IsSet("enableTelemetry") {
 		enableTelemetry = v.GetBool("enableTelemetry")
 	}
-	enableNotification := true
+	enableNotification := false
 	if v.IsSet("enableNotification") {
 		enableNotification = v.GetBool("enableNotification")
 	} else if v.IsSet("notification") {

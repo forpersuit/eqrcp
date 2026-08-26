@@ -212,7 +212,9 @@ func TestGUIAgentHistoryNoTransferFiltered(t *testing.T) {
 
 func TestGUIAgentNotificationDisabledInSettings(t *testing.T) {
 	agent := newDesktopAgent(nil)
-	agent.notifyEnabled = false
+	if agent.notifyEnabled {
+		t.Fatalf("expected notifyEnabled default to be false, got true")
+	}
 
 	notifications := make(chan string, 4)
 	agent.notifier = func(title string, message string) error {
