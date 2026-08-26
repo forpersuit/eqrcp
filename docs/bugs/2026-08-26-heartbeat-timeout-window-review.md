@@ -134,3 +134,42 @@ go test ./pkg/chat/v2/session
 - **服务端闭环**：`transport/websocket.go:210` 对 `CommandHeartbeat` 无条件回发 `EventHeartbeat`，健康连接零误报。
 - **`isDesktopPeer` 完备性**：所有路径（包括 join / reconnect / unregister / visibility）均彻底抑制 desktop 主机产生系统通知。
 - **结论**：全部审查项（含初审、复核与终态复审发现）已 100% 闭环修复，代码稳健一致。
+
+---
+
+## 九、 移动端还原与 desktop 连续连接（commit 69f6b81，v1.36.5）
+
+> 2026-08-26 提交 `69f6b81` "Preserve continuous connection for desktop GUI and restore mobile background suspension"。
+> 在先前的连续三次提交（c49fd62 / b4ab874 / ecca648）把移动端也改为「后台常驻连接」之后，本提交将连接挂起策略**按 peer 分叉**：desktop GUI 保留前后台连续连接，移动/网页端还原为「后台主动关闭 + 前台自动重连」——即用户认可的原移动端机制。
+
+### 9.1 修改内容（`websocket.ts` 与版本号）
+
+1. **复活 `isSuspended` 字段**（b4ab874 曾作为只写不读死代码将其删除）：现在重新成为有读有写的有效状态。
+2. **`visibilitychange` hidden 分支**：desktop → `return` 保持连接；非 desktop → 置 `isSuspended = true` 并主动 `ws.close(1000, "page_hidden")`。
+3. **`visibilitychange` visible 分支**：清 `isSuspended`、清 `pendingHeartbeatSince`；若 socket 仍 OPEN 则发 `hb-probe` 并设 `pendingHeartbeatSince = Date.now()`（保留 ecca648 对 B 的修复）；若 socket 已 CLOSED/CLOSING 且非手工关闭，则重置重连计数后自动 `connect()`。
+4. **`onclose`**：`isSuspended` 为真时静默终止，跳过自动重连（避免后台重连抖动）。
+5. 版本 v1.36.4 → v1.36.5。
+
+### 9.2 修改效果
+
+| peer | 后台（hidden） | 前台（visible） | 净效果 |
+| :--- | :--- | :--- | :--- |
+| desktop GUI | 保持连接，依靠 Worker 心跳（不受浏览器节流）探测死连接 | OPEN 则立即 `hb-probe` 开启在途超时窗口 | 前后台连续在线，最小化不丢线不误报 |
+| 移动/网页 | 主动 `close(1000, page_hidden)`，服务端收到正常关闭码即移除 peer | 自动 `connect()` 重连，经 Register 重放历史 | 避免移动端 OS 定时器节流与半开 socket 延迟累积；省电省流量 |
+
+**正面确认：**
+
+- **desktop 连续连接意图完整保留**：hidden 分支对 desktop 直接 `return`，不触碰 socket；Worker 心跳绕开页面节流，最小化/切后台仍能检测死连接。
+- **前台自动重连是相对原机制的增强**：原 c49fd62 之前的 visible 分支仅在有 OPEN socket 时 probe，后台挂起后回前台需用户手动重连；本提交在 CLOSED/CLOSING 时自动 `connect()`，并顺带复位 `reconnectAttempts`/`reconnectDelay`，悬停重连计数不会累积成「重连耗尽」误报。
+- **服务端闭环不变**：`transport/websocket.go:210` 仍对 heartbeat 无条件回发 `EventHeartbeat`；desktop 端 probe（ecca648 起）同步开启在途超时窗口。
+- **`isSuspended` 不再死代码**：hidden 置真、onclose 读真，读-写闭环成立；b4ab874 当时的删除判断在彼时正确，本提交按产品意图将其复用以承载「挂起抑制重连」语义，属行为重定义而非缺陷复活。
+
+### 9.3 残留与边界（低风险，不阻塞）
+
+- **快速 hidden→visible 抖动**：若 visible 的 `connect()` 先执行、旧 socket 的 `onclose` 后触发（此刻 `isSuspended` 已被清 false），会 `handleReconnect` 追加一次冗余重连。服务端按 peer 替换旧连接自愈，属原机制固有模式，人工切换远慢于关闭握手，实际无感。
+- **移动端后台离场会触发可见通知**：非 desktop peer 的 `close(page_hidden)` 会向房间内其它成员广播「已断开连接」，前台重连再广播「已加入会话」——这是产品还原的既有行为（原移动端机制亦然），非新缺陷。
+- **`Unregister` / 心跳窗口 / desktop 抑制等此前审查项不受影响**：9 项全表保持闭环。
+
+### 9.4 结论
+
+`69f6b81` 是对 `c49fd62` 起「所有 peer 后台常驻」的一次机制纠偏：为移动端还原证明可靠的主动挂起 + 前台重连，为 desktop 保留连续连接，二者以 `peer === "desktop"` 分流。与 b4ab874/ecca648 的心跳窗口修复完全兼容，无回归。
