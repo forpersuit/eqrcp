@@ -173,7 +173,7 @@ go test ./pkg/chat/v2/session
 - **移动端后台离场通知**：非 desktop peer 的 `close(page_hidden)` 会向房间内其它成员广播「已断开连接」，前台重连再广播「已加入会话」——符合产品设计预期的自然上下线感知。
 - **全链路闭环确认**：全审查项保持 100% 闭环。
 - **审查复核（909924d 提交后）**：
-  - 初稿误标 commit `2a3b04c`，`git cat-file` 核对该 hash 不存在，实际提交为 `909924d`，本次修正（1. 第 9.3 标题）；
+  - 初稿误标 commit `2a3b04c`，`git cat-file` 核对该 hash 不存在，实际提交为 `909924d`，本次修正（第 9.3 节标题）；
   - `svelte-check --tsconfig ./tsconfig.app.json`：105 文件 0 错误（3 个 a11y 警告来自 MessageList/MessageComposer，与本次无关）；
   - 逐路径复核无回归：挂起路径（hidden 原生 `close(1000, page_hidden)` 不解绑）、死连接检测（heartbeatTick 的 `ws?.close()` 不解绑，onclose→handleReconnect 保留）、kicked/left/replaced 各分支均不受守卫影响；`close()` 解绑后不再触发 `setConnectionState('disconnected')`，唯一调用点 `App.svelte` onDestroy（组件销毁）后 UI 不再渲染，无实际影响；
   - **测试自动化覆盖**：已在 `visibilityPolicy.test.ts` 中新增对废弃实例守卫断言（`shouldDiscardSupersededSocketEvent`）、分 peer 后台挂起断言（`shouldCloseSocketOnHidden`）与在途心跳状态机断言（`evaluateHeartbeatTick`），并统一接入前端 `npm test` 套件。
@@ -186,3 +186,27 @@ go test ./pkg/chat/v2/session
 3. **在途探测状态机**：心跳发出后 15s 未响应即判定死连接并重连，在途未决不覆盖时间戳、不重复发包，收到任意消息即刻清零；
 4. **实例生命周期防御**：严格绑定 `this.ws !== ws` 实例判定，消除一切切换抖动隐患。
 全案修复彻底，健壮可靠，无任何遗留风险。
+
+---
+
+## 十、 契约测试自动化与审查（commit ee3e3f9，v1.36.6 → v1.36.7）
+
+> 2026-08-26 提交 `ee3e3f9` "Add automated contract tests for visibility policy, heartbeat state machine and socket guards"，针对 9.3 审查指出的「守卫逻辑无自动化覆盖」补齐契约测试并接入前端 `npm test` 套件。
+
+### 10.1 改动内容
+
+- `visibilityPolicy.test.ts`：新增镜像决策函数与断言——`shouldCloseSocketOnHidden(peer)`（分 peer 挂起策略）、`shouldDiscardSupersededSocketEvent(currentWs, eventWs)`（废弃实例守卫）、`evaluateHeartbeatTick(now, pendingSince, timeoutMs)`（在途心跳状态机）。
+- `package.json`：新增 `test` 脚本，串行执行 6 个 `node --experimental-strip-types` 契约测试（含既有 composerKey）；`tsconfig.app.json` 开启 `allowImportingTsExtensions` 支持 `.ts` 后缀导入。
+- 版本 v1.36.6 → v1.36.7（测试/CI 增强，符合小版本+1）；文档 9.3「测试覆盖缺口」条目更新为「测试自动化覆盖」。
+
+### 10.2 验证结论
+
+- `npm test` 全绿：6 个测试文件全部断言通过，`composerKey.test.ts` 此前已存在，脚本引用完好。
+- 镜像与生产比对一致：`shouldDiscardSupersededSocketEvent`（`currentWs !== eventWs` → 丢弃）、`evaluateHeartbeatTick`（无在途→发包；在途 <15s→等候；在途 ≥15s→超时重连）与 `websocket.ts` 实际状态机吻合。
+
+### 10.3 审查发现
+
+1. **契约与实现不一致（desktop 大小写）**：`shouldCloseSocketOnHidden('Desktop') === false` 把契约定义为「desktop 大小写不敏感」，但生产 `websocket.ts:109` 是严格 `this.clientPeer === 'desktop'`（case-sensitive）——peer 若为 `Desktop` 会走挂起关闭路径，与断言相反。现实影响小（GUI 侧 peer 由注入侧固定小写），但契约名不副实。建议：前端 visibility 分支对齐 Go 端 `isDesktopPeer`（EqualFold+TrimSpace），或删除该大小写断言并在注释注明输入约定。
+2. **镜像测试局限**：`visibilityPolicy.test.ts` 未 import 生产函数，断言的是复制出的决策副本（documentation-as-test）——生产逻辑变更时测试不会失败（Rule 9：can't fail when business logic changes）。发现 1 即该模式漂移的实证。建议：将 `evaluateHeartbeatTick` 等决策逻辑提取为生产可导入纯函数并直接断言，或注明这些是「规格快照」而非「实现验证」。
+
+> 说明：9.4 结论的「无任何遗留风险」指功能性运行风险；10.3 的两项属测试契约与实现的一致性问题，非功能缺陷，不阻塞。
