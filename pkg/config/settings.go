@@ -203,26 +203,6 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 	}, nil
 }
 
-// IsNotificationEnabled checks if system notifications for share/receive are enabled in user configuration (defaults to true).
-func IsNotificationEnabled() bool {
-	if raw := os.Getenv("EQT_ENABLE_NOTIFICATION"); raw != "" {
-		return strings.EqualFold(raw, "true") || raw == "1"
-	}
-	v := GetViperInstance(application.App{})
-	if err := v.ReadInConfig(); err == nil {
-		if v.IsSet("enableNotification") {
-			return v.GetBool("enableNotification")
-		}
-		if v.IsSet("notification") {
-			return v.GetBool("notification")
-		}
-		if v.IsSet("enableNotifications") {
-			return v.GetBool("enableNotifications")
-		}
-	}
-	return true
-}
-
 // IsTelemetryEnabled checks if telemetry / anonymous device registration is enabled in user configuration (defaults to true).
 func IsTelemetryEnabled() bool {
 	if raw := os.Getenv("EQT_ENABLE_TELEMETRY"); raw != "" {

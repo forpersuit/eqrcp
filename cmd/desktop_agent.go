@@ -107,38 +107,43 @@ type desktopAgentHistoryStore struct {
 type desktopAgentNotifier func(title string, message string) error
 
 type desktopAgent struct {
-	mu           sync.Mutex
-	baseFlags    application.Flags
-	log          logger.Logger
-	startedAt    time.Time
-	busy         bool
-	current      *desktopAgentTaskRecord
-	chat         *desktopAgentTaskRecord
-	queue        []desktopAgentTask
-	history      []desktopAgentTaskRecord
-	nextID       int
-	activeStop   func(string)
-	chatStop     func(string)
-	shutdown     func()
-	lastError    string
-	runner       func(desktopAgentTask) error
-	notifier     desktopAgentNotifier
-	historyPath  string
-	notified     map[int]map[string]bool
-	revision     int64
-	subscribers  map[chan struct{}]struct{}
-	activeServer *server.Server
+	mu            sync.Mutex
+	baseFlags     application.Flags
+	log           logger.Logger
+	startedAt     time.Time
+	busy          bool
+	current       *desktopAgentTaskRecord
+	chat          *desktopAgentTaskRecord
+	queue         []desktopAgentTask
+	history       []desktopAgentTaskRecord
+	nextID        int
+	activeStop    func(string)
+	chatStop      func(string)
+	shutdown      func()
+	lastError     string
+	runner        func(desktopAgentTask) error
+	notifier      desktopAgentNotifier
+	historyPath   string
+	notified      map[int]map[string]bool
+	revision      int64
+	subscribers   map[chan struct{}]struct{}
+	activeServer  *server.Server
+	notifyEnabled bool
 }
 
 func newDesktopAgent(baseFlags application.Flags) *desktopAgent {
 	agent := &desktopAgent{
-		baseFlags:   baseFlags,
-		log:         logger.New(baseFlags.Quiet),
-		startedAt:   time.Now(),
-		notifier:    notifyDesktop,
-		historyPath: defaultDesktopAgentHistoryPath(),
-		notified:    map[int]map[string]bool{},
-		subscribers: map[chan struct{}]struct{}{},
+		baseFlags:     baseFlags,
+		log:           logger.New(baseFlags.Quiet),
+		startedAt:     time.Now(),
+		notifier:      notifyDesktop,
+		historyPath:   defaultDesktopAgentHistoryPath(),
+		notified:      map[int]map[string]bool{},
+		subscribers:   map[chan struct{}]struct{}{},
+		notifyEnabled: true,
+	}
+	if s, err := agent.readSettings(); err == nil {
+		agent.notifyEnabled = s.EnableNotification
 	}
 	agent.runner = agent.runTask
 	return agent
@@ -433,6 +438,7 @@ func (agent *desktopAgent) writeSettings(settings config.DesktopSettings) (confi
 		return saved, err
 	}
 	agent.mu.Lock()
+	agent.notifyEnabled = saved.EnableNotification
 	srv := agent.activeServer
 	chatTaskRunning := agent.chat != nil && agent.chat.State == "running"
 	agent.mu.Unlock()
@@ -1430,15 +1436,8 @@ func (agent *desktopAgent) observeChatStatus(taskID int, status server.ChatStatu
 	agent.touchLocked()
 }
 
-func (agent *desktopAgent) isNotificationEnabled() bool {
-	if s, err := agent.readSettings(); err == nil {
-		return s.EnableNotification
-	}
-	return true
-}
-
 func (agent *desktopAgent) notifyRecordLocked(record desktopAgentTaskRecord) {
-	if agent.notifier == nil || !agent.isNotificationEnabled() {
+	if agent.notifier == nil || !agent.notifyEnabled {
 		return
 	}
 	title, message := desktopAgentNotification(record)
@@ -1449,7 +1448,7 @@ func (agent *desktopAgent) notifyRecordLocked(record desktopAgentTaskRecord) {
 }
 
 func (agent *desktopAgent) notifyTransferStatusLocked(record desktopAgentTaskRecord) {
-	if agent.notifier == nil || !agent.isNotificationEnabled() {
+	if agent.notifier == nil || !agent.notifyEnabled {
 		return
 	}
 	key := record.TransferState

@@ -28,35 +28,42 @@ const desktopAgentMaxHistory = 20
 const desktopAgentHistoryFilename = "desktop-agent-history.json"
 
 type desktopAgent struct {
-	mu           sync.Mutex
-	baseFlags    application.Flags
-	log          logger.Logger
-	fileLogger   *FileLogger
-	startedAt    time.Time
-	busy         bool
-	current      *TaskRecord
-	chat         *TaskRecord
-	queue        []AgentTask
-	history      []TaskRecord
-	nextID       int
-	activeStop   func(string)
-	chatStop     func(string)
-	lastError    string
-	historyPath  string
-	notified     map[int]map[string]bool
-	activeServer *server.Server
-	ctx          context.Context
+	mu            sync.Mutex
+	baseFlags     application.Flags
+	log           logger.Logger
+	fileLogger    *FileLogger
+	startedAt     time.Time
+	busy          bool
+	current       *TaskRecord
+	chat          *TaskRecord
+	queue         []AgentTask
+	history       []TaskRecord
+	nextID        int
+	activeStop    func(string)
+	chatStop      func(string)
+	lastError     string
+	historyPath   string
+	notified      map[int]map[string]bool
+	activeServer  *server.Server
+	ctx           context.Context
+	notifyEnabled bool
+	notifier      func(title string, message string) error
 }
 
 func newDesktopAgent(ctx context.Context) *desktopAgent {
 	flags := application.Flags{}
 	agent := &desktopAgent{
-		baseFlags:   flags,
-		log:         logger.New(flags.Quiet),
-		startedAt:   time.Now(),
-		historyPath: defaultDesktopAgentHistoryPath(),
-		notified:    map[int]map[string]bool{},
-		ctx:         ctx,
+		baseFlags:     flags,
+		log:           logger.New(flags.Quiet),
+		startedAt:     time.Now(),
+		historyPath:   defaultDesktopAgentHistoryPath(),
+		notified:      map[int]map[string]bool{},
+		ctx:           ctx,
+		notifyEnabled: true,
+		notifier:      notifyDesktop,
+	}
+	if s, err := agent.readSettings(); err == nil {
+		agent.notifyEnabled = s.EnableNotification
 	}
 	return agent
 }
@@ -468,6 +475,7 @@ func (agent *desktopAgent) writeSettings(settings DesktopSettings) (DesktopSetti
 		return DesktopSettings{}, err
 	}
 	agent.mu.Lock()
+	agent.notifyEnabled = saved.EnableNotification
 	srv := agent.activeServer
 	chatTaskRunning := agent.chat != nil && agent.chat.State == "running"
 	agent.mu.Unlock()
@@ -889,26 +897,23 @@ func (agent *desktopAgent) observeChatStatus(taskID int, status server.ChatStatu
 	agent.touchLocked()
 }
 
-func (agent *desktopAgent) isNotificationEnabled() bool {
-	if s, err := agent.readSettings(); err == nil {
-		return s.EnableNotification
-	}
-	return true
-}
-
 func (agent *desktopAgent) notifyRecordLocked(record TaskRecord) {
-	if !agent.isNotificationEnabled() {
+	if !agent.notifyEnabled {
 		return
 	}
 	title, message := desktopAgentNotification(record)
 	if title == "" || message == "" {
 		return
 	}
-	_ = notifyDesktop(title, message)
+	if agent.notifier != nil {
+		_ = agent.notifier(title, message)
+	} else {
+		_ = notifyDesktop(title, message)
+	}
 }
 
 func (agent *desktopAgent) notifyTransferStatusLocked(record TaskRecord) {
-	if !agent.isNotificationEnabled() {
+	if !agent.notifyEnabled {
 		return
 	}
 	key := record.TransferState
@@ -928,7 +933,11 @@ func (agent *desktopAgent) notifyTransferStatusLocked(record TaskRecord) {
 		return
 	}
 	agent.notified[record.ID][key] = true
-	_ = notifyDesktop(title, message)
+	if agent.notifier != nil {
+		_ = agent.notifier(title, message)
+	} else {
+		_ = notifyDesktop(title, message)
+	}
 }
 
 func (agent *desktopAgent) runTask(task AgentTask) error {

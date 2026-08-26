@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -207,4 +208,48 @@ func TestGUIAgentHistoryNoTransferFiltered(t *testing.T) {
 		t.Fatalf("Expected only task 2 in history, got %v", agent.history)
 	}
 	agent.mu.Unlock()
+}
+
+func TestGUIAgentNotificationDisabledInSettings(t *testing.T) {
+	agent := newDesktopAgent(nil)
+	agent.notifyEnabled = false
+
+	notifications := make(chan string, 4)
+	agent.notifier = func(title string, message string) error {
+		notifications <- title + ": " + message
+		return nil
+	}
+
+	agent.mu.Lock()
+	agent.current = &TaskRecord{ID: 10, Action: "share", Paths: []string{"a.txt"}, State: "running"}
+	agent.notifyRecordLocked(*agent.current)
+	agent.notifyTransferStatusLocked(TaskRecord{
+		ID:            10,
+		Action:        "share",
+		Paths:         []string{"a.txt"},
+		TransferState: "transferring",
+	})
+	agent.mu.Unlock()
+
+	select {
+	case got := <-notifications:
+		t.Fatalf("unexpected notification when notifyEnabled is false: %q", got)
+	default:
+		// Success: no notification sent
+	}
+
+	// Now enable it and verify notifications are sent
+	agent.mu.Lock()
+	agent.notifyEnabled = true
+	agent.notifyRecordLocked(*agent.current)
+	agent.mu.Unlock()
+
+	select {
+	case got := <-notifications:
+		if !strings.Contains(got, "eqt transfer ready") {
+			t.Fatalf("expected 'eqt transfer ready', got %q", got)
+		}
+	default:
+		t.Fatal("expected notification when notifyEnabled is true, got none")
+	}
 }
