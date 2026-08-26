@@ -18,6 +18,7 @@ export class ChatWebSocketClient {
   private heartbeatIntervalId: any = null;
   private heartbeatWorker: Worker | null = null;
   private lastHeartbeatAck = Date.now();
+  private pendingHeartbeatSince = 0;
   private isManualClosed = false;
   private isSuspended = false;
   private clientToken = '';
@@ -100,26 +101,14 @@ export class ChatWebSocketClient {
     this.clientToken = savedToken;
     localStorage.setItem('chat_token', savedToken);
 
-    // Page visibility: actively close socket with 1000 page_hidden on backgrounding
-    // to comply with WS RFC 6455 and avoid OS TCP suspension timeout accumulation.
-    // Immediately reset reconnect attempts and reconnect on foreground visibility.
+    // Page visibility: keep connection alive in background, probe or reconnect on foreground visibility.
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'hidden') {
-          // Desktop GUI host stays active when minimized or hidden; never close connection actively.
-          if (this.clientPeer === 'desktop') {
-            return;
-          }
-          this.isSuspended = true;
-          if (this.ws) {
-            this.sendLog(`[SYSTEM] Page hidden/suspended, closing WebSocket client actively.`);
-            this.ws.close(1000, "page_hidden");
-          }
-        } else if (document.visibilityState === 'visible') {
+        if (document.visibilityState === 'visible') {
           this.isSuspended = false;
+          this.pendingHeartbeatSince = 0;
+          this.lastHeartbeatAck = Date.now();
           if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            // Reset heartbeat timer watermark to prevent false timeout when unminimizing
-            this.lastHeartbeatAck = Date.now();
             this.sendCommand({
               type: 'heartbeat',
               commandId: `hb-probe-${Date.now()}`
@@ -215,6 +204,8 @@ export class ChatWebSocketClient {
     };
 
     this.ws.onmessage = (event) => {
+      this.lastHeartbeatAck = Date.now();
+      this.pendingHeartbeatSince = 0;
       try {
         const payload: EventEnvelope = JSON.parse(event.data);
         this.handleEvent(payload);
@@ -472,14 +463,22 @@ export class ChatWebSocketClient {
   private startHeartbeat(): void {
     this.stopHeartbeat();
     this.lastHeartbeatAck = Date.now();
+    this.pendingHeartbeatSince = 0;
 
     const heartbeatTick = () => {
-      if (Date.now() - this.lastHeartbeatAck > 30000) {
-        chatActions.addDebugNotice('Heartbeat timeout (30s). Re-establishing connection.');
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        return;
+      }
+
+      // If a heartbeat probe was sent and no response (or other message) was received within 15s, connection is dead.
+      if (this.pendingHeartbeatSince > 0 && Date.now() - this.pendingHeartbeatSince > 15000) {
+        chatActions.addDebugNotice('Heartbeat timeout (15s after ping). Re-establishing connection.');
+        this.pendingHeartbeatSince = 0;
         this.ws?.close();
         return;
       }
 
+      this.pendingHeartbeatSince = Date.now();
       this.sendCommand({
         type: 'heartbeat',
         commandId: `hb-${Date.now()}`
@@ -520,6 +519,7 @@ export class ChatWebSocketClient {
   }
 
   private stopHeartbeat(): void {
+    this.pendingHeartbeatSince = 0;
     if (this.heartbeatWorker) {
       try {
         this.heartbeatWorker.postMessage('stop');

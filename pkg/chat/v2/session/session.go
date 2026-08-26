@@ -96,13 +96,13 @@ func (s *Session) Register(c *Client, afterSeq, joinSeq int64) {
 			sysMsg = "{oldSender} 修改用户名为 {sender}"
 		} else if oldClient.Avatar != c.Avatar {
 			sysMsg = "{sender} 修改了头像"
-		} else {
+		} else if c.Peer != "desktop" {
 			sysMsg = "{sender} 已重新连接"
 		}
 	} else {
 		if parentLabel != "" {
 			sysMsg = fmt.Sprintf("{sender} 通过 %s 加入了会话", parentLabel)
-		} else {
+		} else if c.Peer != "desktop" {
 			sysMsg = "{sender} 已加入会话"
 		}
 	}
@@ -137,7 +137,7 @@ func (s *Session) Unregister(c *Client) {
 		c.Close()
 		s.broadcastPresence()
 
-		if !hasOther && !s.DisableSystemMessages && !c.Kicked {
+		if !hasOther && !s.DisableSystemMessages && !c.Kicked && c.Peer != "desktop" {
 			s.broadcastSystemMessage("{sender} 已断开连接", c.Theme, c, "")
 		}
 

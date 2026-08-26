@@ -354,3 +354,58 @@ func TestAssignThemePreservesThemeOnReconnect(t *testing.T) {
 		t.Fatalf("theme should change when user rescans a QR code, but stayed %s", c3.Theme)
 	}
 }
+
+func TestDesktopHostSuppressesJoinAndDisconnectNotices(t *testing.T) {
+	sess := NewSession("desktop-quiet-room")
+	// System messages enabled (default)
+	sess.DisableSystemMessages = false
+
+	// Register desktop host
+	host := NewClient(protocol.ClientInfo{Label: "EQT User", Peer: "desktop"}, nil)
+	sess.Register(host, 0, 0)
+
+	// Check that no system messages were added for desktop initial join
+	events := sess.MessageStore.GetSince(0)
+	for _, ev := range events {
+		if ev.Message != nil && ev.Message.Type == protocol.MessageSystem {
+			t.Fatalf("desktop host should not generate system messages on join, got: %s", ev.Message.Text)
+		}
+	}
+
+	// Register mobile peer
+	phone := NewClient(protocol.ClientInfo{Label: "Mobile Phone", Peer: "peer-mobile-1"}, nil)
+	sess.Register(phone, 0, 0)
+
+	// Check that mobile peer join message WAS generated
+	eventsAfterPhone := sess.MessageStore.GetSince(0)
+	phoneJoinFound := false
+	for _, ev := range eventsAfterPhone {
+		if ev.Message != nil && ev.Message.Type == protocol.MessageSystem && ev.Message.SenderID == "peer-mobile-1" {
+			phoneJoinFound = true
+			break
+		}
+	}
+	if !phoneJoinFound {
+		t.Fatal("mobile client should generate join system message")
+	}
+
+	// Reconnect desktop host (same peer)
+	host2 := NewClient(protocol.ClientInfo{Label: "EQT User", Peer: "desktop"}, nil)
+	sess.Register(host2, 0, 0)
+
+	eventsAfterHost2 := sess.MessageStore.GetSince(0)
+	for _, ev := range eventsAfterHost2 {
+		if ev.Message != nil && ev.Message.Type == protocol.MessageSystem && ev.Message.SenderID == "desktop" {
+			t.Fatalf("desktop host should not generate reconnect system messages, got: %s", ev.Message.Text)
+		}
+	}
+
+	// Unregister desktop host
+	sess.Unregister(host2)
+	eventsAfterHostLeave := sess.MessageStore.GetSince(0)
+	for _, ev := range eventsAfterHostLeave {
+		if ev.Message != nil && ev.Message.Type == protocol.MessageSystem && ev.Message.SenderID == "desktop" {
+			t.Fatalf("desktop host should not generate disconnect system messages, got: %s", ev.Message.Text)
+		}
+	}
+}
