@@ -73,3 +73,27 @@ go test ./pkg/chat/v2/session
 ## 六、 结论
 
 心跳超时检测存在边界设计缺陷（窗口与 tick 周期相等 + 无条件重置 pending），实际运行时依赖定时器漂移"碰巧"工作；fallback 路径在后台节流下存在误报风险。建议按 2.3 修复后，将超时检测从"依赖漂移"改为"确定性逻辑"。
+
+---
+
+## 七、 修复核验与同步（2026-08-26，commit b4ab874）
+
+> 同日提交 `b4ab874` "Fix in-flight heartbeat timeout window and unify desktop peer matching"（v1.36.1 → v1.36.2）修复了上文 2.3 与第三节的问题。复核查验如下。
+
+### 7.1 三个问题全部修复
+
+| 上文发现 | 修复状态 | 验证 |
+| :--- | :--- | :--- |
+| 2.3 心跳窗口 = tick 周期且每 tick 覆盖 pending | ✅ 已修 | 采用方案 A：`pendingHeartbeatSince > 0`（有在途心跳）时直接 `return`，不重复发包、不覆盖时间戳；判定改 `>= 15000`（原 `> 15000`）。由于 tick 周期恰好 15s，死连接在精确定时器下确定性触发（tick N 发包 → tick N+1 `15s >= 15s` 成立）。健康连接服务器响应 < 15s 即经 `onmessage` 清 pending，不受影响 |
+| 3.2 `Peer` 大小写不一致 | ✅ 已修 | 抽出包级函数 `isDesktopPeer()`（`strings.EqualFold(strings.TrimSpace(...))`）统一替换全文件所有 desktop 判定；`AssignTheme` 的冗余 `isDesktop` 中间变量顺带内联清理；新增 `TestDesktopHostCaseInsensitiveSuppression` 覆盖 `" Desktop "` 混合大小写+空白场景，且同时验证断开路径 |
+| 3.1 `isSuspended` 死代码 | ✅ 已修 | 字段声明、`visibilitychange` 赋值、`onclose` 短路分支三处引用全删 |
+
+### 7.2 新发现（minor）：`lastHeartbeatAck` 成为只写不读的死字段
+
+`websocket.ts` 中 `private lastHeartbeatAck` 现有 5 处赋值（第 20 行声明 + 108/205/328/459 行 `= Date.now()`），**零读取**。旧逻辑由它驱动 30 秒超时窗口；b4ab874 改由 `pendingHeartbeatSince` 驱动后，该字段已无作用，与已清理的 `isSuspended` 同属旧逻辑残留。不影响功能，但建议删除，避免误导读者以为超时检测仍由它驱动。
+
+### 7.3 复核确认
+
+- 服务器端仍无条件回复心跳事件（`transport/websocket.go:210-221`），健康连接不会误报。
+- 版本 v1.36.2 为行为修复，patch 合理。
+- 审查结论：修复方向正确、无新增功能缺陷，仅剩 7.2 一处死字段待清理。
