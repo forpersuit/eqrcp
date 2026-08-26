@@ -2558,15 +2558,11 @@ function renderLicensePlanBlock() {
 
             <div class="about-plan-footer">
                 <div class="about-plan-actions">
-                    ${isOnline() ? (license ? `
+                    ${isOnline() && hasPaidLicense() ? `
                         <a href="#" id="manage-license-portal-btn" class="about-plan-icon-btn" data-tooltip="${escapeAttr(t('manage_license_portal'))}" aria-label="${escapeAttr(t('manage_license_portal'))}">
                             ${licenseManagerIcon()}
                         </a>
-                    ` : `
-                        <a href="#" id="buy-license-btn" class="about-plan-icon-btn highlight buy-license-btn" data-tooltip="${escapeAttr(t('buy_license_portal'))}" aria-label="${escapeAttr(t('buy_license_portal'))}">
-                            ${cartUpgradeIcon()}
-                        </a>
-                    `) : ''}
+                    ` : ''}
                     <button class="about-plan-icon-btn" id="toggle-plan-info" data-tooltip="${escapeAttr(t('tooltip_popover_comparsion'))}" aria-label="${escapeAttr(t('plan_desc_title'))}">
                         ${diamondIcon()}
                     </button>
