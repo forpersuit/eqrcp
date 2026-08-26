@@ -164,7 +164,7 @@ go test ./pkg/chat/v2/session
 - **服务端闭环不变**：`transport/websocket.go:210` 仍对 heartbeat 无条件回发 `EventHeartbeat`；desktop 端 probe（ecca648 起）同步开启在途超时窗口。
 - **`isSuspended` 不再死代码**：hidden 置真、onclose 读真，读-写闭环成立；b4ab874 当时的删除判断在彼时正确，本提交按产品意图将其复用以承载「挂起抑制重连」语义，属行为重定义而非缺陷复活。
 
-### 9.3 边界加固与防抖（commit 2a3b04c，v1.36.5 → v1.36.6）
+### 9.3 边界加固与防抖（commit 909924d，v1.36.5 → v1.36.6）
 
 - **快速 hidden→visible 抖动与废弃实例防呆**：
   - 在 `connect()` 与 `close()` 中主动解绑旧实例的所有监听器（`onopen = onmessage = onerror = onclose = null`）；
@@ -172,6 +172,11 @@ go test ./pkg/chat/v2/session
   - 彻底杜绝了快速切台时旧 socket 延迟触发 `onclose` 误抛 `handleReconnect` 或影响心跳状态机的竞态可能。
 - **移动端后台离场通知**：非 desktop peer 的 `close(page_hidden)` 会向房间内其它成员广播「已断开连接」，前台重连再广播「已加入会话」——符合产品设计预期的自然上下线感知。
 - **全链路闭环确认**：全审查项保持 100% 闭环。
+- **审查复核（909924d 提交后）**：
+  - 初稿误标 commit `2a3b04c`，`git cat-file` 核对该 hash 不存在，实际提交为 `909924d`，本次修正（1. 第 9.3 标题）；
+  - `svelte-check --tsconfig ./tsconfig.app.json`：105 文件 0 错误（3 个 a11y 警告来自 MessageList/MessageComposer，与本次无关）；
+  - 逐路径复核无回归：挂起路径（hidden 原生 `close(1000, page_hidden)` 不解绑）、死连接检测（heartbeatTick 的 `ws?.close()` 不解绑，onclose→handleReconnect 保留）、kicked/left/replaced 各分支均不受守卫影响；`close()` 解绑后不再触发 `setConnectionState('disconnected')`，唯一调用点 `App.svelte` onDestroy（组件销毁）后 UI 不再渲染，无实际影响；
+  - **测试覆盖缺口**：守卫逻辑（superseded socket 延迟触发 onclose 被丢弃）尚无自动化断言，`resumeConnection.test.ts` 仅覆盖 resume 前置条件；此类浏览器事件时序以 `/chrome-test` 手动 E2E 验证为主，风险可接受。
 
 ### 9.4 最终结论
 
