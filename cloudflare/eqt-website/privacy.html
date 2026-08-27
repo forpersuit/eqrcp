@@ -255,7 +255,15 @@
 
         // Auto-detect language
         (function initLang() {
-            let savedLang = localStorage.getItem('eqt-lang');
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlLang = urlParams.get('lang');
+            let savedLang = null;
+            if (urlLang && translations[urlLang.toLowerCase()]) {
+                savedLang = urlLang.toLowerCase();
+            }
+            if (!savedLang) {
+                savedLang = localStorage.getItem('eqt-lang');
+            }
             if (!savedLang) {
                 const match = document.cookie.match(/(?:^|;\s*)eqt-lang=([^;]+)/) || document.cookie.match(/(?:^|;\s*)eqt_lang=([^;]+)/);
                 if (match) savedLang = match[1];

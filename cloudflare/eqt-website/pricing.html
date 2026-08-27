@@ -758,7 +758,18 @@
         }
 
         function initLang() {
-            let lang = localStorage.getItem('eqt-lang');
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlLang = urlParams.get('lang');
+            const supported = ['en', 'zh', 'ja', 'ko', 'es', 'de', 'fr'];
+            let lang = null;
+            if (urlLang && supported.includes(urlLang.toLowerCase())) {
+                lang = urlLang.toLowerCase();
+                localStorage.setItem('eqt-lang', lang);
+                setCookie('eqt-lang', lang, 365);
+            }
+            if (!lang) {
+                lang = localStorage.getItem('eqt-lang');
+            }
             if (!lang) {
                 lang = getCookie('eqt-lang');
             }
@@ -767,7 +778,6 @@
                 lang = (navLang && navLang.toLowerCase().startsWith('zh')) ? 'zh' : 'en';
             }
             
-            const supported = ['en', 'zh', 'ja', 'ko', 'es', 'de', 'fr'];
             if (!supported.includes(lang)) {
                 lang = 'en';
             }

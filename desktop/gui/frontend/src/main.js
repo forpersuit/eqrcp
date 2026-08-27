@@ -3265,11 +3265,20 @@ function bindEvents() {
             const portalBtn = e.target.closest('#manage-license-portal-btn, .manage-license-portal-btn');
             if (portalBtn) {
                 e.preventDefault();
+                const lang = (state && state.settings && state.settings.lang) || getSystemLocale();
                 let portalUrl = state.appInfo?.isTest
                     ? 'https://test.eqt.net.im/portal.html'
                     : 'https://www.eqt.net.im/portal.html';
+                const params = new URLSearchParams();
                 if (state.status?.buyerEmail) {
-                    portalUrl += '?email=' + encodeURIComponent(state.status.buyerEmail);
+                    params.set('email', state.status.buyerEmail);
+                }
+                if (lang) {
+                    params.set('lang', lang);
+                }
+                const queryString = params.toString();
+                if (queryString) {
+                    portalUrl += '?' + queryString;
                 }
                 window.runtime.BrowserOpenURL(portalUrl);
                 return;
@@ -3277,9 +3286,13 @@ function bindEvents() {
             const buyLicBtn = e.target.closest('.buy-license-btn, #buy-license-btn, #plan-buy-license-btn');
             if (buyLicBtn) {
                 e.preventDefault();
-                const pricingUrl = state.appInfo?.isTest
+                const lang = (state && state.settings && state.settings.lang) || getSystemLocale();
+                let pricingUrl = state.appInfo?.isTest
                     ? 'https://test.eqt.net.im/pricing.html'
                     : 'https://www.eqt.net.im/pricing.html';
+                if (lang) {
+                    pricingUrl += '?lang=' + encodeURIComponent(lang);
+                }
                 window.runtime.BrowserOpenURL(pricingUrl);
                 return;
             }

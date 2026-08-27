@@ -959,7 +959,16 @@
 
         // Setup i18n
         function initLanguage() {
-            let userLang = localStorage.getItem('eqt-lang');
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlLang = urlParams.get('lang');
+            const supported = ['zh','ja','ko','es','de','fr','en'];
+            let userLang = null;
+            if (urlLang && supported.includes(urlLang.toLowerCase())) {
+                userLang = urlLang.toLowerCase();
+            }
+            if (!userLang) {
+                userLang = localStorage.getItem('eqt-lang');
+            }
             if (!userLang) {
                 const match = document.cookie.match(/eqt-lang=([^;]+)/);
                 if (match) userLang = match[1];
