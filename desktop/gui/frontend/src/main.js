@@ -6299,8 +6299,8 @@ async function runAutoUpdateCheck(force = false) {
         return;
     }
 
-    if (state.updateStage !== 'idle') {
-        console.log('[AutoUpdate] Update state is busy:', state.updateStage);
+    if (state.updateStage === 'checking' || state.updateStage === 'downloading' || state.updateStage === 'installing') {
+        console.log('[AutoUpdate] Update operation in progress:', state.updateStage);
         reschedule();
         return;
     }
@@ -6329,6 +6329,7 @@ async function runAutoUpdateCheck(force = false) {
     }
 
     console.log('[AutoUpdate] Starting auto update check. Mode:', mode);
+    const prevStage = state.updateStage;
     state.updateStage = 'checking';
     state.updateStatusText = t('check_updates_auto');
     syncManualUpdateCheckUI();
@@ -6346,8 +6347,12 @@ async function runAutoUpdateCheck(force = false) {
         }
 
         if (!checkRes || !checkRes.new_version_available) {
-            state.updateStage = 'idle';
-            state.updateStatusText = t('up_to_date');
+            if (prevStage === 'ready') {
+                state.updateStage = 'ready';
+            } else {
+                state.updateStage = 'idle';
+                state.updateStatusText = t('up_to_date');
+            }
             syncManualUpdateCheckUI();
             reschedule();
             return;
@@ -6366,14 +6371,29 @@ async function runAutoUpdateCheck(force = false) {
         } else {
             if (state.status?.state === 'busy') {
                 console.log('[AutoUpdate] Agent is busy transferring. Postponing download.');
-                state.updateStage = 'available';
+                state.updateStage = prevStage === 'ready' ? 'ready' : 'available';
                 state.updateStatusText = t('postponed_transfer', { version: checkRes.version });
                 syncManualUpdateCheckUI();
                 reschedule();
                 return;
             }
+
+            // 若当前已处于 ready 状态且版本已是最新版，则不重复下载
+            if (prevStage === 'ready' && state.downloadedVersion === checkRes.version) {
+                console.log('[AutoUpdate] Latest version already downloaded and ready:', checkRes.version);
+                state.updateStage = 'ready';
+                state.updateStatusText = t('update_ready_restart', { version: checkRes.version });
+                state.updateBtnText = t('btn_install_restart');
+                state.updateBtnDisabled = false;
+                syncManualUpdateCheckUI();
+                reschedule();
+                return;
+            }
+
+            // 下载新版本（若之前有已下载但未安装的旧版，会被新下载覆盖）
             await triggerDownloadUpdate();
             if (state.updateStage === 'ready') {
+                state.downloadedVersion = checkRes.version;
                 if (mode === 'download') {
                     state.notice = t('update_ready_restart', { version: checkRes.version });
                     updateMessagesSurface();
@@ -6384,7 +6404,7 @@ async function runAutoUpdateCheck(force = false) {
         }
         reschedule();
     } catch (err) {
-        state.updateStage = 'idle';
+        state.updateStage = prevStage === 'ready' ? 'ready' : 'idle';
         state.updateStatusText = t('auto_check_failed', { err: cleanLocalAddressError(err) });
         syncManualUpdateCheckUI();
         console.error('[AutoUpdate] Auto update check failed:', err);

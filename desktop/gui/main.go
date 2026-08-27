@@ -341,9 +341,11 @@ func startWailsGUI() {
 		return
 	}
 
-	// Apply pending offline update if exists, then restart
-	if server.ApplyOfflineUpdateIfExists() {
-		return
+	// Apply pending offline update only if in silent mode (or default empty), then restart
+	if settings.AutoUpdateMode == "silent" || settings.AutoUpdateMode == "" {
+		if server.ApplyOfflineUpdateIfExists() {
+			return
+		}
 	}
 
 	// Create an instance of the app structure

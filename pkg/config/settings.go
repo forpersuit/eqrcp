@@ -310,10 +310,10 @@ func normalizeAutoUpdateMode(value string) string {
 		return "off"
 	case "notify":
 		return "notify"
-	case "silent":
-		return "silent"
-	default:
+	case "download":
 		return "download"
+	default:
+		return "silent"
 	}
 }
 
