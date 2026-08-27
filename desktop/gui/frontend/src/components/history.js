@@ -47,6 +47,14 @@ export function restoreIcon() {
     </svg>`;
 }
 
+export function warningIcon() {
+    return `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#e11d48" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0; margin-top: 1px;">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+        <line x1="12" y1="9" x2="12" y2="13"></line>
+        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+    </svg>`;
+}
+
 // ---- 工具函数 ----
 function escapeHTML(value) {
     if (value === null || value === undefined) return '';
@@ -211,6 +219,7 @@ export function renderHistoryFiles(task) {
 export let searchQuery = '';
 export let showSearchInput = false;
 export let showSearchDropdown = false;
+export let showClearHistoryConfirm = false;
 export let activeFocusTaskId = null;
 export let activeFocusFilePath = null;
 export let activeFocusDeviceName = null;
@@ -225,12 +234,21 @@ export function toggleSearchDropdown(show) {
     showSearchDropdown = show;
 }
 
+export function toggleClearHistoryConfirm(show) {
+    if (typeof show === 'boolean') {
+        showClearHistoryConfirm = show;
+    } else {
+        showClearHistoryConfirm = !showClearHistoryConfirm;
+    }
+}
+
 export function toggleSearchInput() {
     showSearchInput = !showSearchInput;
     if (!showSearchInput) {
         searchQuery = '';
         showSearchDropdown = false;
     }
+    showClearHistoryConfirm = false;
 }
 
 export function updateSearchQuery(val) {
@@ -357,9 +375,31 @@ export function renderSide() {
                             </button>
                         </div>
                         
-                        <button class="ghost icon-btn" id="clear-history" ${history.length ? '' : 'disabled'} title="${escapeAttr(t('clear'))}" style="min-height: 28px; width: ${searchActive ? '0px' : '28px'}; height: 28px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 4px; border: none; background: transparent; transition: opacity 0.2s ease, width 0.2s ease; ${searchActive ? 'opacity: 0; pointer-events: none;' : 'opacity: 1;'}">
-                            ${clearIcon()}
-                        </button>
+                        <div class="clear-history-container" style="position: relative; display: inline-flex; align-items: center; ${searchActive ? 'width: 0px; opacity: 0; pointer-events: none;' : 'width: 28px; opacity: 1;'}; transition: opacity 0.2s ease, width 0.2s ease;">
+                            <button class="ghost icon-btn" id="clear-history" ${history.length ? '' : 'disabled'} title="${escapeAttr(t('clear'))}" style="min-height: 28px; width: 28px; height: 28px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 4px; border: none; background: transparent; cursor: ${history.length ? 'pointer' : 'not-allowed'}; ${showClearHistoryConfirm ? 'background: var(--accent-hover-soft, rgba(142, 178, 169, 0.15)); color: var(--accent);' : ''}">
+                                ${clearIcon()}
+                            </button>
+                            ${showClearHistoryConfirm && history.length ? `
+                                <div class="clear-history-popover" id="clear-history-popover" role="dialog" aria-modal="true" aria-label="${escapeAttr(t('confirm_clear_history_title'))}">
+                                    <div class="popover-arrow"></div>
+                                    <div class="popover-content">
+                                        <div class="popover-header">
+                                            <span class="popover-icon">${warningIcon()}</span>
+                                            <strong class="popover-title">${escapeHTML(t('confirm_clear_history_title'))}</strong>
+                                        </div>
+                                        <p class="popover-desc">${escapeHTML(t('confirm_clear_history_desc'))}</p>
+                                        <div class="popover-actions">
+                                            <button class="popover-btn popover-btn-cancel" id="cancel-clear-history" type="button">
+                                                ${escapeHTML(t('btn_cancel'))}
+                                            </button>
+                                            <button class="popover-btn popover-btn-confirm" id="confirm-clear-history" type="button">
+                                                ${escapeHTML(t('btn_confirm'))}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
                     </div>
                 </div>
                 

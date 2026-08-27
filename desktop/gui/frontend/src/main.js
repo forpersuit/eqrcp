@@ -10,7 +10,7 @@ import shareIllustrationURL from './assets/images/share.png';
 import receiveIllustrationURL from './assets/images/receive.png';
 import chatIllustrationURL from './assets/images/chat.png';
 import morphdom from './vendor/morphdom.js';
-import { renderSide, toggleSearchInput, updateSearchQuery, searchQuery, showSearchInput, renderHistory, showSearchDropdown, toggleSearchDropdown, activeFocusTaskId, updateActiveFocus, getMatchResults, highlightText } from './components/history.js';
+import { renderSide, toggleSearchInput, updateSearchQuery, searchQuery, showSearchInput, renderHistory, showSearchDropdown, toggleSearchDropdown, activeFocusTaskId, updateActiveFocus, getMatchResults, highlightText, showClearHistoryConfirm, toggleClearHistoryConfirm } from './components/history.js';
 import { initDragDrop, sendDebugMessageToChat } from './dragdrop.js';
 import { renderShareOverlay, closeShareOverlay, prepareMergedQRCode, downloadSharePosterImage } from './components/share.js';
 
@@ -3067,6 +3067,7 @@ function shrinkSearchBoxInDOM() {
     const title = document.querySelector('.panel-title');
     const refreshBtn = document.querySelector('#refresh');
     const clearBtn = document.querySelector('#clear-history');
+    const clearContainer = document.querySelector('.clear-history-container');
     const searchBox = document.querySelector('.search-input-box');
     const searchInput = document.querySelector('#history-search-input');
     const toggleSearch = document.querySelector('#toggle-search');
@@ -3075,6 +3076,7 @@ function shrinkSearchBoxInDOM() {
         toggleSearchInput();
     }
     toggleSearchDropdown(false);
+    toggleClearHistoryConfirm(false);
     
     const panel = document.querySelector('.side .panel');
     if (panel) {
@@ -3091,6 +3093,11 @@ function shrinkSearchBoxInDOM() {
         refreshBtn.style.opacity = '1';
         refreshBtn.style.width = '28px';
         refreshBtn.style.pointerEvents = 'auto';
+    }
+    if (clearContainer) {
+        clearContainer.style.opacity = '1';
+        clearContainer.style.width = '28px';
+        clearContainer.style.pointerEvents = 'auto';
     }
     if (clearBtn) {
         clearBtn.style.opacity = '1';
@@ -3391,6 +3398,20 @@ function bindEvents() {
                 return;
             }
             if (e.target.closest('#clear-history')) {
+                const history = state.status?.history || [];
+                if (!history.length) return;
+                toggleClearHistoryConfirm();
+                render();
+                return;
+            }
+            if (e.target.closest('#cancel-clear-history')) {
+                toggleClearHistoryConfirm(false);
+                render();
+                return;
+            }
+            if (e.target.closest('#confirm-clear-history')) {
+                toggleClearHistoryConfirm(false);
+                render();
                 clearHistory();
                 return;
             }
@@ -4008,6 +4029,11 @@ function bindEvents() {
 
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
+                if (showClearHistoryConfirm) {
+                    toggleClearHistoryConfirm(false);
+                    render();
+                    return;
+                }
                 if (state.showShareOverlay) {
                     closeShareOverlay(state, render);
                     return;
@@ -4046,6 +4072,14 @@ function bindEvents() {
         });
 
         document.addEventListener('pointerdown', (e) => {
+            if (showClearHistoryConfirm) {
+                const inClearContainer = e.target.closest('.clear-history-container') || e.target.closest('#clear-history-popover');
+                if (!inClearContainer) {
+                    toggleClearHistoryConfirm(false);
+                    render();
+                }
+            }
+
             if (showSearchInput) {
                 const inSearchBox = e.target.closest('.search-input-box') || 
                                     e.target.closest('#toggle-search') || 
@@ -4135,6 +4169,7 @@ function openPanel(panel) {
     if (state.activePanel === panel && !state.showShareOverlay) {
         return;
     }
+    toggleClearHistoryConfirm(false);
     syncAndSaveSettingsInBackground();
     state.activePanel = panel;
     state.showShareOverlay = false;
@@ -5493,6 +5528,7 @@ function handleTrayCommand(command) {
 }
 
 function setMode(mode) {
+    toggleClearHistoryConfirm(false);
     if (state.mode === mode) {
         if (mode === 'chat') {
             startChatUsage();
