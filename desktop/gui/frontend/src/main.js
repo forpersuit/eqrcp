@@ -6521,6 +6521,7 @@ async function triggerDownloadUpdate() {
     try {
         await window.go.main.App.DownloadUpdate(checkRes);
         state.updateStage = 'ready';
+        state.downloadedVersion = checkRes.version;
         state.updateStatusText = t('update_ready_restart', { version: checkRes.version });
         state.updateBtnText = t('btn_install_restart');
         state.updateBtnDisabled = false;
@@ -6539,6 +6540,33 @@ async function triggerDownloadUpdate() {
     }
 }
 
+async function checkPendingOfflineUpdate() {
+    if (!window.go?.main?.App?.GetPendingOfflineUpdate) return;
+    try {
+        const info = await window.go.main.App.GetPendingOfflineUpdate();
+        if (info && info.has_pending) {
+            console.log('[AutoUpdate] Found verified pending offline update on disk:', info);
+            state.updateStage = 'ready';
+            state.downloadedVersion = info.version;
+            state.updateCheckRes = {
+                new_version_available: true,
+                version: info.version,
+                asset_name: info.asset_name
+            };
+            state.updateStatusText = t('update_ready_restart', { version: info.version || '' });
+            state.updateBtnText = t('btn_install_restart');
+            state.updateBtnDisabled = false;
+            if (state.settings?.autoUpdateMode === 'download') {
+                state.notice = t('update_ready_restart', { version: info.version || '' });
+                updateMessagesSurface();
+            }
+            syncManualUpdateCheckUI();
+        }
+    } catch (err) {
+        console.warn('[AutoUpdate] Error checking pending offline update:', err);
+    }
+}
+
 loadChatUsage();
 render();
 checkPendingCrashReport();
@@ -6550,8 +6578,9 @@ window.addEventListener('online', () => {
     render();
 });
 window.addEventListener('offline', () => render());
-loadSettings().then(() => {
+loadSettings().then(async () => {
     connectAgentEvents();
+    await checkPendingOfflineUpdate();
     window.setTimeout(() => runAutoUpdateCheck(true), 5000);
 });
 

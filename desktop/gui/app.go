@@ -1355,7 +1355,14 @@ func (a *App) DownloadUpdate(result GUIUpdateCheckResult) (string, error) {
 	if a.agent == nil {
 		return "", fmt.Errorf("agent not initialized")
 	}
-	return a.agent.downloadUpdate(result.AssetURL, result.SignatureURL, result.AssetName)
+	return a.agent.downloadUpdate(result.AssetURL, result.SignatureURL, result.AssetName, result.Version)
+}
+
+func (a *App) GetPendingOfflineUpdate() (server.PendingOfflineUpdateInfo, error) {
+	if a.agent == nil {
+		return server.GetPendingOfflineUpdateInfo(), nil
+	}
+	return a.agent.getPendingOfflineUpdate(), nil
 }
 
 func (a *App) InstallUpdate(assetName string) error {

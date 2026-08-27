@@ -1124,8 +1124,12 @@ func (agent *desktopAgent) checkForUpdates() (GUIUpdateCheckResult, error) {
 	}, nil
 }
 
-func (agent *desktopAgent) downloadUpdate(assetURL, signatureURL, assetName string) (string, error) {
-	return server.DownloadUpdate(assetURL, signatureURL, assetName)
+func (agent *desktopAgent) downloadUpdate(assetURL, signatureURL, assetName, versionStr string) (string, error) {
+	return server.DownloadUpdateWithVersion(assetURL, signatureURL, assetName, versionStr)
+}
+
+func (agent *desktopAgent) getPendingOfflineUpdate() server.PendingOfflineUpdateInfo {
+	return server.GetPendingOfflineUpdateInfo()
 }
 
 func (agent *desktopAgent) installUpdate(assetName string) error {

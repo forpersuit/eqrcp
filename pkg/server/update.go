@@ -209,15 +209,29 @@ func getUpdateTempDir() string {
 	return dir
 }
 
-// DownloadUpdate downloads the update package and its signature, verifies it,
-// and saves it to a persistent update buffer folder in the config directory.
-func DownloadUpdate(assetURL string, sigURL string, assetName string) (string, error) {
+// PendingOfflineUpdateInfo holds the status and metadata of a locally downloaded and verified update package.
+type PendingOfflineUpdateInfo struct {
+	HasPending bool   `json:"has_pending"`
+	Version    string `json:"version"`
+	AssetName  string `json:"asset_name"`
+}
+
+type updateMetadataFile struct {
+	Version   string `json:"version"`
+	AssetName string `json:"asset_name"`
+	CreatedAt int64  `json:"created_at"`
+}
+
+// DownloadUpdateWithVersion downloads the update package and its signature, verifies it,
+// and saves it to a persistent update buffer folder along with version metadata.
+func DownloadUpdateWithVersion(assetURL string, sigURL string, assetName string, versionStr string) (string, error) {
 	tempDir := getUpdateTempDir()
 
 	// Create paths for saving download files
 	pkgPath := filepath.Join(tempDir, assetName)
 	sigPath := pkgPath + ".sig"
-	Log.Debugf("DownloadUpdate: starting download. tempDir: %s, pkgPath: %s, sigPath: %s", tempDir, pkgPath, sigPath)
+	metaPath := filepath.Join(tempDir, "update.json")
+	Log.Debugf("DownloadUpdate: starting download. tempDir: %s, pkgPath: %s, sigPath: %s, version: %s", tempDir, pkgPath, sigPath, versionStr)
 
 	client := &http.Client{Timeout: 60 * time.Second} // Larger timeout for file downloads
 
@@ -271,7 +285,7 @@ func DownloadUpdate(assetURL string, sigURL string, assetName string) (string, e
 	}
 	Log.Debugf("DownloadUpdate: signature verification passed")
 
-	// 4. Save the verified package and signature locally
+	// 4. Save the verified package, signature, and metadata locally
 	Log.Debugf("DownloadUpdate: writing verified files to disk")
 	if err := os.WriteFile(pkgPath, pkgBytes, 0644); err != nil {
 		Log.Errorf("DownloadUpdate: failed to write package to disk: %v", err)
@@ -281,9 +295,25 @@ func DownloadUpdate(assetURL string, sigURL string, assetName string) (string, e
 		Log.Errorf("DownloadUpdate: failed to write signature to disk: %v", err)
 		return "", fmt.Errorf("failed to save verified update signature: %w", err)
 	}
+	if versionStr != "" {
+		meta := updateMetadataFile{
+			Version:   versionStr,
+			AssetName: assetName,
+			CreatedAt: time.Now().Unix(),
+		}
+		if metaBytes, err := json.Marshal(meta); err == nil {
+			_ = os.WriteFile(metaPath, metaBytes, 0644)
+		}
+	}
 	Log.Debugf("DownloadUpdate: verified update package saved successfully at %s", pkgPath)
 
 	return pkgPath, nil
+}
+
+// DownloadUpdate downloads the update package and its signature, verifies it,
+// and saves it to a persistent update buffer folder in the config directory.
+func DownloadUpdate(assetURL string, sigURL string, assetName string) (string, error) {
+	return DownloadUpdateWithVersion(assetURL, sigURL, assetName, "")
 }
 
 // InstallAndRestart performs atomic binary replacement and restarts the current process.
@@ -366,6 +396,7 @@ func InstallAndRestart(assetName string) error {
 	Log.Debugf("InstallAndRestart: cleaning up cached download files")
 	_ = os.Remove(pkgPath)
 	_ = os.Remove(pkgPath + ".sig")
+	_ = os.Remove(filepath.Join(tempDir, "update.json"))
 
 	// Restart EQT: spawn a new process and exit the current one.
 	Log.Debugf("InstallAndRestart: spawning new process and restarting EQT. args: %v", os.Args[1:])
@@ -383,6 +414,58 @@ func InstallAndRestart(assetName string) error {
 	// Exit the current process cleanly
 	os.Exit(0)
 	return nil
+}
+
+// GetPendingOfflineUpdateInfo checks if there is a verified update package sitting locally on disk.
+func GetPendingOfflineUpdateInfo() PendingOfflineUpdateInfo {
+	tempDir := getUpdateTempDir()
+	var assetName string
+	if runtime.GOOS == "windows" {
+		assetName = fmt.Sprintf("eqt-desktop-%s-%s.exe", runtime.GOOS, runtime.GOARCH)
+	} else {
+		assetName = fmt.Sprintf("eqt-desktop-%s-%s", runtime.GOOS, runtime.GOARCH)
+	}
+
+	pkgPath := filepath.Join(tempDir, assetName)
+	sigPath := pkgPath + ".sig"
+	metaPath := filepath.Join(tempDir, "update.json")
+
+	if _, err := os.Stat(pkgPath); err != nil {
+		return PendingOfflineUpdateInfo{HasPending: false}
+	}
+	if _, err := os.Stat(sigPath); err != nil {
+		return PendingOfflineUpdateInfo{HasPending: false}
+	}
+
+	pkgBytes, err := os.ReadFile(pkgPath)
+	if err != nil {
+		return PendingOfflineUpdateInfo{HasPending: false}
+	}
+	sigBytes, err := os.ReadFile(sigPath)
+	if err != nil {
+		return PendingOfflineUpdateInfo{HasPending: false}
+	}
+
+	if !VerifyUpdateSignature(pkgBytes, sigBytes) {
+		_ = os.Remove(pkgPath)
+		_ = os.Remove(sigPath)
+		_ = os.Remove(metaPath)
+		return PendingOfflineUpdateInfo{HasPending: false}
+	}
+
+	versionStr := ""
+	if metaBytes, err := os.ReadFile(metaPath); err == nil {
+		var meta updateMetadataFile
+		if err := json.Unmarshal(metaBytes, &meta); err == nil {
+			versionStr = meta.Version
+		}
+	}
+
+	return PendingOfflineUpdateInfo{
+		HasPending: true,
+		Version:    versionStr,
+		AssetName:  assetName,
+	}
 }
 
 // CleanLingeringOldExecutables deletes the .old executable files left by Windows rename scheme
@@ -424,6 +507,7 @@ func ApplyOfflineUpdateIfExists() bool {
 
 	pkgPath := filepath.Join(tempDir, assetName)
 	sigPath := pkgPath + ".sig"
+	metaPath := filepath.Join(tempDir, "update.json")
 
 	// Check if both files exist
 	if _, err := os.Stat(pkgPath); err != nil {
@@ -452,6 +536,7 @@ func ApplyOfflineUpdateIfExists() bool {
 		Log.Errorf("ApplyOfflineUpdateIfExists: pending update signature verification failed. Deleting corrupted files.")
 		_ = os.Remove(pkgPath)
 		_ = os.Remove(sigPath)
+		_ = os.Remove(metaPath)
 		return false
 	}
 
@@ -500,6 +585,7 @@ func ApplyOfflineUpdateIfExists() bool {
 	// Clean up update package cache files
 	_ = os.Remove(pkgPath)
 	_ = os.Remove(sigPath)
+	_ = os.Remove(metaPath)
 
 	Log.Infof("ApplyOfflineUpdateIfExists: update applied successfully. Restarting EQT...")
 

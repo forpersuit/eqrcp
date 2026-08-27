@@ -994,6 +994,7 @@ func (agent *desktopAgent) handleUpdateDownload(w http.ResponseWriter, r *http.R
 		AssetURL     string `json:"asset_url"`
 		SignatureURL string `json:"signature_url"`
 		AssetName    string `json:"asset_name"`
+		Version      string `json:"version"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		agent.log.Errorf("handleUpdateDownload: failed to decode JSON: %v", err)
@@ -1008,7 +1009,7 @@ func (agent *desktopAgent) handleUpdateDownload(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	savedPath, err := server.DownloadUpdate(req.AssetURL, req.SignatureURL, req.AssetName)
+	savedPath, err := server.DownloadUpdateWithVersion(req.AssetURL, req.SignatureURL, req.AssetName, req.Version)
 	if err != nil {
 		agent.log.Errorf("handleUpdateDownload error: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)

@@ -78,6 +78,10 @@ export function GetLogFiles() {
   return window['go']['main']['App']['GetLogFiles']();
 }
 
+export function GetPendingOfflineUpdate() {
+  return window['go']['main']['App']['GetPendingOfflineUpdate']();
+}
+
 export function InstallUpdate(arg1) {
   return window['go']['main']['App']['InstallUpdate'](arg1);
 }
