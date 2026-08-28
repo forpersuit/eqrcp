@@ -195,9 +195,15 @@
                 const errMsg = err.message || '';
                 const isRateLimited = err.status === 429 || err.error_code === 'RATE_LIMITED' ||
                     errMsg.includes('60') || errMsg.includes('频繁') || errMsg.includes('frequent') || errMsg.includes('frecuente');
+                const isServiceDegraded = err.status === 503 || err.error_code === 'EMAIL_SERVICE_DEGRADED' ||
+                    errMsg.includes('temporarily unavailable') || errMsg.includes('暂时不可用');
 
                 if (emailInput) triggerShake(emailInput);
-                const safeMsg = filterFriendlyMsg(errMsg, 'send_code_failed', 'Failed to send verification code. Please try again later.', (k, f) => this.translate(k, f));
+                const defaultFallbackKey = isServiceDegraded ? 'email_service_degraded' : 'send_code_failed';
+                const defaultFallbackMsg = isServiceDegraded
+                    ? 'Email service is temporarily unavailable. Please try again shortly or contact support.'
+                    : 'Failed to send verification code. Please try again later.';
+                const safeMsg = filterFriendlyMsg(errMsg, defaultFallbackKey, defaultFallbackMsg, (k, f) => this.translate(k, f));
 
                 if (!isRateLimited) {
                     // Cancel cooldown immediately on actual errors so user can correct and retry
@@ -205,13 +211,17 @@
                         const curEmail = emailInput ? emailInput.value : trimmedEmail;
                         this.syncButtonWithEmail(curEmail, sendBtn);
                     });
-                    if (typeof onStatus === 'function') onStatus(safeMsg, 'error');
+                    if (isServiceDegraded) {
+                        if (typeof onStatus === 'function') onStatus(safeMsg, 'warning');
+                    } else {
+                        if (typeof onStatus === 'function') onStatus(safeMsg, 'error');
+                    }
                 } else {
                     if (typeof onStatus === 'function') onStatus(safeMsg, 'warning');
                 }
 
                 if (typeof onError === 'function') onError(err, safeMsg);
-                return { ok: false, error: safeMsg, isRateLimited };
+                return { ok: false, error: safeMsg, isRateLimited, isServiceDegraded };
             } finally {
                 this.isSending = false;
             }

@@ -432,9 +432,10 @@ func RegisterDeviceOnline() {
 	}
 
 	var resData struct {
-		DeviceID string `json:"device_id"`
-		Tier     string `json:"tier"`
-		IsDev    bool   `json:"is_dev"`
+		DeviceID    string              `json:"device_id"`
+		Tier        string              `json:"tier"`
+		IsDev       bool                `json:"is_dev"`
+		LicenseCert *LicenseCertificate `json:"license_cert,omitempty"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&resData); err != nil {
 		log.Printf("[DRM] Failed to decode device registration response: %v", err)
@@ -444,5 +445,22 @@ func RegisterDeviceOnline() {
 		SetAuthorityDeviceID(resData.DeviceID)
 		SetServerDevAuthorized(resData.IsDev)
 		log.Printf("[DRM] Anonymous free device registered successfully. Authority DeviceID: %s, Tier: %s, IsDev: %t", resData.DeviceID, resData.Tier, resData.IsDev)
+	}
+
+	// License Auto-Recovery: if server restored an active license certificate for this bound device
+	if resData.LicenseCert != nil && resData.LicenseCert.LicenseCode != "" {
+		cert := *resData.LicenseCert
+		if resData.DeviceID != "" {
+			cert.DeviceID = resData.DeviceID
+		}
+		if VerifyLicenseSignature(cert) && VerifyFingerprint(cert) {
+			if err := SaveRestoredLicenseCertificate(cert); err != nil {
+				log.Printf("[DRM] Auto-recovery: failed to save restored license certificate: %v", err)
+			} else {
+				log.Printf("[DRM] Auto-recovery succeeded! Restored %s license (%s) for device %s", cert.Tier, cert.LicenseCode, resData.DeviceID)
+			}
+		} else {
+			log.Printf("[DRM] Auto-recovery: restored license certificate failed local signature or fingerprint validation.")
+		}
 	}
 }

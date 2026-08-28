@@ -747,6 +747,86 @@ func TestRegisterDeviceOnlineTelemetryDisabled(t *testing.T) {
 	}
 }
 
+func TestRegisterDeviceOnlineAutoRecovery(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "eqt-test-recovery-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	origConfigDir := os.Getenv("EQT_CONFIG_DIR")
+	os.Setenv("EQT_CONFIG_DIR", tempDir)
+	defer os.Setenv("EQT_CONFIG_DIR", origConfigDir)
+
+	ResetLicense()
+	SetAuthorityDeviceID("")
+
+	testUUID := "uuid_recovery_mock"
+	testCPU := "cpu_recovery_mock"
+	testDisk := "disk_recovery_mock"
+	mockID := "dev_recovery_mock_device_id_123"
+
+	testBoardUUID = testUUID
+	testCPUSerial = testCPU
+	testDiskSerial = testDisk
+	defer func() {
+		testBoardUUID = ""
+		testCPUSerial = ""
+		testDiskSerial = ""
+	}()
+
+	mockCert := LicenseCertificate{
+		LicenseCode:        "EQT-PLUS-AUTO-RECOVERY-KEY",
+		Tier:               "PLUS",
+		UUIDHash:           testUUID,
+		CPUHash:            testCPU,
+		DiskHash:           testDisk,
+		DeviceID:           mockID,
+		ExpiresAt:          "LIFETIME",
+		MaxDevices:         2,
+		ActivatedDevices:   1,
+		BuyerEmail:         "auto-recovery@example.com",
+		LastOnlineSyncTime: time.Now().UTC().Format(time.RFC3339),
+	}
+	mockCert.Signature = signTestPayload(mockCert)
+	mockCert.VerifySignature = signTestVerifyPayload(mockCert)
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/device/register" && r.Method == "POST" {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"device_id":    mockID,
+				"tier":         "paid",
+				"is_dev":       false,
+				"license_cert": mockCert,
+			})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer ts.Close()
+
+	os.Setenv("EQT_LICENSE_SERVER", ts.URL)
+	defer os.Unsetenv("EQT_LICENSE_SERVER")
+
+	// Ensure no local license exists before call
+	if VerifyLocalLicense() {
+		t.Fatal("expected local license to be absent before auto-recovery")
+	}
+
+	RegisterDeviceOnline()
+
+	if !GetPaidStatus() {
+		t.Error("expected GetPaidStatus() to be true after auto-recovery")
+	}
+	if tier := GetLicenseTier(); tier != "PLUS" {
+		t.Errorf("expected tier 'PLUS', got '%s'", tier)
+	}
+	if !VerifyLocalLicense() {
+		t.Error("expected VerifyLocalLicense() to succeed from saved restored certificate")
+	}
+}
+
 func TestDeviceIDFormatValidationAndNegativeCaching(t *testing.T) {
 	// Test isValidDeviceID
 	validCases := []string{

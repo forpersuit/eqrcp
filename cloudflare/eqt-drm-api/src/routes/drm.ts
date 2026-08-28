@@ -293,6 +293,160 @@ export async function checkAndApplyPendingUpgrade(
   return currentExpiresAt;
 }
 
+/**
+ * Finds the best active bound license for a device during anonymous register.
+ * Used for automatic silent recovery of missing local license certificates.
+ */
+async function findBestActiveLicenseForDevice(
+  env: Env,
+  deviceId: string,
+  uuidHash: string,
+  cpuHash: string,
+  diskHash: string
+): Promise<any | null> {
+  const candidates: any[] = [];
+  const seen = new Set<string>();
+
+  const pushUnique = (rows: any[] | null | undefined) => {
+    for (const row of rows || []) {
+      if (!row?.license_code) continue;
+      if (seen.has(row.license_code)) continue;
+      seen.add(row.license_code);
+      candidates.push(row);
+    }
+  };
+
+  const dev = (deviceId || "").trim();
+  if (dev) {
+    const byDevice = await env.DB.prepare(`
+      SELECT l.license_code, l.expires_at, l.tier, l.duration_days, l.max_devices, l.buyer_email, l.source, l.paddle_transaction_id, l.status, a.id as activation_id
+      FROM activations a
+      JOIN licenses l ON a.license_code = l.license_code
+      WHERE a.device_id = ? AND l.status = 'active'
+    `).bind(dev).all<any>();
+    pushUnique(byDevice.results);
+  }
+
+  const clauses: string[] = [];
+  const binds: string[] = [];
+  if (uuidHash) { clauses.push("a.uuid_hash = ?"); binds.push(uuidHash); }
+  if (cpuHash) { clauses.push("a.cpu_hash = ?"); binds.push(cpuHash); }
+  if (diskHash) { clauses.push("a.disk_hash = ?"); binds.push(diskHash); }
+
+  if (clauses.length > 0) {
+    const sql = `
+      SELECT a.uuid_hash, a.cpu_hash, a.disk_hash, a.id as activation_id,
+             l.license_code, l.expires_at, l.tier, l.duration_days, l.max_devices, l.buyer_email, l.source, l.paddle_transaction_id, l.status
+      FROM activations a
+      JOIN licenses l ON a.license_code = l.license_code
+      WHERE l.status = 'active'
+        AND (${clauses.join(" OR ")})
+    `;
+    const cand = await env.DB.prepare(sql).bind(...binds).all<any>();
+    for (const row of cand.results || []) {
+      if (!matchFingerprint(
+        uuidHash || "", cpuHash || "", diskHash || "",
+        row.uuid_hash || "", row.cpu_hash || "", row.disk_hash || ""
+      )) {
+        continue;
+      }
+      pushUnique([row]);
+    }
+  }
+
+  // Filter out expired / redeem-expired licenses
+  const validCandidates = candidates.filter(lic => {
+    const evalRes = evaluateLicenseExpiration(lic, lic.expires_at || "LIFETIME");
+    return !evalRes.isExpired && !evalRes.isRedeemExpired;
+  });
+
+  if (validCandidates.length === 0) return null;
+
+  // Arbitrate: PRO > PLUS, LIFETIME > Date, latest activation_id
+  validCandidates.sort((a, b) => {
+    const tierScore = (t: string) => (t === 'PRO' ? 2 : t === 'PLUS' ? 1 : 0);
+    const scoreDiff = tierScore(b.tier) - tierScore(a.tier);
+    if (scoreDiff !== 0) return scoreDiff;
+
+    const isLifeA = (a.expires_at === 'LIFETIME' || !a.expires_at) ? 1 : 0;
+    const isLifeB = (b.expires_at === 'LIFETIME' || !b.expires_at) ? 1 : 0;
+    if (isLifeB !== isLifeA) return isLifeB - isLifeA;
+
+    return (b.activation_id || 0) - (a.activation_id || 0);
+  });
+
+  return validCandidates[0];
+}
+
+/**
+ * Generates an Ed25519-signed LicenseCertificate for license recovery or activation.
+ */
+async function generateSignedLicenseCert(
+  env: Env,
+  license: any,
+  authoritativeDeviceId: string,
+  uuidHash: string,
+  cpuHash: string,
+  diskHash: string
+): Promise<any> {
+  const privateKeyHex = env.ED25519_PRIVATE_KEY;
+  if (!privateKeyHex) {
+    throw new Error("ED25519_PRIVATE_KEY is not configured in Workers Environment Variables");
+  }
+  const privateKeyBytes = hexToUint8Array(privateKeyHex);
+  const pkcs8Bytes = new Uint8Array(16 + privateKeyBytes.length);
+  pkcs8Bytes.set([0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20]);
+  pkcs8Bytes.set(privateKeyBytes, 16);
+
+  const key = await crypto.subtle.importKey(
+    "pkcs8",
+    pkcs8Bytes,
+    { name: "Ed25519" },
+    true,
+    ["sign"]
+  );
+
+  // Guarantee non-empty device_id in V2 payload so signature matches client V2 format
+  let effectiveDeviceId = (authoritativeDeviceId || "").trim();
+  if (!effectiveDeviceId) {
+    effectiveDeviceId = crypto.randomUUID().replace(/-/g, "");
+  }
+
+  const finalExpiresAt = license.expires_at || "LIFETIME";
+  const payloadStr = `${license.license_code}|${license.tier}|${uuidHash || ""}|${cpuHash || ""}|${diskHash || ""}|${effectiveDeviceId}|${finalExpiresAt}|${license.max_devices}`;
+  const encoder = new TextEncoder();
+  const payloadData = encoder.encode(payloadStr);
+
+  const signatureBuf = await crypto.subtle.sign("Ed25519", key, payloadData);
+  const signatureHex = bufToHex(signatureBuf);
+
+  const currentTime = new Date().toISOString();
+  const verifyPayloadStr = `OK|${license.license_code}|${uuidHash || ""}|${cpuHash || ""}|${diskHash || ""}|${effectiveDeviceId}|${currentTime}`;
+  const verifyPayloadData = encoder.encode(verifyPayloadStr);
+  const verifySignatureBuf = await crypto.subtle.sign("Ed25519", key, verifyPayloadData);
+  const verifySignatureHex = bufToHex(verifySignatureBuf);
+
+  const { results: activations } = await env.DB.prepare(
+    "SELECT id FROM activations WHERE license_code = ?"
+  ).bind(license.license_code).all<any>();
+
+  return {
+    license_code: license.license_code,
+    tier: license.tier,
+    uuid_hash: uuidHash || "",
+    cpu_hash: cpuHash || "",
+    disk_hash: diskHash || "",
+    device_id: effectiveDeviceId,
+    expires_at: finalExpiresAt,
+    max_devices: license.max_devices,
+    activated_devices: activations ? activations.length : 1,
+    buyer_email: license.buyer_email || "",
+    signature: signatureHex,
+    last_online_sync_time: currentTime,
+    verify_signature: verifySignatureHex
+  };
+}
+
 export async function handleDrmRoutes(
   request: Request,
   env: Env,
@@ -300,7 +454,7 @@ export async function handleDrmRoutes(
   url: URL,
   corsHeaders: Record<string, string>
 ): Promise<Response | null> {
-  // 0.5 Device registration (Free anonymous device check-in & ID generation)
+  // 0.5 Device registration (Free anonymous device check-in & ID generation & License Auto-Recovery)
   if (url.pathname === "/api/v1/device/register" && request.method === "POST") {
     const body: any = await request.json().catch(() => ({}));
     const reqLang = extractRequestLang(request, body);
@@ -349,6 +503,8 @@ export async function handleDrmRoutes(
     }
 
     let tierLabel: 'free' | 'paid' = 'free';
+    let restoredCert: any = null;
+
     if (license_code) {
       const lic = await env.DB.prepare("SELECT * FROM licenses WHERE license_code = ?").bind(license_code).first<any>();
       if (lic && lic.status === 'active') {
@@ -368,13 +524,50 @@ export async function handleDrmRoutes(
       licenseCode: license_code || null
     }, net);
 
+    // Auto-Recovery for anonymous free device registration:
+    // If client did not provide license_code (e.g. local .lic lost), check if device is already bound to an active license
+    if (!license_code && (uHash || cHash || dHash || reg.device_id)) {
+      const boundLicense = await findBestActiveLicenseForDevice(env, reg.device_id, uHash, cHash, dHash);
+      if (boundLicense) {
+        tierLabel = 'paid';
+        restoredCert = await generateSignedLicenseCert(
+          env,
+          boundLicense,
+          reg.device_id,
+          uHash,
+          cHash,
+          dHash
+        );
+        // Align activations table record with authoritative device_id to ensure device-list & registry harmony
+        if (boundLicense.activation_id && reg.device_id) {
+          ctx.waitUntil(env.DB.prepare(
+            "UPDATE activations SET device_id = ? WHERE id = ? AND (device_id IS NULL OR device_id = '' OR device_id != ?)"
+          ).bind(reg.device_id, boundLicense.activation_id, reg.device_id).run().catch(() => {}));
+        }
+        // Refresh registry tier to paid asynchronously
+        ctx.waitUntil(registerOrRefreshDevice(env, {
+          uuidHash: uHash,
+          cpuHash: cHash,
+          diskHash: dHash,
+          appVersion: app_version || null,
+          tierLabel: 'paid',
+          licenseCode: boundLicense.license_code
+        }, net));
+      }
+    }
+
     const isDev = await isDeviceAuthorizedForDev(env, reg.device_id);
 
-    return new Response(JSON.stringify({
+    const responseBody: any = {
       device_id: reg.device_id,
-      tier: reg.tier_label,
+      tier: restoredCert ? 'paid' : reg.tier_label,
       is_dev: isDev
-    }), {
+    };
+    if (restoredCert) {
+      responseBody.license_cert = restoredCert;
+    }
+
+    return new Response(JSON.stringify(responseBody), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });

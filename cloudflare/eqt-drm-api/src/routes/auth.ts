@@ -136,7 +136,23 @@ export async function handleAuthRoutes(
 
     // Build localized email
     const { subject, html } = buildCheckoutEmailHtml(lang, code);
-    ctx.waitUntil(sendDRMEmail(env, email, subject, html));
+    try {
+      await Promise.race([
+        sendDRMEmail(env, email, subject, html),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("SMTP_TIMEOUT")), 4500))
+      ]);
+    } catch (err: any) {
+      await logSystemError(env, 'SMTP_EMAIL_FAIL', 'WARN', err, { to: email, scene: 'checkout_send_code' });
+      // Delete verification code so rate limit doesn't lock out immediate retry
+      await env.DB.prepare("DELETE FROM verification_codes WHERE email = ?").bind(storageKey).run();
+      return new Response(JSON.stringify({
+        error: getApiTranslation("email_service_degraded", reqLang),
+        error_code: "EMAIL_SERVICE_DEGRADED"
+      }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
 
     return new Response(JSON.stringify({ success: true, message: "Verification code sent to your email" }), {
       status: 200,
@@ -271,7 +287,23 @@ export async function handleAuthRoutes(
     // Send mail via SMTPS with localized i18n template
     const targetEmail = env.TEST_MAIL_RECEIVER || email;
     const { subject, html } = buildAuthCodeEmailHtml(reqLang, code);
-    ctx.waitUntil(sendDRMEmail(env, targetEmail, subject, html));
+    try {
+      await Promise.race([
+        sendDRMEmail(env, targetEmail, subject, html),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("SMTP_TIMEOUT")), 4500))
+      ]);
+    } catch (err: any) {
+      await logSystemError(env, 'SMTP_EMAIL_FAIL', 'WARN', err, { to: targetEmail, scene: 'auth_send_code' });
+      // Delete verification code so rate limit doesn't lock out immediate retry
+      await env.DB.prepare("DELETE FROM verification_codes WHERE email = ?").bind(storageKey).run();
+      return new Response(JSON.stringify({
+        error: getApiTranslation("email_service_degraded", reqLang),
+        error_code: "EMAIL_SERVICE_DEGRADED"
+      }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
 
     return new Response(JSON.stringify({
       success: true,

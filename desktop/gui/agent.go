@@ -1144,11 +1144,21 @@ func (agent *desktopAgent) installUpdate(assetName string) error {
 		return fmt.Errorf("cannot install update during active transfer")
 	}
 
+	// 1. Synchronous pre-flight check: verify update package exists and is cryptographically valid
+	if err := server.PreflightCheckUpdatePackage(assetName); err != nil {
+		agent.log.Errorf("installUpdate preflight failed: %v", err)
+		return err
+	}
+
+	// 2. Launch restart in background goroutine to allow RPC handler to return cleanly
 	go func() {
 		time.Sleep(500 * time.Millisecond)
 		err := server.InstallAndRestart(assetName)
 		if err != nil {
 			agent.log.Errorf("installUpdate failed to install: %v", err)
+			if agent.ctx != nil {
+				wailsruntime.EventsEmit(agent.ctx, "eqt:install-update-error", err.Error())
+			}
 		}
 	}()
 	return nil

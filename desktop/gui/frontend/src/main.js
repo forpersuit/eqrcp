@@ -6284,6 +6284,23 @@ EventsOn('eqt:dev-mode-changed', async (isDev) => {
     render();
 });
 
+EventsOn('eqt:install-update-error', (errMsg) => {
+    console.error('[AutoUpdate] Background install error received:', errMsg);
+    const cleanedErr = cleanLocalAddressError(errMsg);
+    const isPackageCorruptedOrMissing = String(errMsg).includes('signature verification failed') || String(errMsg).includes('not found');
+    if (isPackageCorruptedOrMissing) {
+        state.updateStage = state.updateCheckRes?.new_version_available ? 'available' : 'idle';
+        state.updateBtnText = state.updateCheckRes?.new_version_available ? t('btn_download_now') : t('btn_check');
+    } else {
+        state.updateStage = 'ready';
+        state.updateBtnText = t('btn_install_restart');
+    }
+    state.updateStatusText = t('install_failed', { err: cleanedErr });
+    state.updateBtnDisabled = false;
+    syncManualUpdateCheckUI();
+    showToast(t('install_failed', { err: cleanedErr }));
+});
+
 window.addEventListener('beforeunload', stopChatUsage);
 
 async function runAutoUpdateCheck(force = false) {
@@ -6336,7 +6353,6 @@ async function runAutoUpdateCheck(force = false) {
 
     try {
         const checkRes = await window.go.main.App.CheckForUpdates();
-        state.updateCheckRes = checkRes;
 
         // 成功通信，重置指数退避等级
         state.updateBackoffCount = 0;
@@ -6349,7 +6365,11 @@ async function runAutoUpdateCheck(force = false) {
         if (!checkRes || !checkRes.new_version_available) {
             if (prevStage === 'ready') {
                 state.updateStage = 'ready';
+                state.updateStatusText = t('update_ready_restart', { version: state.downloadedVersion || state.updateCheckRes?.version || '' });
+                state.updateBtnText = t('btn_install_restart');
+                state.updateBtnDisabled = false;
             } else {
+                state.updateCheckRes = checkRes;
                 state.updateStage = 'idle';
                 state.updateStatusText = t('up_to_date');
             }
@@ -6358,6 +6378,7 @@ async function runAutoUpdateCheck(force = false) {
             return;
         }
 
+        state.updateCheckRes = checkRes;
         console.log('[AutoUpdate] New version available:', checkRes.version);
         if (mode === 'notify') {
             state.updateStage = 'available';
@@ -6394,6 +6415,7 @@ async function runAutoUpdateCheck(force = false) {
             await triggerDownloadUpdate();
             if (state.updateStage === 'ready') {
                 state.downloadedVersion = checkRes.version;
+                state.readyAssetName = checkRes.asset_name;
                 if (mode === 'download') {
                     state.notice = t('update_ready_restart', { version: checkRes.version });
                     updateMessagesSurface();
@@ -6442,9 +6464,9 @@ async function runManualUpdateCheck() {
 
         try {
             const checkRes = await window.go.main.App.CheckForUpdates();
-            state.updateCheckRes = checkRes;
 
             if (!checkRes || !checkRes.new_version_available) {
+                state.updateCheckRes = checkRes;
                 state.updateStage = 'idle';
                 state.updateStatusText = t('up_to_date');
                 state.updateBtnText = t('btn_check');
@@ -6453,6 +6475,7 @@ async function runManualUpdateCheck() {
                 return;
             }
 
+            state.updateCheckRes = checkRes;
             const mode = state.settings?.autoUpdateMode || 'silent';
             if (mode === 'off' || mode === 'notify') {
                 state.updateStage = 'available';
@@ -6490,17 +6513,23 @@ async function runManualUpdateCheck() {
         state.updateBtnDisabled = true;
         syncManualUpdateCheckUI();
 
+        const assetName = state.updateCheckRes?.asset_name || state.readyAssetName || '';
         try {
-            await window.go.main.App.InstallUpdate(state.updateCheckRes.asset_name);
+            await window.go.main.App.InstallUpdate(assetName);
         } catch (err) {
-            state.updateStage = 'ready';
             const cleanedErr = cleanLocalAddressError(err);
-            state.updateStatusText = t('install_failed', { err: cleanedErr });
-            if (cleanedErr === 'Local service connection failed.') {
+            const isPackageCorruptedOrMissing = String(err).includes('signature verification failed') || String(err).includes('not found');
+            if (isPackageCorruptedOrMissing) {
+                state.updateStage = state.updateCheckRes?.new_version_available ? 'available' : 'idle';
+                state.updateBtnText = state.updateCheckRes?.new_version_available ? t('btn_download_now') : t('btn_check');
+            } else if (cleanedErr === 'Local service connection failed.') {
+                state.updateStage = 'ready';
                 state.updateBtnText = t('btn_retry');
             } else {
+                state.updateStage = 'ready';
                 state.updateBtnText = t('btn_install_restart');
             }
+            state.updateStatusText = t('install_failed', { err: cleanedErr });
             state.updateBtnDisabled = false;
             syncManualUpdateCheckUI();
         }
@@ -6522,6 +6551,7 @@ async function triggerDownloadUpdate() {
         await window.go.main.App.DownloadUpdate(checkRes);
         state.updateStage = 'ready';
         state.downloadedVersion = checkRes.version;
+        state.readyAssetName = checkRes.asset_name;
         state.updateStatusText = t('update_ready_restart', { version: checkRes.version });
         state.updateBtnText = t('btn_install_restart');
         state.updateBtnDisabled = false;

@@ -505,6 +505,22 @@ export namespace server {
 		    return a;
 		}
 	}
+	export class PendingOfflineUpdateInfo {
+	    has_pending: boolean;
+	    version: string;
+	    asset_name: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PendingOfflineUpdateInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.has_pending = source["has_pending"];
+	        this.version = source["version"];
+	        this.asset_name = source["asset_name"];
+	    }
+	}
 
 }
 

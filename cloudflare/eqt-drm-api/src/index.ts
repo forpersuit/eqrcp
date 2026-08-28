@@ -11,6 +11,7 @@ import { handleDrmRoutes } from './routes/drm';
 import { handleCrashReport } from './routes/crash-report';
 import { assertEnvironmentAlignment } from './utils/env-guard';
 import { wrapD1WithRetry } from './utils/d1-retry';
+import { probeSmtp } from './services/smtp';
 
 export type { Env };
 
@@ -117,6 +118,34 @@ export default {
       });
       ctx.waitUntil(logStructuredRequest(request, errorResp, startMs));
       return attachTraceId(errorResp, traceId);
+    }
+  },
+
+  /**
+   * Cloudflare Scheduled Cron Handler (Daily SMTP health probe at 03:05 UTC).
+   * Verifies live TLS handshake, EHLO greeting, and AUTH LOGIN availability.
+   * Emits a WARN alert to Telegram if the probe fails or SMTP certificate is invalid.
+   */
+  async scheduled(event: { cron: string; type?: string; scheduledTime?: number }, env: Env, ctx: ExecutionContext): Promise<void> {
+    try {
+      const probe = await probeSmtp(env, 5000);
+      if (!probe.ok && !probe.skipped) {
+        await logSystemError(
+          env,
+          'SMTP_PROBE_FAIL',
+          'WARN',
+          new Error(probe.error || 'SMTP scheduled health probe failed'),
+          { latency_ms: probe.latency_ms, cron: event?.cron }
+        );
+      }
+    } catch (err: any) {
+      await logSystemError(
+        env,
+        'SMTP_PROBE_FAIL',
+        'WARN',
+        err,
+        { cron: event?.cron }
+      );
     }
   }
 };

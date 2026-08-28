@@ -100,7 +100,27 @@ func VerifyLicenseSignature(cert LicenseCertificate) bool {
 		cert.ExpiresAt,
 		cert.MaxDevices,
 	)
-	return ed25519.Verify(pubKey, []byte(v1PayloadStr), sigBytes)
+	if ed25519.Verify(pubKey, []byte(v1PayloadStr), sigBytes) {
+		return true
+	}
+
+	// 3. Fallback for empty DeviceID V2 payload variant:
+	if cert.DeviceID == "" {
+		v2EmptyPayloadStr := fmt.Sprintf("%s|%s|%s|%s|%s||%s|%d",
+			cert.LicenseCode,
+			cert.Tier,
+			cert.UUIDHash,
+			cert.CPUHash,
+			cert.DiskHash,
+			cert.ExpiresAt,
+			cert.MaxDevices,
+		)
+		if ed25519.Verify(pubKey, []byte(v2EmptyPayloadStr), sigBytes) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // VerifySyncSignature checks the cryptographic signature of the online sync response (Supports V2 6-field with device_id & V1 legacy)
@@ -142,7 +162,25 @@ func VerifySyncSignature(cert LicenseCertificate) bool {
 		cert.DiskHash,
 		cert.LastOnlineSyncTime,
 	)
-	return ed25519.Verify(pubKey, []byte(v1PayloadStr), sigBytes)
+	if ed25519.Verify(pubKey, []byte(v1PayloadStr), sigBytes) {
+		return true
+	}
+
+	// 3. Fallback for empty DeviceID V2 sync payload variant:
+	if cert.DeviceID == "" {
+		v2EmptySyncPayloadStr := fmt.Sprintf("OK|%s|%s|%s|%s||%s",
+			cert.LicenseCode,
+			cert.UUIDHash,
+			cert.CPUHash,
+			cert.DiskHash,
+			cert.LastOnlineSyncTime,
+		)
+		if ed25519.Verify(pubKey, []byte(v2EmptySyncPayloadStr), sigBytes) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // VerifySyncUsageSignature checks the cryptographic Ed25519 signature of the sync usage response (§8)
@@ -435,6 +473,39 @@ func ActivateLicenseOnlineWithLang(licenseCode string, lang string) error {
 	return nil
 }
 
+// SaveRestoredLicenseCertificate writes an automatically restored license certificate to disk,
+// initializes local metadata, and updates memory paid status and UI callbacks.
+func SaveRestoredLicenseCertificate(cert LicenseCertificate) error {
+	// Enforce alignment with authoritative DeviceID from registration
+	if authID := GetAuthorityDeviceID(); authID != "" {
+		cert.DeviceID = authID
+	}
+	cert.LastSeenLocalTime = time.Now().Format(time.RFC3339)
+	path := getLicenseFilePath()
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return fmt.Errorf("failed to create config dir: %w", err)
+	}
+	certBytes, err := json.Marshal(cert)
+	if err != nil {
+		return fmt.Errorf("failed to serialize restored license: %w", err)
+	}
+	licenseFileMu.Lock()
+	if err := os.WriteFile(path, certBytes, 0644); err != nil {
+		licenseFileMu.Unlock()
+		return fmt.Errorf("failed to write restored license file: %w", err)
+	}
+	licenseFileMu.Unlock()
+
+	licenseCacheMu.Lock()
+	cachedLicense = &cert
+	hasCachedLicense = true
+	licenseCacheMu.Unlock()
+
+	SetClockTampered(false)
+	SetPaidStatus(true, cert.LastOnlineSyncTime, cert.ExpiresAt, cert.Tier)
+	return nil
+}
+
 // ForceOnlineLicenseSync forces an immediate online license synchronization, ignoring rate limits.
 func ForceOnlineLicenseSync() error {
 	return doOnlineLicenseSync(true)
@@ -536,9 +607,9 @@ func doOnlineLicenseSync(force bool) error {
 	// 3. Make HTTP verify request
 	apiURL := fmt.Sprintf("%s/api/v1/verify", getLicenseServer())
 	uuid, cpu, disk := GetDeviceFingerprintHashes()
-	deviceID := cert.DeviceID
+	deviceID := GetAuthorityDeviceID()
 	if deviceID == "" {
-		deviceID = GetAuthorityDeviceID()
+		deviceID = cert.DeviceID
 	}
 	reqMap := map[string]string{
 		"license_code": cert.LicenseCode,
@@ -613,6 +684,9 @@ func doOnlineLicenseSync(force bool) error {
 		return errors.New("verification signature invalid")
 	}
 	SetServerDevAuthorized(verifyResp.IsDev)
+	if updatedCert.DeviceID != "" {
+		SetAuthorityDeviceID(updatedCert.DeviceID)
+	}
 	cert = updatedCert
 
 	path := getLicenseFilePath()

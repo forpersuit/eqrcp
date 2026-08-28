@@ -316,10 +316,65 @@ func DownloadUpdate(assetURL string, sigURL string, assetName string) (string, e
 	return DownloadUpdateWithVersion(assetURL, sigURL, assetName, "")
 }
 
+// PreflightCheckUpdatePackage verifies the update file exists, is readable, and passes signature verification.
+func PreflightCheckUpdatePackage(assetName string) error {
+	tempDir := getUpdateTempDir()
+	if assetName == "" {
+		pending := GetPendingOfflineUpdateInfo()
+		if pending.HasPending && pending.AssetName != "" {
+			assetName = pending.AssetName
+		} else {
+			if runtime.GOOS == "windows" {
+				assetName = fmt.Sprintf("eqt-desktop-%s-%s.exe", runtime.GOOS, runtime.GOARCH)
+			} else {
+				assetName = fmt.Sprintf("eqt-desktop-%s-%s", runtime.GOOS, runtime.GOARCH)
+			}
+		}
+	}
+	pkgPath := filepath.Join(tempDir, assetName)
+	sigPath := pkgPath + ".sig"
+
+	if _, err := os.Stat(pkgPath); err != nil {
+		return fmt.Errorf("update package not found at %s: %w", pkgPath, err)
+	}
+	if _, err := os.Stat(sigPath); err != nil {
+		return fmt.Errorf("update signature not found at %s: %w", sigPath, err)
+	}
+
+	pkgBytes, err := os.ReadFile(pkgPath)
+	if err != nil {
+		return fmt.Errorf("failed to read update package: %w", err)
+	}
+	sigBytes, err := os.ReadFile(sigPath)
+	if err != nil {
+		return fmt.Errorf("failed to read signature: %w", err)
+	}
+
+	if !VerifyUpdateSignature(pkgBytes, sigBytes) {
+		_ = os.Remove(pkgPath)
+		_ = os.Remove(sigPath)
+		return fmt.Errorf("update package signature verification failed")
+	}
+
+	return nil
+}
+
 // InstallAndRestart performs atomic binary replacement and restarts the current process.
 // It supports differential handling for Windows (Rename scheme) and Linux/macOS.
 func InstallAndRestart(assetName string) error {
 	tempDir := getUpdateTempDir()
+	if assetName == "" {
+		pending := GetPendingOfflineUpdateInfo()
+		if pending.HasPending && pending.AssetName != "" {
+			assetName = pending.AssetName
+		} else {
+			if runtime.GOOS == "windows" {
+				assetName = fmt.Sprintf("eqt-desktop-%s-%s.exe", runtime.GOOS, runtime.GOARCH)
+			} else {
+				assetName = fmt.Sprintf("eqt-desktop-%s-%s", runtime.GOOS, runtime.GOARCH)
+			}
+		}
+	}
 	pkgPath := filepath.Join(tempDir, assetName)
 	Log.Debugf("InstallAndRestart: starting installation. tempDir: %s, pkgPath: %s", tempDir, pkgPath)
 

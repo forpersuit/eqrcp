@@ -36,6 +36,9 @@ routes = [
   # 不再挂到此 Worker，避免域名归属冲突导致 wrangler deploy 失败。
 ]
 
+[triggers]
+crons = ["5 3 * * *"]
+
 # ── 测试环境：wrangler deploy --env test ──────────────────────────
 # 测试 Worker 绑定专属测试子域名 lic-test.eqt.net.im，享受 Cloudflare CDN 稳定网络与生产隔离。
 [env.test]
@@ -43,6 +46,8 @@ name = "eqt-drm-api-test"
 routes = [
   { pattern = "lic-test.eqt.net.im", custom_domain = true }
 ]
+[env.test.triggers]
+crons = ["5 3 * * *"]
 # logpush 也是 inheritable 键,但测试账户无 Logpush 权限(10023),必须显式关闭
 logpush = false
 

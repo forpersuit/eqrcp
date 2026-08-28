@@ -876,6 +876,89 @@ async function runTests() {
   assert(j19.error !== undefined, 'response contains error message');
   await flushCtx();
 
+  // ============================================================
+  // T20: License Auto-Recovery on /api/v1/device/register when local .lic is lost
+  // ============================================================
+  console.log('\nTest 20: License Auto-Recovery on /api/v1/device/register when local .lic is lost...');
+  const db20 = new SqliteD1Mock();
+  ensureAllTables(db20);
+  env.DB = db20;
+
+  const autoCode = 'EQT-PLUS-AUTO-RECOVER-001';
+  db20.prepare(
+    "INSERT INTO licenses (license_code, tier, status, max_devices, expires_at, buyer_email, source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+  ).bind(autoCode, 'PLUS', 'active', 2, 'LIFETIME', 'buyer@example.com', 'purchase', new Date().toISOString()).run();
+
+  // 1. Initial activation creates the binding in activations table
+  const actRes = await handleDrmRoutes(new Request('https://lic.eqt.net.im/api/v1/activate', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      license_code: autoCode,
+      uuid_hash: 'uuid-auto-20',
+      cpu_hash: 'cpu-auto-20',
+      disk_hash: 'disk-auto-20',
+      app_version: '1.0.0'
+    })
+  }), env, ctx, new URL('https://lic.eqt.net.im/api/v1/activate'), {});
+  assert(actRes.status === 200, 'activate 200 OK');
+  await flushCtx();
+
+  // 2. Client launches without license_code (simulating deleted ~/.local/eqt/license.lic)
+  const regRecoverRes = await handleDrmRoutes(registerReq({
+    uuid_hash: 'uuid-auto-20',
+    cpu_hash: 'cpu-auto-20',
+    disk_hash: 'disk-auto-20',
+    app_version: '1.0.0'
+  }), env, ctx, new URL('https://lic.eqt.net.im/api/v1/device/register'), {});
+
+  assert(regRecoverRes.status === 200, 'device/register 200 OK');
+  const regRecoverJson = await regRecoverRes.json();
+  assert(regRecoverJson.tier === 'paid', 'tier auto-promoted to paid');
+  assert(regRecoverJson.license_cert !== undefined, 'license_cert is attached');
+  assert(regRecoverJson.license_cert.license_code === autoCode, 'license_cert.license_code matches');
+  assert(regRecoverJson.license_cert.tier === 'PLUS', 'license_cert.tier is PLUS');
+  assert(regRecoverJson.license_cert.signature && regRecoverJson.license_cert.signature.length > 30, 'license_cert.signature generated');
+  assert(regRecoverJson.license_cert.verify_signature && regRecoverJson.license_cert.verify_signature.length > 30, 'license_cert.verify_signature generated');
+  await flushCtx();
+
+  // 3. Unbound free device does not receive license_cert
+  const freeRegRes = await handleDrmRoutes(registerReq({
+    uuid_hash: 'uuid-free-20',
+    cpu_hash: 'cpu-free-20',
+    disk_hash: 'disk-free-20',
+    app_version: '1.0.0'
+  }), env, ctx, new URL('https://lic.eqt.net.im/api/v1/device/register'), {});
+  assert(freeRegRes.status === 200, 'free device/register 200 OK');
+  const freeRegJson = await freeRegRes.json();
+  assert(freeRegJson.tier === 'free', 'free device tier is free');
+  assert(freeRegJson.license_cert === undefined, 'no license_cert for free device');
+  await flushCtx();
+
+  // 4. Pure 3-of-2 fingerprint match when device_registry has NO prior record (P1 test)
+  const autoCodeP1 = 'EQT-PLUS-P1-RECOVER-002';
+  db20.prepare(
+    "INSERT INTO licenses (license_code, tier, status, max_devices, expires_at, buyer_email, source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+  ).bind(autoCodeP1, 'PLUS', 'active', 2, 'LIFETIME', 'p1@example.com', 'purchase', new Date().toISOString()).run();
+  db20.prepare(
+    "INSERT INTO activations (license_code, uuid_hash, cpu_hash, disk_hash, device_id, activated_at) VALUES (?, ?, ?, ?, ?, ?)"
+  ).bind(autoCodeP1, 'uuid-p1-match', 'cpu-p1-match', 'disk-p1-old', null, new Date().toISOString()).run();
+
+  const regP1Res = await handleDrmRoutes(registerReq({
+    uuid_hash: 'uuid-p1-match',
+    cpu_hash: 'cpu-p1-match',
+    disk_hash: 'disk-p1-replaced',
+    app_version: '1.0.0'
+  }), env, ctx, new URL('https://lic.eqt.net.im/api/v1/device/register'), {});
+
+  assert(regP1Res.status === 200, 'P1 3-of-2 register 200 OK');
+  const regP1Json = await regP1Res.json();
+  assert(regP1Json.tier === 'paid', 'P1 tier is paid');
+  assert(regP1Json.license_cert !== undefined, 'P1 license_cert is attached');
+  assert(regP1Json.license_cert.device_id && regP1Json.license_cert.device_id.length > 0, 'P1 device_id is non-empty');
+  assert(regP1Json.license_cert.signature && regP1Json.license_cert.signature.length > 30, 'P1 signature is generated');
+  await flushCtx();
+
   console.log('\n🎉🎉 ALL DEVICE REGISTRY WRITE PATH TESTS PASSED! 🎉🎉');
 }
 

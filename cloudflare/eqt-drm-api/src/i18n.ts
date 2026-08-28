@@ -477,6 +477,15 @@ export const API_I18N: Record<string, Record<string, string>> = {
     es: "Demasiadas solicitudes. Inténtelo de nuevo más tarde.",
     de: "Zu viele Anfragen. Bitte versuchen Sie es später erneut.",
     fr: "Trop de requêtes. Veuillez réessayer plus tard."
+  },
+  email_service_degraded: {
+    zh: "邮件发送服务暂时不可用，请稍后重试或联系客服支持",
+    en: "Email service is temporarily unavailable. Please try again shortly or contact support.",
+    ja: "メール送信サービスは一時的に利用できません。しばらくしてからもう一度お試しください。",
+    ko: "이메일 전송 서비스를 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도하거나 고객지원팀에 문의하세요.",
+    es: "El servicio de correo electrónico no está disponible temporalmente. Inténtelo más tarde o contacte a soporte.",
+    de: "Der E-Mail-Dienst ist vorübergehend nicht verfügbar. Bitte versuchen Sie es später noch einmal oder kontaktieren Sie den Support.",
+    fr: "Le service d'e-mail est temporairement indisponible. Veuillez réessayer plus tard ou contacter le support."
   }
 };
 

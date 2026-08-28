@@ -5,9 +5,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -299,6 +301,69 @@ func TestProductionUpdateFlow(t *testing.T) {
 	}
 	defer os.Remove(savedPath)
 	defer os.Remove(savedPath + ".sig")
-
 	t.Logf("Successfully downloaded and verified production Windows asset signature at: %s", savedPath)
+}
+
+func TestPreflightCheckUpdatePackageAndEmptyAssetNameFallback(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "eqt-test-update-preflight-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	origConfigDir := os.Getenv("EQT_CONFIG_DIR")
+	os.Setenv("EQT_CONFIG_DIR", tempDir)
+	defer os.Setenv("EQT_CONFIG_DIR", origConfigDir)
+
+	// 1. Missing package preflight check fails cleanly
+	if err := PreflightCheckUpdatePackage("non_existent_package.exe"); err == nil {
+		t.Error("expected PreflightCheckUpdatePackage to fail on non-existent package")
+	}
+
+	// 2. Write valid package and signature
+	fakeBinary := []byte("Preflight test binary payload 12345")
+	seedBytes, _ := hex.DecodeString(testPrivateKeySeedHex)
+	privKey := ed25519.NewKeyFromSeed(seedBytes)
+	hash := sha256.Sum256(fakeBinary)
+	sigBytes := ed25519.Sign(privKey, hash[:])
+
+	updatesDir := filepath.Join(tempDir, "updates")
+	if err := os.MkdirAll(updatesDir, 0755); err != nil {
+		t.Fatalf("failed to create updates dir: %v", err)
+	}
+
+	var defaultAssetName string
+	if runtime.GOOS == "windows" {
+		defaultAssetName = fmt.Sprintf("eqt-desktop-%s-%s.exe", runtime.GOOS, runtime.GOARCH)
+	} else {
+		defaultAssetName = fmt.Sprintf("eqt-desktop-%s-%s", runtime.GOOS, runtime.GOARCH)
+	}
+
+	pkgPath := filepath.Join(updatesDir, defaultAssetName)
+	sigPath := pkgPath + ".sig"
+
+	if err := os.WriteFile(pkgPath, fakeBinary, 0755); err != nil {
+		t.Fatalf("failed to write package: %v", err)
+	}
+	if err := os.WriteFile(sigPath, sigBytes, 0644); err != nil {
+		t.Fatalf("failed to write signature: %v", err)
+	}
+
+	// 3. Preflight check with specific assetName succeeds
+	if err := PreflightCheckUpdatePackage(defaultAssetName); err != nil {
+		t.Errorf("expected PreflightCheckUpdatePackage with explicit name to succeed: %v", err)
+	}
+
+	// 4. Preflight check with empty assetName auto-detects and succeeds
+	if err := PreflightCheckUpdatePackage(""); err != nil {
+		t.Errorf("expected PreflightCheckUpdatePackage with empty name to auto-detect and succeed: %v", err)
+	}
+
+	// 5. Tampered signature fails preflight check and purges corrupted files
+	if err := os.WriteFile(sigPath, []byte("invalid_sig_bytes_12345"), 0644); err != nil {
+		t.Fatalf("failed to corrupt signature: %v", err)
+	}
+	if err := PreflightCheckUpdatePackage(defaultAssetName); err == nil {
+		t.Error("expected PreflightCheckUpdatePackage to fail on tampered signature")
+	}
 }
