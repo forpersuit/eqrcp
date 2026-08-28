@@ -7,14 +7,14 @@
   "frontend:dev:watcher": "npm run dev",
   "frontend:dev:serverUrl": "auto",
   "author": {
-    "name": "forpersuit",
+    "name": "EQT",
     "email": "jinxpeeter@outlook.com"
   },
   "info": {
     "productName": "EQT - Easy QR Transfer",
-    "productVersion": "1.36.15",
-    "companyName": "forpersuit",
-    "copyright": "Copyright © 2026 forpersuit",
+    "productVersion": "1.36.16",
+    "companyName": "EQT",
+    "copyright": "Copyright © 2026 EQT",
     "comments": "EQT (eqt) — Easy QR Transfer for files and chat"
   }
 }

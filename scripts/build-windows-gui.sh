@@ -85,6 +85,10 @@ if [[ -n "$raw_ver" && -f "$root_dir/desktop/gui/wails.json" ]]; then
     const cfg = JSON.parse(fs.readFileSync(p, 'utf8'));
     cfg.info = cfg.info || {};
     cfg.info.productVersion = '$raw_ver';
+    cfg.info.companyName = 'EQT';
+    cfg.info.copyright = 'Copyright © 2026 EQT';
+    cfg.author = cfg.author || {};
+    cfg.author.name = 'EQT';
     fs.writeFileSync(p, JSON.stringify(cfg, null, 2) + '\n');
   " || true
 fi
@@ -92,5 +96,19 @@ fi
 echo "Building Windows GUI executable..."
 (cd "$root_dir/desktop/gui" && env GOCACHE="$env_cache" "$wails_cmd" build -clean -ldflags "-H=windowsgui" -o eqt-desktop.exe -platform windows/amd64)
 cp "$root_dir/desktop/gui/build/bin/eqt-desktop.exe" "$build_root/eqt-desktop.exe"
+cp "$root_dir/desktop/gui/build/bin/eqt-desktop.exe" "$build_root/eqt.exe"
+
+# Package Windows installer/executable into zip archive for website distribution
+echo "Packaging Windows distribution zip..."
+python3 -c "
+import zipfile, os
+results_dir = '$build_root'
+exe_path = os.path.join(results_dir, 'eqt.exe')
+if os.path.exists(exe_path):
+    zip_path = os.path.join(results_dir, 'eqt-desktop-windows-amd64.zip')
+    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as z:
+        z.write(exe_path, 'eqt.exe')
+    print(f'Packaged {zip_path} successfully')
+" || true
 
 echo "Windows GUI artifacts written to: $build_root"

@@ -116,6 +116,10 @@ if [[ "$run_checks" -eq 1 ]]; then
       const cfg = JSON.parse(fs.readFileSync(p, 'utf8'));
       cfg.info = cfg.info || {};
       cfg.info.productVersion = '$raw_ver';
+      cfg.info.companyName = 'EQT';
+      cfg.info.copyright = 'Copyright © 2026 EQT';
+      cfg.author = cfg.author || {};
+      cfg.author.name = 'EQT';
       fs.writeFileSync(p, JSON.stringify(cfg, null, 2) + '\n');
     " || true
   fi
@@ -151,6 +155,19 @@ if [[ "$build_gui" -eq 1 ]]; then
     cp "$root_dir/desktop/gui/build/bin/eqt-desktop.exe" "$results_dir/eqt.exe"
   fi
 fi
+
+# Package Windows installer/executable into zip archive for official website distribution
+echo "Packaging Windows distribution zip..."
+python3 -c "
+import zipfile, os
+results_dir = '$results_dir'
+exe_path = os.path.join(results_dir, 'eqt.exe')
+if os.path.exists(exe_path):
+    zip_path = os.path.join(results_dir, 'eqt-desktop-windows-amd64.zip')
+    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as z:
+        z.write(exe_path, 'eqt.exe')
+    print(f'Packaged {zip_path} successfully')
+" || true
 
 # Close any lingering test agent processes that may have spawned during tests
 echo "Ensuring all lingering processes are closed..."
