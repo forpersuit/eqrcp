@@ -961,12 +961,15 @@
             return getTranslation('quotaExhaustedBroadcast', currentLang);
           }
 
+          const hasOldSender = text.includes('{oldSender}');
           if (text.includes('{sender}')) {
             const meText = getTranslation('me', currentLang) + ` (${msg.sender})`;
-            const senderRepl = isMe && msg.sender ? meText : (msg.sender || '');
+            // If the message contains {oldSender} (rename event), the subject is already {oldSender},
+            // so the new target name {sender} should be rendered plainly without duplicate 'Me / 我'.
+            const senderRepl = (isMe && !hasOldSender && msg.sender) ? meText : (msg.sender || '');
             text = text.replaceAll('{sender}', senderRepl);
           }
-          if (text.includes('{oldSender}')) {
+          if (hasOldSender) {
             const meText = getTranslation('me', currentLang) + ` (${msg.oldSender})`;
             const oldSenderRepl = isMe && msg.oldSender ? meText : (msg.oldSender || '');
             text = text.replaceAll('{oldSender}', oldSenderRepl);
