@@ -55,6 +55,8 @@ export function OpenPath(arg1:string):Promise<void>;
 
 export function OpenURL(arg1:string):Promise<void>;
 
+export function QuitApp():Promise<void>;
+
 export function ReadSettings():Promise<main.DesktopSettings>;
 
 export function Receive(arg1:string):Promise<main.AgentStatus>;

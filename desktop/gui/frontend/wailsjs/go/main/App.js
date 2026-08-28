@@ -106,6 +106,10 @@ export function OpenURL(arg1) {
   return window['go']['main']['App']['OpenURL'](arg1);
 }
 
+export function QuitApp() {
+  return window['go']['main']['App']['QuitApp']();
+}
+
 export function ReadSettings() {
   return window['go']['main']['App']['ReadSettings']();
 }
