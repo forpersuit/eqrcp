@@ -1132,6 +1132,10 @@ func (agent *desktopAgent) getPendingOfflineUpdate() server.PendingOfflineUpdate
 	return server.GetPendingOfflineUpdateInfo()
 }
 
+func (agent *desktopAgent) clearPendingOfflineUpdate() error {
+	return server.ClearPendingOfflineUpdateFiles()
+}
+
 func (agent *desktopAgent) installUpdate(assetName string) error {
 	agent.mu.Lock()
 	hasActiveTransfer := false

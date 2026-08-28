@@ -1,15 +1,41 @@
 {
 	"fixed": {
-		"file_version": "{{.Info.ProductVersion}}"
+		"file_version": "{{.Info.ProductVersion}}",
+		"product_version": "{{.Info.ProductVersion}}"
 	},
 	"info": {
 		"0000": {
 			"ProductVersion": "{{.Info.ProductVersion}}",
+			"FileVersion": "{{.Info.ProductVersion}}",
 			"CompanyName": "{{.Info.CompanyName}}",
 			"FileDescription": "{{.Info.ProductName}}",
 			"LegalCopyright": "{{.Info.Copyright}}",
 			"ProductName": "{{.Info.ProductName}}",
-			"Comments": "{{.Info.Comments}}"
+			"Comments": "{{.Info.Comments}}",
+			"OriginalFilename": "eqt.exe",
+			"InternalName": "eqt"
+		},
+		"0409": {
+			"ProductVersion": "{{.Info.ProductVersion}}",
+			"FileVersion": "{{.Info.ProductVersion}}",
+			"CompanyName": "{{.Info.CompanyName}}",
+			"FileDescription": "{{.Info.ProductName}}",
+			"LegalCopyright": "{{.Info.Copyright}}",
+			"ProductName": "{{.Info.ProductName}}",
+			"Comments": "{{.Info.Comments}}",
+			"OriginalFilename": "eqt.exe",
+			"InternalName": "eqt"
+		},
+		"0804": {
+			"ProductVersion": "{{.Info.ProductVersion}}",
+			"FileVersion": "{{.Info.ProductVersion}}",
+			"CompanyName": "{{.Info.CompanyName}}",
+			"FileDescription": "{{.Info.ProductName}}",
+			"LegalCopyright": "{{.Info.Copyright}}",
+			"ProductName": "{{.Info.ProductName}}",
+			"Comments": "{{.Info.Comments}}",
+			"OriginalFilename": "eqt.exe",
+			"InternalName": "eqt"
 		}
 	}
 }

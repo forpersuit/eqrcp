@@ -76,6 +76,19 @@ if [[ -z "$wails_cmd" ]]; then
   exit 1
 fi
 
+# Sync wails.json version with pkg/version/version.go
+raw_ver="$(grep -o 'version = "[^"]*"' "$root_dir/pkg/version/version.go" | cut -d'"' -f2 | sed 's/^v//')"
+if [[ -n "$raw_ver" && -f "$root_dir/desktop/gui/wails.json" ]]; then
+  node -e "
+    const fs = require('fs');
+    const p = '$root_dir/desktop/gui/wails.json';
+    const cfg = JSON.parse(fs.readFileSync(p, 'utf8'));
+    cfg.info = cfg.info || {};
+    cfg.info.productVersion = '$raw_ver';
+    fs.writeFileSync(p, JSON.stringify(cfg, null, 2) + '\n');
+  " || true
+fi
+
 echo "Building Windows GUI executable..."
 (cd "$root_dir/desktop/gui" && env GOCACHE="$env_cache" "$wails_cmd" build -clean -ldflags "-H=windowsgui" -o eqt-desktop.exe -platform windows/amd64)
 cp "$root_dir/desktop/gui/build/bin/eqt-desktop.exe" "$build_root/eqt-desktop.exe"

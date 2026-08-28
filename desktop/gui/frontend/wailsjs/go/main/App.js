@@ -38,6 +38,10 @@ export function ClearHistory() {
   return window['go']['main']['App']['ClearHistory']();
 }
 
+export function ClearPendingUpdate() {
+  return window['go']['main']['App']['ClearPendingUpdate']();
+}
+
 export function DevForceOnlineLicenseSync() {
   return window['go']['main']['App']['DevForceOnlineLicenseSync']();
 }

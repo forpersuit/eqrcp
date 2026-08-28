@@ -1365,6 +1365,13 @@ func (a *App) GetPendingOfflineUpdate() (server.PendingOfflineUpdateInfo, error)
 	return a.agent.getPendingOfflineUpdate(), nil
 }
 
+func (a *App) ClearPendingUpdate() error {
+	if a.agent == nil {
+		return server.ClearPendingOfflineUpdateFiles()
+	}
+	return a.agent.clearPendingOfflineUpdate()
+}
+
 func (a *App) InstallUpdate(assetName string) error {
 	if a.agent == nil {
 		return fmt.Errorf("agent not initialized")

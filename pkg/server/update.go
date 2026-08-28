@@ -523,6 +523,27 @@ func GetPendingOfflineUpdateInfo() PendingOfflineUpdateInfo {
 	}
 }
 
+// ClearPendingOfflineUpdateFiles removes any pending update package, signature, and metadata files from disk.
+func ClearPendingOfflineUpdateFiles() error {
+	tempDir := getUpdateTempDir()
+	var assetName string
+	if runtime.GOOS == "windows" {
+		assetName = fmt.Sprintf("eqt-desktop-%s-%s.exe", runtime.GOOS, runtime.GOARCH)
+	} else {
+		assetName = fmt.Sprintf("eqt-desktop-%s-%s", runtime.GOOS, runtime.GOARCH)
+	}
+
+	pkgPath := filepath.Join(tempDir, assetName)
+	sigPath := pkgPath + ".sig"
+	metaPath := filepath.Join(tempDir, "update.json")
+
+	_ = os.Remove(pkgPath)
+	_ = os.Remove(sigPath)
+	_ = os.Remove(metaPath)
+	Log.Infof("ClearPendingOfflineUpdateFiles: cleared pending offline update files in %s", tempDir)
+	return nil
+}
+
 // CleanLingeringOldExecutables deletes the .old executable files left by Windows rename scheme
 func CleanLingeringOldExecutables() {
 	if runtime.GOOS != "windows" {

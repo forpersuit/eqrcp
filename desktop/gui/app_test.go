@@ -66,3 +66,10 @@ func TestDesktopIntegrationCommands(t *testing.T) {
 		}
 	}
 }
+
+func TestAppClearPendingUpdate(t *testing.T) {
+	app := NewApp()
+	if err := app.ClearPendingUpdate(); err != nil {
+		t.Fatalf("ClearPendingUpdate failed: %v", err)
+	}
+}

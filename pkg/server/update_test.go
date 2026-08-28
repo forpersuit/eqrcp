@@ -367,3 +367,49 @@ func TestPreflightCheckUpdatePackageAndEmptyAssetNameFallback(t *testing.T) {
 		t.Error("expected PreflightCheckUpdatePackage to fail on tampered signature")
 	}
 }
+
+func TestClearPendingOfflineUpdateFiles(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "eqt-test-update-clear-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	origConfigDir := os.Getenv("EQT_CONFIG_DIR")
+	os.Setenv("EQT_CONFIG_DIR", tempDir)
+	defer os.Setenv("EQT_CONFIG_DIR", origConfigDir)
+
+	updatesDir := filepath.Join(tempDir, "updates")
+	if err := os.MkdirAll(updatesDir, 0755); err != nil {
+		t.Fatalf("failed to create updates dir: %v", err)
+	}
+
+	var defaultAssetName string
+	if runtime.GOOS == "windows" {
+		defaultAssetName = fmt.Sprintf("eqt-desktop-%s-%s.exe", runtime.GOOS, runtime.GOARCH)
+	} else {
+		defaultAssetName = fmt.Sprintf("eqt-desktop-%s-%s", runtime.GOOS, runtime.GOARCH)
+	}
+
+	pkgPath := filepath.Join(updatesDir, defaultAssetName)
+	sigPath := pkgPath + ".sig"
+	metaPath := filepath.Join(updatesDir, "update.json")
+
+	_ = os.WriteFile(pkgPath, []byte("test binary"), 0755)
+	_ = os.WriteFile(sigPath, []byte("test sig"), 0644)
+	_ = os.WriteFile(metaPath, []byte("{\"version\":\"v1.36.14\"}"), 0644)
+
+	if err := ClearPendingOfflineUpdateFiles(); err != nil {
+		t.Fatalf("ClearPendingOfflineUpdateFiles failed: %v", err)
+	}
+
+	if _, err := os.Stat(pkgPath); !os.IsNotExist(err) {
+		t.Error("expected pkg file to be deleted")
+	}
+	if _, err := os.Stat(sigPath); !os.IsNotExist(err) {
+		t.Error("expected sig file to be deleted")
+	}
+	if _, err := os.Stat(metaPath); !os.IsNotExist(err) {
+		t.Error("expected meta file to be deleted")
+	}
+}

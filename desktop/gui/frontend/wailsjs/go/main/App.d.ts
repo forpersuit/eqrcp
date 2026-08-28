@@ -21,6 +21,8 @@ export function CheckForUpdates():Promise<main.GUIUpdateCheckResult>;
 
 export function ClearHistory():Promise<void>;
 
+export function ClearPendingUpdate():Promise<void>;
+
 export function DevForceOnlineLicenseSync():Promise<main.AgentStatus>;
 
 export function DevTriggerCrash():Promise<main.CrashReportInfo>;

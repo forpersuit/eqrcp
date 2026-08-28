@@ -107,6 +107,19 @@ if [[ "$run_checks" -eq 1 ]]; then
 
   echo "Running Go tests..."
   (cd "$root_dir" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" go test -timeout 180s ./...)
+  # Sync wails.json version with pkg/version/version.go
+  raw_ver="$(grep -o 'version = "[^"]*"' "$root_dir/pkg/version/version.go" | cut -d'"' -f2 | sed 's/^v//')"
+  if [[ -n "$raw_ver" && -f "$root_dir/desktop/gui/wails.json" ]]; then
+    node -e "
+      const fs = require('fs');
+      const p = '$root_dir/desktop/gui/wails.json';
+      const cfg = JSON.parse(fs.readFileSync(p, 'utf8'));
+      cfg.info = cfg.info || {};
+      cfg.info.productVersion = '$raw_ver';
+      fs.writeFileSync(p, JSON.stringify(cfg, null, 2) + '\n');
+    " || true
+  fi
+
   if wails_cmd="$(find_wails)"; then
     echo "Generating Wails bindings..."
     rm -f /tmp/wailsbindings || true

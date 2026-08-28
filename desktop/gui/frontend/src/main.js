@@ -575,15 +575,13 @@ function render() {
                     <div class="topbar-menu">
                         <button class="menu-button" id="open-top-menu" title="${t('menu_label')}" aria-label="${t('menu_label')}" aria-haspopup="true" aria-expanded="${state.topMenuOpen ? 'true' : 'false'}" style="position: relative;">
                             <span class="menu-icon">${ellipsisIcon()}</span>
-                            ${(state.pendingCrashDump) || (state.settings?.autoUpdateMode !== 'off' && (
-                                (state.settings?.autoUpdateMode === 'notify' && (state.updateStage === 'available' || state.updateStage === 'ready')) ||
-                                ((state.settings?.autoUpdateMode === 'download' || state.settings?.autoUpdateMode === 'silent') && state.updateStage === 'ready')
-                            )) ? `<span class="badge-dot" style="position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; background-color: var(--accent, #156f5a); border-radius: 50%; border: 1.5px solid var(--bg, #ffffff); pointer-events: none;"></span>` : ''}
+                            ${(state.pendingCrashDump || shouldShowUpdateBadge()) ? `<span class="badge-dot" style="position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; background-color: var(--accent, #156f5a); border-radius: 50%; border: 1.5px solid var(--bg, #ffffff); pointer-events: none;"></span>` : ''}
                         </button>
                         ${state.topMenuOpen ? `
                             <div class="topbar-dropdown" role="menu">
-                                <button role="menuitem" class="topbar-menu-item" data-open-panel="settings">
+                                <button role="menuitem" class="topbar-menu-item" data-open-panel="settings" style="position: relative;">
                                     <span class="menu-icon">${settingsIcon()}</span><span>${t('settings')}</span>
+                                    ${shouldShowUpdateBadge() ? `<span class="badge-dot" style="position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; background-color: var(--accent, #156f5a); border-radius: 50%; border: 1.5px solid var(--bg, #ffffff); pointer-events: none;"></span>` : ''}
                                 </button>
                                 <button role="menuitem" class="topbar-menu-item" data-open-panel="about">
                                     <span class="menu-icon">${aboutIcon()}</span><span>${t('about')}</span>
@@ -2229,7 +2227,10 @@ function renderSettingsPanel() {
                         <strong>${t('check_update')}</strong>
                         <span id="update-check-status">${escapeHTML(state.updateStatusText || t('manual_check_tips'))}</span>
                     </div>
-                    <button type="button" class="secondary" id="btn-manual-update-check" ${state.updateBtnDisabled ? 'disabled' : ''}>${escapeHTML(state.updateBtnText || t('manual_check_btn'))}</button>
+                    <button type="button" class="secondary" id="btn-manual-update-check" style="position: relative;" ${state.updateBtnDisabled ? 'disabled' : ''}>
+                        ${escapeHTML(state.updateBtnText || t('manual_check_btn'))}
+                        ${shouldShowUpdateBadge() ? `<span class="badge-dot" style="position: absolute; top: 5px; right: 5px; width: 8px; height: 8px; background-color: var(--accent, #156f5a); border-radius: 50%; border: 1.5px solid var(--bg, #ffffff); pointer-events: none;"></span>` : ''}
+                    </button>
                 </div>
             </section>
 
@@ -4001,18 +4002,12 @@ function bindEvents() {
                 return;
             }
             if (e.target.matches('#settings-interface, #settings-port, #settings-browser, #settings-chat-autosave, #settings-chat-download-dir, #settings-chat-v2, #settings-close-behavior, #settings-auto-update-mode, #settings-update-interval, #settings-lang, #settings-show-history, #settings-telemetry, #settings-notification')) {
+                if (e.target.id === 'settings-auto-update-mode') {
+                    handleAutoUpdateModeChange(e.target.value);
+                    return;
+                }
                 syncSettingsFromDOM();
-                handleAutoSaveSettings().then(() => {
-                    if (e.target.id === 'settings-auto-update-mode') {
-                        const mode = e.target.value;
-                        if (mode && mode !== 'off') {
-                            state.settings.lastUpdateCheckTime = 0;
-                            handleAutoSaveSettings().then(() => {
-                                runAutoUpdateCheck(true);
-                            });
-                        }
-                    }
-                });
+                handleAutoSaveSettings();
                 return;
             }
         });
@@ -4320,25 +4315,127 @@ function shouldProtectActiveInput() {
     return false;
 }
 
+function shouldShowUpdateBadge() {
+    const mode = state.settings?.autoUpdateMode || 'silent';
+    if (mode === 'off') {
+        return false;
+    }
+    if (mode === 'notify') {
+        return state.updateStage === 'available' || state.updateStage === 'ready';
+    }
+    // download or silent mode
+    return state.updateStage === 'ready';
+}
+
 function updateSettingsBadgeUI() {
+    const showUpdate = shouldShowUpdateBadge();
+    const showCrash = Boolean(state.pendingCrashDump);
+
+    // 1. Top menu ellipsis button
     const btn = document.querySelector('#open-top-menu');
-    if (!btn) return;
-    let badge = btn.querySelector('.badge-dot');
-    const shouldShow = state.settings?.autoUpdateMode !== 'off' && (
-        (state.settings?.autoUpdateMode === 'notify' && (state.updateStage === 'available' || state.updateStage === 'ready')) ||
-        ((state.settings?.autoUpdateMode === 'download' || state.settings?.autoUpdateMode === 'silent') && state.updateStage === 'ready')
-    );
-    if (shouldShow) {
-        if (!badge) {
-            badge = document.createElement('span');
-            badge.className = 'badge-dot';
-            badge.style.cssText = 'position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; background-color: var(--accent, #156f5a); border-radius: 50%; border: 1.5px solid var(--bg, #ffffff); pointer-events: none;';
-            btn.appendChild(badge);
-        }
-    } else {
-        if (badge) {
+    if (btn) {
+        let badge = btn.querySelector('.badge-dot');
+        if (showUpdate || showCrash) {
+            if (!badge) {
+                badge = document.createElement('span');
+                badge.className = 'badge-dot';
+                badge.style.cssText = 'position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; background-color: var(--accent, #156f5a); border-radius: 50%; border: 1.5px solid var(--bg, #ffffff); pointer-events: none;';
+                btn.appendChild(badge);
+            }
+        } else if (badge) {
             badge.remove();
         }
+    }
+
+    // 2. Dropdown Settings item
+    const settingsMenuItem = document.querySelector('.topbar-dropdown [data-open-panel="settings"]');
+    if (settingsMenuItem) {
+        let badge = settingsMenuItem.querySelector('.badge-dot');
+        if (showUpdate) {
+            if (!badge) {
+                badge = document.createElement('span');
+                badge.className = 'badge-dot';
+                badge.style.cssText = 'position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; background-color: var(--accent, #156f5a); border-radius: 50%; border: 1.5px solid var(--bg, #ffffff); pointer-events: none;';
+                settingsMenuItem.appendChild(badge);
+            }
+        } else if (badge) {
+            badge.remove();
+        }
+    }
+
+    // 3. Settings panel update button
+    const updateBtn = document.querySelector('#btn-manual-update-check');
+    if (updateBtn) {
+        let badge = updateBtn.querySelector('.badge-dot');
+        if (showUpdate) {
+            if (!badge) {
+                badge = document.createElement('span');
+                badge.className = 'badge-dot';
+                badge.style.cssText = 'position: absolute; top: 5px; right: 5px; width: 8px; height: 8px; background-color: var(--accent, #156f5a); border-radius: 50%; border: 1.5px solid var(--bg, #ffffff); pointer-events: none;';
+                updateBtn.appendChild(badge);
+            }
+        } else if (badge) {
+            badge.remove();
+        }
+    }
+}
+
+async function handleAutoUpdateModeChange(mode) {
+    if (!state.settings) state.settings = {};
+    state.settings.autoUpdateMode = mode;
+
+    if (mode === 'off') {
+        state.updateStage = 'idle';
+        state.updateStatusText = t('manual_check_tips');
+        state.updateBtnText = t('manual_check_btn');
+        state.updateBtnDisabled = false;
+        if (window.go?.main?.App?.ClearPendingUpdate) {
+            window.go.main.App.ClearPendingUpdate().catch((err) => {
+                console.warn('[AutoUpdate] Failed to clear pending update:', err);
+            });
+        }
+        await handleAutoSaveSettings();
+        syncManualUpdateCheckUI();
+        syncPanelSurface();
+        return;
+    }
+
+    if (mode === 'notify') {
+        if (state.updateStage === 'ready' || state.updateStage === 'available' || state.updateCheckRes?.new_version_available) {
+            const ver = state.downloadedVersion || state.updateCheckRes?.version || '';
+            state.updateStage = 'available';
+            state.updateStatusText = t('version_available', { version: ver });
+            state.updateBtnText = t('btn_download_now');
+            state.updateBtnDisabled = false;
+            await handleAutoSaveSettings();
+            syncManualUpdateCheckUI();
+            syncPanelSurface();
+        } else {
+            state.settings.lastUpdateCheckTime = 0;
+            await handleAutoSaveSettings();
+            runAutoUpdateCheck(true);
+        }
+        return;
+    }
+
+    if (mode === 'download' || mode === 'silent') {
+        if (state.updateStage === 'ready') {
+            const ver = state.downloadedVersion || state.updateCheckRes?.version || '';
+            state.updateStatusText = t('update_ready_restart', { version: ver });
+            state.updateBtnText = t('btn_install_restart');
+            state.updateBtnDisabled = false;
+            await handleAutoSaveSettings();
+            syncManualUpdateCheckUI();
+            syncPanelSurface();
+        } else if (state.updateStage === 'available' && state.updateCheckRes) {
+            await handleAutoSaveSettings();
+            triggerDownloadUpdate();
+        } else {
+            state.settings.lastUpdateCheckTime = 0;
+            await handleAutoSaveSettings();
+            runAutoUpdateCheck(true);
+        }
+        return;
     }
 }
 
@@ -4565,7 +4662,7 @@ function recalculateUpdateTexts() {
         return;
     }
     const checkRes = state.updateCheckRes;
-    const version = checkRes?.version || '';
+    const version = checkRes?.version || state.downloadedVersion || '';
     if (state.updateStage === 'checking') {
         state.updateStatusText = t('checking_updates');
         state.updateBtnText = t('btn_checking');
