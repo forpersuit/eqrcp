@@ -63,8 +63,9 @@ func (t *trayController) onReady() {
 	stopCurrent := systray.AddMenuItem("Stop Current Task", "Stop the active transfer or chat session")
 	systray.AddSeparator()
 	settings := systray.AddMenuItem("Settings", "Open EQT settings")
-	about := systray.AddMenuItem("About EQT", "Show product information")
+	systray.AddSeparator()
 	feedback := systray.AddMenuItem("Send Feedback", "Open the feedback form")
+	about := systray.AddMenuItem("About EQT", "Show product information")
 	systray.AddSeparator()
 	quit := systray.AddMenuItem("Quit EQT App", "Quit the EQT window and tray app")
 
@@ -77,8 +78,8 @@ func (t *trayController) onReady() {
 	go t.handle(openCurrent, t.openCurrentQR)
 	go t.handle(stopCurrent, t.stopCurrent)
 	go t.handle(settings, func() { t.showAndEmit("settings") })
-	go t.handle(about, func() { t.showAndEmit("about") })
 	go t.handle(feedback, func() { t.showAndEmit("feedback") })
+	go t.handle(about, func() { t.showAndEmit("about") })
 	go t.handle(quit, t.quit)
 }
 

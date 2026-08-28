@@ -583,21 +583,22 @@ function render() {
                                     <span class="menu-icon">${settingsIcon()}</span><span>${t('settings')}</span>
                                     ${shouldShowUpdateBadge() ? `<span class="badge-dot" style="position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; background-color: var(--accent, #156f5a); border-radius: 50%; border: 1.5px solid var(--bg, #ffffff); pointer-events: none;"></span>` : ''}
                                 </button>
-                                <button role="menuitem" class="topbar-menu-item" data-open-panel="about">
-                                    <span class="menu-icon">${aboutIcon()}</span><span>${t('about')}</span>
-                                </button>
-                                ${isOnline() ? `
-                                <button role="menuitem" class="topbar-menu-item" data-open-panel="feedback" style="position: relative;">
-                                    <span class="menu-icon">${feedbackIcon()}</span><span>${t('feedback')}</span>
-                                    ${state.pendingCrashDump ? `<span class="badge-dot" style="position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; background-color: var(--accent, #156f5a); border-radius: 50%; border: 1.5px solid var(--bg, #ffffff); pointer-events: none;"></span>` : ''}
-                                </button>
-                                ` : ''}
                                 <div class="topbar-menu-sep"></div>
                                 <button role="menuitem" class="topbar-menu-item" data-open-panel="license">
                                     <span class="menu-icon">${diamondIcon()}</span><span>${t('plan_license_menu')}</span>
                                 </button>
                                 <button role="menuitem" class="topbar-menu-item" data-open-share="1">
                                     <span class="menu-icon">${shareIcon()}</span><span>${t('promo')}</span>
+                                </button>
+                                <div class="topbar-menu-sep"></div>
+                                ${isOnline() ? `
+                                <button role="menuitem" class="topbar-menu-item" data-open-panel="feedback" style="position: relative;">
+                                    <span class="menu-icon">${feedbackIcon()}</span><span>${t('feedback')}</span>
+                                    ${state.pendingCrashDump ? `<span class="badge-dot" style="position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; background-color: var(--accent, #156f5a); border-radius: 50%; border: 1.5px solid var(--bg, #ffffff); pointer-events: none;"></span>` : ''}
+                                </button>
+                                ` : ''}
+                                <button role="menuitem" class="topbar-menu-item" data-open-panel="about">
+                                    <span class="menu-icon">${aboutIcon()}</span><span>${t('about')}</span>
                                 </button>
                                 <div class="topbar-menu-sep"></div>
                                 <button role="menuitem" class="topbar-menu-item" data-action="quit-app">
