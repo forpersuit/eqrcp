@@ -29,6 +29,7 @@ import (
 
 	"github.com/skip2/go-qrcode"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
+	"fyne.io/systray"
 )
 
 const chatSaveRetentionDays = 7
@@ -263,6 +264,12 @@ func (a *App) beforeClose(ctx context.Context) bool {
 	}
 	wailsruntime.WindowHide(ctx)
 	return true
+}
+
+// QuitApp completely terminates the application and tray icon, identical to the tray Quit action.
+func (a *App) QuitApp() {
+	systray.Quit()
+	a.quit()
 }
 
 func (a *App) quit() {

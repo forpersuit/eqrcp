@@ -73,3 +73,13 @@ func TestAppClearPendingUpdate(t *testing.T) {
 		t.Fatalf("ClearPendingUpdate failed: %v", err)
 	}
 }
+
+func TestAppQuitApp(t *testing.T) {
+	app := NewApp()
+	// QuitApp should safely invoke cleanup without panics
+	app.QuitApp()
+	if !app.forceQuit {
+		t.Fatalf("expected forceQuit to be true after QuitApp")
+	}
+}
+

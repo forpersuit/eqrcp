@@ -599,6 +599,10 @@ function render() {
                                 <button role="menuitem" class="topbar-menu-item" data-open-share="1">
                                     <span class="menu-icon">${shareIcon()}</span><span>${t('promo')}</span>
                                 </button>
+                                <div class="topbar-menu-sep"></div>
+                                <button role="menuitem" class="topbar-menu-item" data-action="quit-app">
+                                    <span class="menu-icon">${exitIcon()}</span><span>${t('menu_quit')}</span>
+                                </button>
                             </div>
                         ` : ''}
                     </div>
@@ -3216,6 +3220,12 @@ function bindEvents() {
                     state.showShareOverlay = true;
                     render();
                     prepareMergedQRCode(faviconURL, render).catch(() => {});
+                } else if (menuItem.dataset.action === 'quit-app') {
+                    state.topMenuOpen = false;
+                    render();
+                    if (window.go?.main?.App?.QuitApp) {
+                        window.go.main.App.QuitApp();
+                    }
                 } else {
                     state.topMenuOpen = false;
                     render();
@@ -6203,6 +6213,10 @@ function chevronIcon(open) {
     return open
         ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m18 15-6-6-6 6"></path></svg>'
         : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>';
+}
+
+function exitIcon() {
+    return '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>';
 }
 
 function linkIcon() {
