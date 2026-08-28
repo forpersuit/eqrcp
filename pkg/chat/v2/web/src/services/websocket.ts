@@ -76,9 +76,6 @@ export class ChatWebSocketClient {
     if (!randSuffix || randSuffix.length < 4) {
       randSuffix = Math.floor(1000 + Math.random() * 9000).toString();
     }
-    this.clientLabel = params.get('sender') || localStorage.getItem('chat_label') || `Device-${randSuffix}`;
-    this.clientAvatar = params.get('avatar') || localStorage.getItem('chat_avatar') || '';
-    
     // Device identity: same browser shares one peer via localStorage so multiple
     // tabs of the same room count as one device. The server keeps a single live
     // connection per peer (newer tab replaces older). Use ?peer= only for multi-tab
@@ -87,8 +84,19 @@ export class ChatWebSocketClient {
     if (!params.get('peer')) {
       localStorage.setItem('chat_peer', this.clientPeer);
     }
-    
-    localStorage.setItem('chat_label', this.clientLabel);
+
+    const isDesktopPeer = this.clientPeer === 'desktop';
+    const defaultLabel = isDesktopPeer ? 'Desktop' : `Device-${randSuffix}`;
+    const senderParam = params.get('sender');
+    if (senderParam) {
+      this.clientLabel = senderParam;
+      localStorage.setItem('chat_label', senderParam);
+      localStorage.setItem('eqt_device_name', senderParam);
+    } else {
+      this.clientLabel = localStorage.getItem('chat_label') || defaultLabel;
+      localStorage.setItem('chat_label', this.clientLabel);
+    }
+    this.clientAvatar = params.get('avatar') || localStorage.getItem('chat_avatar') || '';
     localStorage.setItem('chat_avatar', this.clientAvatar);
 
     // Generate/load client-unique token for session verification

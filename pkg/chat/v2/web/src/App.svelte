@@ -251,6 +251,9 @@
       }
     } else if (event.data.type === 'update-identity') {
       const { name, avatar } = event.data;
+      if (client && name && client.clientLabel === name && (avatar === undefined || client.clientAvatar === avatar)) {
+        return;
+      }
       let updated = false;
       if (name && name !== localStorage.getItem('chat_label')) {
         localStorage.setItem('chat_label', name);

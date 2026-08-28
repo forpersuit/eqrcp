@@ -1313,12 +1313,13 @@ func desktopChatPageURL(baseURL string, hostToken string, sender string, avatar 
 	if useV2 {
 		baseURL = strings.Replace(baseURL, "/chat/", "/chat-v2/", 1)
 	}
+	sender = strings.TrimSpace(sender)
+	if sender == "" {
+		sender = "Desktop"
+	}
 	parsed, err := url.Parse(baseURL)
 	if err != nil {
-		query := "?peer=desktop&hostToken=" + url.QueryEscape(hostToken)
-		if sender = strings.TrimSpace(sender); sender != "" {
-			query += "&sender=" + url.QueryEscape(sender)
-		}
+		query := "?peer=desktop&hostToken=" + url.QueryEscape(hostToken) + "&sender=" + url.QueryEscape(sender)
 		if avatar = strings.TrimSpace(avatar); avatar != "" {
 			query += "&avatar=" + url.QueryEscape(avatar)
 		}
@@ -1327,9 +1328,7 @@ func desktopChatPageURL(baseURL string, hostToken string, sender string, avatar 
 	params := parsed.Query()
 	params.Set("peer", "desktop")
 	params.Set("hostToken", hostToken)
-	if sender = strings.TrimSpace(sender); sender != "" {
-		params.Set("sender", sender)
-	}
+	params.Set("sender", sender)
 	if avatar = strings.TrimSpace(avatar); avatar != "" {
 		params.Set("avatar", avatar)
 	}

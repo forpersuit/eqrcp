@@ -112,6 +112,9 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 		}
 	}
 	chatSender := strings.TrimSpace(v.GetString("chatSender"))
+	if chatSender == "" {
+		chatSender = "Desktop"
+	}
 	chatAvatar := strings.TrimSpace(v.GetString("chatAvatar"))
 	selectedInterface := v.GetString("interface")
 	if selectedInterface == "" {

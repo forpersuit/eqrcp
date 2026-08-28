@@ -255,3 +255,19 @@ func TestGUIAgentNotificationDisabledInSettings(t *testing.T) {
 		t.Fatal("expected notification when notifyEnabled is true, got none")
 	}
 }
+
+func TestDesktopChatPageURLDefaultSender(t *testing.T) {
+	urlWithEmptySender := desktopChatPageURL("http://127.0.0.1:19000/chat/abc", "host-token-123", "", "", true)
+	if !strings.Contains(urlWithEmptySender, "sender=Desktop") {
+		t.Fatalf("expected sender=Desktop in URL, got %s", urlWithEmptySender)
+	}
+	if !strings.Contains(urlWithEmptySender, "/chat-v2/") {
+		t.Fatalf("expected /chat-v2/ in URL when useV2 is true, got %s", urlWithEmptySender)
+	}
+
+	urlWithCustomSender := desktopChatPageURL("http://127.0.0.1:19000/chat/abc", "host-token-123", "CustomDevice", "avatar.png", true)
+	if !strings.Contains(urlWithCustomSender, "sender=CustomDevice") {
+		t.Fatalf("expected sender=CustomDevice in URL, got %s", urlWithCustomSender)
+	}
+}
+
