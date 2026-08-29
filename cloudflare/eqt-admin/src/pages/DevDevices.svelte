@@ -123,18 +123,20 @@
     }
   }
 
-  async function handleDelete(dev: DevDeviceEntry) {
-    if (!window.confirm($t('devDevices.deleteConfirm'))) {
-      return;
-    }
+  let deleteTarget = $state<DevDeviceEntry | null>(null);
+
+  async function executeDelete() {
+    if (!deleteTarget) return;
+    const targetId = deleteTarget.id;
     busy = true;
     errorMsg = '';
     actionMsg = '';
     try {
-      await adminFetch(`/api/v1/admin/dev-devices/${dev.id}`, {
+      await adminFetch(`/api/v1/admin/dev-devices/${targetId}`, {
         method: 'DELETE'
       });
       actionMsg = `${$t('common.delete')} ${$t('common.success')}`;
+      deleteTarget = null;
       await loadDevices();
     } catch (err: any) {
       errorMsg = err.message || $t('common.failed');
@@ -271,7 +273,7 @@
               <button type="button" class="btn btn-xs btn-secondary" onclick={() => openEditModal(dev)}>
                 {$t('devDevices.edit')}
               </button>
-              <button type="button" class="btn btn-xs btn-danger" onclick={() => handleDelete(dev)} disabled={busy}>
+              <button type="button" class="btn btn-xs btn-danger" onclick={() => (deleteTarget = dev)} disabled={busy}>
                 {$t('devDevices.delete')}
               </button>
             </div>
@@ -336,6 +338,24 @@
         </button>
       </div>
     </form>
+  </Modal>
+{/if}
+
+{#if deleteTarget}
+  <Modal open={true} title={$t('common.delete')} maxWidth="480px" onclose={() => (deleteTarget = null)}>
+    <p class="confirm-text">
+      {$t('devDevices.deleteConfirm')}
+      {#if deleteTarget.device_id || deleteTarget.email}
+        <br/><br/>
+        <strong class="font-mono text-muted">{deleteTarget.device_id || deleteTarget.email}</strong>
+      {/if}
+    </p>
+    {#snippet footer()}
+      <button type="button" class="btn btn-secondary" onclick={() => (deleteTarget = null)} disabled={busy}>{$t('common.cancel')}</button>
+      <button type="button" class="btn btn-danger" onclick={executeDelete} disabled={busy}>
+        {busy ? $t('common.loading') : $t('common.delete')}
+      </button>
+    {/snippet}
   </Modal>
 {/if}
 
