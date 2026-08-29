@@ -12,6 +12,7 @@
 - **落地前必须修正防抖 SQL 时序 bug**：`datetime('now','-5 seconds')` 与 ISO `created_at` 字符串比较会恒真，导致第一条后全部下载记录被防抖丢弃。
 - 必须接受并标注统计口径：路线 B 仅覆盖「官网下载按钮点击」，桌面端自动更新与 GitHub 直链不在统计内，实际覆盖率远低于开发自估的 85-90%。
 - 免鉴权写端点需加 IP 限速与字段校验（复用现有 `rate_limits` 基建），并处理与官网 hero 死链（F1）的联动口径。
+- **地理成本为零（2026-08-30 修订）**：城市级位置经 Cloudflare「Add visitor location headers」头通道所有计划免费可得（非 Enterprise），已在 eqt.net.im 开启；下载遥测可零成本记录 `city/lat/lng`，与现有设备星球图同粒度。
 
 ## 2. 已核实事实（file:line 证据）
 
@@ -20,9 +21,13 @@
 - `cloudflare/eqt-drm-api/src/services/github.ts:24-115` `handleDownloadDomain` 职责是 `/update-metadata.json` 与 `/downloads/:version/:filename` 的 **latest 版本解析 + 302 重定向**（`github.ts:110`），其可达路径是 host 无关的 path 匹配（`index.ts:63`，对 lic.eqt.net.im 生效），**不是真实文件下载**。
 - 真实下载：`download.eqt.net.im/downloads/<version>/<file>` → R2 直接回对象，中间无 Worker → 无 `request.cf`、无 `ctx.waitUntil`、无 D1。原方案「服务端 0 延迟旁路记录」立论不成立。
 
-### 2.2 地理信息约束
-- `request.cf` 的 `city` / `region` / `latitude` / `longitude` 为 Cloudflare **Enterprise 专属**；免费/Pro 层稳定可用的是 `country`、`colo`、`asn`、`CF-IPCountry` 头。
-- 修正：以国家质心渲染地球大图。`COUNTRY_COORDS` 字典已存在：`cloudflare/eqt-admin/src/components/LicenseGlobeCard.svelte:13`（country → {lat,lng,zh,en}，含回退 `LicenseGlobeCard.svelte:182/302/310`）。
+### 2.2 地理信息约束（2026-08-30 修订：头通道所有计划可用）
+- **两条来源通道，可用性不同**：
+  - `request.cf` 对象（Workers 运行时）的 `city` / `latitude` / `longitude` / `region` → **Enterprise 专属**；
+  - **HTTP 请求头**（`CF-IPCountry` / `CF-IPContinent` / `CF-IPCity` / `CF-IPRegion` / `CF-IPRegionCode` / `CF-IPLatitude` / `CF-IPLongitude` / `CF-IPASN`）→ **所有计划可用**，由 Cloudflare 边缘按访客 IP 注入。官方文档明确 Transform Rules（含 Managed Transforms）对所有客户开放；仅 True-Client-IP 标注 Enterprise-only。
+- 现有代码正是**头优先双通道**：`routes/drm.ts:137-157` `activationClientMeta()` 先读 `cf-ipcountry`/`cf-ipcity`/`cf-region-code`/`cf-iplatitude`/`cf-iplongitude` 头，兜底 `request.cf`。因此激活/注册地理在现计划下**已能拿到城市级**（`activations`、`device_registry` 均已持久化 city/region/lat/lng）。
+- **2026-08-30 已在 Dashboard 开启 eqt.net.im 的「Add visitor location headers」Managed Transform**（Rules → Transform Rules → Managed Transforms，免费，即时生效）；开启后**新请求**才注入 city/lat/lng 头。运行时验证：新激活/注册写入 `device_registry` 的 lat/lng 非空（或设备星球图出现城市级光点）；本文撰写时边缘探针确认 `loc=US`、`colo=SJC` 正常。
+- 渲染：国家粒度用 `COUNTRY_COORDS` 质心（`cloudflare/eqt-admin/src/components/LicenseGlobeCard.svelte:13`，含回退 `182/302/310`）；city 可用时可按城市点位渲染（与设备星球图同构）。
 
 ### 2.3 CORS / CSP
 - `getCorsHeaders`（`cloudflare/eqt-drm-api/src/utils/auth.ts:9-19`）默认 `allowOrigin = "*"`，官网 `www.eqt.net.im` 的 sendBeacon/fetch 无 CORS 障碍；`index.ts:38` 全局已处理 OPTIONS 预检。
@@ -88,6 +93,10 @@ CREATE TABLE IF NOT EXISTS download_records (
     client_ip_hash TEXT DEFAULT NULL,           -- SHA-256(ip + salt) 隐私合规
     ip_country     TEXT DEFAULT NULL,           -- CF-IPCountry ("CN","US")
     colo           TEXT DEFAULT NULL,           -- CF-Colo ("HKG","SJC")
+    city           TEXT DEFAULT NULL,           -- CF-IPCity（头通道免费，缺失/未开启为 NULL）
+    region         TEXT DEFAULT NULL,           -- CF-IPRegionCode
+    latitude       REAL DEFAULT NULL,           -- CF-IPLatitude
+    longitude      REAL DEFAULT NULL,           -- CF-IPLongitude
     user_agent     TEXT DEFAULT NULL,
     referer        TEXT DEFAULT NULL,
     source         TEXT NOT NULL DEFAULT 'website', -- 'website' | 'desktop_update' | 'direct'
@@ -100,25 +109,25 @@ CREATE INDEX IF NOT EXISTS idx_downloads_dedup ON download_records(client_ip_has
 - 盐值存 Worker secret（`TELEMETRY_SALT`），服务端对 `cf-connecting-ip` 加盐哈希，客户端不传 IP。
 
 ### 5.2 Telemetry 端点（lic.eqt.net.im/api/v1/telemetry/download）
-- POST，免鉴权，CORS 开放；提取 `cf-ipcountry` / `request.cf?.colo` / 服务端哈希 IP。
+- POST，免鉴权，CORS 开放；提取 `cf-ipcountry` / `cf-ipcity` / `cf-region-code` / `cf-iplatitude` / `cf-iplongitude` / `request.cf?.colo` / 服务端哈希 IP —— 直接复用/仿照 `activationClientMeta()`（`routes/drm.ts:124-160`）的头优先双通道。
 - 原子防抖写入（单 SQL 消除并发竞态与 2 次 RTT）：
   ```sql
-  INSERT INTO download_records (version, filename, client_ip_hash, ip_country, colo, user_agent, referer, source, created_at)
-  SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+  INSERT INTO download_records (version, filename, client_ip_hash, ip_country, colo, city, region, latitude, longitude, user_agent, referer, source, created_at)
+  SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
   WHERE NOT EXISTS (
       SELECT 1 FROM download_records
       WHERE client_ip_hash = ? AND filename = ? AND created_at > ?
   );
   ```
-  （占位符顺序：1-9 为 INSERT 列 version/filename/client_ip_hash/ip_country/colo/user_agent/referer/source/created_at；10-12 为 WHERE 的 client_ip_hash/filename/created_at。参数 9 为当前 ISO 时间 `new Date().toISOString()`，参数 12 为 `new Date(Date.now() - 5000).toISOString()`）。
+  （占位符顺序：1-13 为 INSERT 列 version/filename/client_ip_hash/ip_country/colo/city/region/latitude/longitude/user_agent/referer/source/created_at；14-16 为 WHERE 的 client_ip_hash/filename/created_at。参数 13 为当前 ISO 时间 `new Date().toISOString()`，参数 16 为 `new Date(Date.now() - 5000).toISOString()`）。
 - `ctx.waitUntil(...)` 异步写入，立即返回 204。
 
 ### 5.3 官网埋点（index.html）
 - `#download-link` 绑定 click：`navigator.sendBeacon` 优先，`fetch(..., {keepalive:true})` 兜底；payload `{ version, filename, referer }`，version/filename 取自 `window.latestVersion` 与 href 兜底组装（见 §4.4）。
 
 ### 5.4 Admin 地球大图与统计
-- API：`GET /api/v1/admin/downloads/globe?window=1h|24h|7d|30d`（复用 `requireAdminAuth`），按 `ip_country` 聚合，附 `COUNTRY_COORDS[country]` 质心与最近下载时间。
-- 地球大图：切换「下载分布」模式，以国家质心渲染光柱（如青 #39e5b6），柱高 = 下载量，Tooltip 显国家 / 下载数 / 最新版本 / 相对时间；与现有 `LicenseGlobeCard.svelte` 架构融合。
+- API：`GET /api/v1/admin/downloads/globe?window=1h|24h|7d|30d`（复用 `requireAdminAuth`），默认按 `ip_country` 聚合（附 `COUNTRY_COORDS[country]` 质心与最近下载时间）；`city`/`latitude`/`longitude` 非空时可选按城市点位渲染（与设备星球图 `/devices/live` 同构）。
+- 地球大图：切换「下载分布」模式，默认以国家质心渲染光柱（如青 #39e5b6），柱高 = 下载量，Tooltip 显国家 / 下载数 / 最新版本 / 相对时间；与现有 `LicenseGlobeCard.svelte` 架构融合。
 - 90 天归档：扩展现有 `scheduled`（每日 UTC 03:05）清理 90 天前明细并保留每日国家/版本汇总。
 
 ## 6. 建议实现顺序
@@ -137,14 +146,15 @@ CREATE INDEX IF NOT EXISTS idx_downloads_dedup ON download_records(client_ip_has
 ### 7.2 性能与并发优化：原子化单语句防抖写入（Atomic INSERT WHERE NOT EXISTS）
 - 代替先 SELECT 后 INSERT（存在并发竞态且产生 2 次 D1 网络往返），采用单条原子 SQL 写入：
   ```sql
-  INSERT INTO download_records (version, filename, client_ip_hash, ip_country, colo, user_agent, referer, source, created_at)
-  SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+  INSERT INTO download_records (version, filename, client_ip_hash, ip_country, colo, city, region, latitude, longitude, user_agent, referer, source, created_at)
+  SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
   WHERE NOT EXISTS (
       SELECT 1 FROM download_records
       WHERE client_ip_hash = ? AND filename = ? AND created_at > ?
   );
   ```
 - **收益**：彻底消除双请求竞态，D1 写入往返从 2 次降为 1 次，执行时延由 ~100ms 降至 ~35ms。
+- **2026-08-30**：INSERT 列已并入 `city/region/latitude/longitude`（取自已开启的「Add visitor location headers」头通道，零额外成本；见 §2.2、§5.1）。
 
 ### 7.3 扩展字段：预留 `source` 列平滑支持未来桌面端更新统计
 - 表中直接增加 `source TEXT NOT NULL DEFAULT 'website'` 列（枚举：`'website'` / `'desktop_update'` / `'direct'`）。
@@ -171,7 +181,7 @@ CREATE INDEX IF NOT EXISTS idx_downloads_dedup ON download_records(client_ip_has
   - **前端动态替换**：官网 `index.html` 的 JS 在获取到元数据后，将 href 动态替换为具名版本链接。
 - **G4 隐私协议披露（Privacy Compliance）**：
   - 在 `cloudflare/eqt-website/privacy.html` 的“数据收集”章节新增声明：
-    > “在您下载软件安装包时，我们仅在边缘网络匿名记录下载版本、文件名、粗略地理国家/地区及单向加盐哈希标识，绝不记录或存储您的原始 IP 地址与个人敏感信息。”
+    > “在您下载软件安装包时，我们仅在边缘网络匿名记录下载版本、文件名、粗略地理位置（国家/地区及可用时的城市级大致位置）及单向加盐哈希标识，绝不记录或存储您的原始 IP 地址与个人敏感信息。”
 - **G5 归档聚合表 DDL（`daily_download_stats`）**：
   ```sql
   CREATE TABLE IF NOT EXISTS daily_download_stats (
@@ -195,7 +205,7 @@ CREATE INDEX IF NOT EXISTS idx_downloads_dedup ON download_records(client_ip_has
 
 - [ ] **Phase 1 (D1 + Worker API)**：
   - [ ] `schema.sql` 增加 `download_records` 与 `daily_download_stats` 表及复合索引；
-  - [ ] `routes/telemetry.ts` 实现 `POST /api/v1/telemetry/download`（`TELEMETRY_SALT` 加盐哈希、60 req/min 限速、G2 格式校验、原子单 SQL 防抖）；
+  - [ ] `routes/telemetry.ts` 实现 `POST /api/v1/telemetry/download`（`TELEMETRY_SALT` 加盐哈希、60 req/min 限速、G2 格式校验、原子单 SQL 防抖、`activationClientMeta` 式头通道地理提取）；
   - [ ] 编写离线单测 `tests/telemetry-download-offline.js` 验证时序定序、校验拦截与原子防抖。
 - [ ] **Phase 2 (Release Pipeline + Website + Privacy)**：
   - [ ] `.github/workflows/release.yml` 补充上传字面量 `EQT-latest-windows-amd64.zip` 至 `downloads/latest/`（G3 双保险）；
@@ -203,6 +213,6 @@ CREATE INDEX IF NOT EXISTS idx_downloads_dedup ON download_records(client_ip_has
   - [ ] `cloudflare/eqt-website/privacy.html` 补充下载遥测匿名披露条款（G4）。
 - [ ] **Phase 3 (Admin 地球大图与统计)**：
   - [ ] `routes/admin.ts` 增加 `GET /api/v1/admin/downloads/globe` 和 `GET /api/v1/admin/downloads/stats`；
-  - [ ] `LicenseGlobeCard.svelte` 增加模式切换与国家质心下载热力光柱（复用 WebGL 单实例）。
+  - [ ] `LicenseGlobeCard.svelte` 增加模式切换与下载热力光柱（默认国家质心，city 可用时按点位渲染，复用 WebGL 单实例）。
 - [ ] **Phase 4 (Scheduled 聚合与归档)**：
   - [ ] `index.ts` 的 `scheduled` 处理器扩展每日聚合逻辑：将 90 天前明细按 `(stat_date, version, ip_country, source)` 汇总写入 `daily_download_stats` 并清理过期明细。
