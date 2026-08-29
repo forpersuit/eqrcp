@@ -399,17 +399,25 @@
   let activeBubbleEl: HTMLElement | null = null;
   let activeMenuOptions: { label: string; action: () => void; danger?: boolean; confirmLabel?: string; disabled?: boolean }[] = [];
   
-  let menuIsBelow = true;
-  let arrowXPercent = 50;
+  let menuPlacement: 'left' | 'right' | 'top' | 'bottom' = 'bottom';
+  let arrowXPx = 0;
+  let arrowYPx = 0;
+  let lastClickPoint: { x: number; y: number } | null = null;
 
   let confirmingIndex: number | null = null;
   let confirmTimeout: number | null = null;
 
-  async function openMessageMenu(msg: Message, bubbleEl: HTMLElement) {
+  async function openMessageMenu(msg: Message, bubbleEl: HTMLElement, clickPoint?: { clientX: number; clientY: number }) {
     if (msg.recalled) return; // 撤回消息不支持右键菜单/滑动
     if (selectionMode) return; // 选择模式下不弹右键菜单
     activeMenuMessage = msg;
     activeBubbleEl = bubbleEl;
+    if (clickPoint) {
+      lastClickPoint = { x: clickPoint.clientX, y: clickPoint.clientY };
+    } else {
+      const rect = bubbleEl.getBoundingClientRect();
+      lastClickPoint = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    }
     confirmingIndex = null;
     if (confirmTimeout) clearTimeout(confirmTimeout);
     
@@ -549,6 +557,7 @@
     showMenu = false;
     activeMenuMessage = null;
     activeBubbleEl = null;
+    lastClickPoint = null;
     activeMenuOptions = [];
     confirmingIndex = null;
     menuSpacerHeight = 0;
@@ -608,7 +617,7 @@
 
   async function adjustMenuPosition(isRetry = false) {
     const menuEl = document.querySelector('.bubble-context-menu') as HTMLElement;
-    if (!menuEl || !activeBubbleEl) return;
+    if (!menuEl || !activeBubbleEl || !activeMenuMessage) return;
     
     // 1. 动态测量子项文本的最大实际宽度
     let maxTextW = 0;
@@ -639,68 +648,95 @@
 
     const vMinTop = Math.max(8, messagesRect.top + 8);
     const vMaxBottom = Math.min(winH - 8, composerTop - 8);
+    const vMinLeft = Math.max(8, messagesRect.left + 8);
+    const vMaxRight = Math.min(winW - 8, messagesRect.right - 8);
 
     const bubbleRect = activeBubbleEl.getBoundingClientRect();
+    const mine = isMine(activeMenuMessage);
 
-    // 4. 计算超长气泡在聊天视口内的有效可见区域切片 (Visible Slice)
-    const visibleTop = Math.max(bubbleRect.top, vMinTop);
-    const visibleBottom = Math.min(bubbleRect.bottom, vMaxBottom);
+    // 获取并规范化点击坐标（保证在气泡内或附近）
+    let clickX = lastClickPoint ? lastClickPoint.x : (bubbleRect.left + bubbleRect.width / 2);
+    let clickY = lastClickPoint ? lastClickPoint.y : (bubbleRect.top + bubbleRect.height / 2);
 
-    // 优先尝试放在下方
-    let top = visibleBottom + 8;
-    menuIsBelow = true;
+    clickX = Math.max(bubbleRect.left, Math.min(bubbleRect.right, clickX));
+    clickY = Math.max(bubbleRect.top, Math.min(bubbleRect.bottom, clickY));
 
-    const fitsBelow = top + menuH <= vMaxBottom;
-    const fitsAbove = visibleTop - 8 - menuH >= vMinTop;
+    // 4. 空间与遮挡检测 (基于气泡对向外侧展开)
+    // 气泡左外侧空间：从 vMinLeft 到 bubbleRect.left - 8
+    const spaceLeft = bubbleRect.left - 8 - vMinLeft;
+    // 气泡右外侧空间：从 bubbleRect.right + 8 到 vMaxRight
+    const spaceRight = vMaxRight - (bubbleRect.right + 8);
 
-    if (fitsBelow) {
-      // 下方空间足够
-      top = visibleBottom + 8;
-      menuIsBelow = true;
-    } else if (fitsAbove) {
-      // 上方空间足够
-      top = visibleTop - 8 - menuH;
-      menuIsBelow = false;
+    const preferredSide = mine ? 'left' : 'right';
+    let placement: 'left' | 'right' | 'top' | 'bottom';
+
+    if (preferredSide === 'left') {
+      if (spaceLeft >= menuW) {
+        placement = 'left';
+      } else if (spaceRight >= menuW) {
+        placement = 'right';
+      } else {
+        // 左右均放不下（例如手机窄屏全宽气泡），回退到基于点击垂直位置的上下展开
+        const spaceBelow = vMaxBottom - (clickY + 8);
+        const spaceAbove = (clickY - 8) - vMinTop;
+        placement = (spaceBelow >= menuH || spaceBelow >= spaceAbove) ? 'bottom' : 'top';
+      }
     } else {
-      // 上下直放空间均不足，判断是否属于最底部气泡触碰 Input 边界的场景
-      const distToComposer = vMaxBottom - bubbleRect.bottom;
-      if (!isRetry && distToComposer < menuH + 16 && messagesEl) {
-        const requiredBump = Math.ceil(menuH + 24 - Math.max(0, distToComposer));
-        if (requiredBump > 0) {
-          menuSpacerHeight = requiredBump;
-          await tick();
-          messagesEl.scrollTop += requiredBump;
-          await tick();
-          return adjustMenuPosition(true);
+      if (spaceRight >= menuW) {
+        placement = 'right';
+      } else if (spaceLeft >= menuW) {
+        placement = 'left';
+      } else {
+        const spaceBelow = vMaxBottom - (clickY + 8);
+        const spaceAbove = (clickY - 8) - vMinTop;
+        placement = (spaceBelow >= menuH || spaceBelow >= spaceAbove) ? 'bottom' : 'top';
+      }
+    }
+
+    menuPlacement = placement;
+
+    let left = 0;
+    let top = 0;
+
+    if (placement === 'left' || placement === 'right') {
+      // 水平展开模式
+      if (placement === 'left') {
+        left = bubbleRect.left - 8 - menuW;
+        if (left < vMinLeft) left = vMinLeft;
+      } else {
+        left = bubbleRect.right + 8;
+        if (left + menuW > vMaxRight) left = vMaxRight - menuW;
+      }
+
+      // 垂直方向以点击处居中，并限制在视口安全范围内防遮挡
+      const idealTop = clickY - menuH / 2;
+      top = Math.max(vMinTop, Math.min(vMaxBottom - menuH, idealTop));
+
+      // 箭头垂直对齐点击处（无需强制在菜单中间，精准指向点击垂直高度）
+      const rawArrowY = clickY - top;
+      arrowYPx = Math.max(14, Math.min(menuH - 14, rawArrowY));
+    } else {
+      // 垂直展开回退模式 (top / bottom)
+      if (placement === 'bottom') {
+        top = clickY + 8;
+        if (top + menuH > vMaxBottom) {
+          top = Math.max(vMinTop, vMaxBottom - menuH);
+        }
+      } else {
+        top = clickY - 8 - menuH;
+        if (top < vMinTop) {
+          top = vMinTop;
         }
       }
 
-      // 如果撑高后或针对超长贯穿气泡依然无法完整容纳，收敛限制在视口安全范围内
-      if (bubbleRect.bottom > vMaxBottom) {
-        top = Math.max(vMinTop, vMaxBottom - menuH);
-        menuIsBelow = false;
-      } else {
-        top = vMinTop;
-        menuIsBelow = true;
-      }
-    }
+      // 水平方向以点击处居中，并限制在视口安全范围内防遮挡
+      const idealLeft = clickX - menuW / 2;
+      left = Math.max(vMinLeft, Math.min(vMaxRight - menuW, idealLeft));
 
-    // 5. 水平居中对齐与视口边缘防溢出保护
-    let left = bubbleRect.left + bubbleRect.width / 2 - menuW / 2;
-    const vLeft = Math.max(8, messagesRect.left + 8);
-    const vRight = Math.min(winW - 8, messagesRect.right - 8);
-
-    if (left + menuW > vRight) {
-      left = vRight - menuW;
+      // 箭头水平对齐点击处（精准指向点击水平位置）
+      const rawArrowX = clickX - left;
+      arrowXPx = Math.max(14, Math.min(menuW - 14, rawArrowX));
     }
-    if (left < vLeft) {
-      left = vLeft;
-    }
-
-    // 6. 计算气泡中心点在菜单上的相对 X 坐标百分比
-    const bubbleCenterX = bubbleRect.left + bubbleRect.width / 2;
-    const relativeX = bubbleCenterX - left;
-    arrowXPercent = Math.max(10, Math.min(90, (relativeX / menuW) * 100));
 
     menuEl.style.left = `${left}px`;
     menuEl.style.top = `${top}px`;
@@ -743,6 +779,8 @@
       if (e.touches.length !== 1) return;
       startX = e.touches[0].clientX;
       startY = e.touches[0].clientY;
+      currentX = startX;
+      currentY = startY;
       isScrolling = false;
       isSliding = false;
       hasTriggeredLongPress = false;
@@ -750,7 +788,7 @@
       if (longPressTimer) clearTimeout(longPressTimer);
       longPressTimer = window.setTimeout(() => {
         hasTriggeredLongPress = true;
-        openMessageMenu(msg, node);
+        openMessageMenu(msg, node, { clientX: startX, clientY: startY });
         if (window.navigator && window.navigator.vibrate) {
           try { window.navigator.vibrate(50); } catch(ex) {}
         }
@@ -815,7 +853,7 @@
         
         if (canSlide && absOffset >= 35) {
           setTimeout(() => {
-            openMessageMenu(msg, node);
+            openMessageMenu(msg, node, { clientX: currentX, clientY: currentY });
           }, 50);
         }
       }
@@ -1028,7 +1066,7 @@
               class:selecting={selectionMode && canMultiSelect(msg)}
               class:selected={selectionMode && canMultiSelect(msg) && isSelected(msg)}
               use:swipeable={msg}
-              on:contextmenu|preventDefault={(e) => openMessageMenu(msg, e.currentTarget)}
+              on:contextmenu|preventDefault={(e) => openMessageMenu(msg, e.currentTarget, { clientX: e.clientX, clientY: e.clientY })}
               on:click={(e) => {
                 if (selectionMode && canMultiSelect(msg)) {
                   e.preventDefault();
@@ -1233,9 +1271,8 @@
 
 {#if showMenu}
   <div 
-    class="bubble-context-menu" 
-    class:above={!menuIsBelow}
-    style="display: block; --arrow-x: {arrowXPercent}%;"
+    class="bubble-context-menu placement-{menuPlacement}" 
+    style="display: block; --arrow-x: {arrowXPx}px; --arrow-y: {arrowYPx}px;"
     use:portal
     use:initResizeObserver
   >
@@ -1398,25 +1435,61 @@
     height: 0;
     border-style: solid;
     z-index: 10001;
-    border-width: 0 6px 6px 6px;
-    border-color: transparent transparent #ffffff transparent;
-    top: -6px;
-    left: var(--arrow-x, 50%);
-    transform: translateX(-50%);
   }
 
-  :global(.dark) .bubble-context-menu::after {
+  /* 菜单在气泡左侧：箭头在菜单右侧指向气泡 (向右) */
+  .bubble-context-menu.placement-left::after {
+    top: var(--arrow-y, 50%);
+    right: -6px;
+    left: auto;
+    bottom: auto;
+    transform: translateY(-50%);
+    border-width: 6px 0 6px 6px;
+    border-color: transparent transparent transparent #ffffff;
+  }
+  :global(.dark) .bubble-context-menu.placement-left::after {
+    border-color: transparent transparent transparent #0f172a;
+  }
+
+  /* 菜单在气泡右侧：箭头在菜单左侧指向气泡 (向左) */
+  .bubble-context-menu.placement-right::after {
+    top: var(--arrow-y, 50%);
+    left: -6px;
+    right: auto;
+    bottom: auto;
+    transform: translateY(-50%);
+    border-width: 6px 6px 6px 0;
+    border-color: transparent #ffffff transparent transparent;
+  }
+  :global(.dark) .bubble-context-menu.placement-right::after {
+    border-color: transparent #0f172a transparent transparent;
+  }
+
+  /* 菜单在下方：箭头在菜单顶部指向上方 */
+  .bubble-context-menu.placement-bottom::after {
+    top: -6px;
+    bottom: auto;
+    left: var(--arrow-x, 50%);
+    right: auto;
+    transform: translateX(-50%);
+    border-width: 0 6px 6px 6px;
+    border-color: transparent transparent #ffffff transparent;
+  }
+  :global(.dark) .bubble-context-menu.placement-bottom::after {
     border-color: transparent transparent #0f172a transparent;
   }
 
-  .bubble-context-menu.above::after {
+  /* 菜单在上方：箭头在菜单底部指向下方 */
+  .bubble-context-menu.placement-top::after {
+    bottom: -6px;
+    top: auto;
+    left: var(--arrow-x, 50%);
+    right: auto;
+    transform: translateX(-50%);
     border-width: 6px 6px 0 6px;
     border-color: #ffffff transparent transparent transparent;
-    top: auto;
-    bottom: -6px;
   }
-
-  :global(.dark) .bubble-context-menu.above::after {
+  :global(.dark) .bubble-context-menu.placement-top::after {
     border-color: #0f172a transparent transparent transparent;
   }
 
