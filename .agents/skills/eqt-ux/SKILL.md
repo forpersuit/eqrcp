@@ -90,11 +90,11 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
 - **传输完成状态自愈 (WebSocket 重连修复)**：
   - 移动端锁屏重连时，后端重放历史事件需对 `Transfer` 事件放行（`e.Message != nil || e.Transfer != nil`）。
   - 前端计算下载完结状态时，结合 `msg.downloaded` 与 `completedMap[msg.id]`。若物理传输早已成功结束，主动将 UI 从悬空的“传输中”纠正为“已就绪”状态。
-- **长文本气泡上下文菜单外侧自适应展开与点击对齐 (Bubble Context Menu Placement & Click Alignment)**：
-  - **点击坐标捕获**：在桌面端右键（`contextmenu`）和移动端长按/滑动结束（`swipeable`）时，精确记录触发点的视口坐标 `(clientX, clientY)`。
-  - **对向外侧优先展开**：发送方（Mine，气泡靠右）优先向气泡左外侧（`placement-left`）展开；接收方（Other，气泡靠左）优先向气泡右外侧（`placement-right`）展开。
-  - **视口遮挡与边界保护 (Collision Clamping)**：动态检测视口上下（顶栏 `vMinTop` 与底部输入框 `vMaxBottom`）和左右边界。当外侧空间不足时（如手机窄屏全宽气泡），优雅回退到点击点下方（`placement-bottom`）或上方（`placement-top`）。
-  - **箭头精准对齐 (Non-centered Dynamic Arrow)**：菜单为防止视口遮挡可自由上下/左右平移，箭头无需固定居中（50%），而是通过 CSS 变量 `--arrow-y` / `--arrow-x` 精准对齐用户的实际点击高度或水平位置（带有圆角安全边距保护）。
+- **长文本气泡上下文菜单自适应展开与手势规范 (Bubble Context Menu Placement & Gesture Guidelines)**：
+  - **手势触发规范**：移动端仅通过向左/右滑动气泡（`swipeable`）唤起操作菜单，禁用长按触发，防止与系统选词和页面手势冲突；桌面端支持右键直接触发。
+  - **左右边框箭头对齐 (Side Arrows)**：菜单箭头始终位于菜单的左右两侧边框（`placement-left` / `placement-right`），箭头垂直高度（`--arrow-y`）精准对齐手指滑动触控点的 `clientY` 坐标，禁止出现上下边框箭头。
+  - **移动端窄屏内侧自适应**：发送方（Mine）向左展开（`placement-left`），接收方（Other）向右展开（`placement-right`）；若外侧空间不足，自动贴合气泡内侧安全区域呈现。
+  - **全局失焦即时关闭**：用户点击屏幕任何非菜单区域（包括气泡、消息空白区等）时，立即在 `pointerdown` 时触发 `closeMenu()` 干净关闭。
 
 ---
 

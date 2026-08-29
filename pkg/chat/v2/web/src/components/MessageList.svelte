@@ -668,82 +668,39 @@
     clickX = Math.max(bubbleRect.left, Math.min(bubbleRect.right, clickX));
     clickY = Math.max(bubbleRect.top, Math.min(bubbleRect.bottom, clickY));
 
-    // 4. 空间与遮挡检测 (基于气泡对向外侧展开)
-    // 气泡左外侧空间：从 vMinLeft 到 bubbleRect.left - 8
-    const spaceLeft = bubbleRect.left - 8 - vMinLeft;
-    // 气泡右外侧空间：从 bubbleRect.right + 8 到 vMaxRight
-    const spaceRight = vMaxRight - (bubbleRect.right + 8);
-
-    const preferredSide = mine ? 'left' : 'right';
-    let placement: 'left' | 'right' | 'top' | 'bottom';
-
-    if (preferredSide === 'left') {
-      if (spaceLeft >= menuW) {
-        placement = 'left';
-      } else if (spaceRight >= menuW) {
-        placement = 'right';
-      } else {
-        // 左右均放不下（例如手机窄屏全宽气泡），回退到基于点击垂直位置的上下展开
-        const spaceBelow = vMaxBottom - (clickY + 8);
-        const spaceAbove = (clickY - 8) - vMinTop;
-        placement = (spaceBelow >= menuH || spaceBelow >= spaceAbove) ? 'bottom' : 'top';
-      }
-    } else {
-      if (spaceRight >= menuW) {
-        placement = 'right';
-      } else if (spaceLeft >= menuW) {
-        placement = 'left';
-      } else {
-        const spaceBelow = vMaxBottom - (clickY + 8);
-        const spaceAbove = (clickY - 8) - vMinTop;
-        placement = (spaceBelow >= menuH || spaceBelow >= spaceAbove) ? 'bottom' : 'top';
-      }
-    }
-
+    // 4. 始终保持左右方向：发送方在左侧(placement-left)，接收方在右侧(placement-right)
+    // 菜单箭头始终位于菜单的左右两侧，垂直精准对齐滑动的坐标 clickY
+    const placement: 'left' | 'right' = mine ? 'left' : 'right';
     menuPlacement = placement;
 
     let left = 0;
     let top = 0;
 
-    if (placement === 'left' || placement === 'right') {
-      // 水平展开模式
-      if (placement === 'left') {
-        left = bubbleRect.left - 8 - menuW;
-        if (left < vMinLeft) left = vMinLeft;
+    if (placement === 'left') {
+      // 发送方：向左展开，空间足够放外侧，移动端窄屏/气泡占宽时显示在气泡内左侧 (带有视口左安全距离)
+      const idealOuterLeft = bubbleRect.left - 8 - menuW;
+      if (idealOuterLeft >= vMinLeft) {
+        left = idealOuterLeft;
       } else {
-        left = bubbleRect.right + 8;
-        if (left + menuW > vMaxRight) left = vMaxRight - menuW;
+        left = Math.max(vMinLeft, Math.min(bubbleRect.right - menuW - 12, bubbleRect.left + 12));
       }
-
-      // 垂直方向以点击处居中，并限制在视口安全范围内防遮挡
-      const idealTop = clickY - menuH / 2;
-      top = Math.max(vMinTop, Math.min(vMaxBottom - menuH, idealTop));
-
-      // 箭头垂直对齐点击处（无需强制在菜单中间，精准指向点击垂直高度）
-      const rawArrowY = clickY - top;
-      arrowYPx = Math.max(14, Math.min(menuH - 14, rawArrowY));
     } else {
-      // 垂直展开回退模式 (top / bottom)
-      if (placement === 'bottom') {
-        top = clickY + 8;
-        if (top + menuH > vMaxBottom) {
-          top = Math.max(vMinTop, vMaxBottom - menuH);
-        }
+      // 接收方：向右展开，空间足够放外侧，移动端窄屏/气泡占宽时显示在气泡内右侧 (带有视口右安全距离)
+      const idealOuterLeft = bubbleRect.right + 8;
+      if (idealOuterLeft + menuW <= vMaxRight) {
+        left = idealOuterLeft;
       } else {
-        top = clickY - 8 - menuH;
-        if (top < vMinTop) {
-          top = vMinTop;
-        }
+        left = Math.min(vMaxRight - menuW, Math.max(bubbleRect.left + 12, bubbleRect.right - menuW - 12));
       }
-
-      // 水平方向以点击处居中，并限制在视口安全范围内防遮挡
-      const idealLeft = clickX - menuW / 2;
-      left = Math.max(vMinLeft, Math.min(vMaxRight - menuW, idealLeft));
-
-      // 箭头水平对齐点击处（精准指向点击水平位置）
-      const rawArrowX = clickX - left;
-      arrowXPx = Math.max(14, Math.min(menuW - 14, rawArrowX));
     }
+
+    // 垂直方向以点击/滑动处居中，并限制在视口安全范围内防遮挡
+    const idealTop = clickY - menuH / 2;
+    top = Math.max(vMinTop, Math.min(vMaxBottom - menuH, idealTop));
+
+    // 箭头垂直对齐滑动/点击处（精准指向滑动的垂直高度，带有圆角保护）
+    const rawArrowY = clickY - top;
+    arrowYPx = Math.max(14, Math.min(menuH - 14, rawArrowY));
 
     menuLeft = left;
     menuTop = top;
@@ -751,13 +708,12 @@
     menuEl.style.top = `${top}px`;
   }
 
-  // 全局失焦关闭菜单
+  // 全局失焦关闭菜单（点击任何非菜单区域立即关闭）
   function handleGlobalPointerDown(e: PointerEvent) {
     if (!showMenu) return;
     const target = e.target as HTMLElement;
     const menuEl = document.querySelector('.bubble-context-menu');
     if (menuEl && menuEl.contains(target)) return;
-    if (target.closest('.bubble')) return; // 让气泡自带的处理器去处理切换
     closeMenu();
   }
 
@@ -780,8 +736,6 @@
     let currentY = 0;
     let isScrolling = false;
     let isSliding = false;
-    let longPressTimer: number | null = null;
-    let hasTriggeredLongPress = false;
     
     function handleTouchStart(e: TouchEvent) {
       if (msg.recalled) return;
@@ -792,20 +746,10 @@
       currentY = startY;
       isScrolling = false;
       isSliding = false;
-      hasTriggeredLongPress = false;
-      
-      if (longPressTimer) clearTimeout(longPressTimer);
-      longPressTimer = window.setTimeout(() => {
-        hasTriggeredLongPress = true;
-        openMessageMenu(msg, node, { clientX: startX, clientY: startY });
-        if (window.navigator && window.navigator.vibrate) {
-          try { window.navigator.vibrate(50); } catch(ex) {}
-        }
-      }, 600);
     }
     
     function handleTouchMove(e: TouchEvent) {
-      if (msg.recalled || e.touches.length !== 1 || hasTriggeredLongPress) return;
+      if (msg.recalled || e.touches.length !== 1) return;
       currentX = e.touches[0].clientX;
       currentY = e.touches[0].clientY;
       
@@ -818,16 +762,8 @@
         if (absDx > 6 || absDy > 6) {
           if (absDx > absDy * 1.2) {
             isSliding = true;
-            if (longPressTimer) {
-              clearTimeout(longPressTimer);
-              longPressTimer = null;
-            }
           } else {
             isScrolling = true;
-            if (longPressTimer) {
-              clearTimeout(longPressTimer);
-              longPressTimer = null;
-            }
           }
         }
       }
@@ -849,11 +785,6 @@
     
     function handleTouchEnd() {
       if (msg.recalled) return;
-      if (longPressTimer) {
-        clearTimeout(longPressTimer);
-        longPressTimer = null;
-      }
-      if (hasTriggeredLongPress) return;
       
       if (isSliding) {
         const dx = currentX - startX;
@@ -864,7 +795,7 @@
         node.style.transition = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)';
         node.style.transform = '';
         
-        if (canSlide && absOffset >= 25) {
+        if (canSlide && absOffset >= 20) {
           setTimeout(() => {
             openMessageMenu(msg, node, { clientX: currentX, clientY: currentY });
           }, 50);
@@ -875,10 +806,6 @@
     }
     
     function handleTouchCancel() {
-      if (longPressTimer) {
-        clearTimeout(longPressTimer);
-        longPressTimer = null;
-      }
       node.style.transition = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)';
       node.style.transform = '';
       isSliding = false;
@@ -899,7 +826,6 @@
         node.removeEventListener('touchmove', handleTouchMove);
         node.removeEventListener('touchend', handleTouchEnd);
         node.removeEventListener('touchcancel', handleTouchCancel);
-        if (longPressTimer) clearTimeout(longPressTimer);
       }
     };
   }
