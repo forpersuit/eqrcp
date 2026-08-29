@@ -1,0 +1,125 @@
+# 下载遥测（Download Telemetry）设计评审与落地方向
+
+> 状态：设计评审完成，待开发者复核后落地
+> 记录日期：2026-08-30
+> 背景：开发者提出「边缘服务端旁路记录下载遥测 + Admin 地球大图热力 + 下载统计面板」方案，核心立论为「download.eqt.net.im 域名的所有请求已由 Worker eqt-drm-api 的 handleDownloadDomain 统一调度重定向至 R2」。经逐条核实，该前提在生产环境不成立：下载流量直连 R2 Custom Domain，不经过任何 Worker。方案已按评审意见调整为「客户端 Beacon 埋点（路线 B）先行」。本文沉淀核实事实、两处必须修正的 bug、决策矩阵与落地顺序，供开发者复核。
+
+---
+
+## 1. 结论摘要
+
+- 方向可行，推荐路线 B（客户端 Beacon）先行，零基础设施风险。
+- **落地前必须修正防抖 SQL 时序 bug**：`datetime('now','-5 seconds')` 与 ISO `created_at` 字符串比较会恒真，导致第一条后全部下载记录被防抖丢弃。
+- 必须接受并标注统计口径：路线 B 仅覆盖「官网下载按钮点击」，桌面端自动更新与 GitHub 直链不在统计内，实际覆盖率远低于开发自估的 85-90%。
+- 免鉴权写端点需加 IP 限速与字段校验（复用现有 `rate_limits` 基建），并处理与官网 hero 死链（F1）的联动口径。
+
+## 2. 已核实事实（file:line 证据）
+
+### 2.1 下载链路：R2 Custom Domain 直连，无 Worker
+- `cloudflare/eqt-drm-api/wrangler.toml`：`routes = [{ pattern = "lic.eqt.net.im", custom_domain = true }]`，注释明确「download.eqt.net.im 由 R2 桶 eqt-downloads 的 custom domain 直接接管（只服务 /downloads/），不再挂到此 Worker，避免域名归属冲突导致 wrangler deploy 失败」。
+- `cloudflare/eqt-drm-api/src/services/github.ts:24-115` `handleDownloadDomain` 职责是 `/update-metadata.json` 与 `/downloads/:version/:filename` 的 **latest 版本解析 + 302 重定向**（`github.ts:110`），其可达路径是 host 无关的 path 匹配（`index.ts:63`，对 lic.eqt.net.im 生效），**不是真实文件下载**。
+- 真实下载：`download.eqt.net.im/downloads/<version>/<file>` → R2 直接回对象，中间无 Worker → 无 `request.cf`、无 `ctx.waitUntil`、无 D1。原方案「服务端 0 延迟旁路记录」立论不成立。
+
+### 2.2 地理信息约束
+- `request.cf` 的 `city` / `region` / `latitude` / `longitude` 为 Cloudflare **Enterprise 专属**；免费/Pro 层稳定可用的是 `country`、`colo`、`asn`、`CF-IPCountry` 头。
+- 修正：以国家质心渲染地球大图。`COUNTRY_COORDS` 字典已存在：`cloudflare/eqt-admin/src/components/LicenseGlobeCard.svelte:13`（country → {lat,lng,zh,en}，含回退 `LicenseGlobeCard.svelte:182/302/310`）。
+
+### 2.3 CORS / CSP
+- `getCorsHeaders`（`cloudflare/eqt-drm-api/src/utils/auth.ts:9-19`）默认 `allowOrigin = "*"`，官网 `www.eqt.net.im` 的 sendBeacon/fetch 无 CORS 障碍；`index.ts:38` 全局已处理 OPTIONS 预检。
+- 官网 `cloudflare/eqt-website/index.html` 无 Content-Security-Policy meta，无需改 connect-src。
+
+### 2.4 时间与建表约定
+- 现有代码库 `created_at` 统一用 `new Date().toISOString()`（如 `routes/drm.ts:423/792/927`），即 `2026-08-30T04:05:06.123Z`。
+- 新表若沿用该约定，防抖/范围查询必须传 ISO 参数比较（见 §4.1）。
+
+### 2.5 可复用基建
+- 限速：`utils/rate-limit` 的 `rateLimitStatus` + `rate_limits` 表（`schema.sql:65`，已在 `routes/admin.ts:21` 使用）。
+- 归档 cron：`wrangler.toml` `crons = ["5 3 * * *"]`，现有 `scheduled` 处理器跑 SMTP 探活（`index.ts:129`），可直接扩展 90 天归档逻辑。
+- Admin 鉴权：`requireAdminAuth`（`routes/admin.ts:24` 起），新管理端接口复用该模式。
+
+## 3. 技术路线决策
+
+| 维度 | 路线 A：Worker 代理 R2 流式下载 | 路线 B：官网 Beacon 客户端埋点（✅ 推荐先行） |
+|---|---|---|
+| 核心机制 | 迁移 download.eqt.net.im 到 Worker，绑定 DOWNLOADS_BUCKET 流式回源并入库 | R2 直连不变，官网按钮点击 `navigator.sendBeacon` 到 `lic.eqt.net.im/api/v1/telemetry/download` |
+| 统计覆盖 | 100%（官网、直链、脚本、**桌面自动更新**） | 仅官网按钮点击；桌面自动更新、GitHub 直链不在内，**实际覆盖率远低于 85-90%** |
+| 基础设施改动 | 高：解绑 R2 custom domain → 挂 Worker，存在域名归属冲突风险（wrangler.toml 注释即因此迁出）与 DNS/证书生效窗口 | 零改动，无上线风险 |
+| 代码与维护 | 中（R2 流式分发 + 分块读取） | 极低（1 个点击事件 + 1 个 Telemetry API） |
+
+选择理由：不破坏稳定运行的 R2 直连分发链路，完全满足「记录官网下载、统计国家与时段、Admin 地球大图热力」的业务诉求。若未来需要完整下载画像或集中控流，再评估升级路线 A。
+
+## 4. 关键 bug（落地前必须修正）
+
+### 4.1 🔴 防抖 SQL 时序不匹配（数据正确性前置）
+设计稿防抖查询：
+```sql
+WHERE client_ip_hash = ? AND filename = ? AND created_at > datetime('now', '-5 seconds')
+```
+`created_at` 存 `toISOString()`（`T` + 毫秒 + `Z`），SQLite `datetime('now')` 返回空格分隔、无 Z 的字符串。字符串比较在第 10 位 `'T'(0x54) > ' '(0x20)` 即定序 → **任何历史 ISO 记录都「大于」5 秒前阈值 → 防抖恒命中 → 第一条之后所有下载被丢弃**。
+修复（二选一）：
+- `created_at > ?`，参数传 `new Date(Date.now() - 5000).toISOString()`（ISO 对 ISO 字符串比较正确）；
+- 或新表 `created_at` 存 INTEGER epoch 毫秒（`Date.now()`），范围查询无解析成本。
+补充：SELECT-then-INSERT 有并发竞态（双请求同查 0 行双写），低流量可接受；若需原子化用 `INSERT ... SELECT ... WHERE NOT EXISTS`。
+
+### 4.2 🟠 统计口径：路线 B 覆盖远低于自估
+- 桌面端自动更新直连 `download.eqt.net.im`（`pkg/server/update.go`：拉 `lic.eqt.net.im/update-metadata.json` → 按资产 `DownloadURL` 下载 zip），不经过官网按钮；GitHub Release 页面直链同理。
+- 对存量用户活跃的成熟产品，自动更新占比不小，真实覆盖率可能仅 40-60%。
+- 处理：指标明确定义为「官网下载」，Admin 面板标注口径；未来可在桌面端更新成功回调补打一条 beacon 作为增量。
+
+### 4.3 🟡 免鉴权写端点防滥用
+`POST /api/v1/telemetry/download` 开放写入 D1，必须加护栏：
+- 按 IP 速率限制（复用 `utils/rate-limit`）；
+- `version` 校验 `^v?\d+\.\d+\.\d+$`；`filename`/`referer`/`user_agent` 长度上限；
+- 解析 body 不强依赖 `application/json` 头（sendBeacon 发 `text/plain`）。
+
+### 4.4 🟡 与官网 hero 死链（F1）联动
+- 现 hero 静态 href 为 `download.eqt.net.im/downloads/latest/EQT-latest-windows-amd64.zip`，R2 直连无 Worker 解析文件名中 `latest` → 404；仅靠 JS `fetchLatestVersion` 成功后覆写（`index.html:1230-1246`）。
+- 若 fetch 失败，用户点击 404，但 beacon 仍记一次「下载」——统计与真实成功下载脱钩。
+- 建议：点击 handler 用 `window.latestVersion` 兜底组装正确 URL（顺带修复 F1），并明确「点击即记录」口径。
+
+## 5. 修订后的落地设计
+
+### 5.1 D1 表（download_records）
+```sql
+CREATE TABLE IF NOT EXISTS download_records (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    version        TEXT NOT NULL,               -- "v1.36.24"
+    filename       TEXT NOT NULL,               -- "EQT-v1.36.24-windows-amd64.zip"
+    client_ip_hash TEXT DEFAULT NULL,           -- SHA-256(ip + salt) 隐私合规
+    ip_country     TEXT DEFAULT NULL,           -- CF-IPCountry ("CN","US")
+    colo           TEXT DEFAULT NULL,           -- CF-Colo ("HKG","SJC")
+    user_agent     TEXT DEFAULT NULL,
+    referer        TEXT DEFAULT NULL,
+    created_at     TEXT NOT NULL                -- ISO 8601 UTC（防抖查询须传 ISO 参数，见 §4.1）
+);
+CREATE INDEX IF NOT EXISTS idx_downloads_version_time ON download_records(version, created_at);
+CREATE INDEX IF NOT EXISTS idx_downloads_country_time ON download_records(ip_country, created_at);
+CREATE INDEX IF NOT EXISTS idx_downloads_dedup ON download_records(client_ip_hash, filename, created_at);
+```
+- 盐值存 Worker secret（`TELEMETRY_SALT`），服务端对 `cf-connecting-ip` 加盐哈希，客户端不传 IP。
+
+### 5.2 Telemetry 端点（lic.eqt.net.im/api/v1/telemetry/download）
+- POST，免鉴权，CORS 开放；提取 `cf-ipcountry` / `request.cf?.colo` / 服务端哈希 IP。
+- 防抖（修正版）：`SELECT id FROM download_records WHERE client_ip_hash=? AND filename=? AND created_at > ?`（参数为 `new Date(Date.now()-5000).toISOString()`）→ 命中则跳过。
+- `ctx.waitUntil(...)` 异步写入，立即返回 204。
+
+### 5.3 官网埋点（index.html）
+- `#download-link` 绑定 click：`navigator.sendBeacon` 优先，`fetch(..., {keepalive:true})` 兜底；payload `{ version, filename, referer }`，version/filename 取自 `window.latestVersion` 与 href 兜底组装（见 §4.4）。
+
+### 5.4 Admin 地球大图与统计
+- API：`GET /api/v1/admin/downloads/globe?window=1h|24h|7d|30d`（复用 `requireAdminAuth`），按 `ip_country` 聚合，附 `COUNTRY_COORDS[country]` 质心与最近下载时间。
+- 地球大图：切换「下载分布」模式，以国家质心渲染光柱（如青 #39e5b6），柱高 = 下载量，Tooltip 显国家 / 下载数 / 最新版本 / 相对时间；与现有 `LicenseGlobeCard.svelte` 架构融合。
+- 90 天归档：扩展现有 `scheduled`（每日 UTC 03:05）清理 90 天前明细并保留每日国家/版本汇总。
+
+## 6. 建议实现顺序
+
+1. Schema + Telemetry 端点（含修正版防抖 + 限速 + 字段校验），附离线单测。
+2. 官网埋点 + hero 链接兜底修复（F1 联动）。
+3. Admin API（globe / stats）+ 地球图层与统计卡片。
+4. 90 天归档 cron（可后置）。
+
+## 7. 开放决策点
+
+- 是否接受「仅官网下载」口径，还是先上路线 A 获得完整下载画像（含自动更新）？
+- 未来是否在桌面端更新成功回调补打 beacon，把自动更新纳入统计？
+- `created_at` 存储选 TEXT ISO（与现有约定一致）还是 INTEGER epoch ms（查询更稳）？
