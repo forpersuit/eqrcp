@@ -157,18 +157,52 @@ CREATE INDEX IF NOT EXISTS idx_downloads_dedup ON download_records(client_ip_has
 - 在 `LicenseGlobeCard.svelte` 内部引入 `viewMode: 'devices' | 'downloads'`。
 - 两套数据共享同一个 `window.Globe` WebGL 实例，切换视图时仅需通过 `globeInstance.pointsData(...)` / `globeInstance.hexBinPointsData(...)` 切换数据源，零额外 WebGL 上下文开销。
 
+### 7.6 操作层缺口闭环规范（G1–G5 Operational Specification）
+
+- **G1 限速量化规则**：
+  - 单 IP 阈值：`60 req / 1 min`，基于 `utils/rate-limit` 的 `rate_limits` 表与 `isD1RateLimited` 判定，超限直接返回 `429 Too Many Requests`，保护 D1 资源。
+- **G2 严格字段格式与长度校验**：
+  - `version`：严格匹配正则 `^v?\d+\.\d+\.\d+$`（长度 $\le 32$）；
+  - `filename`：严格匹配正则 `^[a-zA-Z0-9._-]+$`（长度 $\le 128$）；
+  - `referer` / `user_agent`：最大长度截断 $\le 512$ 字符；
+  - 校验不通过直接返回 `400 Bad Request`，杜绝脏数据入库。
+- **G3 官网 Hero 死链双保险修复**：
+  - **Pipeline 保障**：在 `.github/workflows/release.yml` 的 R2 上传步骤中，额外上传一份字面量 `EQT-latest-windows-amd64.zip` 至 `downloads/latest/EQT-latest-windows-amd64.zip`，确保无 JS/静态直连 100% 200 OK；
+  - **前端动态替换**：官网 `index.html` 的 JS 在获取到元数据后，将 href 动态替换为具名版本链接。
+- **G4 隐私协议披露（Privacy Compliance）**：
+  - 在 `cloudflare/eqt-website/privacy.html` 的“数据收集”章节新增声明：
+    > “在您下载软件安装包时，我们仅在边缘网络匿名记录下载版本、文件名、粗略地理国家/地区及单向加盐哈希标识，绝不记录或存储您的原始 IP 地址与个人敏感信息。”
+- **G5 归档聚合表 DDL（`daily_download_stats`）**：
+  ```sql
+  CREATE TABLE IF NOT EXISTS daily_download_stats (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      stat_date    TEXT NOT NULL,               -- "2026-08-30" (YYYY-MM-DD)
+      version      TEXT NOT NULL,               -- "v1.36.24"
+      ip_country   TEXT NOT NULL,               -- "CN", "US", "XX"
+      source       TEXT NOT NULL DEFAULT 'website', -- "website" | "desktop_update"
+      download_cnt INTEGER NOT NULL DEFAULT 0,
+      created_at   TEXT NOT NULL
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_download_dim 
+      ON daily_download_stats(stat_date, version, ip_country, source);
+  CREATE INDEX IF NOT EXISTS idx_daily_download_date 
+      ON daily_download_stats(stat_date);
+  ```
+
 ---
 
-## 8. 实施 CheckList
+## 8. 实施 CheckList（DoD 标准）
 
-- [ ] **Phase 1 (D1 + Worker)**：
-  - [ ] `schema.sql` 增加 `download_records` 建表与复合索引；
-  - [ ] `routes/telemetry.ts` 实现 `POST /api/v1/telemetry/download`（加盐哈希 IP、限速、原子防抖）；
-  - [ ] 编写离线单测 `tests/telemetry-download-offline.js` 验证原子防抖与 ISO 时序定序。
-- [ ] **Phase 2 (Website)**：
-  - [ ] `cloudflare/eqt-website/index.html` 修复 hero 动态链接并绑定 `trackDownload`；
-- [ ] **Phase 3 (Admin)**：
+- [ ] **Phase 1 (D1 + Worker API)**：
+  - [ ] `schema.sql` 增加 `download_records` 与 `daily_download_stats` 表及复合索引；
+  - [ ] `routes/telemetry.ts` 实现 `POST /api/v1/telemetry/download`（`TELEMETRY_SALT` 加盐哈希、60 req/min 限速、G2 格式校验、原子单 SQL 防抖）；
+  - [ ] 编写离线单测 `tests/telemetry-download-offline.js` 验证时序定序、校验拦截与原子防抖。
+- [ ] **Phase 2 (Release Pipeline + Website + Privacy)**：
+  - [ ] `.github/workflows/release.yml` 补充上传字面量 `EQT-latest-windows-amd64.zip` 至 `downloads/latest/`（G3 双保险）；
+  - [ ] `cloudflare/eqt-website/index.html` 绑定 `trackDownload` 并确保 href 动态替换；
+  - [ ] `cloudflare/eqt-website/privacy.html` 补充下载遥测匿名披露条款（G4）。
+- [ ] **Phase 3 (Admin 地球大图与统计)**：
   - [ ] `routes/admin.ts` 增加 `GET /api/v1/admin/downloads/globe` 和 `GET /api/v1/admin/downloads/stats`；
-  - [ ] `LicenseGlobeCard.svelte` 增加模式切换与下载热力光柱；
-- [ ] **Phase 4 (Scheduled)**：
-  - [ ] 扩展每日 UTC 03:05 cron 自动清理 90 天前明细并保留日汇总。
+  - [ ] `LicenseGlobeCard.svelte` 增加模式切换与国家质心下载热力光柱（复用 WebGL 单实例）。
+- [ ] **Phase 4 (Scheduled 聚合与归档)**：
+  - [ ] `index.ts` 的 `scheduled` 处理器扩展每日聚合逻辑：将 90 天前明细按 `(stat_date, version, ip_country, source)` 汇总写入 `daily_download_stats` 并清理过期明细。
