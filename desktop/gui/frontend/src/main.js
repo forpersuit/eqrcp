@@ -404,6 +404,9 @@ window.addEventListener('message', (e) => {
             .catch(() => {
                 e.source?.postMessage({type: 'clipboard-text', requestId, text: '', error: 'clipboard unavailable'}, targetOrigin);
             });
+    } else if (e.data.type === 'write-clipboard-text') {
+        const text = String(e.data.text || '');
+        ClipboardSetText(text).catch(() => {});
     } else if (e.data.type === 'select-files') {
         const requestId = String(e.data.requestId || '');
         if (!requestId) { return; }
@@ -6837,6 +6840,50 @@ window.render = render;
 window.state = state;
 
 
+export async function copyToClipboard(text) {
+    if (typeof text !== 'string') text = String(text || '');
+    if (typeof ClipboardSetText === 'function') {
+        try {
+            const ok = await ClipboardSetText(text);
+            if (ok !== false) return true;
+        } catch (_) {}
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        try {
+            await navigator.clipboard.writeText(text);
+            return true;
+        } catch (_) {}
+    }
+    try {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        return true;
+    } catch (_) {}
+    return false;
+}
+
+export async function readFromClipboard() {
+    if (typeof ClipboardGetText === 'function') {
+        try {
+            const text = await ClipboardGetText();
+            if (typeof text === 'string') return text;
+        } catch (_) {}
+    }
+    if (navigator.clipboard && navigator.clipboard.readText) {
+        try {
+            const text = await navigator.clipboard.readText();
+            return String(text || '');
+        } catch (_) {}
+    }
+    return '';
+}
+
 // 全局 input/textarea 的右键菜单支持 (Context menu for text elements)
 document.addEventListener('contextmenu', (e) => {
     const target = e.target;
@@ -6855,21 +6902,21 @@ document.addEventListener('contextmenu', (e) => {
         if (!isReadOnly) {
             items.push({
                 label: labels.cut,
-                action: () => {
+                action: async () => {
+                    target.focus();
                     const start = target.selectionStart || 0;
                     const end = target.selectionEnd || 0;
-                    const val = target.value;
+                    const val = target.value || '';
                     if (start !== end) {
                         const selectedText = val.substring(start, end);
-                        navigator.clipboard.writeText(selectedText).then(() => {
-                            target.value = val.substring(0, start) + val.substring(end);
-                            target.dispatchEvent(new Event('input', { bubbles: true }));
-                            target.dispatchEvent(new Event('change', { bubbles: true }));
-                            target.focus();
-                            target.selectionStart = target.selectionEnd = start;
-                        }).catch(() => {
-                            target.focus();
-                        });
+                        await copyToClipboard(selectedText);
+                        target.value = val.substring(0, start) + val.substring(end);
+                        target.dispatchEvent(new Event('input', { bubbles: true }));
+                        target.dispatchEvent(new Event('change', { bubbles: true }));
+                        target.focus();
+                        try {
+                            target.setSelectionRange(start, start);
+                        } catch (_) {}
                     } else {
                         target.focus();
                     }
@@ -6880,16 +6927,21 @@ document.addEventListener('contextmenu', (e) => {
         // 复制
         items.push({
             label: labels.copy,
-            action: () => {
+            action: async () => {
+                target.focus();
                 const start = target.selectionStart || 0;
                 const end = target.selectionEnd || 0;
+                const val = target.value || '';
                 if (start !== end) {
-                    const selectedText = target.value.substring(start, end);
-                    navigator.clipboard.writeText(selectedText);
+                    const selectedText = val.substring(start, end);
+                    await copyToClipboard(selectedText);
+                    target.focus();
+                    try {
+                        target.setSelectionRange(start, end);
+                    } catch (_) {}
+                } else {
+                    target.focus();
                 }
-                target.focus();
-                target.selectionStart = start;
-                target.selectionEnd = end;
             }
         });
 
@@ -6897,21 +6949,24 @@ document.addEventListener('contextmenu', (e) => {
         if (!isReadOnly) {
             items.push({
                 label: labels.paste,
-                action: () => {
-                    navigator.clipboard.readText().then(text => {
-                        const start = target.selectionStart || 0;
-                        const end = target.selectionEnd || 0;
-                        const val = target.value;
+                action: async () => {
+                    target.focus();
+                    const start = target.selectionStart || 0;
+                    const end = target.selectionEnd || 0;
+                    const val = target.value || '';
+                    const text = await readFromClipboard();
+                    if (text) {
                         target.value = val.substring(0, start) + text + val.substring(end);
                         target.dispatchEvent(new Event('input', { bubbles: true }));
                         target.dispatchEvent(new Event('change', { bubbles: true }));
                         target.focus();
-                        setTimeout(() => {
-                            target.selectionStart = target.selectionEnd = start + text.length;
-                        }, 0);
-                    }).catch(() => {
+                        const newPos = start + text.length;
+                        try {
+                            target.setSelectionRange(newPos, newPos);
+                        } catch (_) {}
+                    } else {
                         target.focus();
-                    });
+                    }
                 }
             });
         }

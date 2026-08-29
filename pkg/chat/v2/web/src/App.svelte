@@ -565,6 +565,70 @@
     return { cut: 'Cut', copy: 'Copy', paste: 'Paste', selectAll: 'Select All' };
   }
 
+  async function writeClipboardText(text: string): Promise<boolean> {
+    if (typeof text !== 'string') text = String(text || '');
+    if (window.parent && window.parent !== window) {
+      try {
+        window.parent.postMessage({ type: 'write-clipboard-text', text }, '*');
+      } catch (_) {}
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch (_) {}
+    }
+    try {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      return true;
+    } catch (_) {}
+    return false;
+  }
+
+  function readClipboardText(): Promise<string> {
+    return new Promise((resolve) => {
+      let resolved = false;
+      if (window.parent && window.parent !== window) {
+        const requestId = 'cb_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
+        const handler = (e: MessageEvent) => {
+          if (e.data && e.data.type === 'clipboard-text' && e.data.requestId === requestId) {
+            window.removeEventListener('message', handler);
+            resolved = true;
+            resolve(String(e.data.text || ''));
+          }
+        };
+        window.addEventListener('message', handler);
+        try {
+          window.parent.postMessage({ type: 'read-clipboard-text', requestId }, '*');
+        } catch (_) {}
+        setTimeout(() => {
+          if (!resolved) {
+            window.removeEventListener('message', handler);
+            if (navigator.clipboard && navigator.clipboard.readText) {
+              navigator.clipboard.readText().then(t => resolve(String(t || ''))).catch(() => resolve(''));
+            } else {
+              resolve('');
+            }
+          }
+        }, 300);
+        return;
+      }
+
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        navigator.clipboard.readText().then(t => resolve(String(t || ''))).catch(() => resolve(''));
+      } else {
+        resolve('');
+      }
+    });
+  }
+
   function handleGlobalContextMenu(e: MouseEvent) {
     const target = e.target as HTMLElement;
     if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
@@ -591,20 +655,20 @@
       if (!isReadOnly) {
         items.push({
           label: labels.cut,
-          action: () => {
+          action: async () => {
+            input.focus();
             const start = input.selectionStart || 0;
             const end = input.selectionEnd || 0;
-            const val = input.value;
+            const val = input.value || '';
             if (start !== end) {
               const selectedText = val.substring(start, end);
-              navigator.clipboard.writeText(selectedText).then(() => {
-                input.value = val.substring(0, start) + val.substring(end);
-                input.dispatchEvent(new Event('input', { bubbles: true }));
-                input.focus();
-                input.selectionStart = input.selectionEnd = start;
-              }).catch(() => {
-                input.focus();
-              });
+              await writeClipboardText(selectedText);
+              input.value = val.substring(0, start) + val.substring(end);
+              input.dispatchEvent(new Event('input', { bubbles: true }));
+              input.focus();
+              try {
+                input.setSelectionRange(start, start);
+              } catch (_) {}
             } else {
               input.focus();
             }
@@ -615,16 +679,21 @@
       // Copy
       items.push({
         label: labels.copy,
-        action: () => {
+        action: async () => {
+          input.focus();
           const start = input.selectionStart || 0;
           const end = input.selectionEnd || 0;
+          const val = input.value || '';
           if (start !== end) {
-            const selectedText = input.value.substring(start, end);
-            navigator.clipboard.writeText(selectedText);
+            const selectedText = val.substring(start, end);
+            await writeClipboardText(selectedText);
+            input.focus();
+            try {
+              input.setSelectionRange(start, end);
+            } catch (_) {}
+          } else {
+            input.focus();
           }
-          input.focus();
-          input.selectionStart = start;
-          input.selectionEnd = end;
         }
       });
 
@@ -632,20 +701,23 @@
       if (!isReadOnly) {
         items.push({
           label: labels.paste,
-          action: () => {
-            navigator.clipboard.readText().then(text => {
-              const start = input.selectionStart || 0;
-              const end = input.selectionEnd || 0;
-              const val = input.value;
+          action: async () => {
+            input.focus();
+            const start = input.selectionStart || 0;
+            const end = input.selectionEnd || 0;
+            const val = input.value || '';
+            const text = await readClipboardText();
+            if (text) {
               input.value = val.substring(0, start) + text + val.substring(end);
               input.dispatchEvent(new Event('input', { bubbles: true }));
               input.focus();
-              setTimeout(() => {
-                input.selectionStart = input.selectionEnd = start + text.length;
-              }, 0);
-            }).catch(() => {
+              const newPos = start + text.length;
+              try {
+                input.setSelectionRange(newPos, newPos);
+              } catch (_) {}
+            } else {
               input.focus();
-            });
+            }
           }
         });
       }
