@@ -5033,6 +5033,12 @@ function showContextMenu(items, x, y) {
         const button = document.createElement('button');
         button.type = 'button';
         button.textContent = item.label;
+        button.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+        });
+        button.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+        });
         button.addEventListener('click', () => {
             closeContextMenu();
             item.action();
@@ -6859,7 +6865,13 @@ document.addEventListener('contextmenu', (e) => {
                             target.value = val.substring(0, start) + val.substring(end);
                             target.dispatchEvent(new Event('input', { bubbles: true }));
                             target.dispatchEvent(new Event('change', { bubbles: true }));
+                            target.focus();
+                            target.selectionStart = target.selectionEnd = start;
+                        }).catch(() => {
+                            target.focus();
                         });
+                    } else {
+                        target.focus();
                     }
                 }
             });
@@ -6875,6 +6887,9 @@ document.addEventListener('contextmenu', (e) => {
                     const selectedText = target.value.substring(start, end);
                     navigator.clipboard.writeText(selectedText);
                 }
+                target.focus();
+                target.selectionStart = start;
+                target.selectionEnd = end;
             }
         });
 
@@ -6890,10 +6905,13 @@ document.addEventListener('contextmenu', (e) => {
                         target.value = val.substring(0, start) + text + val.substring(end);
                         target.dispatchEvent(new Event('input', { bubbles: true }));
                         target.dispatchEvent(new Event('change', { bubbles: true }));
+                        target.focus();
                         setTimeout(() => {
                             target.selectionStart = target.selectionEnd = start + text.length;
                         }, 0);
-                    }).catch(() => {});
+                    }).catch(() => {
+                        target.focus();
+                    });
                 }
             });
         }
@@ -6902,6 +6920,7 @@ document.addEventListener('contextmenu', (e) => {
         items.push({
             label: labels.selectAll,
             action: () => {
+                target.focus();
                 target.select();
             }
         });

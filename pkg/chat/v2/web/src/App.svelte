@@ -600,7 +600,13 @@
               navigator.clipboard.writeText(selectedText).then(() => {
                 input.value = val.substring(0, start) + val.substring(end);
                 input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.focus();
+                input.selectionStart = input.selectionEnd = start;
+              }).catch(() => {
+                input.focus();
               });
+            } else {
+              input.focus();
             }
           }
         });
@@ -616,6 +622,9 @@
             const selectedText = input.value.substring(start, end);
             navigator.clipboard.writeText(selectedText);
           }
+          input.focus();
+          input.selectionStart = start;
+          input.selectionEnd = end;
         }
       });
 
@@ -630,10 +639,13 @@
               const val = input.value;
               input.value = val.substring(0, start) + text + val.substring(end);
               input.dispatchEvent(new Event('input', { bubbles: true }));
+              input.focus();
               setTimeout(() => {
                 input.selectionStart = input.selectionEnd = start + text.length;
               }, 0);
-            }).catch(() => {});
+            }).catch(() => {
+              input.focus();
+            });
           }
         });
       }
@@ -642,6 +654,7 @@
       items.push({
         label: labels.selectAll,
         action: () => {
+          input.focus();
           input.select();
         }
       });
@@ -659,9 +672,15 @@
         btn.style.cursor = 'pointer';
         btn.style.fontSize = '12px';
         btn.style.outline = 'none';
+        btn.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+        });
+        btn.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+        });
         btn.addEventListener('click', () => {
-          item.action();
           closeContextMenu();
+          item.action();
         });
         menu.appendChild(btn);
       });
