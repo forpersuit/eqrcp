@@ -165,8 +165,8 @@ exe_path = os.path.join(results_dir, 'eqt.exe')
 if os.path.exists(exe_path):
     zip_path = os.path.join(results_dir, 'eqt-desktop-windows-amd64.zip')
     with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as z:
-        z.write(exe_path, 'eqt.exe')
-    print(f'Packaged {zip_path} successfully')
+        z.write(exe_path, 'EQT.exe')
+    print(f'Packaged {zip_path} successfully (containing EQT.exe)')
 " || true
 
 # Close any lingering test agent processes that may have spawned during tests

@@ -39,18 +39,25 @@ jobs:
         shell: bash
         run: |
           mkdir -p out
+          TAG="${{ github.ref_name }}"
           cp desktop/gui/build/bin/eqt-desktop.exe out/eqt-desktop-windows-amd64.exe
           python -c "
-          import zipfile
-          with zipfile.ZipFile('out/eqt-desktop-windows-amd64.zip', 'w', zipfile.ZIP_DEFLATED) as z:
-              z.write('desktop/gui/build/bin/eqt-desktop.exe', 'eqt.exe')
+          import zipfile, os
+          tag = os.environ.get('TAG', 'latest')
+          zip_name = f'out/EQT-{tag}-windows-amd64.zip'
+          with zipfile.ZipFile(zip_name, 'w', zipfile.ZIP_DEFLATED) as z:
+              z.write('desktop/gui/build/bin/eqt-desktop.exe', 'EQT.exe')
           "
+        env:
+          TAG: ${{ github.ref_name }}
       - name: Generate Update Signature
         shell: bash
         run: |
+          TAG="${{ github.ref_name }}"
           go run scripts/generate-update-sig/main.go out/eqt-desktop-windows-amd64.exe
-          go run scripts/generate-update-sig/main.go out/eqt-desktop-windows-amd64.zip
+          go run scripts/generate-update-sig/main.go "out/EQT-${TAG}-windows-amd64.zip"
         env:
+          TAG: ${{ github.ref_name }}
           UPDATE_SIGNING_PRIVATE_KEY: ${{ secrets.UPDATE_SIGNING_PRIVATE_KEY }}
       - name: Upload Windows Artifacts
         uses: actions/upload-artifact@v4
