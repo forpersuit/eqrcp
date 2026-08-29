@@ -90,6 +90,7 @@ CREATE TABLE IF NOT EXISTS download_records (
     colo           TEXT DEFAULT NULL,           -- CF-Colo ("HKG","SJC")
     user_agent     TEXT DEFAULT NULL,
     referer        TEXT DEFAULT NULL,
+    source         TEXT NOT NULL DEFAULT 'website', -- 'website' | 'desktop_update' | 'direct'
     created_at     TEXT NOT NULL                -- ISO 8601 UTC（防抖查询须传 ISO 参数，见 §4.1）
 );
 CREATE INDEX IF NOT EXISTS idx_downloads_version_time ON download_records(version, created_at);
@@ -100,7 +101,16 @@ CREATE INDEX IF NOT EXISTS idx_downloads_dedup ON download_records(client_ip_has
 
 ### 5.2 Telemetry 端点（lic.eqt.net.im/api/v1/telemetry/download）
 - POST，免鉴权，CORS 开放；提取 `cf-ipcountry` / `request.cf?.colo` / 服务端哈希 IP。
-- 防抖（修正版）：`SELECT id FROM download_records WHERE client_ip_hash=? AND filename=? AND created_at > ?`（参数为 `new Date(Date.now()-5000).toISOString()`）→ 命中则跳过。
+- 原子防抖写入（单 SQL 消除并发竞态与 2 次 RTT）：
+  ```sql
+  INSERT INTO download_records (version, filename, client_ip_hash, ip_country, colo, user_agent, referer, source, created_at)
+  SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+  WHERE NOT EXISTS (
+      SELECT 1 FROM download_records
+      WHERE client_ip_hash = ? AND filename = ? AND created_at > ?
+  );
+  ```
+  （参数 8 为当前 ISO 时间，参数 11 为 `new Date(Date.now() - 5000).toISOString()`）。
 - `ctx.waitUntil(...)` 异步写入，立即返回 204。
 
 ### 5.3 官网埋点（index.html）
