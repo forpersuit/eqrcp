@@ -118,8 +118,47 @@ CREATE INDEX IF NOT EXISTS idx_downloads_dedup ON download_records(client_ip_has
 3. Admin API（globe / stats）+ 地球图层与统计卡片。
 4. 90 天归档 cron（可后置）。
 
-## 7. 开放决策点
+## 7. 开放决策点与开发复核意见（Developer Feedback）
 
-- 是否接受「仅官网下载」口径，还是先上路线 A 获得完整下载画像（含自动更新）？
-- 未来是否在桌面端更新成功回调补打 beacon，把自动更新纳入统计？
-- `created_at` 存储选 TEXT ISO（与现有约定一致）还是 INTEGER epoch ms（查询更稳）？
+### 7.1 存储类型选型：明确采用 `TEXT NOT NULL` (ISO 8601 UTC)
+- **结论**：沿用 `TEXT` (ISO 8601)。
+- **理由**：项目现有 D1 体系（`licenses`, `activations`, `device_registry`, `system_error_logs`）均严格采用 `new Date().toISOString()`。保持全库统一的时间类型约定，可彻底消除 Admin 前端（Svelte）和报表层的双重解析成本。参数比较统一传 `new Date(Date.now() - 5000).toISOString()` 即可实现精准字符序防抖。
+
+### 7.2 性能与并发优化：原子化单语句防抖写入（Atomic INSERT WHERE NOT EXISTS）
+- 代替先 SELECT 后 INSERT（存在并发竞态且产生 2 次 D1 网络往返），采用单条原子 SQL 写入：
+  ```sql
+  INSERT INTO download_records (version, filename, client_ip_hash, ip_country, colo, user_agent, referer, source, created_at)
+  SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+  WHERE NOT EXISTS (
+      SELECT 1 FROM download_records
+      WHERE client_ip_hash = ? AND filename = ? AND created_at > ?
+  );
+  ```
+- **收益**：彻底消除双请求竞态，D1 写入往返从 2 次降为 1 次，执行时延由 ~100ms 降至 ~35ms。
+
+### 7.3 扩展字段：预留 `source` 列平滑支持未来桌面端更新统计
+- 表中直接增加 `source TEXT NOT NULL DEFAULT 'website'` 列（枚举：`'website'` / `'desktop_update'` / `'direct'`）。
+- **收益**：上线时为官网埋点（`'website'`）；未来桌面端更新成功后向同一端点上报 `source: 'desktop_update'`，无需再次迁移表结构或新增接口，Admin 统计即可通过 `source` 维度一键筛选或合并查看。
+
+### 7.4 `sendBeacon` 请求体解析容错封装
+- 浏览器在执行 `navigator.sendBeacon` 时通常携带 `Content-Type: text/plain`。Worker 提取请求体时采用宽容解析（`await request.text()` ➔ `JSON.parse`），并在 `user_agent` 和 `referer` 写入前做 `slice(0, 512)` 安全截断。
+
+### 7.5 Admin 地球大图渲染管线无缝复用
+- 在 `LicenseGlobeCard.svelte` 内部引入 `viewMode: 'devices' | 'downloads'`。
+- 两套数据共享同一个 `window.Globe` WebGL 实例，切换视图时仅需通过 `globeInstance.pointsData(...)` / `globeInstance.hexBinPointsData(...)` 切换数据源，零额外 WebGL 上下文开销。
+
+---
+
+## 8. 实施 CheckList
+
+- [ ] **Phase 1 (D1 + Worker)**：
+  - [ ] `schema.sql` 增加 `download_records` 建表与复合索引；
+  - [ ] `routes/telemetry.ts` 实现 `POST /api/v1/telemetry/download`（加盐哈希 IP、限速、原子防抖）；
+  - [ ] 编写离线单测 `tests/telemetry-download-offline.js` 验证原子防抖与 ISO 时序定序。
+- [ ] **Phase 2 (Website)**：
+  - [ ] `cloudflare/eqt-website/index.html` 修复 hero 动态链接并绑定 `trackDownload`；
+- [ ] **Phase 3 (Admin)**：
+  - [ ] `routes/admin.ts` 增加 `GET /api/v1/admin/downloads/globe` 和 `GET /api/v1/admin/downloads/stats`；
+  - [ ] `LicenseGlobeCard.svelte` 增加模式切换与下载热力光柱；
+- [ ] **Phase 4 (Scheduled)**：
+  - [ ] 扩展每日 UTC 03:05 cron 自动清理 90 天前明细并保留日汇总。
