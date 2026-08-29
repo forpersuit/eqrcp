@@ -399,6 +399,9 @@
   let activeBubbleEl: HTMLElement | null = null;
   let activeMenuOptions: { label: string; action: () => void; danger?: boolean; confirmLabel?: string; disabled?: boolean }[] = [];
   
+  let menuLeft = 0;
+  let menuTop = 0;
+  let menuWidth = 0;
   let menuPlacement: 'left' | 'right' | 'top' | 'bottom' = 'bottom';
   let arrowXPx = 0;
   let arrowYPx = 0;
@@ -561,6 +564,9 @@
     activeMenuOptions = [];
     confirmingIndex = null;
     menuSpacerHeight = 0;
+    menuLeft = 0;
+    menuTop = 0;
+    menuWidth = 0;
     if (confirmTimeout) {
       clearTimeout(confirmTimeout);
       confirmTimeout = null;
@@ -633,10 +639,11 @@
 
     // 2. 动态计算菜单宽度 (基于最长文字宽度 + 32px menu-item padding + 8px menu container padding + 2px border)
     const targetW = Math.max(100, Math.min(280, maxTextW + 42));
+    menuWidth = targetW;
     menuEl.style.width = `${targetW}px`;
 
-    const menuW = menuEl.offsetWidth;
-    const menuH = menuEl.offsetHeight;
+    const menuW = menuEl.offsetWidth || targetW;
+    const menuH = menuEl.offsetHeight || (items.length * 36 + 8);
 
     const winW = window.innerWidth;
     const winH = window.innerHeight;
@@ -738,6 +745,8 @@
       arrowXPx = Math.max(14, Math.min(menuW - 14, rawArrowX));
     }
 
+    menuLeft = left;
+    menuTop = top;
     menuEl.style.left = `${left}px`;
     menuEl.style.top = `${top}px`;
   }
@@ -802,19 +811,23 @@
       
       const dx = currentX - startX;
       const dy = currentY - startY;
+      const absDx = Math.abs(dx);
+      const absDy = Math.abs(dy);
       
       if (!isScrolling && !isSliding) {
-        if (Math.abs(dx) > Math.abs(dy) * 1.5) {
-          isSliding = true;
-          if (longPressTimer) {
-            clearTimeout(longPressTimer);
-            longPressTimer = null;
-          }
-        } else if (Math.abs(dy) > Math.abs(dx) * 1.5) {
-          isScrolling = true;
-          if (longPressTimer) {
-            clearTimeout(longPressTimer);
-            longPressTimer = null;
+        if (absDx > 6 || absDy > 6) {
+          if (absDx > absDy * 1.2) {
+            isSliding = true;
+            if (longPressTimer) {
+              clearTimeout(longPressTimer);
+              longPressTimer = null;
+            }
+          } else {
+            isScrolling = true;
+            if (longPressTimer) {
+              clearTimeout(longPressTimer);
+              longPressTimer = null;
+            }
           }
         }
       }
@@ -851,12 +864,14 @@
         node.style.transition = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)';
         node.style.transform = '';
         
-        if (canSlide && absOffset >= 35) {
+        if (canSlide && absOffset >= 25) {
           setTimeout(() => {
             openMessageMenu(msg, node, { clientX: currentX, clientY: currentY });
           }, 50);
         }
       }
+      isSliding = false;
+      isScrolling = false;
     }
     
     function handleTouchCancel() {
@@ -866,6 +881,8 @@
       }
       node.style.transition = 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)';
       node.style.transform = '';
+      isSliding = false;
+      isScrolling = false;
     }
 
     node.addEventListener('touchstart', handleTouchStart, { passive: true });
@@ -1272,7 +1289,7 @@
 {#if showMenu}
   <div 
     class="bubble-context-menu placement-{menuPlacement}" 
-    style="display: block; --arrow-x: {arrowXPx}px; --arrow-y: {arrowYPx}px;"
+    style="display: block; left: {menuLeft}px; top: {menuTop}px; {menuWidth > 0 ? `width: ${menuWidth}px;` : ''} --arrow-x: {arrowXPx}px; --arrow-y: {arrowYPx}px;"
     use:portal
     use:initResizeObserver
   >
