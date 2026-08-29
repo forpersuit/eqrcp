@@ -110,7 +110,7 @@ CREATE INDEX IF NOT EXISTS idx_downloads_dedup ON download_records(client_ip_has
       WHERE client_ip_hash = ? AND filename = ? AND created_at > ?
   );
   ```
-  （参数 8 为当前 ISO 时间，参数 11 为 `new Date(Date.now() - 5000).toISOString()`）。
+  （占位符顺序：1-9 为 INSERT 列 version/filename/client_ip_hash/ip_country/colo/user_agent/referer/source/created_at；10-12 为 WHERE 的 client_ip_hash/filename/created_at。参数 9 为当前 ISO 时间 `new Date().toISOString()`，参数 12 为 `new Date(Date.now() - 5000).toISOString()`）。
 - `ctx.waitUntil(...)` 异步写入，立即返回 204。
 
 ### 5.3 官网埋点（index.html）
