@@ -445,6 +445,33 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
   * **小附件 ( $\le$ 20MB)**：前端在 Web Worker 中单块加密，直接作为单个 payload POST 到 `/upload`，协议交互最轻快；
   * **超大附件 (> 20MB)**：无缝复用 Receive/Share 的 4MB 分块流式管道（`POST /api/chat/v2/attachment/chunk`），避免在聊天前端一次性申请大块 ArrayBuffer 导致移动端浏览器 OOM 崩溃。
 
+### 意见 18:移动端 WebKit 后台休眠防御与 Screen WakeLock 保活机制
+* **背景评估**：iOS Safari 与部分移动端浏览器在用户锁屏或切至其他 App 超过 30 秒后，会强制挂起（Freeze）后台 Web Worker 与 Fetch 网络传输，甚至触发页面自动回收，导致数 GB 的大文件分块加解密传输被意外切断。
+* **工程对策**：
+  * 前端在启动大文件加解密传输时，通过 `navigator.wakeLock.request('screen')` 申请屏幕常亮锁定，传输完毕后释放；
+  * 界面明确显示友好状态提示“正在进行硬件级加密传输，请保持屏幕常亮以防系统休眠”；
+  * 绑定 `document.addEventListener('visibilitychange')` 事件，若从后台切回且检测到连接中断，自动触发断点续传探测（§6.3）。
+
+### 意见 19:多核移动端 Worker 线程池并发加解密（提升单机吞吐至 150MB/s+）
+* **背景评估**：现代智能手机通常具备 6~8 核心 CPU。若仅使用单一 Web Worker 串行执行 WASM XChaCha20 计算，单核性能上限可能限制在 60~80MB/s，无法跑满 Wi-Fi 6 极限。
+* **工程对策**：
+  * 在大文件（> 100MB）传输时，前端可根据 `navigator.hardwareConcurrency` 派生 2~3 个 Crypto Worker 组成轻量线程池；
+  * 采用交替分块派发策略（Worker A 加密块 0, 2, 4，Worker B 加密块 1, 3, 5）；
+  * 将客户端加解密吞吐推升至 150MB/s 以上，彻底消除 CPU 瓶颈。
+
+### 意见 20:DRM D1 会话存储的惰性自动清理与原子 CAS 递增
+* **背景评估**：在 Cloudflare Worker D1 中，若完全依赖定时 Cron 清理过期会话，可能在高并发下产生过期脏数据堆积；若 `claim` 计数非原子操作，易发生并发配额击穿。
+* **工程对策**：
+  * **原子 CAS 递增**：`UPDATE e2ee_sessions SET claim_count = claim_count + 1 WHERE session_id = ? AND claim_count < max_claims AND expires_at > unixepoch() AND status = 'active'`；
+  * **抽样惰性清理**：在 `create` 端点以 10% 概率抽样触发 `DELETE FROM e2ee_sessions WHERE expires_at < unixepoch()`，既保持数据库轻量又避免额外开销。
+
+### 意见 21:桌面端后台 DRM 探活缓存与零延迟启动防抖
+* **背景评估**：若桌面端在每次点击“分享/接收”生成二维码时才同步向 DRM 发起 HTTP 探活，会引入数百毫秒的弹窗延迟；且偶发单次网络丢包可能引发误降级。
+* **工程对策**：
+  * 桌面端后台协程每 30 秒周期性探活 DRM 服务（`HEAD https://drm.eqt.net.im/health`），探活结果缓存在内存中；
+  * 生成二维码时直接读取内存状态，零延迟秒级决策是否开启 E2EE 二维码；
+  * 连续 2 次探活失败才标记为不可达，防止网络微抖动引发误降级。
+
 ---
 
 ## 9. 商业化分级与版本限制策略 (Free vs Plus/Pro Tier)
@@ -473,7 +500,7 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
   - `cloudflare/eqt-drm-api`:新增 `POST /api/v1/e2ee/session/create` 与 `POST /api/v1/e2ee/session/:id/claim`,复用 license 校验、rate-limit、cf-access-jwt;
   - CORS 跨域响应头与前端 CSP `wasm-unsafe-eval` 适配规范(意见 14);
   - `claim` 多设备并发限额 `max_claims`、`client_instance_id` 刷新容错(意见 9);
-  - D1 表 `e2ee_sessions(session_id, master_key, claim_count, max_claims, status, expires_at)`;短期 TTL 与超限物理覆写销毁(意见 8 方案一);引擎静态资源托管与 SRI。
+  - D1 表 `e2ee_sessions(session_id, master_key, claim_count, max_claims, status, expires_at)`;短期 TTL 与超限物理覆写销毁(意见 8 方案一);抽样惰性清理与原子 CAS 递增(意见 20);引擎静态资源托管与 SRI。
 - [ ] **Phase 3:Chat 模式双向 WebSocket 与剪贴板 E2EE**
   - 改造 `pkg/chat/v2/protocol/`,定义 `e2ee_envelope` 载荷与 AAD 防重放验证;
   - 加解密运行于独立 Web Worker,Transferable 零拷贝传输(意见 11);
@@ -481,11 +508,14 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
   - Go 后端与 Svelte 前端实现消息/剪贴板透明加解密。
 - [ ] **Phase 4:Receive / Share 4MB 分块流式加解密**
   - Receive:弃用 Multipart，采用专用 REST 端点 `POST /receive/:path/chunk`(意见 15)+ 前端 `File.slice()` 3 级流水线(Read→Encrypt→POST,并发度 2)(意见 12)+ Go `ChunkedXChaChaReader` 零临时文件写盘 + `chunk_status` 断点恢复;
+  - 移动端 WebKit 屏幕常亮保活 Screen WakeLock 与切后台断点恢复(意见 18);
+  - 多核多 Worker 线程池并发加解密，冲刺 150MB/s+ 吞吐(意见 19);
   - Go 服务端引入 `sync.Pool` 4MB 缓冲池，消除百兆吞吐下的 GC 停顿(意见 16);
   - Share:Go 端 `Range` 兼容分块加密下发 + 移动端 Blob / StreamSaver 流式解密下载管道;
   - 分块加解密统一置于 Web Worker(意见 11)。
 - [ ] **Phase 5:Settings 开关、付费门禁与海外隐私营销**
   - `pkg/config/settings.go` 新增 `EnableE2EE` 字段与 Settings 界面开关;
+  - 桌面端后台 30 秒周期探活 DRM 服务与内存状态缓存防抖(意见 21);
   - 联网检测与离线降级通知;免费版提示升级;安全徽章点亮;
   - 编写隐私白皮书,海外社区重点宣发。
 
