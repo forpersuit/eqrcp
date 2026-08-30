@@ -8,9 +8,10 @@
 
 1. **[零配置端到端加密 (E2EE) 架构设计与 Wi-Fi 嗅探防御规范 (2026-09-01)](20260901-e2ee-end-to-end-encryption-architecture.md)**
    - 局域网 Wi-Fi 嗅探与抓包拦截风险第一性原理剖析
-   - 破局传统自签 TLS 红色告警：URL Fragment (`#k=`) 零知识密钥协商机制
-   - 浏览器原生 WebCrypto API (`AES-256-GCM`) 硬件级加密与 4MB 分块流式加密规范
-   - 免费版 vs Plus/Pro 付费版商业化分级（一键零配置 E2EE 杀手级溢价功能）
+   - Secure Context 陷阱分析：`crypto.subtle` 在局域网 HTTP 不可用，前端改用 libsodium WASM 引擎
+   - DRM 信任锚密钥分发：联网时密钥与加密引擎经 HTTPS 下发（二维码 `#sid=` 会话引用），不可联网自动降级明文
+   - 4MB 分块 XChaCha20-Poly1305 流式加解密（Share / Receive / Chat 三模式统一协议）
+   - 免费版 vs Plus/Pro 付费版商业化分级（`enableE2EE` Settings 配置开关，杀手级溢价功能）
 
 2. **[Receive 模式移动端设备重命名与按设备自动分目录归档设计 (2026-08-31)](20260831-receive-device-rename-and-sync-design.md)**
    - 移动端 Web 上传页设备名称自定义编辑与 `localStorage` 本地记忆
