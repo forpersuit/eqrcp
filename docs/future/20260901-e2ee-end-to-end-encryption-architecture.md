@@ -413,6 +413,7 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
     Access-Control-Allow-Methods: GET, POST, OPTIONS
     Access-Control-Allow-Headers: Content-Type, Authorization, X-Client-Instance-Id
     ```
+  * **⚠️ 约束**：`Access-Control-Allow-Origin: *` 与 `Access-Control-Allow-Credentials: true` **互斥**（浏览器规范禁止二者同用）。本方案密钥领取使用 `Authorization` bearer 头而非 Cookie，因此 `*` 合法；若未来改用 Cookie 会话，须改为显式 `Origin` 白名单。`claim` 端点应叠加现有 `rate-limit` 中间件，防止任意网页跨站暴力猜测短 `session_id`。
   * **CSP 兼容**：Go 服务端下发的 HTML 模板配置宽松 CSP 头，确保允许 `connect-src https://*.eqt.net.im` 与 `script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' https://*.eqt.net.im`。
 
 ### 意见 15:明确弃用复杂 Multipart 封装，全面采用轻量 REST 分块端点 (`POST /receive/.../chunk`)
@@ -420,7 +421,8 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
 * **工程对策**：
   * 在 E2EE 模式下，直接引入专用的轻量分块 REST 端点：`POST /receive/:path/chunk`；
   * 请求头携带 `X-File-ID`、`X-Chunk-Index`、`X-Total-Chunks`，请求体直接为原始二进制封包 `[ChunkIndex(4B) | Nonce(24B) | Ciphertext(<=4MB) | Tag(16B)]`；
-  * 极大简化客户端 3 级流水线并发上传，单个分块重试成本降至最低。
+  * 极大简化客户端 3 级流水线并发上传，单个分块重试成本降至最低;
+  * **双通道并存（零回归）**：REST chunk 端点仅用于 E2EE 模式；明文 / 离线降级模式保留现有 `multipart/form-data` 与 `tus.min.js` 通道（见 §6.3 现有链路描述），不破坏既有传输链路。
 
 ### 意见 16:Go 服务端 4MB Buffer 内存池化 (`sync.Pool`) 杜绝 GC 抖动
 * **背景评估**：在千兆 Wi-Fi 满速（80~110MB/s）高并发传输时，Go 后端每秒需处理 20~30 个 4MB 分块。若频繁分配临时切片，将引发 Go 运行时高频垃圾回收（GC STW 停顿），造成 CPU 占用飙升与网络传输抖动。
@@ -434,7 +436,8 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
         },
     }
     ```
-  * 分块解密写盘完成后立即归还内存池，实现百兆满速下的零 GC 堆内存抖动。
+  * 分块解密写盘完成后立即归还内存池，实现百兆满速下的零 GC 堆内存抖动;
+  * 解密后的**明文** buffer 归还内存池前须先清零覆写（`clear(b)`），避免敏感明文残留在可复用堆内存中；密文 buffer（含 Tag）无此要求。
 
 ### 意见 17:Chat 模式大附件分级处理策略（<20MB 单块直传 vs >20MB 4MB 流式分块）
 * **背景评估**：Chat 模式中传输的内容跨度极大（从几十 KB 的截图到几 GB 的 4K 视频录像）。
