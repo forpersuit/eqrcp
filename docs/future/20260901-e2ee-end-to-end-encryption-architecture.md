@@ -484,45 +484,279 @@ graph TD
 
 ---
 
-## 9. 架构核心工程准则 (Eight Core Engineering Tenets)
+## 9. 架构评审意见与工程避坑指南 (38 项落地细则与 8 大核心准则)
 
-为避免过度设计、杜绝碎片化讨论，将全链路工程实施要点收敛为 **8 项高效简洁的核心准则**：
+> **极简实施核心导图 (Executive Tenets)**：为在编码实施中保持高效简洁、杜绝代码过度设计，全链路 38 项细则高度收敛为以下 **8 大核心工程原则**：
+> 1. **密码学基石**：全链路统一 4MB XChaCha20-Poly1305 + HKDF-SHA256 派生 + 密文内全量 SHA-256 校验；
+> 2. **信任锚与生命周期**：PC 各模式单例原子覆盖重建（`INSERT ... ON CONFLICT`），退出主动 `close`，10 分钟 TTL 物理抹除，DRM 零日志；
+> 3. **数据面流式 I/O**：专用 REST 端点 `POST /receive/:path/chunk`，Go 服务端 `sync.Pool` 4MB 内存池化，多文件流式 ZIP 打包；
+> 4. **移动端沙箱与落盘**：libsodium (WASM) 运行于 Worker（Transferable 零拷贝），落盘 3 级阶梯（Blob $\rightarrow$ File System Access $\rightarrow$ OPFS）；
+> 5. **设备管理与门禁**：强制 UUID 实名准入与改名实时同步，单向静默门禁（`sessionBannedClients`），解封后强制从 Chunk 0 重新发起；
+> 6. **网络漫游与保活**：鉴权绑定 UUID 解耦 IP:Port，移动端 WakeLock 与桌面端关闭 Power Throttling 防休眠，弱网自适应并发避让；
+> 7. **用户体验与端内通知**：响应式绿/灰盾牌徽章，全链路使用端内轻量 Toast/Banner，严禁原生阻塞式 `alert()`；
+> 8. **自动化测试与零回归**：内置内存型 `MockDRMServer` 自动化回归沙盒，100% 保留现有明文与 tus 断点续传链路。
 
-### 准则 1: 密码学与数据面核心 (Cryptographic Core)
-* **算法统一**：全链路统一采用 **XChaCha20-Poly1305 AEAD**，废弃 AES-CTR（无完整性认证）与不兼容局域网的 `crypto.subtle` AES-GCM；
-* **分块与派生**：文件固定以 **4MB (4,194,304 字节)** 为独立加解密切片（24B 安全随机 Nonce + 16B Poly1305 Tag），通过 **HKDF-SHA256** 隔离派生 `K_send`, `K_recv`, `K_ws`, `K_auth`；
-* **双重校验**：发送端在明文分块时流式计算 SHA-256（使用 libsodium 增量 API），并在加密结束帧内附带 `file_sha256`；接收端落盘完成后比对一致才提交重命名，达成“分块 AEAD + 全局 SHA-256”双保险。
+---
 
-### 准则 2: 信任锚与 DRM 云端生命周期 (Trust Anchor & DRM Lifecycle)
-* **单例覆盖重建**：PC 端各模式单例运行，`POST /api/v1/e2ee/session/create` 在 D1 中以 `INSERT ... ON CONFLICT(device_id, mode) DO UPDATE` 原子覆盖作废旧会话并下发全新 MasterKey，实现零跨会话状态负担；
-* **安全销毁闭环**：PC 端正常退出时异步发送 `POST /session/:id/close` 主动抹除；异常断电或超时依赖 10 分钟 TTL 与抽样惰性清理物理淘汰；
-* **零日志与 CORS 规范**：DRM 严禁记录任何 IP、文件名或传输内容，仅保留纯元数据；开放 CORS 响应头（`*` 搭配 `Authorization` Bearer 头，严禁依赖 Cookie）。
+### 意见 1:统一 XChaCha20-Poly1305,废弃 AES-CTR 与「WASM 下 AES-256-GCM」
+* **AES-CTR 已废弃**:无完整性认证(No Authentication),局域网恶意篡改者可翻转密文比特精准篡改可执行文件或文档而接收端无感;字节级 Counter 对齐脆弱,续传偏移 1 字节即全线乱码(历史文档 `docs/crypto/resumable-e2ee-design.md` 已标注)。
+* **AES-256-GCM 不适用于纯局域网前端**:`crypto.subtle` 在 insecure context 不可用;WASM 版 AES-GCM 依赖 AES-NI,移动端性能不稳。
+* **✅ XChaCha20-Poly1305**:AEAD 硬件级(纯软件也可全速)、24 字节 Nonce 冗余、Go 端有标准实现,是局域网 WASM 场景的最优解。
 
-### 准则 3: 数据面流式 I/O 与内存池化 (Streaming I/O & Memory Pooling)
-* **轻量 REST 端点**：Receive 模式在 E2EE 下弃用复杂 Multipart 封包，全面采用轻量 REST 端点 `POST /receive/:path/chunk`，单块请求头携带索引与总块数；
-* **Go 服务端内存池化**：在 `pkg/server/` 中维护全局 `sync.Pool` 4MB 缓冲区，解密落盘完成后明文 Buffer 经 `clear(b)` 清零（紧跟 `runtime.KeepAlive`）归还内存池，消除百兆吞吐下的 GC STW 停顿；
-* **流式 ZIP 归档**：多文件分享时服务端在内存中以虚拟流式 ZIP（Virtual Streamed ZIP）实时逐块加密，移动端解密后触发 1 次单文件下载，彻底绕过移动端浏览器的多文件弹窗拦截墙。
+### 意见 2:移动端浏览器(WebKit)大文件下载「内存墙」破局
+iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直接 `new Blob([decryptedChunks])` 会 OOM 崩溃刷新。采用 §6.2 阶梯式适配(Blob → StreamSaver → 降级提示)。
 
-### 准则 4: 移动端 Web Worker 与存储阶梯适配 (Mobile Worker & Storage Tiering)
-* **线程隔离与环形池**：`libsodium.js` (WASM) 运行于独立的 `crypto.worker.js`，通过 `Transferable Objects` 实现主线程与 Worker 间的零拷贝指针转移；多 Worker 线程池设置全局内存硬顶（`< 64MB`），杜绝百 GB 传输下的 WebKit OOM；
-* **落盘 3 级阶梯适配**：小文件（<500MB）走内存 Blob；中等文件（500MB~2GB）走 File System Access API；超大文件（>2GB）在 Worker 中调用 **OPFS (Origin Private File System)** `SyncAccessHandle` 逐块直写本地私有磁盘。
+### 意见 3:Go 服务端流式解密 Reader,杜绝临时密文二次 I/O
+在 `pkg/server/` 封装 `ChunkedXChaChaReader`,包装 HTTP Body 流,逐块「校验 Tag → 解密 → 直接写入目标文件」,局域网全速(80~110 MB/s),避免数十 GB 视频的双重磁盘 I/O。
 
-### 准则 5: 设备显性化与静默门禁控制 (Device Visibility & Silent Ban Gate)
-* **强实名准入与改名同步**：数据面请求强制携带 `X-Client-Instance-Id` (UUID) 与设备名称；新设备首次接入在 PC GUI / CLI 输出醒目提醒；移动端改名通过 SSE/WS 实时同步更新 PC 卡片；
-* **极简单向静默门禁**：操作员点击 `[🚫 屏蔽]`，服务端仅在内存标记 `sessionBannedClients[ID]=true` 并停止对其响应数据，不发惊扰弹窗；解除屏蔽后**强制从第 0 块 (Chunk 0) 从头重新发起全新传输**，严禁盲目拼接半截断点。
+### 意见 4:WebSocket 必须引入单调递增 Seq 与时间戳 AAD 防重放
+局域网嗅探者可抓取含特定操作(剪贴板同步、断开指令)的密文帧重放。强制 `seq` 单调递增,`seq || timestamp` 作为 AAD,接收端窗口校验(见 §6.4)。
 
-### 准则 6: 网络漫游与系统保活调度 (Network Roaming & Power Management)
-* **UUID 鉴权解耦 IP**：服务端认证与黑名单严格绑定 UUID，移动端在 Wi-Fi 频段漫游或 DHCP 续约后可无感继续传输；
-* **双端协同保活**：移动端使用 Screen WakeLock 申请屏幕常亮；桌面端（Windows）在传输期间调用 `SetProcessInformation(ProcessPowerThrottling)` 关闭后台降频节流，并调用 `ES_SYSTEM_REQUIRED` 防止系统休眠；
-* **弱网自适应避让**：分块传输 RTT 突增 >3 倍时，自动将上传并发度降为 1（串行重试），网络恢复后自动回升。
+### 意见 5:严格遵守前端模块化分离
+所有 libsodium 初始化、HKDF 派生、分块加解密、Worker 通信封装为独立模块 `pkg/pages/assets/crypto-engine.js`;Chat V2 中解耦为独立 Store / Service (`pkg/chat/v2/web/src/lib/e2ee/`);UI 模板仅通过 Promise API 调用,保持视图层纯粹。禁向 `main.js` / 模板直接堆砌密码学逻辑。
 
-### 准则 7: 用户体验与端内非阻塞通知规范 (UX & Notification Standard)
-* **响应式安全徽章**：顶栏显式展示安全状态（绿色 `🔒 E2EE Active` 盾牌 vs 灰色 `🔓 Standard LAN`）；
-* **非阻塞通知**：遵循项目工程规范，严禁调用原生 `alert()`，离线降级、网络重试或被屏蔽提示全部使用端内轻量 Toast / 顶部横幅。
+### 意见 6:无会话访问与领取失败防呆
+* 页面检测 `location.hash` 无 `#sid=`、或 `claim` 返回 403(并发已满/会话过期)时:显示友好引导屏「当前会话不可用,请使用手机相机重新扫描屏幕上的完整二维码」;
+* 免费版或 `enableE2EE=false`:直接走标准明文链路,页面显示「标准局域网模式」徽章。
 
-### 准则 8: 自动化测试沙盒与工程零回归 (Testing Matrix & Zero Regression)
-* **内置 Mock DRM**：在 `pkg/server/` 测试套件中封装内存型 `MockDRMServer`，实现 100% 本地离线自动化回归测试（包含 4MB 分块加解密、密文单字节篡改拦截、Ban 状态机与离线降级）；
-* **零功能退化**：REST chunk 端点仅用于 E2EE 模式，原有的明文模式与 `tus.min.js` 断点续传管道 100% 完整保留。
+### 意见 7:加密状态可视化与离线降级透明
+加密属于付费权益,UI 必须明示当前安全状态,避免用户误以为明文被加密:
+* 加密模式:页面顶部绿色「🔒 End-to-End Encrypted (XChaCha20-Poly1305)」盾牌;
+* 明文模式(未开启 / 离线降级):灰色「标准局域网模式(未加密)」;
+* 离线降级事件写入桌面端通知中心(应用内通知),并可在会话日志追溯。
+
+### 意见 8:DRM 零知识 (Zero-Knowledge) 加固：避免云端持有明文 MasterKey
+* **背景评估**：当前 v2 设计中由 DRM Worker 生成并在 D1 存储 `MasterKey`。安全审计或对隐私极度敏感的海外极客可能会质疑“DRM 托管了通信密钥，是否存在云端后门解密风险”。
+* **工程对策**：
+  * **短期（方案一：盲中继与即时逻辑销毁）**：D1 中的 `master_key` 严格设置 10 分钟 TTL；会话在 **TTL 到期、或 `claim_count` 达到 `max_claims` 且最后一个领取者完成握手后**，由后台异步任务从 D1 逻辑删除（⚠️ 不能"首次 claim 即销毁"，否则与意见 9 的多设备并发领取冲突；D1 `DELETE` 为逻辑删除，密钥寿命 ≤600s，残留无可用性，见 §5.4 第 5 点）。并在白皮书中明示"DRM 仅作为短期盲中继信道，不作任何永久持久化"。
+  * **演进（方案二：端到端 ECDH 零知识密钥协商）**：PC 生成 Ephemeral X25519 密钥对，并将公钥 `pk_pc` 存入 DRM；移动端 claim 时提交其公钥 `pk_mob`，双方通过 X25519 ECDH 在本地派生 `MasterKey`。DRM 全程仅传递公钥，**云端数学上无法获知 `MasterKey`**，实现纯正的 Zero-Knowledge E2EE。
+    * **⚠️ 防恶意云端 MITM 的关键：公钥指纹交叉验证**：ECDH 仅对"被动 DRM"成立——若 DRM 被攻破或作恶，可替换 `pk_pc` / `pk_mob` 与两端各建一条 ECDH 通道（密钥仍在本地派生，云端却可解密重加密）。为使零知识对主动云端同样成立，PC 须将 `pk_pc` 的 SHA-256 短指纹并入二维码 Hash（如 `#sid=<id>&k=<pk指纹>`）；移动端领取公钥后先核对其指纹与二维码一致，再执行 ECDH 派生。二维码视觉信道不入网络，云端无法篡改。
+    * **多设备并发下的密钥模型切换**：方案二按设备派生，每台手机的 `pk_mob` 不同 ⇒ `MasterKey` 不同（不再是方案一的全设备共享密钥）。claim 请求体需增加 `pk_mob` 字段；演进时 §6/§8 的"单一 MasterKey 全会话共享"前提改为「PC 端为每台已 claim 设备独立派生会话密钥」，分块协议、HKDF `info` 与 chunk ACK 均按 `device_id` 隔离，意见 9 的多设备并发能力保持不变。
+
+### 意见 9:多设备并发扫码与页面刷新容错（摒弃绝对一次性 Claim）
+* **背景评估**：EQT 的核心能力之一是支持多台手机同时扫同一个二维码并发上传/下载（`pkg/server/server.go` 的 `clientStates`）；此外，移动端浏览器（尤其是 iOS Safari 内存清理）很容易发生后台静默重载或用户误下拉刷新。若 `claim` 严格一次性锁死，第二台设备或页面刷新将直接报错 403 导致传输中断。
+* **工程对策**：
+  * DRM 会话记录 `claim_count` 与 `max_claims`（根据 License 允许的并发设备数，如 Pro 版最多 5 台）；
+  * 移动端在同一会话内刷新时，携带 `sessionStorage` 中的临时客户端 UUID，DRM 识别为同一客户端重载，直接放行重放密钥；
+  * 整个会话在 TTL（如 600 秒）到期后统一销毁，平衡安全性与多设备易用性。
+
+### 意见 10:WASM 引擎冷启动与渐进式初始化 (Progressive Loading + 强缓存)
+* **背景评估**：`libsodium.js` + `sodium.wasm` 体积约 250KB~400KB。在弱网或拥堵 Wi-Fi 下，若页面必须阻塞等待 WASM 完全下载编译完成才渲染 DOM，会破坏“扫码 3 秒即用”的核心体验。
+* **工程对策**：
+  * **CDN 强缓存**：DRM 静态资源配置 `Cache-Control: public, max-age=31536000, immutable`，手机二次扫码直接命中 Disk Cache（0ms 加载）；
+  * **渐进式骨架屏 (Skeleton UI)**：扫码后首屏 HTML 立即渲染骨架界面与文件选择器；WASM 引擎在后台异步加载编译；在用户点选文件或浏览列表的 1~3 秒“人类操作停顿”时间内完成初始化，实现用户体感上的零等待。
+
+### 意见 11:Web Worker 线程隔离与 Transferable Objects 零拷贝
+* **背景评估**：在移动端主线程（UI Thread）执行 4MB 分块的 XChaCha20-Poly1305 加解密会导致页面明显掉帧、进度条停顿以及“取消传输”按钮无响应。
+* **工程对策**：
+  * 密码学引擎必须运行在独立的 Web Worker (`crypto.worker.js`) 中；
+  * 主线程与 Worker 之间传输 4MB 分块时，强制使用 **Transferable Objects**（`postMessage(arrayBuffer, [arrayBuffer])`）实现零拷贝内存指针所有权转移，避免在 JS 内存堆中产生双倍内存占用与垃圾回收（GC）卡顿。
+
+### 意见 12:Receive 模式 3 级流水线并发（Read $\rightarrow$ Encrypt $\rightarrow$ POST）
+* **背景评估**：若客户端采用单线程串行模式（读取切片 0 $\rightarrow$ WASM 加密 $\rightarrow$ HTTP POST $\rightarrow$ 等待 ACK $\rightarrow$ 读取切片 1），受局域网 HTTP RTT 影响，吞吐量会被压制在 20MB/s 左右，无法利用千兆 Wi-Fi。
+* **工程对策**：
+  * 构建 3 级流水线并发队列：
+    * **Stage 1 (I/O)**：主线程异步读取下一个 4MB 切片 `File.slice(offset + 4MB)`;
+    * **Stage 2 (Crypto)**：Worker 线程并发加密当前 4MB 切片;
+    * **Stage 3 (Network)**：通过 XHR/Fetch 并发发送上一个已加密的切片（保持并发度 = 2）;
+  * 通过流水线将加密耗时与网络上传耗时深度重叠，轻松跑满 80~110MB/s 物理带宽。
+
+### 意见 13:纯离线隔离局域网的未来演进路径 (Air-Gapped LAN PWA + SAS 配对码)
+* **背景评估**：当前 v2 架构确立了“无法联网访问 DRM 时自动诚实降级为明文”，这是在当前无公网证书下的正确决策。但在未来，部分企业级涉密或完全断网的机房环境仍可能有无网加密诉求。
+* **演进对策**：
+  * 未来可通过 **PWA（渐进式 Web 应用）离线缓存 WASM 引擎** + **4位短认证码 (Short Authentication String, SAS)** 交互确认机制：
+  * 手机端若此前联网访问过一次并缓存了 PWA 引擎，在纯离线扫码时直接启用本地 WASM 引擎；
+  * PC 屏幕与手机屏幕各自计算并展示 `Hash(MasterKey)[0:4]` 的 4 位数字配对码，用户肉眼核对一致即确认未被局域网中间人篡改，从而在完全无公网连接的纯局域网内实现数学级防篡改 E2EE。
+
+### 意见 14:DRM 端点 CORS 跨域预检与前端 CSP (`wasm-unsafe-eval`) 策略规范
+* **背景评估**：手机浏览器通过局域网 `http://192.168.x.x` 打开页面后，页面 JS 发起跨域 `fetch` 请求访问公网 HTTPS DRM 服务（`https://drm.eqt.net.im/api/v1/e2ee/...`）。若未正确配置 CORS 头部，移动端浏览器的 Preflight `OPTIONS` 预检失败将直接阻断密钥领取流程；此外，编译 WASM 在某些严格浏览器环境下需要 CSP 授权。
+* **工程对策**：
+  * **DRM CORS 规范**：Cloudflare Worker 必须强制返回开放的 CORS 响应头：
+    ```http
+    Access-Control-Allow-Origin: *
+    Access-Control-Allow-Methods: GET, POST, OPTIONS
+    Access-Control-Allow-Headers: Content-Type, Authorization, X-Client-Instance-Id
+    ```
+  * **⚠️ 约束**：`Access-Control-Allow-Origin: *` 与 `Access-Control-Allow-Credentials: true` **互斥**（浏览器规范禁止二者同用）。本方案密钥领取使用 `Authorization` bearer 头而非 Cookie，因此 `*` 合法；若未来改用 Cookie 会话，须改为显式 `Origin` 白名单。`claim` 端点应叠加现有 `rate-limit` 中间件，防止任意网页跨站暴力猜测短 `session_id`。
+  * **CSP 兼容**：Go 服务端下发的 HTML 模板配置宽松 CSP 头，确保允许 `connect-src https://*.eqt.net.im` 与 `script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' https://*.eqt.net.im`。
+
+### 意见 15:明确弃用复杂 Multipart 封装，全面采用轻量 REST 分块端点 (`POST /receive/.../chunk`)
+* **背景评估**：现行 Receive 模式采用标准 `multipart/form-data`，Go 服务端通过 `r.MultipartReader()` 解析。但在 4MB 分块流式加密场景下，若将每个密文块封装为 Multipart MIME 格式，会在客户端产生大量的字符串拼接与边界缓冲内存开销，且遇到网络中断重试单个分块时难以做精细化控制。
+* **工程对策**：
+  * 在 E2EE 模式下，直接引入专用的轻量分块 REST 端点：`POST /receive/:path/chunk`；
+  * 请求头携带 `X-File-ID`、`X-Chunk-Index`、`X-Total-Chunks`，请求体直接为原始二进制封包 `[ChunkIndex(4B) | Nonce(24B) | Ciphertext(<=4MB) | Tag(16B)]`；
+  * 极大简化客户端 3 级流水线并发上传，单个分块重试成本降至最低;
+  * **双通道并存（零回归）**：REST chunk 端点仅用于 E2EE 模式；明文 / 离线降级模式保留现有 `multipart/form-data` 与 `tus.min.js` 通道（见 §6.3 现有链路描述），不破坏既有传输链路。
+
+### 意见 16:Go 服务端 4MB Buffer 内存池化 (`sync.Pool`) 杜绝 GC 抖动
+* **背景评估**：在千兆 Wi-Fi 满速（80~110MB/s）高并发传输时，Go 后端每秒需处理 20~30 个 4MB 分块。若频繁分配临时切片，将引发 Go 运行时高频垃圾回收（GC STW 停顿），造成 CPU 占用飙升与网络传输抖动。
+* **工程对策**：
+  * 在 `pkg/server/` 中维护全局 `sync.Pool` 内存池：
+    ```go
+    var chunkBufferPool = sync.Pool{
+        New: func() any {
+            b := make([]byte, 4*1024*1024+44)
+            return &b
+        },
+    }
+    ```
+  * 分块解密写盘完成后立即归还内存池，实现百兆满速下的零 GC 堆内存抖动;
+  * 解密后的**明文** buffer 归还内存池前须先清零覆写（`clear(b)`），避免敏感明文残留在可复用堆内存中；密文 buffer（含 Tag）无此要求。
+
+### 意见 17:Chat 模式大附件分级处理策略（<20MB 单块直传 vs >20MB 4MB 流式分块）
+* **背景评估**：Chat 模式中传输的内容跨度极大（从几十 KB 的截图到几 GB 的 4K 视频录像）。
+* **工程对策**：
+  * **小附件 ( $\le$ 20MB)**：前端在 Web Worker 中单块加密，直接作为单个 payload POST 到 `/upload`，协议交互最轻快；
+  * **超大附件 (> 20MB)**：无缝复用 Receive/Share 的 4MB 分块流式管道（`POST /api/chat/v2/attachment/chunk`），避免在聊天前端一次性申请大块 ArrayBuffer 导致移动端浏览器 OOM 崩溃。
+
+### 意见 18:移动端 WebKit 后台休眠防御与 Screen WakeLock 保活机制
+* **背景评估**：iOS Safari 与部分移动端浏览器在用户锁屏或切至其他 App 超过 30 秒后，会强制挂起（Freeze）后台 Web Worker 与 Fetch 网络传输，甚至触发页面自动回收，导致数 GB 的大文件分块加解密传输被意外切断。
+* **工程对策**：
+  * 前端在启动大文件加解密传输时，通过 `navigator.wakeLock.request('screen')` 申请屏幕常亮锁定，传输完毕后释放；
+  * 界面明确显示友好状态提示“正在进行硬件级加密传输，请保持屏幕常亮以防系统休眠”；
+  * 绑定 `document.addEventListener('visibilitychange')` 事件，若从后台切回且检测到连接中断，自动触发断点续传探测（§6.3）。
+
+### 意见 19:多核移动端 Worker 线程池并发加解密（提升单机吞吐至 150MB/s+）
+* **背景评估**：现代智能手机通常具备 6~8 核心 CPU。若仅使用单一 Web Worker 串行执行 WASM XChaCha20 计算，单核性能上限可能限制在 60~80MB/s，无法跑满 Wi-Fi 6 极限。
+* **工程对策**：
+  * 在大文件（> 100MB）传输时，前端可根据 `navigator.hardwareConcurrency` 派生 2~3 个 Crypto Worker 组成轻量线程池；
+  * 采用交替分块派发策略（Worker A 加密块 0, 2, 4，Worker B 加密块 1, 3, 5）；
+  * 将客户端加解密吞吐推升至 150MB/s 以上，彻底消除 CPU 瓶颈。
+
+### 意见 20:DRM D1 会话存储的惰性自动清理与原子 CAS 递增
+* **背景评估**：在 Cloudflare Worker D1 中，若完全依赖定时 Cron 清理过期会话，可能在高并发下产生过期脏数据堆积；若 `claim` 计数非原子操作，易发生并发配额击穿。
+* **工程对策**：
+  * **原子 CAS 递增**：`UPDATE e2ee_sessions SET claim_count = claim_count + 1 WHERE session_id = ? AND claim_count < max_claims AND expires_at > unixepoch() AND status = 'active'`；
+  * **抽样惰性清理**：在 `create` 端点以 10% 概率抽样触发 `DELETE FROM e2ee_sessions WHERE expires_at < unixepoch()`，既保持数据库轻量又避免额外开销。
+
+### 意见 21:桌面端后台 DRM 探活缓存与零延迟启动防抖
+* **背景评估**：若桌面端在每次点击“分享/接收”生成二维码时才同步向 DRM 发起 HTTP 探活，会引入数百毫秒的弹窗延迟；且偶发单次网络丢包可能引发误降级。
+* **工程对策**：
+  * 桌面端后台协程每 30 秒周期性探活 DRM 服务（`HEAD https://drm.eqt.net.im/health`），探活结果缓存在内存中；
+  * 生成二维码时直接读取内存状态，零延迟秒级决策是否开启 E2EE 二维码；
+  * 连续 2 次探活失败才标记为不可达，防止网络微抖动引发误降级。
+
+### 意见 22:DRM 全模式单例会话「覆盖重建+主动销毁」极简闭环
+* **背景评估**：PC 端的 Share (Send)、Receive、Chat 三种模式在本机均为单实例运行。在会话期间，DRM 必须暂存凭据以确保任何扫码设备（多台同事手机或家人设备）在会话期内都能稳定获取密钥并支持刷新重连；但在新任务启动或退出时，必须有确定性的清理逻辑。
+* **工程对策**：
+  * **全模式统一「覆盖重建」**：无论是 Share、Receive 还是 Chat，当 PC 下一次启动该模式请求 `POST /session/create` 时，DRM 以单条 `INSERT ... ON CONFLICT(device_id, mode) DO UPDATE` 原子作废旧会话并下发全新 MasterKey，实现零跨会话状态负担（§5.2 ①、§5.4）；
+  * **主动退出闭环**：PC 端在关闭传输窗口或退出应用时，异步触发 `POST /api/v1/e2ee/session/:id/close`，DRM 校验 `close_token` 后逻辑删除，达成“会话期稳健可用、下次必清、退时即抹”的极简安全闭环。
+
+### 意见 23:极简静默屏蔽门禁与从头重置安全规范 (Silent Ban & Clean Reset Recovery)
+* **背景评估**：局域网传输中，过度复杂的多级弹窗告警与握手协议会增加维护成本并可能干扰正常用户体验；同时，传输中途被屏蔽又解除的设备若盲目续传，易引发 Nonce 状态与分块数据撕裂。
+* **工程对策**：
+  * **静默数据面门禁**：PC GUI 操作员点击 `[🚫 屏蔽]`，服务端仅在内存中标记 `sessionBannedClients[ID]=true` 并停止对其响应数据面分块，无需向移动端推送惊扰弹窗（§7.2.1）；
+  * **随时可逆与从头重置 (Clean Reset)**：操作员可随时点击 `[✅ 恢复]` 解除屏蔽；但传输中途被放开的设备**严禁盲目恢复断点，必须从第 0 块从头重新发起全新传输**，保证 100% 密码学状态与文件数据完整性（§7.2.2）。
+
+### 意见 24:移动端 Web Worker 定长环形 Buffer 池化（杜绝百 GB 大文件 WebKit OOM）
+* **背景评估**：在批量传输上百张高清照片或数十 GB 蓝光视频时，若 Web Worker 持续高频 `new Uint8Array(4*1024*1024)`，iOS Safari / Chrome 的垃圾回收器（GC）在高吞吐下无法及时释放堆内存，易引发 WebKit 内存峰值过高被系统强杀（OOM Crash）。
+* **工程对策**：
+  * 在 Web Worker 内部维护容量为 3~4 个分块的 **环形复用 ArrayBuffer 池**；
+  * 结合 `postMessage(buf, [buf])` Transferable 所有权转移与主线程回收归还机制；
+  * 将移动端浏览器在百 GB 级超大文件流式传输中的峰值内存稳定压制在 35MB 以内。
+  * **评审补充**：`35MB` 峰值以「单 Worker 环形池」计；若叠加意见 19 的多 Worker 并发，须以 `Worker 数 × 池容量` 全局设上限（如 4 Worker × 4 分块 × 4MB ≈ 64MB），避免为省 GC 反而堆爆内存；主线程 XHR 完成后须以 Transferable 原路归还，归还链路不得引入二次拷贝。
+
+### 意见 25:端到端明文 SHA-256 流式校验（分块 AEAD + 全局哈希双保险）
+* **背景评估**：尽管每个 4MB 分块均具备独立 Poly1305 Auth Tag 保证单块不被篡改，但为防范偶发的分块索引错位、多文件流边界截断或磁盘落盘静默损坏，需有整文件维度的完整性证明。
+* **工程对策**：
+  * 发送端在分块读取明文时，同步进行流式 SHA-256 计算并在握手/结束帧附带 `file_sha256`；
+  * 接收端在逐块解密落盘的同时流式计算明文 SHA-256，落盘完成比对一致后才触发最终原子提交与重命名；
+  * 构筑“分块 XChaCha20-Poly1305 AEAD + 全局 SHA-256”双重数学级完整性保证。
+  * **评审补充（关键）**：
+    * `file_sha256` 必须置于 **E2EE 加密信封（AEAD 密文 + Poly1305 认证）内**随结束帧传输，禁止明文帧外发——否则在 §1 的主动 MITM 威胁模型下，攻击者可同时替换数据与哈希（SHA-256 本身不是 MAC，防的是「意外损坏」而非「主动篡改」，主动篡改已由逐块 Poly1305 兜底）；
+    * 流式 SHA-256 **不能使用 `crypto.subtle.digest`**：它是整块 API，且与 §4.1 同源——局域网 HTTP insecure context 下 `crypto.subtle === undefined`。必须改用 libsodium 的 `crypto_hash_sha256` 增量接口（init/update/final），与 XChaCha 同源、同样不依赖 Secure Context；
+    * 多文件队列（意见 23）下**每文件独立 `file_sha256`** 挂在其各自文件结束帧，禁止跨文件共享全局哈希，否则无法定位具体损坏文件。
+
+### 意见 26:桌面端后台加密传输防休眠与 CPU 核心调度优化
+* **背景评估**：在笔记本电池供电模式下，若传输窗口最小化或转入后台托盘运行，操作系统可能会将后台进程调度至能效核（E-Core）或降低 CPU 时钟频率，导致 100MB/s 的局域网加密吞吐断崖式下跌至 10~15MB/s。
+* **工程对策**：
+  * Windows 端在活跃加解密传输期间调用 Win32 API `SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED)` 防止系统进入低功耗待机；
+  * Go 端对高吞吐加解密工作 goroutine 实施适当的核心锁定或调度优先级保护，传输结束后自动释放。
+  * **评审补充**：
+    * `ES_AWAYMODE_REQUIRED` 是 Vista 时代媒体中心遗留旗标，现代 Windows 下不阻止睡眠，可省略；有效组合为 `ES_SYSTEM_REQUIRED`（防待机）± `ES_DISPLAY_REQUIRED`（保屏常亮以展示进度），`ES_CONTINUOUS` 常驻 + 传输结束后置 0 释放的逻辑不变；
+    * 「对 goroutine 做核心锁定」是 Go 反模式——goroutine 不直接占有 CPU，M:N 调度器会在 OS 线程间迁移，手动 CPU 亲和/核绑定会与调度器对抗且不可移植。针对「后台被降频」的真实机制是 Windows **Power Throttling**（Win10 1709+）：应调用 `SetThreadInformation(ThreadPowerThrottling)` 关闭执行速度节流（或 `SetProcessInformation(ProcessPowerThrottling)`），再确保 `GOMAXPROCS` 不被人工压低即可；
+    * 与意见 18（移动端 Screen WakeLock）互补：长时大文件传输需链路两端同时保活，PC 防休眠与手机防锁屏缺一不可。
+
+### 意见 27:客户端 IP 漂移与连接漫游容错（严格以 UUID 鉴权，解耦 IP:Port）
+* **背景评估**：在移动端扫码下载/上传大文件时，手机在 Wi-Fi 边缘可能发生频段漫游（如 5GHz 切换到 2.4GHz）或 DHCP 续约，导致手机的局域网 IP 短暂改变。若服务端基于客户端 `RemoteAddr`（IP:Port）做会话鉴权或黑白名单匹配，会引发误中断。
+* **工程对策**：
+  * PC 服务端（`pkg/server/`）的会话认证、黑名单拦截（`sessionBannedClients`）与断点恢复状态机**严格绑定 `X-Client-Instance-Id` (UUID)**，严禁绑定 IP 地址；
+  * 移动端在 IP 漂移后携带原 UUID 发起后续分块请求，PC 端透明识别为同一会话，无感续传。
+
+### 意见 28:多文件分享时的流式 ZIP 归档策略（规避移动端浏览器多文件拦截墙）
+* **背景评估**：当 PC 一次性分享包含数十个文件的文件夹时，若客户端 JS 尝试为每个文件连续触发原生 `<a>.click()` 下载，iOS Safari 与 Android Chrome 会触发安全拦截（弹出“此网站正在尝试下载多个文件，是否允许”等阻塞窗口或直接丢弃后续下载）。
+* **工程对策**：
+  * 在 E2EE Share 模式下，对于多文件分享：
+    1. 前端提供“文件列表逐个手动下载/预览”模式；
+    2. 对于“全部下载 (Download All)”，PC 服务端以**流式内存 ZIP 容器（Virtual Streamed ZIP）**在内存中实时打包并经 4MB XChaCha20 逐块加密，移动端解密后仅触发 1 次单文件 `.zip` 下载，彻底规避移动端浏览器的多文件拦截墙。
+
+### 意见 29:响应式安全徽章与端内非阻塞通知规范 (In-App Notification Standard)
+* **背景评估**：遵循项目工程规范，严禁使用破坏用户体验的浏览器原生 `alert()` / `confirm()` 阻塞弹窗，必须保证在网络波动、降级明文或被屏蔽时的平滑端内反馈。
+* **工程对策**：
+  * **响应式安全徽章**：前端页面顶栏展示绿色「🔒 E2EE Active (XChaCha20)」盾牌；当 DRM 不可达降级为明文时，盾牌变为灰色「🔓 Standard LAN」；
+  * **端内非阻塞通知**：所有提示（新设备接入、离线降级、网络波动重试、被屏蔽提示）全部使用端内轻量 Toast / 顶部横幅，保持优雅与非打扰。
+
+### 意见 30:移动端超大文件落盘的 OPFS (Origin Private File System) 阶梯适配
+* **背景评估**：在移动端下载 >2GB 的超大视频时，传统 `Blob` 会因移动端堆内存上限（1GB~2GB）直接抛出 OOM，而第三方 `StreamSaver.js` 依赖 ServiceWorker 伪中间人拦截，在局域网纯 HTTP 环境下兼容性差。
+* **工程对策**：
+  * 采用 3 级阶梯式流式落盘：
+    1. **小文件 (< 500MB)**：直接在内存中汇聚为 `Blob` 并触发原生下载链接；
+    2. **中等文件 (500MB ~ 2GB)**：优先检测调用 File System Access API 的 `showSaveFilePicker()`；
+    3. **超大文件 (> 2GB)**：在 Web Worker 中调用 **OPFS (Origin Private File System)** 的 `createWritable()` / `SyncAccessHandle` 逐块直写本地私有磁盘文件，解密完成后触发一键导出，彻底攻克移动端浏览器百 GB 级下载内存墙。
+
+### 意见 31:密码学密钥内存防御性清零与防编译器死码消除 (`runtime.KeepAlive` & `sodium.memzero`)
+* **背景评估**：密码学密钥在 Go 堆内存和 JS WASM 内存中使用完毕后，若仅简单赋值为 `nil`，GC 未触发前密钥字节仍以明文驻留在物理内存中；此外，部分 Go 编译器激进优化可能将未被后续引用的清零循环（Dead Code）优化剔除。
+* **工程对策**：
+  * **Go 服务端**：使用 `clear(keySlice)` 进行字节清零，并紧跟 `runtime.KeepAlive(keySlice)` 强制防止编译器优化消除清零动作；
+  * **JS / WASM 客户端**：调用 libsodium 原生 `sodium.memzero(keyUint8Array)` 物理擦除 WASM 线性内存区中的密钥字节。
+
+### 意见 32:本地离线 Mock DRM 与 E2EE 跨端自动化 CI 测试套件
+* **背景评估**：在 GitHub Actions CI/CD 与本地 `go test ./...` 流程中，无法依赖真实公网 Cloudflare DRM 或实体手机进行交互测试。
+* **工程对策**：
+  * 在 `pkg/server/` 测试套件中封装内置内存型 `MockDRMServer`（基于 `httptest.Server`）；
+  * 构建全自动化集成测试矩阵：
+    1. 4MB 分块加解密与 HKDF 密钥派生一致性验证；
+    2. 密文篡改拦截测试（随机翻转 1 字节密文，验证 Poly1305 Auth Tag 瞬间阻断）；
+    3. 静默屏蔽（Ban）与解屏蔽从头重置（Chunk 0 强制要求）状态机测试；
+    4. DRM 不可达离线降级明文自动化回归测试。
+
+### 意见 33:弱网 Wi-Fi 抖动下的自适应分块重试与拥塞避让
+* **背景评估**：在 2.4GHz 拥堵或边缘 Wi-Fi 环境下，可能出现 10%~20% 的突发丢包与 RTT 抖动。若固定采用 2 并发分块上传，可能导致网络缓冲区膨胀（Bufferbloat）。
+* **工程对策**：
+  * 客户端引入轻量自适应拥塞控制：
+  * 统计最近 3 个分块的平均 RTT，若单个分块请求超时或延迟 > 3 倍平均 RTT，临时将上传并发度降为 1（串行重试）；
+  * 当连续 2 个分块快速完成（RTT 恢复正常）时，自动恢复并发度为 2，保证弱网下的高韧性传输。
+
+### 意见 34:WASM 静态资源 MIME 类型 (`application/wasm`) 与 SRI 哈希防篡改规范
+* **背景评估**：某些移动端浏览器在加载 `.wasm` 文件时，若 HTTP 响应头的 `Content-Type` 为 `application/octet-stream` 而非标准的 `application/wasm`，会导致 `WebAssembly.instantiateStreaming` 编译失败并降级为昂贵的 ArrayBuffer 同步编译，导致初始化延迟激增。
+* **工程对策**：
+  * DRM CDN（Cloudflare Worker）与 PC 局域网 Go 静态资源服务，必须显式为 `.wasm` 注入 `Content-Type: application/wasm` 头；
+  * 首屏 HTML 中的 `<script>` 标签引入 `crypto-engine.js` 时，附带固定 `integrity="sha256-..."` (SRI) 校验，防止 CDN 资源被中间人篡改。
+
+### 意见 35:移动端 Safari 无痕模式与存储配额受限下的降级兜底
+* **背景评估**：在 iOS Safari 隐私无痕浏览模式（Private Browsing Mode）下，`localStorage` 与 OPFS 磁盘配额可能被严格限制在很小范围（如 <50MB），导致写盘抛出 `QuotaExceededError`。
+* **工程对策**：
+  * 前端在尝试写入 OPFS / localStorage 时加入 `try-catch`；
+  * 若捕获到配额超出错误，自动降级为“单分块解密 + 边解密边触发系统原生流式下载”管道，并在页面内通过非阻塞提示通知用户“当前处于隐私浏览模式，建议使用标准标签页以支持超大文件极速传输”。
+
+### 意见 36:多网卡 (Multi-NIC) / 虚拟网卡环境下的 E2EE 局域网绑定与二维码一致性
+* **背景评估**：在 PC 开启 WSL2、VirtualBox 或双网卡（同时连接有线网与无线 Wi-Fi）时，若二维码渲染的 IP 与手机实际可达的局域网 IP 不一致，移动端会无法连入局域网。
+* **工程对策**：
+  * E2EE 模式严格遵循主工程 `config/network.go` 的智能网卡探测与绑定策略；
+  * 二维码所携带的局域网地址必须与 Go HTTP 监听的绑定 IP 强一致，且在 GUI 上提供下拉网卡切换器，用户手动切换网卡时自动触发 `create` 刷新二维码与 session。
+
+### 意见 37:服务端平滑退出 (Graceful Shutdown) 与未决分块 Context 级联取消
+* **背景评估**：用户在 PC GUI 上点击“停止服务”或按下 `Ctrl+C` 时，若后台仍在并发解密或向磁盘写入 4MB 分块，暴力退出可能导致文件句柄未关闭、临时文件残留或数据库连接死锁。
+* **工程对策**：
+  * Go 服务端在退出时向所有正在运行的 `ChunkedXChaChaReader/Writer` 传播 `context.WithTimeout(ctx, 3*time.Second)` 取消信号；
+  * 快速冲刷并安全关闭当前物理文件句柄，删除未完成的 `.tmp` 临时文件，并向 DRM 异步发送 `close` 信号后干净退出。
+
+### 意见 38:DRM 零日志与纯粹匿名遥测隐私合规红线 (Zero-Telemetry Privacy Standard)
+* **背景评估**：为符合欧美 GDPR / CCPA 隐私严苛合规要求，以及践行 First Principle 真正的端到端加密信任，DRM 云端绝对不能留存任何足以关联用户真实数据的痕迹。
+* **工程对策**：
+  * D1 数据库仅保存 `(session_id, device_id, mode, master_key, claim_count, max_claims, status, expires_at, ttl)` 纯元数据；
+  * 严禁在 DRM 日志中记录客户端 IP 地址、局域网私网 IP、文件名、传输文件大小或聊天内容；
+  * 会话 TTL 到期后物理抹除，实现真正无痕的零知识隐私中继。
 
 ---
 
@@ -539,47 +773,59 @@ graph TD
 | **会话阅后即焚清理** | 手动退出。 | 会话关闭自动覆写内存密钥 (Zeroize Buffer)。 |
 | **设备权限管理** | 基础暂停。 | 🚫 静默屏蔽 (Silent Ban) + ✅ 安全从头恢复门禁。 |
 
+
 > 定价与营销口径:在欧美注重隐私的市场,E2EE 属于高溢价卖点;白皮书应如实披露「加密依赖联网协商,离线自动降级明文」,避免过度宣传。
 
 ---
 
 ## 11. 开发实施与演进排期 (Implementation Roadmap)
 
-- [ ] **Phase 1: WASM 密码学基础库与 HKDF 密钥派生引擎**
-  - `pkg/pages/assets/crypto-engine.js`: libsodium.js 初始化、HKDF-SHA256 派生、XChaCha20-Poly1305 分块加解密、Worker 通信 (准则 1);
-  - WASM 渐进式加载、CDN 强缓存与骨架屏初始化;
-  - 密钥内存防御性物理清零 `sodium.memzero` 与防优化 (准则 1);
-  - 跨平台兼容性验证 (iOS Safari, Android Chrome, Edge, Firefox)。
-- [ ] **Phase 2: DRM 会话密钥与引擎分发端点**
-  - `cloudflare/eqt-drm-api`: 新增 `POST /api/v1/e2ee/session/create`、`claim` 与 `close` 端点 (准则 2);
-  - D1 表单例原子覆盖重建 (`INSERT ... ON CONFLICT`) 与短期 TTL 物理删除闭环 (准则 2);
-  - CORS 响应头与 DRM 零日志无遥测隐私标准 (准则 2)。
-- [ ] **Phase 3: Chat 模式双向 WebSocket 与剪贴板 E2EE**
-  - 改造 `pkg/chat/v2/protocol/`, 定义 `e2ee_envelope` 载荷与 AAD 防重放验证;
-  - 加解密运行于独立 Web Worker, Transferable 零拷贝传输;
-  - 附件分级传输（$\le$ 20MB 单块直传，> 20MB 复用 4MB 分块流式管道）;
+- [ ] **Phase 1:WASM 密码学基础库与 HKDF 密钥派生引擎**
+  - `pkg/pages/assets/crypto-engine.js`:libsodium.js 初始化、HKDF-SHA256 派生、XChaCha20-Poly1305 分块加解密、Worker 通信;
+  - WASM 渐进式加载与 CDN 强缓存(`Cache-Control: immutable`)、骨架屏异步初始化(意见 10);
+  - WASM 静态资源 MIME (`application/wasm`) 与 SRI 哈希防篡改(意见 34);
+  - 密钥内存防御性物理清零 `sodium.memzero` 与防优化(意见 31);
+  - 验证 iOS Safari、Android Chrome、Edge、Firefox 在局域网 HTTP 页面的跨平台一致性。
+- [ ] **Phase 2:DRM 会话密钥与引擎分发端点**
+  - `cloudflare/eqt-drm-api`:新增 `POST /api/v1/e2ee/session/create`、`POST /api/v1/e2ee/session/:id/claim` 与 `POST /api/v1/e2ee/session/:id/close`,复用 license 校验、rate-limit、cf-access-jwt;
+  - 单例会话覆盖重建与 PC 主动退出销毁闭环(意见 22、§5.4);
+  - DRM 零日志与纯粹匿名遥测隐私合规红线(意见 38);
+  - CORS 跨域响应头与前端 CSP `wasm-unsafe-eval` 适配规范(意见 14);
+  - `claim` 多设备并发限额 `max_claims`、`client_instance_id` 刷新容错(意见 9);
+  - D1 表 `e2ee_sessions(session_id, device_id, mode, master_key, claim_count, max_claims, status, expires_at, ttl)` + `UNIQUE(device_id, mode)` 唯一索引;`create` 以 `INSERT ... ON CONFLICT` 单语句原子覆盖重建(§5.2 ①、意见 22);短期 TTL 与逻辑删除(意见 8 方案一、§5.4);抽样惰性清理与原子 CAS 递增(意见 20);引擎静态资源托管与 SRI。
+- [ ] **Phase 3:Chat 模式双向 WebSocket 与剪贴板 E2EE**
+  - 改造 `pkg/chat/v2/protocol/`,定义 `e2ee_envelope` 载荷与 AAD 防重放验证;
+  - 加解密运行于独立 Web Worker,Transferable 零拷贝传输(意见 11);
+  - 附件分级传输：$\le$ 20MB 单块直传，> 20MB 复用 4MB 分块流式管道(意见 17);
   - Go 后端与 Svelte 前端实现消息/剪贴板透明加解密。
-- [ ] **Phase 4: Receive / Share 4MB 分块流式加解密与设备管理控制**
-  - Receive: 采用专用 REST 端点 `POST /receive/:path/chunk` + 3 级流水线并发 + Go `ChunkedXChaChaReader` (准则 3);
-  - 移动端超大文件落盘引入 OPFS 阶梯适配 (准则 4);
-  - 多文件分享流式内存 ZIP 归档传输 (准则 3);
-  - 客户端 UUID 鉴权解耦 IP 地址，支持 Wi-Fi 漫游 (准则 6);
-  - 弱网 Wi-Fi 自适应重试与拥塞避让 (准则 6);
-  - 移动端 Web Worker 定长环形 Buffer 池化 (<64MB) 与端到端 SHA-256 双重校验 (准则 1, 4);
-  - Go 服务端引入 `sync.Pool` 4MB 缓冲池，消除 GC 停顿 (准则 3);
-  - 设备管理控制：服务端接入静默屏蔽 `ban` / `unban` 路由与 Chunk 0 强制重置网关 (准则 5);
-  - Share: Go 端 `Range` 兼容分块加密下发 + 移动端流式解密下载管道。
-- [ ] **Phase 5: Settings 开关、GUI 设备管理卡片与海外隐私营销**
+- [ ] **Phase 4:Receive / Share 4MB 分块流式加解密与设备管理控制**
+  - Receive:弃用 Multipart，采用专用 REST 端点 `POST /receive/:path/chunk`(意见 15)+ 前端 `File.slice()` 3 级流水线(Read→Encrypt→POST,并发度 2)(意见 12)+ Go `ChunkedXChaChaReader` 零临时文件写盘 + `chunk_status` 断点恢复;
+  - 移动端超大文件落盘引入 OPFS (Origin Private File System) 阶梯适配(意见 30);
+  - 移动端 Safari 隐私模式配额受限降级兜底(意见 35);
+  - 客户端 UUID 鉴权解耦 IP 地址，支持 Wi-Fi 漫游与 IP 漂移无感续传(意见 27);
+  - 多文件分享流式内存 ZIP 归档传输，规避浏览器多文件拦截弹窗(意见 28);
+  - 弱网 Wi-Fi 自适应重试与拥塞避让(意见 33);
+  - 移动端 Web Worker 定长环形 Buffer 池化，防百 GB 传输 OOM(意见 24);
+  - 端到端明文 SHA-256 流式全量哈希双重校验(意见 25);
+  - 移动端 WebKit 屏幕常亮保活 Screen WakeLock 与切后台断点恢复(意见 18);
+  - 多核多 Worker 线程池并发加解密，冲刺 150MB/s+ 吞吐(意见 19);
+  - Go 服务端引入 `sync.Pool` 4MB 缓冲池，消除百兆吞吐下的 GC 停顿(意见 16);
+  - 设备管理控制：服务端接入静默屏蔽 `ban` / `unban` 路由及内存黑名单拦截网关(意见 23、§7)，落实 §7.5 五项工程红线;
+  - Share:Go 端 `Range` 兼容分块加密下发 + 移动端 Blob / StreamSaver 流式解密下载管道;
+  - 分块加解密统一置于 Web Worker(意见 11)。
+- [ ] **Phase 5:Settings 开关、GUI 设备管理卡片与海外隐私营销**
   - `pkg/config/settings.go` 新增 `EnableE2EE` 字段与 Settings 界面开关;
-  - 响应式安全徽章与端内非阻塞通知标准，杜绝原生 alert (准则 7);
-  - 桌面端后台加密传输防休眠与 CPU 核心调度优化 (准则 6);
-  - 桌面 GUI 传输监控面板实现设备列表可视化、新设备接入提醒与 `[🚫 屏蔽]` / `[✅ 恢复]` 交互 (准则 5);
-  - 桌面端后台 30 秒周期探活 DRM 服务与内存状态缓存防抖;
-  - 本地离线 Mock DRM 与 E2EE 跨端自动化 CI 测试套件 (准则 8);
-  - 联网检测与离线降级通知; 免费版提示升级; 安全徽章点亮;
-  - 编写隐私白皮书, 海外社区重点宣发。
+  - 多网卡与虚拟网卡绑定一致性与 UI 网卡切换支持(意见 36);
+  - 服务端平滑退出 (Graceful Shutdown) 与临时文件物理清理(意见 37);
+  - 响应式安全徽章与端内非阻塞通知标准，杜绝原生 alert(意见 29);
+  - 桌面端后台加密传输防休眠与 CPU 核心调度优化(意见 26);
+  - 桌面 GUI 传输监控面板实现设备列表可视化与 `[🚫 屏蔽]` / `[✅ 恢复]` 交互按钮(§7.3);
+  - 桌面端后台 30 秒周期探活 DRM 服务与内存状态缓存防抖(意见 21);
+  - 本地离线 Mock DRM 与 E2EE 跨端自动化 CI 测试套件(意见 32);
+  - 联网检测与离线降级通知;免费版提示升级;安全徽章点亮;
+  - 编写隐私白皮书,海外社区重点宣发。
 
-> **未来演进(暂不排期)**: ECDH 零知识密钥协商与二维码公钥指纹交叉验证 (准则 1 演进); Air-Gapped 离线加密 PWA + SAS 配对码。两者依赖 Phase 1-2 的数据面与 DRM 端点稳定后再评估。
+> **未来演进(暂不排期)**:ECDH 零知识密钥协商与二维码公钥指纹交叉验证(意见 8 方案二);Air-Gapped 离线加密 PWA + SAS 配对码(意见 13)。两者依赖 Phase 1-2 的数据面与 DRM 端点稳定后再评估。
 
 ---
 
@@ -587,9 +833,8 @@ graph TD
 
 本架构设计方案已完成跨**密码学原理、DRM 云端契约、PC 局域网数据面、浏览器沙箱限制、设备管理门禁、网络异常容错以及自动化 CI 测试**的全链路 360 度第一性原理推导与细节封网。
 
-* **8 项核心工程准则全面闭环**，剔除过度设计，保持高效简洁；
+* **38 项工程评审意见全部完成闭环**，无任何遗留模糊地带；
 * **双端开发边界完全确立**：PC 端以 Go 语言标准实现为准，移动端以 `libsodium.js` (WASM) 纯软解为准；
 * **生命周期完全对齐**：全模式统一覆盖重建，用时可用、下次必清、退时即抹；
 * **本方案正式作为 EQT E2EE 端到端加密特性的终审基准蓝图，可直接作为后续编码实施的法定依据。**
-
 
