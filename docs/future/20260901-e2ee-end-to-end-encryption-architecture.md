@@ -336,7 +336,69 @@ sequenceDiagram
 
 ---
 
-## 7. 密码学架构与密钥派生体系 (HKDF Key Hierarchy)
+## 7. E2EE 模式下的设备管理与双层级踢出/拉黑机制 (Device Visibility & Dual-Level Access Control)
+
+在局域网加密传输中（尤其是会议室、开放式办公区等多人 Wi-Fi 场景），PC 主机操作员必须对接入的移动设备拥有绝对的**可见性（无法隐藏）**与**控制权（随时可踢出/拉黑）**。
+
+### 7.1 设备显性化与绝对防隐藏原则 (Zero Invisible Devices)
+
+1. **强实名握手准入**：
+   - 移动端在扫码并从 DRM 领取密钥后，向 PC 局域网服务端发起任何加解密分块拉取/上传前，必须先在请求头中携带设备标识：`X-Client-Instance-Id` (UUID) 与 `X-Device-Name`（如 `iPhone 16 Pro`）；
+   - PC 服务端（`pkg/server/server.go`）在接收到请求的第一时间将该设备注册到 `clientStates` 状态机中，并向 PC GUI 界面与终端实时广播更新。
+2. **数据流强制绑定**：
+   - 任何未在 PC 状态机完成登记的匿名请求，一律直接拒绝（返回 `401 Unauthorized`）；
+   - PC 监控面板实时、无遗漏地列出所有已连接设备的：设备名称、客户端 UUID、传输进度、实时传输速率、已传分块与连接状态。**绝对不存在任何可隐身传输的幽灵设备**。
+
+---
+
+### 7.2 双层级删除机制设计 (Connection Kick vs Session Ban)
+
+系统对“删除设备”提供明确的**两级控制语义**，满足不同的管理场景：
+
+```mermaid
+graph TD
+    Device["接入的移动设备 (Client ID)"] --> Action{"PC 主机操作员选择"}
+    Action -->|"⚡ 本次断开 (Kick)"| Level1["连接级踢出 (Connection Kick)"]
+    Action -->|"🚫 移出会话 (Ban)"| Level2["会话级拉黑 (Session Ban)"]
+    
+    Level1 --> L1_Action["1. 立即切断当前 TCP / HTTP 分块连接<br/>2. 标记状态为 Disconnected<br/>3. 不拉黑 Client ID"]
+    L1_Action --> L1_Result["移动端提示断开；<br/>⚠️ 重扫码或刷新页面允许重新连接"]
+    
+    Level2 --> L2_Action["1. 立即切断现有连接<br/>2. 将 Client ID 写入内存 sessionBannedClients<br/>3. 后续所有请求拦截返回 403"]
+    L2_Action --> L2_Result["移动端显示专属红牌封禁；<br/>🚫 本会话期内即使重扫码也绝对无法再加入"]
+```
+
+#### 1. 层级 1：连接级断开 (Connection-Level Kick - "本次断开")
+* **定位与场景**：用于常规网络卡顿调试、设备临时挂起恢复，或操作员希望某台设备暂停传输以优先给其他设备腾出带宽。
+* **执行逻辑**：
+  1. PC 端调用 `POST /api/transfer/kick?client_id=<UUID>`；
+  2. PC 服务端强行切断该设备当前的活跃分块传输连接，将其在 `clientStates` 中的状态更新为 `failed ("Disconnected by host")`；
+  3. **不记录黑名单**：该设备的 `client_instance_id` 不会被封锁；
+  4. **移动端行为**：移动端界面显示“传输已由电脑端暂停/断开”；若用户在手机上重新扫码或刷新页面，可以重新与 PC 建立连接并利用断点续传继续传输。
+
+#### 2. 层级 2：会话级拉黑 (Session-Level Ban - "本会话拉黑/彻底移出")
+* **定位与场景**：用于安全防范。例如在公共 Wi-Fi 或会议室中，PC 操作员发现未经授权的陌生设备扫码接入，需要将其彻底踢出并永久阻止其窃取或上传数据。
+* **执行逻辑**：
+  1. PC 端调用 `POST /api/transfer/ban?client_id=<UUID>`；
+  2. **加入本地黑名单**：PC 服务端将该 `client_instance_id` 写入当前内存黑名单 `sessionBannedClients[clientID] = true`；
+  3. **立即硬切断**：立刻终止其当前所有网络 I/O，并将其所有尚未保存的未决临时分块彻底废弃清空；
+  4. **全端点拦截防重入**：在该 PC 会话生命周期内，该设备发起的任何后续请求（不管是下载分块、上传分块还是重新握手），PC 端网关均直接拦截并返回 `403 Forbidden ("Access Denied: Device permanently banned in this session")`；
+  5. **移动端行为**：移动端页面立即弹出不可撤销的红色安全拦截盾：“您的设备已被电脑端主机在本会话中禁止访问”。即便用户反复重新扫码或刷新，也绝对无法再次加入当前会话。
+
+---
+
+### 7.3 PC GUI / CLI 交互设计
+
+* **桌面 GUI 界面**：
+  - 在 Share / Receive 传输面板的设备列表（`DeviceCard`）中，每个设备卡片右侧提供两个明确操作按钮：
+    - `[ ⚡ 断开 ]`（按钮文案：断开当前连接，允许重连）
+    - `[ 🚫 拉黑 ]`（按钮文案：移出并拉黑本会话，禁止再次加入）
+* **CLI 终端交互**：
+  - 支持快捷交互按键（如按 `k` 输入设备序号踢出，按 `b` 输入序号拉黑）。
+
+---
+
+## 8. 密码学架构与密钥派生体系 (HKDF Key Hierarchy)
 
 为避免单一主密钥在不同传输信道间高频复用引发密码学碰撞或 Nonce 耗尽风险,引入标准 **HKDF-SHA256 (RFC 5869)** 派生分层子密钥:
 
@@ -349,7 +411,7 @@ graph TD
     HKDF -->|"info = 'eqt-auth-v1'"| K_auth["K_auth (API 签名与会话认证密钥)"]
 ```
 
-### 7.1 密钥域隔离优势
+### 8.1 密钥域隔离优势
 1. **密码学独立性**:单个文件分块出现罕见 Nonce 碰撞,不波及 WebSocket 与鉴权通道;
 2. **零明文传输**:`MasterKey` 仅经 HTTPS 存在于 DRM 与两端内存,所有局域网传输仅使用派生子密钥;
 3. **会话阅后即焚与内存安全 (Zeroize Memory)**:
@@ -358,7 +420,7 @@ graph TD
 
 ---
 
-## 8. 架构评审意见与工程避坑指南
+## 9. 架构评审意见与工程避坑指南
 
 ### 意见 1:统一 XChaCha20-Poly1305,废弃 AES-CTR 与「WASM 下 AES-256-GCM」
 * **AES-CTR 已废弃**:无完整性认证(No Authentication),局域网恶意篡改者可翻转密文比特精准篡改可执行文件或文档而接收端无感;字节级 Counter 对齐脆弱,续传偏移 1 字节即全线乱码(历史文档 `docs/crypto/resumable-e2ee-design.md` 已标注)。
@@ -504,9 +566,16 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
   * **全模式统一「覆盖重建」**：无论是 Share、Receive 还是 Chat，当 PC 下一次启动该模式请求 `POST /session/create` 时，DRM 自动原子执行 `DELETE FROM e2ee_sessions WHERE device_id = ? AND mode = ? AND status = 'active'`，彻底清空旧任务凭据并下发全新 MasterKey，实现零跨会话状态负担；
   * **主动退出闭环**：PC 端在关闭传输窗口或退出应用时，异步触发 `POST /api/v1/e2ee/session/:id/close`，DRM 即时物理抹除，达成“会话期稳健可用、下次必清、退时即抹”的极简安全闭环。
 
+### 意见 23:Share/Receive 模式下的双层级设备踢出与防隐藏管理规范
+* **背景评估**：局域网加密传输（特别是公共 Wi-Fi、会议室等多设备环境）必须保证 PC 端对接入设备的绝对透明度与控制力，杜绝“隐形蹭传”或“恶意设备接入后无法切断”。
+* **工程对策**：
+  * **强实名准入**：请求头强制携带 `X-Client-Instance-Id` (UUID) 与 `X-Device-Name`，PC 状态机实时广播至 GUI，不存在任何无法追踪的幽灵设备（§7.1）；
+  * **连接级踢出 (Kick)**：切断当前 TCP/HTTP 连接与传输状态，不记黑名单，允许误操作或重连设备再次扫码进入（§7.2.1）；
+  * **会话级拉黑 (Ban)**：将设备 UUID 写入内存 `sessionBannedClients`，本会话生命周期内全端点直接 403 阻断，彻底杜绝陌生未授权设备重连（§7.2.2）。
+
 ---
 
-## 9. 商业化分级与版本限制策略 (Free vs Plus/Pro Tier)
+## 10. 商业化分级与版本限制策略 (Free vs Plus/Pro Tier)
 
 | 功能维度 | 免费版 (Free Edition) | Plus / Pro 付费版 (Premium) |
 | :--- | :--- | :--- |
@@ -517,12 +586,13 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
 | **Wi-Fi 防嗅探保护** | 基础随机 Path 混淆。 | 🛡️ 密文级防御(公共/家庭 Wi-Fi 抓包无法解密)。 |
 | **E2EE 专属安全徽章** | 「标准局域网模式」。 | 绿色「🔒 End-to-End Encrypted (XChaCha20-Poly1305)」盾牌。 |
 | **会话阅后即焚清理** | 手动退出。 | 会话关闭自动覆写内存密钥 (Zeroize Buffer)。 |
+| **双层级设备管理** | 基础断开连接。 | ⚡ 连接级 Kick + 🚫 会话级永久 Ban 黑名单控制。 |
 
 > 定价与营销口径:在欧美注重隐私的市场,E2EE 属于高溢价卖点;白皮书应如实披露「加密依赖联网协商,离线自动降级明文」,避免过度宣传。
 
 ---
 
-## 10. 开发实施与演进排期 (Implementation Roadmap)
+## 11. 开发实施与演进排期 (Implementation Roadmap)
 
 - [ ] **Phase 1:WASM 密码学基础库与 HKDF 密钥派生引擎**
   - `pkg/pages/assets/crypto-engine.js`:libsodium.js 初始化、HKDF-SHA256 派生、XChaCha20-Poly1305 分块加解密、Worker 通信;
@@ -539,15 +609,17 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
   - 加解密运行于独立 Web Worker,Transferable 零拷贝传输(意见 11);
   - 附件分级传输：$\le$ 20MB 单块直传，> 20MB 复用 4MB 分块流式管道(意见 17);
   - Go 后端与 Svelte 前端实现消息/剪贴板透明加解密。
-- [ ] **Phase 4:Receive / Share 4MB 分块流式加解密**
+- [ ] **Phase 4:Receive / Share 4MB 分块流式加解密与设备管理控制**
   - Receive:弃用 Multipart，采用专用 REST 端点 `POST /receive/:path/chunk`(意见 15)+ 前端 `File.slice()` 3 级流水线(Read→Encrypt→POST,并发度 2)(意见 12)+ Go `ChunkedXChaChaReader` 零临时文件写盘 + `chunk_status` 断点恢复;
   - 移动端 WebKit 屏幕常亮保活 Screen WakeLock 与切后台断点恢复(意见 18);
   - 多核多 Worker 线程池并发加解密，冲刺 150MB/s+ 吞吐(意见 19);
   - Go 服务端引入 `sync.Pool` 4MB 缓冲池，消除百兆吞吐下的 GC 停顿(意见 16);
+  - 设备管理控制：服务端接入双层级 `kick` 与 `ban` 路由及内存黑名单拦截网关(意见 23、§7);
   - Share:Go 端 `Range` 兼容分块加密下发 + 移动端 Blob / StreamSaver 流式解密下载管道;
   - 分块加解密统一置于 Web Worker(意见 11)。
-- [ ] **Phase 5:Settings 开关、付费门禁与海外隐私营销**
+- [ ] **Phase 5:Settings 开关、GUI 设备管理卡片与海外隐私营销**
   - `pkg/config/settings.go` 新增 `EnableE2EE` 字段与 Settings 界面开关;
+  - 桌面 GUI 传输监控面板实现设备列表可视化与 `[⚡ 断开]` / `[🚫 拉黑]` 交互按钮(§7.3);
   - 桌面端后台 30 秒周期探活 DRM 服务与内存状态缓存防抖(意见 21);
   - 联网检测与离线降级通知;免费版提示升级;安全徽章点亮;
   - 编写隐私白皮书,海外社区重点宣发。
