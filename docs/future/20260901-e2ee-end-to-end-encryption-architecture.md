@@ -436,7 +436,7 @@ graph TD
    - PC 服务端（`pkg/server/`）比对内存中的 `clientStates`，精准判定其为“同一设备重新接入”；若该设备已被屏蔽（Ban），则网关直接拦截并返回 403；若操作员已解除屏蔽（Unban），该设备重新扫码/刷新后可从第 0 块干净地重新发起传输（§7.2）。
 2. **各设备的密钥关系 (Key Relationship Across Devices)**：
    - **当前主方案（Phase 1-2 DRM 信任锚方案）**：在同一个会话房间内，所有扫了同一个二维码的合法设备，从 DRM 领取的是**同一个共享主密钥 `MasterKey`**（通过 HKDF 派生相同的 `K_send`, `K_recv`, `K_ws`）。但**每个设备的每个分块均使用全新独立的 24 字节安全随机 Nonce**，且各设备通过 `X-Client-Instance-Id` 维护独立的数据流与断点续传状态机；
-   - **未来演进方案（Phase 6 ECDH 方案）**：演进到 ECDH 后，每台手机生成各自的公私钥对与 PC 协商，此时各设备派生出的 `MasterKey_device` 则是**每设备完全独立**的。
+   - **未来演进方案（ECDH 零知识，暂不排期）**：演进到 ECDH 后，每台手机生成各自的公私钥对与 PC 协商，此时各设备派生出的 `MasterKey_device` 则是**每设备完全独立**的。
 3. **恶意设备通过“清空存储/隐私模式换马甲”绕过拉黑的三重防御**：
    - 若被拉黑的恶意用户试图通过清空 `localStorage` 或开启无痕模式伪造全新 UUID 重新接入，系统提供三重防护：
      - **① DRM `max_claims` 配额硬顶**：DRM 会话设有严格的领取上限（如 Pro 版最多 5 台）。恶意用户每清空一次存储即消耗 1 次配额，恶意刷几次后配额即被耗尽，彻底封死；
@@ -452,7 +452,7 @@ graph TD
    - 当该设备解除屏蔽并重新上传时，必须从第 0 块开始重新建立临时文件，直至全部分块 Poly1305 验签完毕后，再通过原子重命名（Atomic Rename）提交为最终文件。
 2. **HTTP 状态码与响应语义规范**：
    - 处于屏蔽状态下的分块请求统一返回 `403 Forbidden`；
-   - 解除屏蔽后，若移动端错误地尝试直接请求历史断点（`index > 0`），服务端返回 `409 Conflict ("Transfer reset: Please restart from chunk 0")` 予以拒绝，强制客户端重置为 0 偏移。
+   - 解除屏蔽后，若移动端错误地尝试直接请求历史断点（`index > 0`），服务端返回 `409 Conflict ("Transfer reset: Please restart from chunk 0")` 予以拒绝，强制客户端重置为 0 偏移；同时该设备的 `chunk_status` 断点查询（§6.3）必须返回 `M=0`，与服务端已废弃的临时文件保持一致，杜绝「旧断点续传 + 新临时文件」错位。
 3. **服务端内存锁与并发竞态保护 (`sync.RWMutex`)**：
    - PC 服务端中的 `sessionBannedClients` Map 与 `clientStates` 在被高并发分块 Handler 检查时，与 GUI 操作员点击“屏蔽/恢复”存在并发读写，**必须全程使用 `sync.RWMutex` 严格加锁保护**，杜绝 Go runtime 的 concurrent map read/write 致命 panic。
 4. **多文件传输队列的会话级级联阻断 (Multi-File Queue Cascade)**：
@@ -678,7 +678,7 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
   - 移动端 WebKit 屏幕常亮保活 Screen WakeLock 与切后台断点恢复(意见 18);
   - 多核多 Worker 线程池并发加解密，冲刺 150MB/s+ 吞吐(意见 19);
   - Go 服务端引入 `sync.Pool` 4MB 缓冲池，消除百兆吞吐下的 GC 停顿(意见 16);
-  - 设备管理控制：服务端接入静默屏蔽 `ban` / `unban` 路由及内存黑名单拦截网关(意见 23、§7);
+  - 设备管理控制：服务端接入静默屏蔽 `ban` / `unban` 路由及内存黑名单拦截网关(意见 23、§7)，落实 §7.5 五项工程红线;
   - Share:Go 端 `Range` 兼容分块加密下发 + 移动端 Blob / StreamSaver 流式解密下载管道;
   - 分块加解密统一置于 Web Worker(意见 11)。
 - [ ] **Phase 5:Settings 开关、GUI 设备管理卡片与海外隐私营销**
