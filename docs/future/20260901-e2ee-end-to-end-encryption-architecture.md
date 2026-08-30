@@ -493,12 +493,12 @@ graph TD
 ## 9. 架构评审意见与工程避坑指南 (38 项落地细则与 8 大核心准则)
 
 > **极简实施核心导图 (Executive Tenets)**：为在编码实施中保持高效简洁、杜绝代码过度设计，全链路 38 项细则高度收敛为以下 **8 大核心工程原则**：
-> 1. **密码学基石**：全链路统一 4MB XChaCha20-Poly1305 + HKDF-SHA256 派生 + 密文内全量 SHA-256 校验；
-> 2. **信任锚与生命周期**：PC 各模式单例原子覆盖重建（`INSERT ... ON CONFLICT`），退出主动 `close`，10 分钟 TTL 物理抹除，DRM 零日志；
-> 3. **数据面流式 I/O**：专用 REST 端点 `POST /receive/:path/chunk`，Go 服务端 `sync.Pool` 4MB 内存池化，多文件流式 ZIP 打包；
-> 4. **移动端沙箱与落盘**：libsodium (WASM) 运行于 Worker（Transferable 零拷贝），落盘 3 级阶梯（Blob $\rightarrow$ File System Access $\rightarrow$ OPFS）；
+> 1. **密码学基石**：全链路统一 4MB XChaCha20-Poly1305 + HKDF-SHA256 派生 + 密文内增量 SHA-256 校验 + WASM 引擎内联/哈希防篡改；
+> 2. **信任锚与生命周期**：PC 各模式单例原子覆盖重建（`INSERT ... ON CONFLICT`），退出主动 `close`，10 分钟 TTL 物理抹除，DRM 应用层零日志；
+> 3. **数据面流式 I/O**：专用 REST 端点 `POST /receive/:path/chunk`，Go 服务端 `sync.Pool` 4MB 内存池化，多文件流式 ZIP 归档传输；
+> 4. **移动端沙箱与落盘**：libsodium (WASM) 运行于 Worker（Transferable 零拷贝），落盘阶梯（<500MB 内存 Blob $\rightarrow$ $\ge$500MB IndexedDB 分件落盘，明确纯 HTTP 下单文件 ≈1GB 诚实边界）；
 > 5. **设备管理与门禁**：强制 UUID 实名准入与改名实时同步，单向静默门禁（`sessionBannedClients`），解封后强制从 Chunk 0 重新发起；
-> 6. **网络漫游与保活**：鉴权绑定 UUID 解耦 IP:Port，移动端 WakeLock 与桌面端关闭 Power Throttling 防休眠，弱网自适应并发避让；
+> 6. **网络漫游与保活**：鉴权绑定 UUID 解耦 IP:Port，移动端 WakeLock 与桌面端关闭 Power Throttling 防休眠，基于超时连续失败计数的自适应并发避让；
 > 7. **用户体验与端内通知**：响应式绿/灰盾牌徽章，全链路使用端内轻量 Toast/Banner，严禁原生阻塞式 `alert()`；
 > 8. **自动化测试与零回归**：内置内存型 `MockDRMServer` 自动化回归沙盒，100% 保留现有明文与 tus 断点续传链路。
 
