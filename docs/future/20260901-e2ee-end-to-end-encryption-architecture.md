@@ -80,6 +80,12 @@ settings.enableE2EE = true
 
 手机扫码访问 EQT 的 `http://192.168.x.x` 页面,属于 insecure context。因此**旧文档依赖 `crypto.subtle` 的整条 AES-256-GCM 链路在该场景下根本跑不起来**——这是 v1 方案的核心缺陷。
 
+> **⚠️ 同源陷阱全景 (Secure Context API 清单)**：Secure Context 门禁不止作用于 `crypto.subtle`。以下能力在 `http://192.168.x.x` 下**同样全部不可用**，实现时须与 `crypto.subtle` 一视同仁：
+> * `navigator.serviceWorker`（Service Worker 注册）——StreamSaver 伪下载管道失效；
+> * `window.showOpenFilePicker / showSaveFilePicker / showDirectoryPicker`（File System Access API）——无法直接写系统下载目录；
+> * `navigator.storage.getDirectory()`（Origin Private File System）——**MDN 明确标注 Secure Context**，意见 30 的 OPFS 落盘在纯 HTTP 下直接落空；
+> * 纯 HTTP 下唯一可用的大容量持久化通道是 **IndexedDB**（不要求 Secure Context），大文件流式落盘须以此为底座（见 §6.2 与意见 30 修正）。
+
 ### 4.2 方向性约束:mixed content 决定信任锚必须「反向拉取」
 混合内容 (Mixed Content) 规则:**HTTPS 页面加载纯 HTTP 资源会被浏览器拦截**。因此不能把加密前端托管在 DRM 的 HTTPS 页面上去 fetch 局域网 PC(该请求会被当成 active mixed content 阻断,除非 PC 也有可信证书——回到 §2 死局)。
 
@@ -263,7 +269,7 @@ sequenceDiagram
     Note over PC: 按 4MB 独立 Nonce 流式加密
     PC-->>Browser: 传输 4MB 分块密文流 [Index|Nonce|Ciphertext|Tag]
     Note over Browser: libsodium WASM 分块解密校验 Tag
-    Browser->>FS: 通过 StreamSaver / Blob 管道流式落盘为明文文件
+    Browser->>FS: 通过 IndexedDB / Blob 管道流式落盘为明文文件
 ```
 
 #### 3. 核心技术细节
@@ -271,8 +277,8 @@ sequenceDiagram
 * **HTTP Range 随机定位**:`Range: bytes=start-end` 时服务端换算分块索引 `ChunkStart = floor(start / 4194304)`、`ChunkEnd = floor(end / 4194304)`,独立 Nonce/Tag 使视频拖拽寻址无需解密前序块;
 * **浏览器内存墙破局**(阶梯适配):
   1. 小文件 (< 300MB):In-Memory Blob + `<a download>` 原生下载;
-  2. 超大文件 (≥ 300MB):`StreamSaver.js`(Service Worker fetch 拦截管道)或 `showSaveFilePicker()` / `FileSystemWritableFileStream`,边解密边落盘,内存常驻仅 ~8MB;
-  3. 极端降级:设备不支持 Service Worker 且文件超限 → 提示切换标准明文模式或分卷传输。
+  2. 超大文件 (≥ 300MB):`fetch` 流式读取(`response.body.getReader()`)→ 逐块解密 → 以分件 Blob 写入 **IndexedDB**,传输完成后由用户触发「导出」重装或分卷导出,内存常驻仅 ~8MB(**StreamSaver / `showSaveFilePicker` / OPFS 均属 Secure Context 门禁,局域网 HTTP 下不可用,见 §4.1 同源陷阱全景**);
+  3. 极端降级:IndexedDB 配额受限(如 iOS Safari 隐私模式,配额约 1GB 量级)且文件超限 → 提示切换标准明文模式或分卷传输。
 
 ### 6.3 Receive 模式:移动端浏览器发送 → PC 服务端接收落盘
 
@@ -504,7 +510,7 @@ graph TD
 * **✅ XChaCha20-Poly1305**:AEAD 硬件级(纯软件也可全速)、24 字节 Nonce 冗余、Go 端有标准实现,是局域网 WASM 场景的最优解。
 
 ### 意见 2:移动端浏览器(WebKit)大文件下载「内存墙」破局
-iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直接 `new Blob([decryptedChunks])` 会 OOM 崩溃刷新。采用 §6.2 阶梯式适配(Blob → StreamSaver → 降级提示)。
+iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直接 `new Blob([decryptedChunks])` 会 OOM 崩溃刷新。采用 §6.2 阶梯式适配(Blob → IndexedDB 流式分件 → 降级提示)。
 
 ### 意见 3:Go 服务端流式解密 Reader,杜绝临时密文二次 I/O
 在 `pkg/server/` 封装 `ChunkedXChaChaReader`,包装 HTTP Body 流,逐块「校验 Tag → 解密 → 直接写入目标文件」,局域网全速(80~110 MB/s),避免数十 GB 视频的双重磁盘 I/O。
@@ -689,6 +695,7 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
   * 在 E2EE Share 模式下，对于多文件分享：
     1. 前端提供“文件列表逐个手动下载/预览”模式；
     2. 对于“全部下载 (Download All)”，PC 服务端以**流式内存 ZIP 容器（Virtual Streamed ZIP）**在内存中实时打包并经 4MB XChaCha20 逐块加密，移动端解密后仅触发 1 次单文件 `.zip` 下载，彻底规避移动端浏览器的多文件拦截墙。
+  * **评审补充**：ZIP 模式将「多文件队列」坍缩为单个 `.zip` 流，意见 25 的「每文件独立 `file_sha256`」随之退化为**单条流哈希（对 ZIP 明文流）**；且超大文件夹的解压仍落在移动端——建议解密后**流式解包直写 IndexedDB 分件**（复用 §6.2/意见 30 的落盘底座），避免「先落一个大 `.zip` 再二次处理」的二次内存墙。
 
 ### 意见 29:响应式安全徽章与端内非阻塞通知规范 (In-App Notification Standard)
 * **背景评估**：遵循项目工程规范，严禁使用破坏用户体验的浏览器原生 `alert()` / `confirm()` 阻塞弹窗，必须保证在网络波动、降级明文或被屏蔽时的平滑端内反馈。
@@ -699,10 +706,11 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
 ### 意见 30:移动端超大文件落盘的 OPFS (Origin Private File System) 阶梯适配
 * **背景评估**：在移动端下载 >2GB 的超大视频时，传统 `Blob` 会因移动端堆内存上限（1GB~2GB）直接抛出 OOM，而第三方 `StreamSaver.js` 依赖 ServiceWorker 伪中间人拦截，在局域网纯 HTTP 环境下兼容性差。
 * **工程对策**：
-  * 采用 3 级阶梯式流式落盘：
+  * 采用 3 级阶梯式流式落盘（**评审修正**：原 tier 2 `showSaveFilePicker` 与 tier 3 OPFS 均为 Secure Context 限定 API，局域网 HTTP 下不可用——见 §4.1 同源陷阱全景——已改为 IndexedDB 底座）：
     1. **小文件 (< 500MB)**：直接在内存中汇聚为 `Blob` 并触发原生下载链接；
-    2. **中等文件 (500MB ~ 2GB)**：优先检测调用 File System Access API 的 `showSaveFilePicker()`；
-    3. **超大文件 (> 2GB)**：在 Web Worker 中调用 **OPFS (Origin Private File System)** 的 `createWritable()` / `SyncAccessHandle` 逐块直写本地私有磁盘文件，解密完成后触发一键导出，彻底攻克移动端浏览器百 GB 级下载内存墙。
+    2. **中等/超大文件 (≥ 500MB)**：`fetch` 流式读取（`response.body.getReader()`）→ 逐块解密 → 分件 Blob 写入 **IndexedDB**（不要求 Secure Context），传输完成后触发「一键导出」重装或分卷导出；
+    3. **未来增强（仅 HTTPS 可解锁）**：OPFS `getDirectory()/createWritable()` 与 File System Access 的 `showSaveFilePicker()` 在页面运行于 HTTPS（安装态 PWA / 一次性信任自签证书）时启用，纯 HTTP 下不进入该分支。
+  * **附（诚实边界）**：iOS Safari IndexedDB 配额长期约 1GB（隐私模式更小），即零配置纯 HTTP 下**单文件 E2EE 下载的实际硬上限 ≈ 1GB**；超出部分须走 HTTPS 信任路径或安装态应用，建议在 UI 明确提示而非静默失败。
 
 ### 意见 31:密码学密钥内存防御性清零与防编译器死码消除 (`runtime.KeepAlive` & `sodium.memzero`)
 * **背景评估**：密码学密钥在 Go 堆内存和 JS WASM 内存中使用完毕后，若仅简单赋值为 `nil`，GC 未触发前密钥字节仍以明文驻留在物理内存中；此外，部分 Go 编译器激进优化可能将未被后续引用的清零循环（Dead Code）优化剔除。
@@ -726,12 +734,14 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
   * 客户端引入轻量自适应拥塞控制：
   * 统计最近 3 个分块的平均 RTT，若单个分块请求超时或延迟 > 3 倍平均 RTT，临时将上传并发度降为 1（串行重试）；
   * 当连续 2 个分块快速完成（RTT 恢复正常）时，自动恢复并发度为 2，保证弱网下的高韧性传输。
+  * **评审补充**：RTT 比值判据适合 WAN；局域网 RTT 仅 ~1ms，Wi-Fi 突发抖动下「延迟 > 3 倍平均 RTT」极易误触发降并发。更稳的判据是**显式 XHR 超时 + 连续失败计数**：连续 N 块失败才降为串行重试，恢复判据保留「连续成功计数」。
 
 ### 意见 34:WASM 静态资源 MIME 类型 (`application/wasm`) 与 SRI 哈希防篡改规范
 * **背景评估**：某些移动端浏览器在加载 `.wasm` 文件时，若 HTTP 响应头的 `Content-Type` 为 `application/octet-stream` 而非标准的 `application/wasm`，会导致 `WebAssembly.instantiateStreaming` 编译失败并降级为昂贵的 ArrayBuffer 同步编译，导致初始化延迟激增。
 * **工程对策**：
   * DRM CDN（Cloudflare Worker）与 PC 局域网 Go 静态资源服务，必须显式为 `.wasm` 注入 `Content-Type: application/wasm` 头；
   * 首屏 HTML 中的 `<script>` 标签引入 `crypto-engine.js` 时，附带固定 `integrity="sha256-..."` (SRI) 校验，防止 CDN 资源被中间人篡改。
+  * **评审补充**：SRI 只作用于 `<script>`/`<link>` 标签加载的资源；libsodium.js 运行时自行 `fetch()` 的 `.wasm` **不会走 SRI**。作为防 CDN 被攻破的纵深防御，须在 `crypto-engine.js` 内显式比对 wasm 字节的 SHA-256（或直接将 wasm base64 内联进 JS，消除外部替换面）。
 
 ### 意见 35:移动端 Safari 无痕模式与存储配额受限下的降级兜底
 * **背景评估**：在 iOS Safari 隐私无痕浏览模式（Private Browsing Mode）下，`localStorage` 与 OPFS 磁盘配额可能被严格限制在很小范围（如 <50MB），导致写盘抛出 `QuotaExceededError`。
@@ -757,6 +767,7 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
   * D1 数据库仅保存 `(session_id, device_id, mode, master_key, claim_count, max_claims, status, expires_at, ttl)` 纯元数据；
   * 严禁在 DRM 日志中记录客户端 IP 地址、局域网私网 IP、文件名、传输文件大小或聊天内容；
   * 会话 TTL 到期后物理抹除，实现真正无痕的零知识隐私中继。
+  * **评审补充（诚实边界）**：应用层零日志 ≠ 平台零日志——Cloudflare 边缘访问日志与会话层日志仍可能记录公网源 IP，属平台侧不可控。应在 DRM 自有 `structured-logger` 中剥离一切可关联字段，并在隐私白皮书中如实声明平台日志边界，避免「无痕」承诺被证伪。
 
 ---
 
@@ -811,7 +822,7 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
   - 多核多 Worker 线程池并发加解密，冲刺 150MB/s+ 吞吐(意见 19);
   - Go 服务端引入 `sync.Pool` 4MB 缓冲池，消除百兆吞吐下的 GC 停顿(意见 16);
   - 设备管理控制：服务端接入静默屏蔽 `ban` / `unban` 路由及内存黑名单拦截网关(意见 23、§7)，落实 §7.5 五项工程红线;
-  - Share:Go 端 `Range` 兼容分块加密下发 + 移动端 Blob / StreamSaver 流式解密下载管道;
+  - Share:Go 端 `Range` 兼容分块加密下发 + 移动端 Blob / IndexedDB 分件流式解密落盘管道;
   - 分块加解密统一置于 Web Worker(意见 11)。
 - [ ] **Phase 5:Settings 开关、GUI 设备管理卡片与海外隐私营销**
   - `pkg/config/settings.go` 新增 `EnableE2EE` 字段与 Settings 界面开关;
@@ -836,5 +847,6 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
 * **38 项工程评审意见全部完成闭环**，无任何遗留模糊地带；
 * **双端开发边界完全确立**：PC 端以 Go 语言标准实现为准，移动端以 `libsodium.js` (WASM) 纯软解为准；
 * **生命周期完全对齐**：全模式统一覆盖重建，用时可用、下次必清、退时即抹；
+* **已知边界（诚实声明）**：纯 HTTP 零配置下单文件 E2EE 下载受 Secure Context 门禁与 iOS IndexedDB 配额硬限制，实际上限 ≈1GB（§4.1 同源陷阱全景、意见 30）；该边界属平台约束而非设计遗漏，超大文件降级路径已在上文明确（IndexedDB 分件导出 / 未来 HTTPS 信任路径 / 分卷传输）；
 * **本方案正式作为 EQT E2EE 端到端加密特性的终审基准蓝图，可直接作为后续编码实施的法定依据。**
 
