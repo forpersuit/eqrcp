@@ -18,32 +18,29 @@ set -euo pipefail
 
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-# 1. Check if fast commit is requested via environment variable
-if [[ "${EQT_SKIP_BUILD:-0}" == "1" || "${EQT_FAST_COMMIT:-0}" == "1" || "${EQT_NO_DEPLOY:-0}" == "1" ]]; then
-  echo "=== [pre-commit] Fast commit mode enabled. Skipping heavy build and side effects. ==="
+# 1. 只有显式声明 EQT_DEPLOY_ON_COMMIT=1 时，才执行全量 Windows 编译、测试、杀进程与验收目录部署
+if [[ "${EQT_DEPLOY_ON_COMMIT:-0}" == "1" || "${EQT_BUILD_ON_COMMIT:-0}" == "1" ]]; then
+  echo "=== eqt pre-commit: deploy Windows acceptance artifacts (explicitly enabled) ==="
+  "$root_dir/scripts/deploy-windows-results.sh"
+  echo "=== eqt pre-commit completed ==="
   exit 0
 fi
 
-# 2. Smart Diff: skip heavy build if only documentation/markdown/metadata files changed
-changed_files="$(git diff --cached --name-only 2>/dev/null || true)"
-if [[ -n "$changed_files" ]]; then
-  non_doc_files="$(echo "$changed_files" | grep -v -E '^docs/|\.md$|^\.gitignore$|^LICENSE$|^\.github/' || true)"
-  if [[ -z "$non_doc_files" ]]; then
-    echo "=== [pre-commit] Only docs/metadata files modified. Skipping heavy build & side effects. ==="
-    exit 0
-  fi
+# 2. 默认模式：纯提交，绝对零副作用（不杀进程、不编译 Windows/Wails、不生成交付件）
+# 仅对暂存的 Go 代码执行轻量 gofmt 格式化，耗时 < 0.05s
+staged_go_files="$(git diff --cached --name-only --diff-filter=ACMR 2>/dev/null | grep '\.go$' || true)"
+if [[ -n "$staged_go_files" ]]; then
+  echo "$staged_go_files" | xargs gofmt -w 2>/dev/null || true
+  echo "$staged_go_files" | xargs git add 2>/dev/null || true
 fi
 
-echo "=== eqt pre-commit: deploy Windows acceptance artifacts ==="
-"$root_dir/scripts/deploy-windows-results.sh"
-echo "=== eqt pre-commit completed ==="
+exit 0
 EOF
 
 chmod +x "$hooks_dir/pre-commit" 2>/dev/null || true
 
-echo "Pre-commit hook installed."
-echo "The hook runs scripts/deploy-windows-results.sh before each commit."
-echo "Fast options:"
-echo "  - Use 'git commit -n' or 'git commit --no-verify' to bypass hook entirely."
-echo "  - Use 'EQT_FAST_COMMIT=1 git commit' or 'export EQT_FAST_COMMIT=1' to skip builds."
-echo "  - Commits containing only docs/*.md automatically skip recompile."
+echo "Pre-commit hook installed successfully."
+echo "Default behavior: Fast pure commit (<0.05s, zero side effects, no process kills, no recompile)."
+echo "When Windows acceptance deployment is needed:"
+echo "  - Run: './scripts/deploy-windows-results.sh' directly"
+echo "  - Or: 'EQT_DEPLOY_ON_COMMIT=1 git commit -m \"...\"'"

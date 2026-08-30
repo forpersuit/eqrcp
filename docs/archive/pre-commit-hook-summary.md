@@ -130,28 +130,32 @@ cd desktop/gui
 wails build -clean -o E:/developer/results/eqt-desktop.exe -platform windows/amd64
 ```
 
-## 使用技巧
+## Hook 功能与执行策略
 
-### 1. 快速提交（跳过重编译与副作用）
+### 1. 默认提交模式（绝对零副作用，秒级完成）
 
-**方法 A：使用 Git 原生 `--no-verify` / `-n` 参数（直接跳过 Hook）**
+日常执行标准的 `git commit` 时：
+* **耗时**：`< 0.05 秒`。
+* **行为**：仅对暂存的 Go 代码执行轻量 `gofmt` 格式化。
+* **绝对零副作用**：**不杀任何后台调试进程**、**不触发 Wails/Vite 重新编译**、**不生成 Windows exe**、**不向 `E:\developer\results` 写入交付件**。
+
+### 2. 按需执行带副作用的验收部署提交 (On-Demand Acceptance Deployment)
+
+**方式 A：直接运行手动验收部署脚本（推荐）**
 ```bash
-git commit -n -m "commit message"
-# 或
-git commit --no-verify -m "commit message"
+./scripts/deploy-windows-results.sh
 ```
 
-**方法 B：使用环境变量（保留 Hook 逻辑但跳过耗时重构建）**
+**方式 B：通过环境变量在提交时触发全量 Windows 编译与部署**
 ```bash
-EQT_FAST_COMMIT=1 git commit -m "commit message"
-# 或者在当前终端会话全局启用：
-export EQT_FAST_COMMIT=1
+EQT_DEPLOY_ON_COMMIT=1 git commit -m "feat: complete release feature"
 ```
 
-**方法 C：纯文档/Markdown 改动智能免编译（自动触发）**
-- 当暂存的文件全部属于 `docs/`、`*.md`、`.gitignore` 等文档/元数据文件时，Pre-commit Hook 会**自动识别并智能跳过** Wails 构建与 Windows 编译，实现 0.05 秒纯提交，绝无副作用！
-
-### 2. 卸载 Hook
+触发全量构建时，脚本将自动：
+1. 关闭正在运行的 `eqt.exe` / `eqt-launcher.exe` / `eqt-desktop.exe`；
+2. 运行 Go tests 与 GUI 单元测试；
+3. 执行 Wails 构建与前端 Vite 打包；
+4. 编译 Windows 二进制并打包 zip，写入 `E:\developer\results`。
 
 ```bash
 # Windows
