@@ -1,34 +1,202 @@
-# EQT (Easy QR Transfer) — Twitter (X) 推广策略与推文文案库
+# EQT (Easy QR Transfer) — Twitter (X) 推广策略与多维文案资产库
 
-本文档为 EQT 项目在 Twitter (X) 平台上的官方推广方案与推文资产库。所有文案均严格按照 Twitter 推荐算法机制、字符计量标准（<= 280 字符单元）及高转化运营逻辑设计。
+本文档为 EQT 在 Twitter (X) 平台上的官方推广全案。内容围绕**核心功能（Chat 局域网即时加密通信、Receive & Share 多设备并发互传、免数据线极简轻便）**与**目标用户身份角色（程序员、视频创作者、跨端办公白领、学生学者）**多维展开，并为**每条推文配备了详细的效果配图视觉设计指南**。
+
+全部文案均基于**中文打底模板**，并提供**英语、日语、德语等多语种国际化转译**。所有推文严格经过物理字符长度校验（<= 280 单元）并遵循 Twitter 推荐算法法则（正文 100% 零外链，链接全部在评论区第一条沉淀）。
 
 ---
 
 ## 1. Twitter (X) 算法推荐逻辑与发推黄金法则
 
-为了让推文获得平台“For You (为你推荐)”算法的最大化曝光推荐，本套文案严格遵循以下核心原则：
+### 1.1 零外链降权原则 (No-Link Penalty)
+* **算法机制**：Twitter 对正文中包含外链（如 github.com、http 链接）的推文施加重度降权（曝光量减少 50%~80%）。
+* **执行规范**：**所有主帖正文严禁出现任何链接**。所有 GitHub 开源地址、官网、文档链接统一在**评论区第 1 条 (First Reply / 置顶评论)** 中发布，正文尾部仅保留指引符号（如 `👇 开源地址与下载见评论区第1条`）。
 
-### 1.1 零外链降权原则 (No Outbound Links in Main Post)
-* **算法底层逻辑**：Twitter 算法为了降低用户跳出率，会极重度惩罚正文中包含外部 URL（如 GitHub 链接、官网域名等）的推文，通常会导致 50% ~ 80% 的曝光量腰斩。
-* **执行规范**：**所有主推文正文 100% 不放任何链接**。所有下载链接、GitHub 仓库地址、文档链接统一在**评论区第 1 条（First Reply / 置顶回复）**中发布，并在正文尾部使用明确的引导箭头（如 `👇 见评论区第1条`）。
+### 1.2 互动权重倍率 (Engagement Multipliers)
+* 🔖 **Bookmark（书签/收藏） [~30x - 50x 权重]**：算法最高权重点赞指标。文案中高频自然植入“建议先 Bookmark 收藏防丢”、“建议收藏备用”。
+* 🔁 **Retweet / Repost（转发） [~20x 权重]**：高扩散指标，引导转发给饱受微信传文件困扰的同事和朋友。
+* 💬 **Reply（评论互动） [~20x - 50x 权重]**：结尾以开放式痛点问题或投票引发讨论，提升推文驻留时长 (Dwell Time)。
 
-### 1.2 互动权重倍率驱动 (Engagement Multipliers)
-Twitter 开源推荐算法中，各项互动权重大致比例：
-* 🔖 **Bookmark（书签/收藏） [权重 ~30x - 50x]**：极其重要的正向指标，算法认为收藏代表“长期高价值干货”。文案中自然嵌入“建议 Bookmark 收藏备用”、“建议收藏防丢”。
-* 🔁 **Retweet / Repost（转发） [权重 ~20x]**：极高扩散加权，引导开发者或受困于微信传文件的同事转发展示。
-* 💬 **Reply（评论互动） [权重 ~20x - 50x]**：主帖与跟帖的对话深度能显著提升推文生命周期。每组文案均以开放式痛点问题收尾引发热议。
-* ⏱️ **Dwell Time（停留驻留时长）**：Thread（串推）形式能让用户逐条展开阅读，极大增加有效停留时长。
-
-### 1.3 字符计量与安全边距 (Character Limit Standards)
-* Twitter 计量规则：ASCII / 英文字符计 **1 单元**，中日韩 (CJK) 汉字、全角符号、Emoji 计 **2 单元**。单条普通推文上限为 **280 单元**（纯中文最大上限为 140 字）。
-* 本文档中的所有推文均通过物理单元脚本精准校验，每条均控制在 **200 ~ 265 单元**之间，预留了充足的安全边距，防止直接复制发推时溢出。
+### 1.3 字符计量标准与物理校验
+* Twitter 计量标准：单字节 ASCII（英文/数字/半角符号）计 **1 单元**，双字节 CJK（中日韩汉字/全角符号/Emoji）计 **2 单元**。单条推文上限为 **280 单元**（纯中文约 140 字）。
+* 本文所有推文均经自动化脚本校验，字符数全部落在 **200 ~ 276 单元**的安全区间。
 
 ---
 
-## 2. 方案一：官方主打多推串推 (Official Launch Thread — 中文极客开发者篇)
+## 2. 核心功能推文矩阵与效果配图指南 (Feature-Driven Matrix)
 
-> **定位**：深度科普、建立品牌心智、引发极客共鸣，适合作为账号置顶 Thread 或正式发布主打推。  
-> **配图建议**：Tweet 1 搭配一张高质感的终端生成二维码 + 手机扫码界面的分屏动图 (GIF) 或并列截图。
+---
+
+### 🔥 主打功能 A：Chat 局域网即时加密聊天与剪贴板同步 (Star Feature)
+
+> **定位**：解决电脑与手机间高敏感信息（API Token、密码、代码、多张截图）的安全互通，会话关闭即焚，零云端扫描。
+
+#### 📝 推文文案 (中文)
+```text
+平时电脑手机互传 API Token、密码或代码，还在用微信？
+
+• 微信不安全、易被云端扫描留痕
+• 剪贴板跨端不同步
+• 离开工位忘记退微信隐患大
+
+试试 EQT Chat：
+终端敲一行命令生成临时加密房间，手机扫码秒连！
+两端文字、代码、截图即时双向互通，关闭即焚。
+
+👇 开源地址与安装见评论区第1条
+```
+* **字符数**：274 / 280 单元 (安全)
+* **外链检查**：无外链 (通过)
+
+#### 🎨 效果配图设计指南 (Visual Guide)
+* **配图构图**：**左电脑右手机 16:9 双拼对比图**。
+  - **左半屏（PC 侧）**：黑色深色终端中执行 `eqt chat`，显示精美的 ASCII 二维码，旁边嵌有 VS Code 代码编辑器高亮显示的一串 API Key。
+  - **右半屏（手机侧）**：手机浏览器打开的 EQT Chat 极简聊天界面，清晰展示刚才复制的 API Key 已瞬间同步至对话气泡中，并带有一键“复制到剪贴板”高亮按钮。
+  - **视觉焦点**：画面中央带有“局域网点对点直连 · 0 云端残留”绿色盾牌安全徽章。
+
+#### 💬 评论区第 1 条 (First Reply)
+```text
+🔗 开源项目地址: https://github.com/forpersuit/eqt
+官网 & 文档: https://eqt.net.im
+
+💻 一行命令快速体验 Chat 模式:
+eqt chat --browser
+
+完全开源、纯 Go 单二进制文件，断网也能在局域网内加密互传！求个 Star ⭐️ 支持！
+```
+
+---
+
+### 🌐 次主打功能 B：Receive & Share 多设备局域网并发传输
+
+> **定位**：开会、聚会、家庭场景下，1 台电脑向多部手机同时下发大文件，或多部手机同时向电脑汇总照片，跑满内网千兆。
+
+#### 📝 推文文案 (中文)
+```text
+给办公室开会或聚会朋友传大文件，不用一个个建群：
+
+① 电脑输入 `eqt send ./photos/`
+② 全场多台 iPhone、安卓同时扫同一个二维码
+③ 所有人并发跑满内网千兆带宽极速下载！
+
+不加好友、不建群、手机 0 安装。
+
+建议【Bookmark 收藏】备用，👇 开源地址见评论区
+```
+* **字符数**：226 / 280 单元 (安全)
+* **外链检查**：无外链 (通过)
+
+#### 🎨 效果配图设计指南 (Visual Guide)
+* **配图构图**：**俯拍/透视场景实拍风格图**。
+  - **画面中心**：一台发光的笔记本电脑，屏幕中央显示大号交互式二维码。
+  - **画面四周**：环绕着 3~4 台不同品牌与系统的移动设备（iPhone 15、Google Pixel、华为 Mate、iPad），所有设备均使用原生相机/浏览器对准屏幕扫码。
+  - **UI 状态**：每台手机屏幕上都显示着正在全速下载的进度条（标注 `82.4 MB/s`），展现多端并发传输的震撼感。
+
+#### 💬 评论区第 1 条 (First Reply)
+```text
+🔗 GitHub 仓库: https://github.com/forpersuit/eqt
+支持 Windows / macOS / Linux 全平台！
+
+💡 小贴士：局域网内任意手机无需安装任何 App，原生浏览器打开即下，极度适合开会临时分发资料！
+```
+
+---
+
+## 3. 用户身份与真实应用场景矩阵 (Persona & Use-Case Matrix)
+
+---
+
+### 👨‍💻 场景 1：全栈/移动端开发者与 DevOps 工程师
+* **传输具体内容**：`.apk` / `.ipa` 测试安装包、`crash.log` 崩溃日志、`id_rsa.pub` 公钥、OAuth 调试 Callback URL、JSON 响应报文。
+
+#### 📝 推文文案 (中文)
+```text
+写代码/测移动端时，如何一秒把打包好的 APK 和日志丢到测试机？
+
+告别数据线插拔和 ADB 报错：
+• 终端敲 `eqt app.apk` 弹出二维码
+• 测试机相机一扫直接安装
+• 敲 `eqt chat` 两端互甩 JSON 与崩溃日志
+
+单二进制 Go 神器，0 依赖开箱即用。
+
+👇 GitHub 仓库与体验见评论区置顶
+```
+* **字符数**：239 / 280 单元
+* **效果配图指南**：
+  - **画面**：开发桌面视角。显示 VS Code / GoLand 终端刚刚编译出 `build.apk`，输入 `eqt app.apk` 后打印二维码；旁边放置的 Android 测试机屏幕显示“正在从局域网安装应用”卡片。
+
+---
+
+### 📹 场景 2：自媒体创作者、摄影师与剪辑师
+* **传输具体内容**：手机拍摄的 4K 60fps ProRes / HDR 视频片段、无损 RAW 照片集、CapCut / Premiere 工程压缩包。
+
+#### 📝 推文文案 (中文)
+```text
+手机拍了 20GB 的 4K 视频，怎么最快丢到电脑剪辑？
+
+❌ 微信传输：压缩画质成渣
+❌ 网盘中转：上传下载各耗半天
+❌ 数据线：找转换头与驱动识别繁琐
+✅ EQT 扫码：内网 80MB/s 跑满千兆，原画无损直传！
+
+纯本地局域网点对点，不耗公网流量。
+
+建议先【收藏】防丢，👇 开源地址见评论区
+```
+* **字符数**：266 / 280 单元
+* **效果配图指南**：
+  - **画面**：对比风格图。左侧展示“微信视频画质被压缩马赛克/网盘限速 50KB/s 红色告警”；右侧展示“EQT 85MB/s 绿色满速仪表盘 + 电脑端原画 4K 视频无损播放”。
+
+---
+
+### 💼 场景 3：跨平台混合办公白领与远程工作者
+* **传输具体内容**：PDF 合同协议、PPT 演示文稿、客户临时长文案、手机验证码与跨端剪贴板。
+
+#### 📝 推文文案 (中文)
+```text
+Windows 电脑 + iPhone，如何拥有比 AirDrop 还爽的互传体验？
+
+同一 WiFi 下：
+• 电脑托盘右键选文件生成二维码
+• iPhone 自带相机一扫秒存相册
+• 手机向电脑回传大文件，扫码直接选
+
+无需安装手机 App，打破苹果生态壁垒！
+
+👇 开源项目与下载见评论区第1条
+```
+* **字符数**：243 / 280 单元
+* **效果配图指南**：
+  - **画面**：现代整洁办公桌面。Windows 11 任务栏右键托盘点击“EQT Share”，屏幕跳出二维码；iPhone 相机取景框扫码后，Safari 浏览器无缝预览高清 PDF 合同。
+
+---
+
+### 🎓 场景 4：高校学生、科研学者与考研党
+* **传输具体内容**：iPad 手写笔记截图、论文文献 PDF、实验采集 `.csv` 数据集、课堂板书实拍照片。
+
+#### 📝 推文文案 (中文)
+```text
+平板手写笔记、文献 PDF 怎么一键回传 Windows 电脑整理？
+
+用 EQT 局域网接收模式：
+• 电脑敲 `eqt receive` 生成专属接收码
+• 平板相机一扫打开网页，批量上传几十篇论文与高清课件
+• 电脑端瞬间收到原文件，自动分门别类
+
+免装 App、不占云盘容量。
+
+👇 开源体验见评论区
+```
+* **字符数**：244 / 280 单元
+* **效果配图指南**：
+  - **画面**：iPad 上 GoodNotes/Notability 手写笔记界面与 Windows 电脑资料夹并列，中间为 EQT Web 上传成功列表，清晰展示“批量上传 30 个 PDF 成功”。
+
+---
+
+## 4. 官方主打 6 推 Thread (Official Launch Thread — 中文标准底座)
+
+> **定位**：用于官方账号置顶（Pin to Profile）或重大版本发布的完整深度科普串推。
 
 ---
 
@@ -44,13 +212,11 @@ Twitter 开源推荐算法中，各项互动权重大致比例：
 
 🧵 完整特性与设计思路：1/6
 ```
-* **字符数**：231 / 280 单元 (安全)
-* **链接检查**：无外链
-* **配图建议**：终端敲命令生成二维码 + 手机扫码界面的动图或双拼图。
+* **配图**：终端二维码 + 手机扫码双拼高清动图 (GIF)。
 
 ---
 
-### 🧵 Tweet 2/6 (核心亮点 1：免装 App)
+### 🧵 Tweet 2/6 (核心亮点 1：免装 App 扫码即用)
 ```text
 ✨ 1. 手机端零安装，扫码即用
 
@@ -61,9 +227,7 @@ Twitter 开源推荐算法中，各项互动权重大致比例：
 
 哪怕借用同事手机，也能5秒内完成交接。2/6
 ```
-* **字符数**：208 / 280 单元 (安全)
-* **链接检查**：无外链
-* **配图建议**：手机原生相机扫码直达网页界面截图。
+* **配图**：iPhone 自带原生相机扫码直出 Safari 下载界面截图。
 
 ---
 
@@ -78,15 +242,13 @@ Twitter 开源推荐算法中，各项互动权重大致比例：
 
 真正把内网带宽利用到极致。3/6
 ```
-* **字符数**：243 / 280 单元 (安全)
-* **链接检查**：无外链
-* **配图建议**：传输进度条达到 80MB/s 的速度实测截图。
+* **配图**：85MB/s 局域网大文件传输速度曲线与时间对比表。
 
 ---
 
-### 🧵 Tweet 4/6 (核心亮点 3：局域网 Chat 与剪贴板)
+### 🧵 Tweet 4/6 (核心亮点 3：局域网 Chat 临时房间)
 ```text
-💬 3. 局域网端到端隐私聊天室
+💬 3. 局域网端到端隐私聊天室 (Star Feature)
 
 不仅是传文件，还内置了轻量局域网 Chat：
 • 电脑输入 eqt chat，生成独立加密临时房间
@@ -95,9 +257,7 @@ Twitter 开源推荐算法中，各项互动权重大致比例：
 
 临时发口令、长文本、Token 极度丝滑。4/6
 ```
-* **字符数**：251 / 280 单元 (安全)
-* **链接检查**：无外链
-* **配图建议**：EQT Web 聊天室界面截图。
+* **配图**：EQT Web 聊天室界面，展示代码高亮、多图预览与剪贴板一键粘贴。
 
 ---
 
@@ -112,9 +272,7 @@ Twitter 开源推荐算法中，各项互动权重大致比例：
 
 极客在终端敲命令，小白用桌面托盘点右键，各自舒适。5/6
 ```
-* **字符数**：256 / 280 单元 (安全)
-* **链接检查**：无外链
-* **配图建议**：Windows 托盘菜单与终端 CLI 并排展示图。
+* **配图**：Windows 托盘 GUI 与 Linux 终端 CLI 并排展示图。
 
 ---
 
@@ -127,15 +285,11 @@ Twitter 开源推荐算法中，各项互动权重大致比例：
 
 👇 开源项目地址与一键安装命令见【评论区第一条】：6/6
 ```
-* **字符数**：197 / 280 单元 (安全)
-* **链接检查**：无外链
 * **行动指令**：引导 Bookmark、Retweet 与评论区引流。
 
 ---
 
-### 💬 评论区第 1 条跟帖 (First Reply - 转化落地与链接沉淀)
-> ⚠️ **注意**：在主 Thread 发出后 **30 秒内** 立即在 Tweet 6/6（或 Tweet 1/6）下方回复，并尽量 Pin 置顶。
-
+### 💬 评论区第 1 条跟帖 (First Reply)
 ```text
 🔗 项目已在 GitHub 完全开源，欢迎 Star 支持 ⭐️
 
@@ -152,90 +306,15 @@ eqt send ./your-file.pdf
 
 ---
 
-## 3. 方案二：单条独立爆款推文矩阵 (Single Viral Posts)
+## 5. 多语种国际化转译矩阵 (Multilingual Translation Matrix)
 
-> **定位**：适合日常打点、高频测试不同受众画像（开发者、视频创作者、办公族）。单推信息密度极高，转化路径短。
-
----
-
-### 📌 单推 A：程序员/极客直球型（痛击微信文件传输助手）
-```text
-还在用微信“文件传输助手”给自己发大文件？
-
-• 传图被压缩糊成马赛克
-• 动不动提示“文件超过大小限制”
-• 登录两个账号来回切
-
-不如试试用 Go 写的局域网跨端工具【EQT】：
-电脑终端敲一行命令，手机扫码即传，免装 App、跑满千兆内网不限速！
-
-👇 开源地址与安装方法见评论区第1条
-```
-* **字符数**：267 / 280 单元
-* **配图建议**：终端二维码 + 手机扫码界面 1:1 对比图。
-* **评论区跟帖文案**：
-  ```text
-  🔗 GitHub 仓库: https://github.com/forpersuit/eqt
-  一行命令直接跑：eqt send ./filename
-  纯 Go 编写，内存占用极低，喜欢的朋友求个 Star ⭐️
-  ```
+> 以中文高转化底座为基准，严格转译并校验字符长度，适配欧美、日本等高价值受众。
 
 ---
 
-### 📌 单推 B：音视频创作者/大文件无损传输型
-```text
-剪视频/拍 4K 素材，从电脑丢到手机有多慢？
+### 🇺🇸 英语篇 (English - US / Global Tech Twitter)
 
-实测对比：
-❌ 百度网盘：限速几十KB/s，上传完还要手机端再下
-❌ 微信传输：压缩画质、有大小限制
-✅ EQT 局域网互传：扫码秒连，内网 80MB/s 跑满，零云端中转
-
-纯点对点内网协议，断网也能传！
-
-👇 GitHub 开源地址与下载见评论区置顶
-```
-* **字符数**：263 / 280 单元
-* **配图建议**：80MB/s 局域网传输大视频文件的实时录屏 GIF。
-* **评论区跟帖文案**：
-  ```text
-  🔗 开源地址: https://github.com/forpersuit/eqt
-  官网下载: https://eqt.net.im
-  完全离线工作，数据 0 上传，建议先 Bookmark 收藏防丢！
-  ```
-
----
-
-### 📌 单推 C：极简办公与跨端剪贴板神器型
-```text
-极客办公幸福感提升小工具：EQT
-
-电脑手机在同一 WiFi 下：
-1. 终端敲 `eqt send` 发送大文件
-2. 敲 `eqt receive` 手机秒传电脑
-3. 敲 `eqt chat` 跨端实时互通剪贴板与文本
-
-免装手机 App，极速、安全、无云端留痕。
-
-建议先【收藏】防丢，👇 开源地址见评论区
-```
-* **字符数**：210 / 280 单元
-* **配图建议**：EQT 网页端剪贴板粘贴与文字互传实录。
-* **评论区跟帖文案**：
-  ```text
-  项目地址: https://github.com/forpersuit/eqt
-  支持 Windows / Mac / Linux 全平台，手机端任何浏览器扫码即用 🚀
-  ```
-
----
-
-## 4. 方案三：海外英文开发者推广串推 (English Developer Thread)
-
-> **定位**：面向全球 Tech Twitter、Indie Hackers、Self-Hosted 和 Go 语言海外社区。
-
----
-
-### 🧵 EN Tweet 1/5 (Hook & Problem Statement)
+#### 🧵 EN Thread Hook (265 / 280 units)
 ```text
 Cross-device file sharing is still painful:
 • AirDrop is Apple-only
@@ -246,72 +325,34 @@ I built EQT — a blazing-fast local LAN transfer & chat tool in Go.
 
 Scan terminal QR code, transfer instantly. No phone app. 🧵 1/5
 ```
-* **Units**: 265 / 280 (Safe)
-* **Links**: None
-* **Media**: Split-screen GIF showing terminal QR scan -> instant download.
 
----
-
-### 🧵 EN Tweet 2/5 (Zero Install on Mobile)
+#### 💬 EN Star Feature: Chat Mode (268 / 280 units)
 ```text
-🚀 1. Zero Mobile App Installation
+Sending API keys, tokens or code to your phone?
 
-No need to install anything on your phone:
-1. Run `eqt myfile.mp4` on your PC
-2. A QR code shows up in terminal
-3. Scan with phone camera/browser to upload or download
+• Cloud sync leaves traces on remote servers
+• Work chats are monitored
 
-Works seamlessly across Windows, macOS, Linux, iOS & Android. 2/5
+Try EQT Chat:
+Scan terminal QR code. Instant bidirectional text, clipboard & photo sync over local LAN. Zero cloud.
+
+👇 GitHub link in 1st reply
 ```
-* **Units**: 254 / 280 (Safe)
-* **Links**: None
 
----
-
-### 🧵 EN Tweet 3/5 (Max LAN Speeds & Privacy)
+#### 🌐 EN Multi-Device Concurrency (276 / 280 units)
 ```text
-⚡ 2. Maximize Local Network Speeds
+Sharing files with multiple teammates in a meeting without AirDrop:
 
-No 3rd-party servers, no bandwidth throttling:
-• 100% peer-to-peer over your local WiFi
-• Speeds easily reach 50-100+ MB/s
-• Huge 4K videos & zip archives transfer in seconds
-• Completely offline capable. 3/5
+1. Run `eqt ./assets/` on PC
+2. Multiple iPhones & Androids scan the SAME QR code
+3. Everyone downloads concurrently at full local speeds (80MB/s)!
+
+No accounts, zero mobile app.
+
+RT & Bookmark! 👇 GitHub repo in 1st reply
 ```
-* **Units**: 249 / 280 (Safe)
-* **Links**: None
 
----
-
-### 🧵 EN Tweet 4/5 (Local Chat & Clipboard)
-```text
-💬 3. Local P2P Chat & Clipboard Sync
-
-Need to send quick text, API tokens, or clipboard?
-• Run `eqt chat` to spin up a temporary encrypted room
-• Bidirectional text, image, and file streaming
-• Zero telemetry, zero cloud tracking. 4/5
-```
-* **Units**: 228 / 280 (Safe)
-* **Links**: None
-
----
-
-### 🧵 EN Tweet 5/5 (CTA & Discussion)
-```text
-If you love lightweight developer tools that just work:
-
-• RT & Bookmark this thread for later!
-• What is your current cross-device transfer workflow?
-
-👇 GitHub repository link & quick-start instructions in the first reply: 5/5
-```
-* **Units**: 230 / 280 (Safe)
-* **Links**: None
-
----
-
-### 💬 EN 1st Reply (Conversion & Repo Link)
+#### 💬 EN 1st Reply (First Comment)
 ```text
 🔗 EQT is 100% open source on GitHub:
 👉 https://github.com/forpersuit/eqt
@@ -319,65 +360,64 @@ If you love lightweight developer tools that just work:
 📦 Install via Go:
 `go install github.com/forpersuit/eqt@latest`
 
-Or download prebuilt binaries for Windows/macOS/Linux. If you find this useful, dropping a ⭐️ on GitHub would mean the world!
+Available for Windows, macOS, and Linux. If you find this helpful, dropping a ⭐️ on GitHub would mean the world!
 ```
 
 ---
 
-## 5. 方案四：高互动话题讨论帖 (Discussion Starters)
+### 🇯🇵 日语篇 (Japanese - Tech & Office Focus)
 
-> **定位**：用于日常调动算法权重、提升账号活跃度与回复率。
-
-### 💬 讨论帖 1：痛点调查（拉高回复率）
+#### 📝 日语高转化推文 (245 / 280 units)
 ```text
-大家平时在 Windows 电脑和 iPhone / 安卓之间传大文件，目前体验最好的是什么方式？
+Windows PCとスマホ間で写真や大容量ファイルを最速転送：
 
-1. 微信/QQ传输助手（画质被压、大文件不行）
-2. 百度网盘/云盘中转（慢、要上传两遍）
-3. 数据线插拔（麻烦）
-4. 局域网开临时 HTTP / Web 服务（如 EQT 扫码）
+• アプリのインストール不要
+• クラウド経由なし・データ完全ローカル
+• PCのQRコードをカメラで読むだけ
+• Wi-Fi物理最高速度で爆速転送
 
-欢迎在评论区说说你的主力方案和踩坑史 👇
+AirDrop不要でWindowsでも快適！
+
+👇 リンクはリプライ欄へ
 ```
-* **字符数**：272 / 280 单元
-* **评论区互动**：当用户提到方案 4 时，顺水推舟回复推荐 EQT 并附带 GitHub 链接。
 
----
-
-### 💬 讨论帖 2：产品哲学与极客态度
+#### 💬 日语评论区第 1 条 (1st Reply)
 ```text
-为什么很多传文件工具非逼用户在手机上装 App？
+🔗 GitHubリポジトリ（オープンソース）:
+👉 https://github.com/forpersuit/eqt
 
-其实手机浏览器原生就支持 WebSocket、文件选择器与流式下载。
-
-做 EQT 的初衷：电脑端单二进制文件起服务，打印二维码，手机浏览器扫码直连，0 安装、0 权限索取、用完即走。
-
-做工具就该这么轻克制。👇 开源体验见评论区
+Windows / Mac / Linux対応。スマホはブラウザさえあればアプリ追加不要です！⭐️応援よろしくお願いします！
 ```
-* **字符数**：252 / 280 单元
-* **评论区跟帖文案**：
-  ```text
-  开源地址：https://github.com/forpersuit/eqt
-  纯 Go 单二进制文件分发，Windows / macOS / Linux 均可直接运行。
-  ```
 
 ---
 
-## 6. Twitter (X) 运营与冷启动 SOP (Standard Operating Procedure)
+### 🇩🇪 德语篇 (German - Privacy & Local Speed Focus)
 
-### 6.1 发布时机选择 (Timing Strategy)
-* **中文技术推圈**：
-  - 工作日上午 **11:30 - 12:30**（午休刷手机黄金期）
-  - 晚间 **20:30 - 22:30**（极客下班与自由冲浪期）
-* **海外技术推圈 (UTC-8 / UTC-5)**：
-  - 北京时间 **21:30 - 23:30**（美东早上 08:30 - 10:30）
-  - 北京时间 **08:30 - 10:00**（美西下午与收工时段）
+#### 📝 德语高转化推文 (270 / 280 units)
+```text
+Dateien zwischen PC & Handy übertragen ohne Cloud:
 
-### 6.2 发帖黄金前 60 分钟响应法则 (The 1-Hour Golden Window)
-1. **立即跟帖评论**：主帖发出后 **30 秒内**，用自己的账号发布带有链接与一键命令的 First Reply，并设为置顶评论（Pin Reply）。
-2. **种子互动启动**：发帖后前 15 分钟内，让核心团队成员或技术好友进行 Bookmark（收藏）与 Retweet（转发）。
-3. **100% 评论回复**：推文发布后 1 小时内，对每一条评论积极进行实质性回复（带技术细节或幽默回应），将互动深度拉满，促使算法持续分发至更多人的 Feed 流中。
+• 100% lokal im WLAN (bis 100 MB/s)
+• Kein Upload auf fremde Server
+• QR-Code im Terminal scannen & direkt laden
+• Keine App auf dem Smartphone nötig
 
-### 6.3 标签 (#Hashtag) 使用红线
-* 🚫 **严禁堆砌标签**：千万不要加 4~5 个以上的标签，会被 Twitter 反垃圾系统识别为垃圾营销号而限流。
-* ✅ **精选 1~2 个精准标签**（可选用，亦可不加）：如 `#开源` `#Go语言` `#独立开发` 或 `#buildinpublic`。
+Open-Source Tool in Go.
+
+👇 GitHub-Link & Infos im 1. Kommentar
+```
+
+#### 💬 德语评论区第 1 条 (1st Reply)
+```text
+🔗 Vollständig Open Source auf GitHub:
+👉 https://github.com/forpersuit/eqt
+
+100% datenschutzkonform, keine Cloud-Speicherung, keine Telemetrie. Star auf GitHub willkommen! ⭐️
+```
+
+---
+
+## 6. 短视频动态推广联动计划
+
+动态视觉与高转化短视频分镜头脚本（15~30 秒，涵盖扫码实操、多设备并发、Chat 剪贴板即时同步与 80MB/s 性能狂飙），请参阅独立专项文档：  
+👉 **[EQT 核心功能短视频与动态视觉推广计划](feature-video-promotion-plan.md)**
