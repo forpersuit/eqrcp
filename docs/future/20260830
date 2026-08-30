@@ -203,16 +203,16 @@ CREATE INDEX IF NOT EXISTS idx_downloads_dedup ON download_records(client_ip_has
 
 ## 8. 实施 CheckList（DoD 标准）
 
-- [ ] **Phase 1 (D1 + Worker API)**：
-  - [ ] `schema.sql` 增加 `download_records` 与 `daily_download_stats` 表及复合索引；
-  - [ ] `routes/telemetry.ts` 实现 `POST /api/v1/telemetry/download`（`TELEMETRY_SALT` 加盐哈希、60 req/min 限速、G2 格式校验、原子单 SQL 防抖、`activationClientMeta` 式头通道地理提取）；
-  - [ ] 编写离线单测 `tests/telemetry-download-offline.js` 验证时序定序、校验拦截与原子防抖。
-- [ ] **Phase 2 (Release Pipeline + Website + Privacy)**：
-  - [ ] `.github/workflows/release.yml` 补充上传字面量 `EQT-latest-windows-amd64.zip` 至 `downloads/latest/`（G3 双保险）；
-  - [ ] `cloudflare/eqt-website/index.html` 绑定 `trackDownload` 并确保 href 动态替换；
-  - [ ] `cloudflare/eqt-website/privacy.html` 补充下载遥测匿名披露条款（G4）。
-- [ ] **Phase 3 (Admin 地球大图与统计)**：
-  - [ ] `routes/admin.ts` 增加 `GET /api/v1/admin/downloads/globe` 和 `GET /api/v1/admin/downloads/stats`；
-  - [ ] `LicenseGlobeCard.svelte` 增加模式切换与下载热力光柱（默认国家质心，city 可用时按点位渲染，复用 WebGL 单实例）。
-- [ ] **Phase 4 (Scheduled 聚合与归档)**：
-  - [ ] `index.ts` 的 `scheduled` 处理器扩展每日聚合逻辑：将 90 天前明细按 `(stat_date, version, ip_country, source)` 汇总写入 `daily_download_stats` 并清理过期明细。
+- [x] **Phase 1 (D1 + Worker API)**：
+  - [x] `schema.sql` 增加 `download_records` 与 `daily_download_stats` 表及复合索引；
+  - [x] `routes/telemetry.ts` 实现 `POST /api/v1/telemetry/download`（`TELEMETRY_SALT` 加盐哈希、60 req/min 限速、G2 格式校验、原子单 SQL 防抖、`activationClientMeta` 式头通道地理提取）；
+  - [x] 编写离线单测 `tests/telemetry-download-offline.js` 验证时序定序、校验拦截与原子防抖。
+- [x] **Phase 2 (Release Pipeline + Website + Privacy)**：
+  - [x] `.github/workflows/release.yml` 补充上传字面量 `EQT-latest-windows-amd64.zip` 至 `downloads/latest/`（G3 双保险）；
+  - [x] `cloudflare/eqt-website/index.html` 绑定 `trackDownload` 并确保 href 动态替换；
+  - [x] `cloudflare/eqt-website/privacy.html` 补充下载遥测匿名披露条款（G4）。
+- [x] **Phase 3 (Admin 地球大图与统计)**：
+  - [x] `routes/admin.ts` 增加 `GET /api/v1/admin/downloads/globe` 和 `GET /api/v1/admin/downloads/stats`；
+  - [x] `LicenseGlobeCard.svelte` 增加模式切换与下载热力光柱（默认国家质心，city 可用时按点位渲染，复用 WebGL 单实例）。
+- [x] **Phase 4 (Scheduled 聚合与归档)**：
+  - [x] `index.ts` 的 `scheduled` 处理器扩展每日聚合逻辑：将 90 天前明细按 `(stat_date, version, ip_country, source)` 汇总写入 `daily_download_stats` 并清理过期明细。

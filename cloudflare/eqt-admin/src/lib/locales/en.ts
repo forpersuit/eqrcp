@@ -242,15 +242,24 @@ export const en = {
     viewInLicenses: "View in License Management",
     noArcsInWindow: "No cross-region active connections in this time window",
     activeStatus: "Active: {total} (Paid {paid} / Free {free})",
+    downloadsStatus: "Downloads: {total} (Across {countries} countries/regions)",
+    downloadsSubtitle: "Global download distribution heat based on edge network geolocation; cyan pillars represent volume",
+    modeDevices: "Active Devices",
+    modeDownloads: "Downloads",
     refreshPoints: "🔄 Refresh Points",
     fetchFailed: "Failed to fetch active device distribution",
+    fetchDownloadsFailed: "Failed to fetch download distribution",
     empty: "No active device records in this period",
+    emptyDownloads: "No download records in this period",
     units: {
       devices: "devices",
       devicesShort: "devs",
       paid: "Paid",
       free: "Free",
-      recentActive: "Last Active"
+      recentActive: "Last Active",
+      downloads: "downloads",
+      latestVersion: "Latest Version",
+      latestDownload: "Latest Download"
     },
     time: {
       unknown: "Unknown",

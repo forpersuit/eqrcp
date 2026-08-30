@@ -219,6 +219,42 @@ CREATE TABLE IF NOT EXISTS free_daily_usage (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_free_daily_usage_dev_date ON free_daily_usage(device_id, usage_date);
 CREATE INDEX IF NOT EXISTS idx_free_daily_usage_date ON free_daily_usage(usage_date);
 
+-- Download Telemetry tracking records (§5.1 in docs/future/20260830)
+CREATE TABLE IF NOT EXISTS download_records (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    version        TEXT NOT NULL,               -- e.g. "v1.36.24"
+    filename       TEXT NOT NULL,               -- e.g. "EQT-v1.36.24-windows-amd64.zip"
+    client_ip_hash TEXT DEFAULT NULL,           -- SHA-256(ip + salt) for privacy
+    ip_country     TEXT DEFAULT NULL,           -- CF-IPCountry ("CN", "US", etc.)
+    colo           TEXT DEFAULT NULL,           -- CF-Colo ("HKG", "SJC", etc.)
+    city           TEXT DEFAULT NULL,           -- CF-IPCity (from visitor location headers)
+    region         TEXT DEFAULT NULL,           -- CF-IPRegion / RegionCode
+    latitude       REAL DEFAULT NULL,           -- CF-IPLatitude
+    longitude      REAL DEFAULT NULL,           -- CF-IPLongitude
+    user_agent     TEXT DEFAULT NULL,
+    referer        TEXT DEFAULT NULL,
+    source         TEXT NOT NULL DEFAULT 'website', -- 'website' | 'desktop_update' | 'direct'
+    created_at     TEXT NOT NULL                -- ISO 8601 UTC
+);
+
+CREATE INDEX IF NOT EXISTS idx_downloads_version_time ON download_records(version, created_at);
+CREATE INDEX IF NOT EXISTS idx_downloads_country_time ON download_records(ip_country, created_at);
+CREATE INDEX IF NOT EXISTS idx_downloads_dedup ON download_records(client_ip_hash, filename, created_at);
+
+-- Daily aggregated download stats for 90-day data retention (§7.6/G5)
+CREATE TABLE IF NOT EXISTS daily_download_stats (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    stat_date    TEXT NOT NULL,               -- "YYYY-MM-DD"
+    version      TEXT NOT NULL,               -- "v1.36.24"
+    ip_country   TEXT NOT NULL,               -- "CN", "US", "XX"
+    source       TEXT NOT NULL DEFAULT 'website', -- 'website' | 'desktop_update'
+    download_cnt INTEGER NOT NULL DEFAULT 0,
+    created_at   TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_download_dim ON daily_download_stats(stat_date, version, ip_country, source);
+CREATE INDEX IF NOT EXISTS idx_daily_download_date ON daily_download_stats(stat_date);
+
 
 
 

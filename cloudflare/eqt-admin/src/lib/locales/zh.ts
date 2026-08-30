@@ -243,15 +243,24 @@ export const zh = {
     viewInLicenses: "在授权码管理中查看",
     noArcsInWindow: "当前时间窗口内暂无跨地域连接",
     activeStatus: "活跃: {total} 台 (付费 {paid} / 免费 {free})",
+    downloadsStatus: "官网下载: {total} 次 (覆盖 {countries} 个国家/地区)",
+    downloadsSubtitle: "基于边缘网络访客地理定位的全球下载分布热力；青绿光柱高度表征下载频次",
+    modeDevices: "活跃设备",
+    modeDownloads: "下载分布",
     refreshPoints: "🔄 刷新点位",
     fetchFailed: "获取活跃设备分布失败",
+    fetchDownloadsFailed: "获取下载分布失败",
     empty: "尚无区间内活跃设备记录",
+    emptyDownloads: "尚无区间内下载记录",
     units: {
       devices: "台设备",
       devicesShort: "台",
       paid: "付费",
       free: "免费",
-      recentActive: "最近活跃"
+      recentActive: "最近活跃",
+      downloads: "次下载",
+      latestVersion: "最新版本",
+      latestDownload: "最近下载"
     },
     time: {
       unknown: "未知",

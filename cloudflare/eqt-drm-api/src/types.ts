@@ -30,8 +30,37 @@ export interface Env {
   PRICE_YEARLY_ID?: string;
   /** Optional comma-separated list of Dev Device IDs for hard overrides */
   DEV_DEVICE_IDS?: string;
+  /** Secret salt for hashing client IP in telemetry */
+  TELEMETRY_SALT?: string;
   /** Environment mode: 'production' | 'test' | 'development' */
   ENVIRONMENT?: string;
+}
+
+export interface DownloadRecord {
+  id?: number;
+  version: string;
+  filename: string;
+  client_ip_hash?: string | null;
+  ip_country?: string | null;
+  colo?: string | null;
+  city?: string | null;
+  region?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  user_agent?: string | null;
+  referer?: string | null;
+  source: 'website' | 'desktop_update' | 'direct' | string;
+  created_at: string;
+}
+
+export interface DailyDownloadStat {
+  id?: number;
+  stat_date: string;
+  version: string;
+  ip_country: string;
+  source: string;
+  download_cnt: number;
+  created_at: string;
 }
 
 /** purchase | promo | admin | test — see docs/payment/license-source-and-refund-policy.md */

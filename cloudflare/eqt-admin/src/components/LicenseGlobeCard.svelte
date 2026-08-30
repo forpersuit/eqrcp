@@ -3,12 +3,14 @@
   import { adminFetch } from '../lib/api';
   import { t, currentLocale } from '../lib/i18n';
   import Modal from './Modal.svelte';
-  import type { LiveDeviceLocation, LiveDeviceArc, LiveDevicesResponse } from '../lib/types';
+  import type { LiveDeviceLocation, LiveDeviceArc, LiveDevicesResponse, DownloadLocation, DownloadsGlobeResponse } from '../lib/types';
 
   interface Props {
     onNavigateToLicense?: (licenseCode: string) => void;
   }
   let { onNavigateToLicense }: Props = $props();
+
+  let viewMode = $state<'devices' | 'downloads'>('devices');
 
   const COUNTRY_COORDS: Record<string, { lat: number; lng: number; zh: string; en: string }> = {
     'CN': { lat: 35.8617, lng: 104.1954, zh: '中国', en: 'China' },
@@ -45,10 +47,15 @@
   let totalActiveDevices = $state(0);
   let totalPaidDevices = $state(0);
   let totalFreeDevices = $state(0);
+
+  let downloadLocations = $state<DownloadLocation[]>([]);
+  let totalDownloads = $state(0);
+  let uniqueCountries = $state(0);
+
   let loading = $state(true);
   let errorMsg = $state<string | null>(null);
 
-  let activeWindow = $state<string>('1h');
+  let activeWindow = $state<string>('24h');
   let showArcs = $state<boolean>(true);
   let showArcsModal = $state<boolean>(false);
   let copiedCode = $state<string | null>(null);
@@ -134,28 +141,69 @@
     return '#64748b';                           // all free → gray
   }
 
+  function getCoordForDownload(item: DownloadLocation): { lat: number; lng: number; name: string } {
+    const countryCode = (item.country || '').toUpperCase();
+    const countryName = getCountryDisplayName(countryCode);
+    if (typeof item.latitude === 'number' && typeof item.longitude === 'number') {
+      const label = item.city ? (countryName ? `${countryName} · ${item.city}` : item.city) : (countryName || item.country);
+      return { lat: item.latitude, lng: item.longitude, name: label || $t('globe.other') };
+    }
+    const c = COUNTRY_COORDS[countryCode];
+    if (c) {
+      return { lat: c.lat, lng: c.lng, name: item.city ? `${countryName} · ${item.city}` : countryName };
+    }
+    return { lat: 35.86, lng: 104.19, name: item.city || countryName || countryCode || $t('globe.other') };
+  }
+
+  function downloadRecentLabel(item: DownloadLocation): string {
+    const mins = minutesSince(item.latest_download_at);
+    if (mins === null) return $t('globe.time.unknown');
+    if (mins < 60) return $t('globe.time.minutesAgo', { mins });
+    return $t('globe.time.hoursAgo', { hours: Math.floor(mins / 60) });
+  }
+
   export async function refreshData() {
     const seq = ++loadSeq;
     try {
       loading = true; // disable window/refresh buttons during the request
       errorMsg = null;
       const params: Record<string, string> = { window: activeWindow };
-      if (showArcs) params.arcs = '1';
-      const res = await adminFetch<LiveDevicesResponse>('/api/v1/admin/devices/live', { params });
-      if (seq !== loadSeq) return; // superseded by a newer request — drop stale result
-      if (res && Array.isArray(res.locations)) {
-        locations = res.locations;
-        totalActiveDevices = res.total_active_devices || 0;
-        totalPaidDevices = res.total_paid_devices || 0;
-        totalFreeDevices = res.total_free_devices || 0;
-        crossRegionArcs = res.cross_region_arcs || [];
-        renderGlobeData(locations, crossRegionArcs);
+
+      if (viewMode === 'devices') {
+        if (showArcs) params.arcs = '1';
+        const res = await adminFetch<LiveDevicesResponse>('/api/v1/admin/devices/live', { params });
+        if (seq !== loadSeq) return; // superseded by a newer request — drop stale result
+        if (res && Array.isArray(res.locations)) {
+          locations = res.locations;
+          totalActiveDevices = res.total_active_devices || 0;
+          totalPaidDevices = res.total_paid_devices || 0;
+          totalFreeDevices = res.total_free_devices || 0;
+          crossRegionArcs = res.cross_region_arcs || [];
+          renderGlobeData();
+        }
+      } else {
+        const res = await adminFetch<DownloadsGlobeResponse>('/api/v1/admin/downloads/globe', { params });
+        if (seq !== loadSeq) return;
+        if (res && Array.isArray(res.locations)) {
+          downloadLocations = res.locations;
+          totalDownloads = res.total_downloads || 0;
+          uniqueCountries = res.unique_countries || 0;
+          renderGlobeData();
+        }
       }
     } catch (err: any) {
-      if (seq === loadSeq) errorMsg = err.message || $t('globe.fetchFailed');
+      if (seq === loadSeq) {
+        errorMsg = err.message || (viewMode === 'devices' ? $t('globe.fetchFailed') : $t('globe.fetchDownloadsFailed'));
+      }
     } finally {
       if (seq === loadSeq) loading = false;
     }
+  }
+
+  function handleViewModeChange(mode: 'devices' | 'downloads') {
+    if (viewMode === mode) return;
+    viewMode = mode;
+    refreshData();
   }
 
   function loadScript(src: string): Promise<void> {
@@ -216,9 +264,14 @@
           .pointColor((d: any) => d.color || '#38bdf8')
           .pointAltitude((d: any) => d.altitude || 0.05)
           .pointRadius((d: any) => d.radius || 0.6)
-          .pointLabel((d: any) => `<div style="background:rgba(2,6,23,0.9);color:#f8fafc;padding:5px 10px;border-radius:6px;font-size:12px;border:1px solid rgba(56,189,248,0.4);box-shadow:0 4px 12px rgba(0,0,0,0.5);">🏙️ <b>${d.cityName}</b>: ${d.totalCount} ${$t('globe.units.devices')}<br/>💛 ${$t('globe.units.paid')}: ${d.paidCount} ${$t('globe.units.devicesShort')}<br/>🩶 ${$t('globe.units.free')}: ${d.freeCount} ${$t('globe.units.devicesShort')}<br/>⏱ ${$t('globe.units.recentActive')}: ${d.recentLabel}</div>`)
+          .pointLabel((d: any) => {
+            if (d.isDownload) {
+              return `<div style="background:rgba(2,6,23,0.92);color:#f8fafc;padding:6px 12px;border-radius:6px;font-size:12px;border:1px solid rgba(57,229,182,0.4);box-shadow:0 4px 12px rgba(0,0,0,0.5);">📥 <b>${d.cityName}</b>: ${d.downloadCount} ${$t('globe.units.downloads')}<br/>🏷️ ${$t('globe.units.latestVersion')}: ${d.latestVersion}<br/>⏱ ${$t('globe.units.latestDownload')}: ${d.recentLabel}</div>`;
+            }
+            return `<div style="background:rgba(2,6,23,0.9);color:#f8fafc;padding:5px 10px;border-radius:6px;font-size:12px;border:1px solid rgba(56,189,248,0.4);box-shadow:0 4px 12px rgba(0,0,0,0.5);">🏙️ <b>${d.cityName}</b>: ${d.totalCount} ${$t('globe.units.devices')}<br/>💛 ${$t('globe.units.paid')}: ${d.paidCount} ${$t('globe.units.devicesShort')}<br/>🩶 ${$t('globe.units.free')}: ${d.freeCount} ${$t('globe.units.devicesShort')}<br/>⏱ ${$t('globe.units.recentActive')}: ${d.recentLabel}</div>`;
+          })
           .ringsData([])
-          .ringColor(() => (rT: number) => `rgba(56,189,248,${1 - rT})`)
+          .ringColor((d: any) => (rT: number) => d.isDownload ? `rgba(57,229,182,${1 - rT})` : `rgba(56,189,248,${1 - rT})`)
           .ringMaxRadius(3.5)
           .ringPropagationSpeed(2)
           .ringRepeatPeriod(1200)
@@ -234,7 +287,7 @@
         }
 
         handleGlobeResize();
-        renderGlobeData(locations, crossRegionArcs);
+        renderGlobeData();
       } else {
         init2DFallback();
       }
@@ -252,15 +305,58 @@
     }
   }
 
-  function renderGlobeData(locList: LiveDeviceLocation[], arcsList: LiveDeviceArc[]) {
+  function renderGlobeData() {
     if (isFallback2D) return;
     if (!globeInstance) return;
 
+    if (viewMode === 'downloads') {
+      const points: any[] = [];
+      const rings: any[] = [];
+
+      downloadLocations.forEach((item) => {
+        const coord = getCoordForDownload(item);
+        const count = item.download_count || 1;
+        const altitude = Math.min(0.06 + count * 0.04, 0.45);
+        const radius = Math.min(0.6 + count * 0.15, 1.8);
+        const color = '#39e5b6';
+
+        points.push({
+          lat: coord.lat,
+          lng: coord.lng,
+          radius,
+          altitude,
+          color,
+          cityName: coord.name,
+          downloadCount: item.download_count,
+          latestVersion: item.latest_version || '—',
+          recentLabel: downloadRecentLabel(item),
+          isDownload: true
+        });
+
+        if (minutesSince(item.latest_download_at) !== null && minutesSince(item.latest_download_at)! <= 60) {
+          rings.push({
+            lat: coord.lat,
+            lng: coord.lng,
+            maxR: Math.min(2.5 + count * 0.6, 7.0),
+            propagationSpeed: 1.6,
+            repeatPeriod: 1400,
+            isDownload: true
+          });
+        }
+      });
+
+      globeInstance.pointsData(points);
+      if (globeInstance.ringsData) globeInstance.ringsData(rings);
+      if (globeInstance.arcsData) globeInstance.arcsData([]);
+      return;
+    }
+
+    // Devices Mode
     const points: any[] = [];
     const rings: any[] = [];
     const arcs: any[] = [];
 
-    locList.forEach((item) => {
+    locations.forEach((item) => {
       const coord = getCoordForItem(item);
       const count = item.total_count || 1;
 
@@ -278,24 +374,24 @@
         totalCount: item.total_count,
         paidCount: item.paid_count,
         freeCount: item.free_count,
-        recentLabel: recentLabel(item)
+        recentLabel: recentLabel(item),
+        isDownload: false
       });
 
-      // §4.4: 环/光晕表示"最近 1h 内活跃"。宽窗口（7d）里陈旧的点不发脉冲，
-      // 只有最近活跃的位置有光环——latest_seen_at 就是这个语义的数据源。
       if (isRecentlyActive(item)) {
         rings.push({
           lat: coord.lat,
           lng: coord.lng,
           maxR: Math.min(2.5 + count * 0.5, 6.5),
           propagationSpeed: 1.5,
-          repeatPeriod: 1500
+          repeatPeriod: 1500,
+          isDownload: false
         });
       }
     });
 
     if (showArcs) {
-      arcsList.forEach((arc) => {
+      crossRegionArcs.forEach((arc) => {
         let startLat = arc.from_lat;
         let startLng = arc.from_lng;
         if (typeof startLat !== 'number' || typeof startLng !== 'number') {
@@ -484,7 +580,7 @@
       // Last fetch had arcs off (server skipped the raw scan) → backfill arc data
       refreshData();
     } else if (!isFallback2D) {
-      renderGlobeData(locations, crossRegionArcs);
+      renderGlobeData();
     }
   }
 
@@ -513,12 +609,29 @@
       <span class="icon">🌍</span>
       <div>
         <h3>{$t('globe.title')}</h3>
-        <p class="subtitle">{$t('globe.subtitle')}</p>
+        <p class="subtitle">{viewMode === 'devices' ? $t('globe.subtitle') : $t('globe.downloadsSubtitle')}</p>
       </div>
     </div>
     <div class="header-right">
+      <div class="mode-selector" role="group" aria-label="View Mode">
+        <button
+          type="button"
+          class="btn btn-xs mode-btn"
+          class:active={viewMode === 'devices'}
+          onclick={() => handleViewModeChange('devices')}
+          disabled={loading}
+        >📱 {$t('globe.modeDevices')}</button>
+        <button
+          type="button"
+          class="btn btn-xs mode-btn"
+          class:active={viewMode === 'downloads'}
+          onclick={() => handleViewModeChange('downloads')}
+          disabled={loading}
+        >📥 {$t('globe.modeDownloads')}</button>
+      </div>
+
       <div class="window-selector" role="group" aria-label={$t('globe.timeWindow')}>
-        {#each ['1h', '12h', '24h', '7d'] as w}
+        {#each ['1h', '12h', '24h', '7d', '30d'] as w}
           <button
             class="btn btn-xs window-btn"
             class:active={activeWindow === w}
@@ -528,22 +641,27 @@
         {/each}
       </div>
 
-      <label class="arcs-toggle" title={$t('globe.arcsToggleTitle')}>
-        <input type="checkbox" checked={showArcs} onchange={handleArcsToggle} />
-        <span class="toggle-label">{$t('globe.arcs')}</span>
-      </label>
+      {#if viewMode === 'devices'}
+        <label class="arcs-toggle" title={$t('globe.arcsToggleTitle')}>
+          <input type="checkbox" checked={showArcs} onchange={handleArcsToggle} />
+          <span class="toggle-label">{$t('globe.arcs')}</span>
+        </label>
 
-      {#if crossRegionArcs.length > 0}
-        <button
-          type="button"
-          class="badge badge-purple badge-clickable"
-          title={$t('globe.crossRegionTooltip')}
-          onclick={() => (showArcsModal = true)}
-        >
-          {$t('globe.crossRegionLinksBtn', { count: crossRegionArcs.length })}
-        </button>
+        {#if crossRegionArcs.length > 0}
+          <button
+            type="button"
+            class="badge badge-purple badge-clickable"
+            title={$t('globe.crossRegionTooltip')}
+            onclick={() => (showArcsModal = true)}
+          >
+            {$t('globe.crossRegionLinksBtn', { count: crossRegionArcs.length })}
+          </button>
+        {/if}
+        <span class="badge badge-info">{$t('globe.activeStatus', { total: totalActiveDevices, paid: totalPaidDevices, free: totalFreeDevices })}</span>
+      {:else}
+        <span class="badge badge-teal">{$t('globe.downloadsStatus', { total: totalDownloads, countries: uniqueCountries })}</span>
       {/if}
-      <span class="badge badge-info">{$t('globe.activeStatus', { total: totalActiveDevices, paid: totalPaidDevices, free: totalFreeDevices })}</span>
+
       <button class="btn btn-xs btn-outline" onclick={refreshData} disabled={loading}>
         {$t('globe.refreshPoints')}
       </button>
@@ -556,21 +674,39 @@
 
   <div class="globe-wrapper" bind:this={globeContainerRef}></div>
 
-  {#if locations.length > 0}
-    <div class="locations-bar">
-      {#each locations as loc}
-        {@const countryName = getCountryDisplayName(loc.country)}
-        <div class="loc-chip">
-          <span class="flag">{loc.country}</span>
-          <span class="name">{loc.city ? `${countryName} · ${loc.city}` : (countryName || loc.country)}</span>
-          <span class="count-badge">{loc.total_count} {$t('globe.units.devicesShort')}</span>
-          <span class="paid-badge">{loc.paid_count} {$t('globe.units.paid')}</span>
-          <span class="free-badge">{loc.free_count} {$t('globe.units.free')}</span>
-        </div>
-      {/each}
-    </div>
-  {:else if !loading}
-    <div class="empty-bar">{$t('globe.empty')}</div>
+  {#if viewMode === 'devices'}
+    {#if locations.length > 0}
+      <div class="locations-bar">
+        {#each locations as loc}
+          {@const countryName = getCountryDisplayName(loc.country)}
+          <div class="loc-chip">
+            <span class="flag">{loc.country}</span>
+            <span class="name">{loc.city ? `${countryName} · ${loc.city}` : (countryName || loc.country)}</span>
+            <span class="count-badge">{loc.total_count} {$t('globe.units.devicesShort')}</span>
+            <span class="paid-badge">{loc.paid_count} {$t('globe.units.paid')}</span>
+            <span class="free-badge">{loc.free_count} {$t('globe.units.free')}</span>
+          </div>
+        {/each}
+      </div>
+    {:else if !loading}
+      <div class="empty-bar">{$t('globe.empty')}</div>
+    {/if}
+  {:else}
+    {#if downloadLocations.length > 0}
+      <div class="locations-bar">
+        {#each downloadLocations as loc}
+          {@const countryName = getCountryDisplayName(loc.country)}
+          <div class="loc-chip download-chip">
+            <span class="flag teal-flag">{loc.country}</span>
+            <span class="name">{loc.city ? `${countryName} · ${loc.city}` : (countryName || loc.country)}</span>
+            <span class="download-badge">{loc.download_count} {$t('globe.units.downloads')}</span>
+            <span class="ver-badge">{loc.latest_version || '—'}</span>
+          </div>
+        {/each}
+      </div>
+    {:else if !loading}
+      <div class="empty-bar">{$t('globe.emptyDownloads')}</div>
+    {/if}
   {/if}
 </div>
 
@@ -681,6 +817,79 @@
     align-items: center;
     gap: 0.75rem;
     flex-wrap: wrap;
+  }
+
+  .mode-selector {
+    display: flex;
+    gap: 2px;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 6px;
+    padding: 2px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .mode-btn {
+    padding: 0.25rem 0.6rem;
+    font-size: 0.75rem;
+    border-radius: 4px;
+    cursor: pointer;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-secondary, #94a3b8);
+    font-weight: 600;
+    transition: all 0.2s;
+  }
+
+  .mode-btn:hover {
+    color: var(--text-primary, #f8fafc);
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .mode-btn.active {
+    background: rgba(57, 229, 182, 0.18);
+    color: #39e5b6;
+    border-color: rgba(57, 229, 182, 0.35);
+  }
+
+  .mode-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .badge-teal {
+    background: rgba(57, 229, 182, 0.15);
+    color: #39e5b6;
+    border: 1px solid rgba(57, 229, 182, 0.3);
+    font-size: 0.75rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: 9999px;
+    font-weight: 600;
+  }
+
+  .download-chip {
+    border-color: rgba(57, 229, 182, 0.2);
+  }
+
+  .teal-flag {
+    color: #39e5b6;
+  }
+
+  .download-badge {
+    background: rgba(57, 229, 182, 0.15);
+    color: #39e5b6;
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  .ver-badge {
+    background: rgba(255, 255, 255, 0.08);
+    color: #94a3b8;
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-family: monospace;
   }
 
   .window-selector {

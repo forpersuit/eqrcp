@@ -114,6 +114,16 @@ jobs:
               npx wrangler r2 object put "$BUCKET/downloads/${{ github.ref_name }}/$filename" --file "$file" --remote
               echo "Uploading $filename to downloads/latest/$filename ..."
               npx wrangler r2 object put "$BUCKET/downloads/latest/$filename" --file "$file" --remote
+              
+              # G3 double-insurance: also upload literal latest name for static href fallback
+              if [[ "$filename" =~ ^EQT-.*-windows-amd64\.zip$ ]]; then
+                echo "Uploading literal fallback EQT-latest-windows-amd64.zip to downloads/latest/ ..."
+                npx wrangler r2 object put "$BUCKET/downloads/latest/EQT-latest-windows-amd64.zip" --file "$file" --remote
+              fi
+              if [[ "$filename" =~ ^EQT-.*-windows-amd64\.exe$ ]]; then
+                echo "Uploading literal fallback EQT-latest-windows-amd64.exe to downloads/latest/ ..."
+                npx wrangler r2 object put "$BUCKET/downloads/latest/EQT-latest-windows-amd64.exe" --file "$file" --remote
+              fi
             done
           else
             echo "CLOUDFLARE_API_TOKEN is not set, skipping R2 deployment."

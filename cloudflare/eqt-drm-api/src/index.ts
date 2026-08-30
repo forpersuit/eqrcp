@@ -9,6 +9,7 @@ import { handlePortalRoutes } from './routes/portal';
 import { handlePaddleRoutes } from './routes/paddle';
 import { handleDrmRoutes } from './routes/drm';
 import { handleCrashReport } from './routes/crash-report';
+import { handleTelemetryRoutes } from './routes/telemetry';
 import { assertEnvironmentAlignment } from './utils/env-guard';
 import { wrapD1WithRetry } from './utils/d1-retry';
 import { probeSmtp } from './services/smtp';
@@ -91,6 +92,11 @@ export default {
         response = await handleCrashReport(request, env, corsHeaders);
       }
 
+      // 5.6 Route to Telemetry endpoints (/api/v1/telemetry/*, no auth required — rate-limited per IP)
+      if (!response && url.pathname.startsWith("/api/v1/telemetry/")) {
+        response = await handleTelemetryRoutes(request, env, ctx, url, corsHeaders);
+      }
+
       // 6. Route to Client DRM endpoints (/api/v1/activate, /api/v1/verify, /api/v1/update/check)
       if (!response) {
         response = await handleDrmRoutes(request, env, ctx, url, corsHeaders);
@@ -127,6 +133,7 @@ export default {
    * Emits a WARN alert to Telegram if the probe fails or SMTP certificate is invalid.
    */
   async scheduled(event: { cron: string; type?: string; scheduledTime?: number }, env: Env, ctx: ExecutionContext): Promise<void> {
+    // 1. SMTP health probe
     try {
       const probe = await probeSmtp(env, 5000);
       if (!probe.ok && !probe.skipped) {
@@ -146,6 +153,39 @@ export default {
         err,
         { cron: event?.cron }
       );
+    }
+
+    // 2. Daily 90-day download telemetry retention & aggregation (§7.6 / Phase 4)
+    try {
+      const retentionDays = 90;
+      const cutoffDate = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
+      const nowIso = new Date().toISOString();
+
+      // Aggregate and Upsert into daily_download_stats
+      await env.DB.prepare(`
+        INSERT INTO daily_download_stats (stat_date, version, ip_country, source, download_cnt, created_at)
+        SELECT
+          substr(created_at, 1, 10) AS stat_date,
+          version,
+          COALESCE(ip_country, 'XX') AS ip_country,
+          source,
+          COUNT(*) AS download_cnt,
+          ? AS created_at
+        FROM download_records
+        WHERE created_at < ?
+        GROUP BY stat_date, version, ip_country, source
+        ON CONFLICT(stat_date, version, ip_country, source)
+        DO UPDATE SET
+          download_cnt = download_cnt + excluded.download_cnt,
+          created_at = excluded.created_at
+      `).bind(nowIso, cutoffDate).run();
+
+      // Delete archived detailed records
+      await env.DB.prepare(`
+        DELETE FROM download_records WHERE created_at < ?
+      `).bind(cutoffDate).run();
+    } catch (archiveErr: any) {
+      console.error("Failed to archive 90-day download records:", archiveErr);
     }
   }
 };

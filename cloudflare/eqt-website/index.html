@@ -1254,10 +1254,60 @@
         }
     }
 
+    // Download telemetry tracking (§5.3 in docs/future/20260830)
+    function trackDownload(version, filename) {
+        try {
+            const effectiveVer = version || window.latestVersion || "v1.36.24";
+            const effectiveFile = filename || (window.latestVersion ? `EQT-${window.latestVersion}-windows-amd64.zip` : "EQT-latest-windows-amd64.zip");
+            const payload = JSON.stringify({
+                version: effectiveVer,
+                filename: effectiveFile,
+                source: "website",
+                referer: document.referrer || window.location.href
+            });
+            const endpoint = `${window.EQT_API_BASE}/api/v1/telemetry/download`;
+            if (navigator.sendBeacon) {
+                const blob = new Blob([payload], { type: 'text/plain; charset=UTF-8' });
+                navigator.sendBeacon(endpoint, blob);
+            } else {
+                fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: payload,
+                    keepalive: true
+                }).catch(() => {});
+            }
+        } catch (e) {
+            console.warn("Download tracking error:", e);
+        }
+    }
+
+    function initDownloadTracking() {
+        const link = document.getElementById('download-link');
+        if (!link) return;
+        link.addEventListener('click', () => {
+            let version = window.latestVersion;
+            let filename = '';
+            try {
+                const href = link.getAttribute('href') || '';
+                const parts = href.split('/');
+                filename = parts[parts.length - 1] || '';
+                if (!version && parts.length >= 2) {
+                    const verPart = parts[parts.length - 2];
+                    if (/^v?\d+\.\d+\.\d+$/.test(verPart)) {
+                        version = verPart;
+                    }
+                }
+            } catch (e) {}
+            trackDownload(version, filename);
+        });
+    }
+
     // Run on load
     window.addEventListener('DOMContentLoaded', () => {
         initLang();
         initGallery();
+        initDownloadTracking();
         fetchLatestVersion();
     });
 </script>

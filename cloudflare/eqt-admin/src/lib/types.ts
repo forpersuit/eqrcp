@@ -249,5 +249,38 @@ export interface LiveDevicesResponse {
   total_active_devices: number;
   total_paid_devices: number;
   total_free_devices: number;
-  cross_region_arcs?: LiveDeviceArc[];
+  cross_region_arcs: LiveDeviceArc[];
+}
+
+export interface DownloadLocation {
+  country: string;
+  region?: string | null;
+  city?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  source: string;
+  download_count: number;
+  latest_version: string;
+  latest_download_at: string;
+}
+
+export interface DownloadsGlobeResponse {
+  success: boolean;
+  window: string;
+  locations: DownloadLocation[];
+  total_downloads: number;
+  unique_countries: number;
+}
+
+export interface DownloadStatsResponse {
+  success: boolean;
+  stats: {
+    today: number;
+    last_7_days: number;
+    last_30_days: number;
+    total_all_time: number;
+    top_versions: Array<{ version: string; count: number }>;
+    top_countries: Array<{ country: string; count: number }>;
+    sources: Array<{ source: string; count: number }>;
+  };
 }

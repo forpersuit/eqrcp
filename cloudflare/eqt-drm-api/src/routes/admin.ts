@@ -618,6 +618,153 @@ export async function handleAdminRoutes(
     });
   }
 
+  // 3.10 Admin Endpoint: Download telemetry for 3D Globe visualization (§5.4 in docs/future/20260830)
+  if (url.pathname === "/api/v1/admin/downloads/globe" && request.method === "GET") {
+    const denied = await requireAdminAuth(request, env, corsHeaders);
+    if (denied) return denied;
+
+    const windowParam = (url.searchParams.get("window") || "24h").trim();
+    const WINDOW_MS: Record<string, number> = {
+      "1h": 60 * 60 * 1000,
+      "12h": 12 * 60 * 60 * 1000,
+      "24h": 24 * 60 * 60 * 1000,
+      "7d": 7 * 24 * 60 * 60 * 1000,
+      "30d": 30 * 24 * 60 * 60 * 1000
+    };
+    const effectiveWindow = WINDOW_MS[windowParam] ? windowParam : "24h";
+    const windowMs = WINDOW_MS[effectiveWindow];
+    const cutoff = new Date(Date.now() - windowMs).toISOString();
+
+    const sql = `
+      SELECT
+        ip_country AS country,
+        region,
+        city,
+        latitude,
+        longitude,
+        source,
+        COUNT(*) AS download_count,
+        MAX(version) AS latest_version,
+        MAX(created_at) AS latest_download_at
+      FROM download_records
+      WHERE created_at >= ?
+        AND ip_country IS NOT NULL AND ip_country != ''
+      GROUP BY ip_country, region, city, latitude, longitude, source
+      ORDER BY download_count DESC
+    `;
+
+    const res = await env.DB.prepare(sql).bind(cutoff).all<{
+      country: string;
+      region?: string | null;
+      city?: string | null;
+      latitude?: number | null;
+      longitude?: number | null;
+      source: string;
+      download_count: number;
+      latest_version: string;
+      latest_download_at: string;
+    }>();
+
+    const locations = res.results || [];
+    let totalDownloads = 0;
+    const countriesSet = new Set<string>();
+
+    for (const loc of locations) {
+      totalDownloads += loc.download_count;
+      if (loc.country) countriesSet.add(loc.country.toUpperCase());
+    }
+
+    return new Response(JSON.stringify({
+      success: true,
+      window: effectiveWindow,
+      locations,
+      total_downloads: totalDownloads,
+      unique_countries: countriesSet.size
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
+  // 3.11 Admin Endpoint: Aggregated Download Statistics & Trends
+  if (url.pathname === "/api/v1/admin/downloads/stats" && request.method === "GET") {
+    const denied = await requireAdminAuth(request, env, corsHeaders);
+    if (denied) return denied;
+
+    const now = Date.now();
+    const startOfToday = new Date(new Date().setUTCHours(0, 0, 0, 0)).toISOString();
+    const cutoff7d = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const cutoff30d = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    // 1. Time window download totals from active records
+    const todayRes = await env.DB.prepare(
+      "SELECT COUNT(*) AS cnt FROM download_records WHERE created_at >= ?"
+    ).bind(startOfToday).first<{ cnt: number }>();
+
+    const weekRes = await env.DB.prepare(
+      "SELECT COUNT(*) AS cnt FROM download_records WHERE created_at >= ?"
+    ).bind(cutoff7d).first<{ cnt: number }>();
+
+    const monthRes = await env.DB.prepare(
+      "SELECT COUNT(*) AS cnt FROM download_records WHERE created_at >= ?"
+    ).bind(cutoff30d).first<{ cnt: number }>();
+
+    const liveTotalRes = await env.DB.prepare(
+      "SELECT COUNT(*) AS cnt FROM download_records"
+    ).first<{ cnt: number }>();
+
+    const archivedTotalRes = await env.DB.prepare(
+      "SELECT SUM(download_cnt) AS cnt FROM daily_download_stats"
+    ).first<{ cnt: number | null }>();
+
+    const totalAllTime = (liveTotalRes?.cnt || 0) + (archivedTotalRes?.cnt || 0);
+
+    // 2. Top Versions in the last 30 days
+    const topVersionsRes = await env.DB.prepare(`
+      SELECT version, COUNT(*) AS count
+      FROM download_records
+      WHERE created_at >= ?
+      GROUP BY version
+      ORDER BY count DESC
+      LIMIT 6
+    `).bind(cutoff30d).all<{ version: string; count: number }>();
+
+    // 3. Top Countries in the last 30 days
+    const topCountriesRes = await env.DB.prepare(`
+      SELECT ip_country AS country, COUNT(*) AS count
+      FROM download_records
+      WHERE created_at >= ? AND ip_country IS NOT NULL AND ip_country != ''
+      GROUP BY ip_country
+      ORDER BY count DESC
+      LIMIT 8
+    `).bind(cutoff30d).all<{ country: string; count: number }>();
+
+    // 4. Source Breakdown (e.g. website vs desktop_update)
+    const sourcesRes = await env.DB.prepare(`
+      SELECT source, COUNT(*) AS count
+      FROM download_records
+      WHERE created_at >= ?
+      GROUP BY source
+      ORDER BY count DESC
+    `).bind(cutoff30d).all<{ source: string; count: number }>();
+
+    return new Response(JSON.stringify({
+      success: true,
+      stats: {
+        today: todayRes?.cnt || 0,
+        last_7_days: weekRes?.cnt || 0,
+        last_30_days: monthRes?.cnt || 0,
+        total_all_time: totalAllTime,
+        top_versions: topVersionsRes.results || [],
+        top_countries: topCountriesRes.results || [],
+        sources: sourcesRes.results || []
+      }
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
   // 4. Admin Endpoint: Search all licenses (sort by created_at; real activations columns)
   if (url.pathname === "/api/v1/admin/licenses" && request.method === "GET") {
     const denied = await requireAdminAuth(request, env, corsHeaders);
