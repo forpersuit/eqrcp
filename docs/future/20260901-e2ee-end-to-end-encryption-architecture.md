@@ -189,16 +189,20 @@ sequenceDiagram
 
 ### 5.4 DRM 会话生命周期与单例模式下的覆盖/销毁机制
 
-针对 DRM 在会话期的数据驻留与单例生命周期，确立以下核心原则：
+针对 DRM 在会话期的数据驻留与全模式生命周期，确立以下核心原则：
 
 1. **DRM 绝对不存储任何业务数据 (Zero Business Data in DRM)**：
    - 所有的实际文件二进制、图片、聊天文本和剪贴板内容，**100% 仅在 PC 和手机之间的局域网物理信道流动**，绝对不经过 DRM，DRM 无从知晓任何业务内容。
    - DRM 仅在内存/D1 中短暂保留会话凭据（`MasterKey`、TTL 与 `claim_count`）。
-2. **会话期间保留的必要性**：
-   - 在活跃会话期（如 10 分钟 TTL 内），DRM 必须暂存凭据，以支持：① 后续多台手机陆续扫码加入同一个 Chat/传输会话；② 移动端切后台、误刷新或 Safari 内存回收重载时的重连 Re-claim。
-3. **单例模式下的「覆盖+删除+重建」机制**：
-   - 由于 PC 端的 Chat / Share / Receive 是单例运行的，当用户在 PC 端关闭当前会话时，PC 触发 `POST /session/:id/close` 主动通知 DRM 立即物理抹除密钥；
-   - 若 PC 异常退出未发送关闭请求，当该设备下一次启动同模式传输并请求 `POST /session/create` 时，DRM 会自动原子执行 **“Purge Old Sessions for (device_id, mode) + Insert New Session”**，确保旧会话密钥彻底作废并物理抹除。
+2. **会话期间保留的必要性与多端可用性保证**：
+   - 在活跃会话期（如 10 分钟 TTL 内），DRM 必须完整保留当前会话凭据，以确保：
+     - **Share (Send) 模式**：PC 分享文件给会议室多位同事时，多台手机在会话期内陆续扫码均可顺利领取密钥下载；
+     - **Receive 模式**：多台手机在会话期内同时或先后扫码并发上传照片到 PC 均可正常握手；
+     - **Chat 模式**：多台设备随时加入聊天室，且移动端切后台、误刷新时均可无缝重连 Re-claim。
+3. **全模式统一的「下次请求时覆盖清理+重建 (Delete + Recreate)」机制**：
+   - **全模式统一**：PC 端的 `Share`、`Receive`、`Chat` 在本机均为单例运行。因此 DRM 在 `POST /session/create` 端点对三种模式**统一采用「删除历史旧活跃会话 + 插入新会话」**策略；
+   - **架构极简性**：无需设计复杂的跨会话状态机或会话复用池。每次 PC 启动新传输/聊天，DRM 自动原子执行 `DELETE FROM e2ee_sessions WHERE device_id = ? AND mode = ? AND status = 'active'` 并生成全新的 256-bit MasterKey；
+   - **主动销毁补充**：PC 端在正常点击关闭或退出程序时，异步触发 `POST /session/:id/close`，DRM 收到即时物理抹除，实现“用时可用、下次必清、退时即抹”的极简安全闭环。
 
 
 ---
@@ -494,11 +498,11 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
   * 生成二维码时直接读取内存状态，零延迟秒级决策是否开启 E2EE 二维码；
   * 连续 2 次探活失败才标记为不可达，防止网络微抖动引发误降级。
 
-### 意见 22:DRM 单例会话覆盖重建与 PC 主动销毁闭环 (`POST /session/:id/close`)
-* **背景评估**：PC 端的 Chat、Share、Receive 均为单实例运行。在会话期间，DRM 暂存会话凭据以支持多设备接入与刷新重连；但在会话关闭或下次启动同模式时，必须有确定的销毁逻辑，杜绝旧凭据长期滞留。
+### 意见 22:DRM 全模式单例会话「覆盖重建+主动销毁」极简闭环
+* **背景评估**：PC 端的 Share (Send)、Receive、Chat 三种模式在本机均为单实例运行。在会话期间，DRM 必须暂存凭据以确保任何扫码设备（多台同事手机或家人设备）在会话期内都能稳定获取密钥并支持刷新重连；但在新任务启动或退出时，必须有确定性的清理逻辑。
 * **工程对策**：
-  * **主动退出闭环**：PC 端在关闭会话或退出程序时，异步调用 `POST /api/v1/e2ee/session/:id/close`，DRM 收到后立即从 D1 中物理抹除该会话记录；
-  * **单例覆盖重建 (Singleton Invalidation)**：下次该 PC 重新启动同模式请求 `create` 时，DRM 自动原子执行 `DELETE FROM e2ee_sessions WHERE device_id = ? AND mode = ? AND status = 'active'`，彻底消除孤儿会话。
+  * **全模式统一「覆盖重建」**：无论是 Share、Receive 还是 Chat，当 PC 下一次启动该模式请求 `POST /session/create` 时，DRM 自动原子执行 `DELETE FROM e2ee_sessions WHERE device_id = ? AND mode = ? AND status = 'active'`，彻底清空旧任务凭据并下发全新 MasterKey，实现零跨会话状态负担；
+  * **主动退出闭环**：PC 端在关闭传输窗口或退出应用时，异步触发 `POST /api/v1/e2ee/session/:id/close`，DRM 即时物理抹除，达成“会话期稳健可用、下次必清、退时即抹”的极简安全闭环。
 
 ---
 
