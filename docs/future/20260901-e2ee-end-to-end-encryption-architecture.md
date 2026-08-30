@@ -684,6 +684,37 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
   * **响应式安全徽章**：前端页面顶栏展示绿色「🔒 E2EE Active (XChaCha20)」盾牌；当 DRM 不可达降级为明文时，盾牌变为灰色「🔓 Standard LAN」；
   * **端内非阻塞通知**：所有提示（新设备接入、离线降级、网络波动重试、被屏蔽提示）全部使用端内轻量 Toast / 顶部横幅，保持优雅与非打扰。
 
+### 意见 30:移动端超大文件落盘的 OPFS (Origin Private File System) 阶梯适配
+* **背景评估**：在移动端下载 >2GB 的超大视频时，传统 `Blob` 会因移动端堆内存上限（1GB~2GB）直接抛出 OOM，而第三方 `StreamSaver.js` 依赖 ServiceWorker 伪中间人拦截，在局域网纯 HTTP 环境下兼容性差。
+* **工程对策**：
+  * 采用 3 级阶梯式流式落盘：
+    1. **小文件 (< 500MB)**：直接在内存中汇聚为 `Blob` 并触发原生下载链接；
+    2. **中等文件 (500MB ~ 2GB)**：优先检测调用 File System Access API 的 `showSaveFilePicker()`；
+    3. **超大文件 (> 2GB)**：在 Web Worker 中调用 **OPFS (Origin Private File System)** 的 `createWritable()` / `SyncAccessHandle` 逐块直写本地私有磁盘文件，解密完成后触发一键导出，彻底攻克移动端浏览器百 GB 级下载内存墙。
+
+### 意见 31:密码学密钥内存防御性清零与防编译器死码消除 (`runtime.KeepAlive` & `sodium.memzero`)
+* **背景评估**：密码学密钥在 Go 堆内存和 JS WASM 内存中使用完毕后，若仅简单赋值为 `nil`，GC 未触发前密钥字节仍以明文驻留在物理内存中；此外，部分 Go 编译器激进优化可能将未被后续引用的清零循环（Dead Code）优化剔除。
+* **工程对策**：
+  * **Go 服务端**：使用 `clear(keySlice)` 进行字节清零，并紧跟 `runtime.KeepAlive(keySlice)` 强制防止编译器优化消除清零动作；
+  * **JS / WASM 客户端**：调用 libsodium 原生 `sodium.memzero(keyUint8Array)` 物理擦除 WASM 线性内存区中的密钥字节。
+
+### 意见 32:本地离线 Mock DRM 与 E2EE 跨端自动化 CI 测试套件
+* **背景评估**：在 GitHub Actions CI/CD 与本地 `go test ./...` 流程中，无法依赖真实公网 Cloudflare DRM 或实体手机进行交互测试。
+* **工程对策**：
+  * 在 `pkg/server/` 测试套件中封装内置内存型 `MockDRMServer`（基于 `httptest.Server`）；
+  * 构建全自动化集成测试矩阵：
+    1. 4MB 分块加解密与 HKDF 密钥派生一致性验证；
+    2. 密文篡改拦截测试（随机翻转 1 字节密文，验证 Poly1305 Auth Tag 瞬间阻断）；
+    3. 静默屏蔽（Ban）与解屏蔽从头重置（Chunk 0 强制要求）状态机测试；
+    4. DRM 不可达离线降级明文自动化回归测试。
+
+### 意见 33:弱网 Wi-Fi 抖动下的自适应分块重试与拥塞避让
+* **背景评估**：在 2.4GHz 拥堵或边缘 Wi-Fi 环境下，可能出现 10%~20% 的突发丢包与 RTT 抖动。若固定采用 2 并发分块上传，可能导致网络缓冲区膨胀（Bufferbloat）。
+* **工程对策**：
+  * 客户端引入轻量自适应拥塞控制：
+  * 统计最近 3 个分块的平均 RTT，若单个分块请求超时或延迟 > 3 倍平均 RTT，临时将上传并发度降为 1（串行重试）；
+  * 当连续 2 个分块快速完成（RTT 恢复正常）时，自动恢复并发度为 2，保证弱网下的高韧性传输。
+
 ---
 
 ## 10. 商业化分级与版本限制策略 (Free vs Plus/Pro Tier)
@@ -709,6 +740,7 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
 - [ ] **Phase 1:WASM 密码学基础库与 HKDF 密钥派生引擎**
   - `pkg/pages/assets/crypto-engine.js`:libsodium.js 初始化、HKDF-SHA256 派生、XChaCha20-Poly1305 分块加解密、Worker 通信;
   - WASM 渐进式加载与 CDN 强缓存(`Cache-Control: immutable`)、骨架屏异步初始化(意见 10);
+  - 密钥内存防御性物理清零 `sodium.memzero` 与防优化(意见 31);
   - 验证 iOS Safari、Android Chrome、Edge、Firefox 在局域网 HTTP 页面的跨平台一致性。
 - [ ] **Phase 2:DRM 会话密钥与引擎分发端点**
   - `cloudflare/eqt-drm-api`:新增 `POST /api/v1/e2ee/session/create`、`POST /api/v1/e2ee/session/:id/claim` 与 `POST /api/v1/e2ee/session/:id/close`,复用 license 校验、rate-limit、cf-access-jwt;
@@ -723,8 +755,10 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
   - Go 后端与 Svelte 前端实现消息/剪贴板透明加解密。
 - [ ] **Phase 4:Receive / Share 4MB 分块流式加解密与设备管理控制**
   - Receive:弃用 Multipart，采用专用 REST 端点 `POST /receive/:path/chunk`(意见 15)+ 前端 `File.slice()` 3 级流水线(Read→Encrypt→POST,并发度 2)(意见 12)+ Go `ChunkedXChaChaReader` 零临时文件写盘 + `chunk_status` 断点恢复;
+  - 移动端超大文件落盘引入 OPFS (Origin Private File System) 阶梯适配(意见 30);
   - 客户端 UUID 鉴权解耦 IP 地址，支持 Wi-Fi 漫游与 IP 漂移无感续传(意见 27);
   - 多文件分享流式内存 ZIP 归档传输，规避浏览器多文件拦截弹窗(意见 28);
+  - 弱网 Wi-Fi 自适应重试与拥塞避让(意见 33);
   - 移动端 Web Worker 定长环形 Buffer 池化，防百 GB 传输 OOM(意见 24);
   - 端到端明文 SHA-256 流式全量哈希双重校验(意见 25);
   - 移动端 WebKit 屏幕常亮保活 Screen WakeLock 与切后台断点恢复(意见 18);
@@ -739,6 +773,7 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
   - 桌面端后台加密传输防休眠与 CPU 核心调度优化(意见 26);
   - 桌面 GUI 传输监控面板实现设备列表可视化与 `[🚫 屏蔽]` / `[✅ 恢复]` 交互按钮(§7.3);
   - 桌面端后台 30 秒周期探活 DRM 服务与内存状态缓存防抖(意见 21);
+  - 本地离线 Mock DRM 与 E2EE 跨端自动化 CI 测试套件(意见 32);
   - 联网检测与离线降级通知;免费版提示升级;安全徽章点亮;
   - 编写隐私白皮书,海外社区重点宣发。
 
