@@ -60,7 +60,7 @@ Environment variables use the `EQT_` prefix.
 - [Desktop platform notes](desktop-platform-notes.md)
 - [Windows validation checklist](windows-validation-checklist.md)
 - [Security notes](security-notes.md)
-- [Twitter (X) 推广策略与文案库](marketing/twitter-promotion-strategy.md)
+- **[市场营销与全球推广全案目录 (Marketing Hub)](marketing/README.md)** — [全球 GTM 推广战略与 SEO/GEO 增长全案](marketing/global-gtm-and-seo-strategy.md) · [Twitter (X) 推广策略与推文文案库](marketing/twitter-promotion-strategy.md)
 - [Admin 文档目录](admin/README.md) · [Portal 文档目录](portal/README.md)
 
 ## License
