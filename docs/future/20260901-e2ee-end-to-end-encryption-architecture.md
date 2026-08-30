@@ -404,6 +404,44 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
   * 手机端若此前联网访问过一次并缓存了 PWA 引擎，在纯离线扫码时直接启用本地 WASM 引擎；
   * PC 屏幕与手机屏幕各自计算并展示 `Hash(MasterKey)[0:4]` 的 4 位数字配对码，用户肉眼核对一致即确认未被局域网中间人篡改，从而在完全无公网连接的纯局域网内实现数学级防篡改 E2EE。
 
+### 意见 14:DRM 端点 CORS 跨域预检与前端 CSP (`wasm-unsafe-eval`) 策略规范
+* **背景评估**：手机浏览器通过局域网 `http://192.168.x.x` 打开页面后，页面 JS 发起跨域 `fetch` 请求访问公网 HTTPS DRM 服务（`https://drm.eqt.net.im/api/v1/e2ee/...`）。若未正确配置 CORS 头部，移动端浏览器的 Preflight `OPTIONS` 预检失败将直接阻断密钥领取流程；此外，编译 WASM 在某些严格浏览器环境下需要 CSP 授权。
+* **工程对策**：
+  * **DRM CORS 规范**：Cloudflare Worker 必须强制返回开放的 CORS 响应头：
+    ```http
+    Access-Control-Allow-Origin: *
+    Access-Control-Allow-Methods: GET, POST, OPTIONS
+    Access-Control-Allow-Headers: Content-Type, Authorization, X-Client-Instance-Id
+    ```
+  * **CSP 兼容**：Go 服务端下发的 HTML 模板配置宽松 CSP 头，确保允许 `connect-src https://*.eqt.net.im` 与 `script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' https://*.eqt.net.im`。
+
+### 意见 15:明确弃用复杂 Multipart 封装，全面采用轻量 REST 分块端点 (`POST /receive/.../chunk`)
+* **背景评估**：现行 Receive 模式采用标准 `multipart/form-data`，Go 服务端通过 `r.MultipartReader()` 解析。但在 4MB 分块流式加密场景下，若将每个密文块封装为 Multipart MIME 格式，会在客户端产生大量的字符串拼接与边界缓冲内存开销，且遇到网络中断重试单个分块时难以做精细化控制。
+* **工程对策**：
+  * 在 E2EE 模式下，直接引入专用的轻量分块 REST 端点：`POST /receive/:path/chunk`；
+  * 请求头携带 `X-File-ID`、`X-Chunk-Index`、`X-Total-Chunks`，请求体直接为原始二进制封包 `[ChunkIndex(4B) | Nonce(24B) | Ciphertext(<=4MB) | Tag(16B)]`；
+  * 极大简化客户端 3 级流水线并发上传，单个分块重试成本降至最低。
+
+### 意见 16:Go 服务端 4MB Buffer 内存池化 (`sync.Pool`) 杜绝 GC 抖动
+* **背景评估**：在千兆 Wi-Fi 满速（80~110MB/s）高并发传输时，Go 后端每秒需处理 20~30 个 4MB 分块。若频繁分配临时切片，将引发 Go 运行时高频垃圾回收（GC STW 停顿），造成 CPU 占用飙升与网络传输抖动。
+* **工程对策**：
+  * 在 `pkg/server/` 中维护全局 `sync.Pool` 内存池：
+    ```go
+    var chunkBufferPool = sync.Pool{
+        New: func() any {
+            b := make([]byte, 4*1024*1024+44)
+            return &b
+        },
+    }
+    ```
+  * 分块解密写盘完成后立即归还内存池，实现百兆满速下的零 GC 堆内存抖动。
+
+### 意见 17:Chat 模式大附件分级处理策略（<20MB 单块直传 vs >20MB 4MB 流式分块）
+* **背景评估**：Chat 模式中传输的内容跨度极大（从几十 KB 的截图到几 GB 的 4K 视频录像）。
+* **工程对策**：
+  * **小附件 ( $\le$ 20MB)**：前端在 Web Worker 中单块加密，直接作为单个 payload POST 到 `/upload`，协议交互最轻快；
+  * **超大附件 (> 20MB)**：无缝复用 Receive/Share 的 4MB 分块流式管道（`POST /api/chat/v2/attachment/chunk`），避免在聊天前端一次性申请大块 ArrayBuffer 导致移动端浏览器 OOM 崩溃。
+
 ---
 
 ## 9. 商业化分级与版本限制策略 (Free vs Plus/Pro Tier)
@@ -430,14 +468,17 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
   - 验证 iOS Safari、Android Chrome、Edge、Firefox 在局域网 HTTP 页面的跨平台一致性。
 - [ ] **Phase 2:DRM 会话密钥与引擎分发端点**
   - `cloudflare/eqt-drm-api`:新增 `POST /api/v1/e2ee/session/create` 与 `POST /api/v1/e2ee/session/:id/claim`,复用 license 校验、rate-limit、cf-access-jwt;
+  - CORS 跨域响应头与前端 CSP `wasm-unsafe-eval` 适配规范(意见 14);
   - `claim` 多设备并发限额 `max_claims`、`client_instance_id` 刷新容错(意见 9);
   - D1 表 `e2ee_sessions(session_id, master_key, claim_count, max_claims, status, expires_at)`;短期 TTL 与超限物理覆写销毁(意见 8 方案一);引擎静态资源托管与 SRI。
 - [ ] **Phase 3:Chat 模式双向 WebSocket 与剪贴板 E2EE**
   - 改造 `pkg/chat/v2/protocol/`,定义 `e2ee_envelope` 载荷与 AAD 防重放验证;
   - 加解密运行于独立 Web Worker,Transferable 零拷贝传输(意见 11);
+  - 附件分级传输：$\le$ 20MB 单块直传，> 20MB 复用 4MB 分块流式管道(意见 17);
   - Go 后端与 Svelte 前端实现消息/剪贴板透明加解密。
 - [ ] **Phase 4:Receive / Share 4MB 分块流式加解密**
-  - Receive:前端 `File.slice()` 3 级流水线(Read→Encrypt→POST,并发度 2)(意见 12)+ Go `ChunkedXChaChaReader` 零临时文件写盘 + `chunk_status` 断点恢复;
+  - Receive:弃用 Multipart，采用专用 REST 端点 `POST /receive/:path/chunk`(意见 15)+ 前端 `File.slice()` 3 级流水线(Read→Encrypt→POST,并发度 2)(意见 12)+ Go `ChunkedXChaChaReader` 零临时文件写盘 + `chunk_status` 断点恢复;
+  - Go 服务端引入 `sync.Pool` 4MB 缓冲池，消除百兆吞吐下的 GC 停顿(意见 16);
   - Share:Go 端 `Range` 兼容分块加密下发 + 移动端 Blob / StreamSaver 流式解密下载管道;
   - 分块加解密统一置于 Web Worker(意见 11)。
 - [ ] **Phase 5:Settings 开关、付费门禁与海外隐私营销**
