@@ -351,3 +351,23 @@ echo -n "your_secret_value" | npx wrangler secret put KEY_NAME
   - **Portal 页面前端**：许可证列表仅在 `lic.status === 'active' && lic.refundable === true` 时渲染「申请退款」按钮；0 元订单完全隐藏退款入口。
   - **API 服务端前置拦截**：`POST /api/v1/user/refund` 接口前置检查 `isLicenseRefundable` 及 Paddle 交易详情中的总金额，对 $0 订单直接返回 400 与友好提示 `REFUND_NOT_ALLOWED_ZERO_AMOUNT`，严禁向 Paddle 发起无效调整，避免产生无意义的系统异常日志与 Telegram 告警。
   - **存量过渡与按需自愈 (Lazy Cache & Self-Healing)**：历史存量订单在修复前 `paid_amount` 为 `NULL`，前端列表暂保留退款入口；当用户发起退款请求时，服务端通过实时查询 Paddle API 校验 `grand_total`，若判定为 0 元则即时更新写入 `paid_amount = 0` 缓存并拦截（400），实现存量数据的按需自愈。
+
+---
+
+## 16. 匿名下载埋点 (Telemetry)、隐私保护与 3D 地球仪可视化规范 (Download Telemetry & Visualizations)
+
+### 16.1 盐值防护与 Fail-Loud 安全准则 (P1 Zero-Tolerance)
+- **绝对禁止 Fallback 盐**：`TELEMETRY_SALT` 必须且仅保存在 Cloudflare Worker Secret 中（`wrangler secret put TELEMETRY_SALT`）。服务端严禁使用任何形式的公开 fallback 盐值。
+- **Fail-Loud 前置拒写**：若环境变量中缺失 `TELEMETRY_SALT`，`/api/v1/telemetry/download` 必须立即返回 500 并记录严重错误日志，拒绝写入任何明文或未受保护的 IP 哈希。
+- **生产环境对齐校验 (Env-Guard)**：`assertEnvironmentAlignment` 在非测试环境下强制校验 `TELEMETRY_SALT` 的非空存在性。
+
+### 16.2 地球仪最新版本语义序与 SQLite 裸列特性 (P2 Semantic Ordering)
+- **禁止 `MAX(version)` 字符串聚合**：由于版本号（如 `"v1.36.9"` 与 `"v1.36.25"`）按字符串比对时存在字典序误导，严禁在 SQL 聚合中使用 `MAX(version)`。
+- **SQLite 裸列 (Bare Column) 保障**：在包含 `MAX(created_at) AS latest_download_at` 的分组查询中，直接选取 `version AS latest_version`，SQLite 保证从获得 `MAX(created_at)` 最大值的那一行提取版本字段，精准呈现该区域最近一次实际下载的版本。
+
+### 16.3 90 天数据归档与原子批处理事务 (P2 Atomic Retention)
+- **Cloudflare D1 `batch()` 事务保证**：在定时任务 `scheduled` 中，对超期（> 90天）明细记录向 `daily_download_stats` 聚合插入（`INSERT ... ON CONFLICT DO UPDATE`）与后续删除（`DELETE FROM download_records`）必须包裹在单次 `env.DB.batch([insertStmt, deleteStmt])` 批处理调用中，确保两者处于单一 SQLite 事务内原子执行，杜绝因异常导致的永久重复累加。
+
+### 16.4 官网动态埋点与真实版本解析 (P3 Dynamic Versioning)
+- **禁止硬编码版本兜底**：前端 `trackDownload` 必须动态读取 `window.latestVersion` 或从下载直链/文件名中正则提取版本号，并严格经过 `/^v?\d+\.\d+\.\d+$/` 校验。若未就绪或格式非法则跳过，严禁硬编码静态历史版本兜底。
+

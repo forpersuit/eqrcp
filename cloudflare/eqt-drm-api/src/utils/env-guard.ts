@@ -57,6 +57,10 @@ export function assertEnvironmentAlignment(env: Env, url?: URL): void {
     if (lifetimePrice === SANDBOX_PRICE_LIFETIME_ID || yearlyPrice === SANDBOX_PRICE_YEARLY_ID) {
       throw new Error('CRITICAL CONFIG MISMATCH: Production worker must not be configured with Paddle Sandbox price IDs!');
     }
+    // Production worker MUST have TELEMETRY_SALT configured for privacy-compliant IP hashing
+    if (!env.TELEMETRY_SALT || !env.TELEMETRY_SALT.trim()) {
+      throw new Error('CRITICAL SECURITY CONFIG MISMATCH: Production worker must have TELEMETRY_SALT configured!');
+    }
   } else if (env.ENVIRONMENT === 'test') {
     // Test worker configured with ENVIRONMENT='test' MUST NOT have Live production prices configured
     if (lifetimePrice === PROD_PRICE_LIFETIME_ID || yearlyPrice === PROD_PRICE_YEARLY_ID) {

@@ -51,12 +51,13 @@ runTest('isTestEnvironment correctly identifies test environments', () => {
 });
 
 // Group 2: Production Guard (Live mode)
-runTest('Production Worker with valid Live keys and prices passes', () => {
+runTest('Production Worker with valid Live keys, prices, and TELEMETRY_SALT passes', () => {
   const validProdEnv = {
     ENVIRONMENT: 'production',
     PADDLE_API_KEY: 'pdl_live_apikey_1234567890abcdef',
     PADDLE_PRICE_ID_PLUS_LIFETIME: PROD_LIFETIME,
-    PADDLE_PRICE_ID_PLUS_YEARLY: PROD_YEARLY
+    PADDLE_PRICE_ID_PLUS_YEARLY: PROD_YEARLY,
+    TELEMETRY_SALT: 'prod_telemetry_salt_secret_123'
   };
   assert.doesNotThrow(() => assertEnvironmentAlignment(validProdEnv, PROD_URL));
 });
@@ -66,7 +67,8 @@ runTest('Production Worker blocks Sandbox API Key (Fail-Fast)', () => {
     ENVIRONMENT: 'production',
     PADDLE_API_KEY: 'pdl_sdbx_apikey_1234567890abcdef',
     PADDLE_PRICE_ID_PLUS_LIFETIME: PROD_LIFETIME,
-    PADDLE_PRICE_ID_PLUS_YEARLY: PROD_YEARLY
+    PADDLE_PRICE_ID_PLUS_YEARLY: PROD_YEARLY,
+    TELEMETRY_SALT: 'prod_telemetry_salt_secret_123'
   };
   assert.throws(() => assertEnvironmentAlignment(badProdEnv, PROD_URL), /CRITICAL SECURITY CONFIG MISMATCH.*Production worker must not use Paddle sandbox key/);
 });
@@ -76,9 +78,20 @@ runTest('Production Worker blocks Sandbox Price IDs (Fail-Fast)', () => {
     ENVIRONMENT: 'production',
     PADDLE_API_KEY: 'pdl_live_apikey_1234567890abcdef',
     PADDLE_PRICE_ID_PLUS_LIFETIME: SANDBOX_LIFETIME,
-    PADDLE_PRICE_ID_PLUS_YEARLY: PROD_YEARLY
+    PADDLE_PRICE_ID_PLUS_YEARLY: PROD_YEARLY,
+    TELEMETRY_SALT: 'prod_telemetry_salt_secret_123'
   };
   assert.throws(() => assertEnvironmentAlignment(badPriceProdEnv, PROD_URL), /CRITICAL CONFIG MISMATCH.*Production worker must not be configured with Paddle Sandbox price IDs/);
+});
+
+runTest('Production Worker blocks missing TELEMETRY_SALT (Fail-Fast)', () => {
+  const missingSaltProdEnv = {
+    ENVIRONMENT: 'production',
+    PADDLE_API_KEY: 'pdl_live_apikey_1234567890abcdef',
+    PADDLE_PRICE_ID_PLUS_LIFETIME: PROD_LIFETIME,
+    PADDLE_PRICE_ID_PLUS_YEARLY: PROD_YEARLY
+  };
+  assert.throws(() => assertEnvironmentAlignment(missingSaltProdEnv, PROD_URL), /CRITICAL SECURITY CONFIG MISMATCH.*Production worker must have TELEMETRY_SALT configured/);
 });
 
 // Group 3: Test Worker Guard (Sandbox mode)

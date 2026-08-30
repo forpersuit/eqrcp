@@ -115,7 +115,14 @@ export async function handleTelemetryRoutes(
     const refererHeader = request.headers.get("referer") || "";
     const referer = String(body.referer || refererHeader).trim().slice(0, 512) || null;
 
-    const salt = env.TELEMETRY_SALT || "eqt_telemetry_default_salt_2026";
+    const salt = (env.TELEMETRY_SALT || "").trim();
+    if (!salt) {
+      console.error("CRITICAL SECURITY CONFIG MISMATCH: TELEMETRY_SALT is not configured. Refusing to hash client IP with empty/fallback salt.");
+      return new Response(JSON.stringify({ error: "Telemetry service misconfigured" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
     const clientIpHash = await hashClientIp(clientIp, salt);
     const { ip_country, colo, city, region, latitude, longitude } = extractGeoMetadata(request);
 

@@ -644,7 +644,7 @@ export async function handleAdminRoutes(
         longitude,
         source,
         COUNT(*) AS download_count,
-        MAX(version) AS latest_version,
+        version AS latest_version,
         MAX(created_at) AS latest_download_at
       FROM download_records
       WHERE created_at >= ?

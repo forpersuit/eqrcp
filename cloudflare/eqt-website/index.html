@@ -1257,8 +1257,18 @@
     // Download telemetry tracking (§5.3 in docs/future/20260830)
     function trackDownload(version, filename) {
         try {
-            const effectiveVer = version || window.latestVersion || "v1.36.24";
-            const effectiveFile = filename || (window.latestVersion ? `EQT-${window.latestVersion}-windows-amd64.zip` : "EQT-latest-windows-amd64.zip");
+            let effectiveVer = String(version || window.latestVersion || '').trim();
+            let effectiveFile = String(filename || (effectiveVer ? `EQT-${effectiveVer}-windows-amd64.zip` : 'EQT-latest-windows-amd64.zip')).trim();
+
+            if (!effectiveVer && effectiveFile) {
+                const match = effectiveFile.match(/v?\d+\.\d+\.\d+/);
+                if (match) effectiveVer = match[0];
+            }
+
+            if (!effectiveVer || !/^v?\d+\.\d+\.\d+$/.test(effectiveVer)) {
+                return;
+            }
+
             const payload = JSON.stringify({
                 version: effectiveVer,
                 filename: effectiveFile,

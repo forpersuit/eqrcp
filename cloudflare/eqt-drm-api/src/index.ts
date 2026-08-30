@@ -161,29 +161,29 @@ export default {
       const cutoffDate = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
       const nowIso = new Date().toISOString();
 
-      // Aggregate and Upsert into daily_download_stats
-      await env.DB.prepare(`
-        INSERT INTO daily_download_stats (stat_date, version, ip_country, source, download_cnt, created_at)
-        SELECT
-          substr(created_at, 1, 10) AS stat_date,
-          version,
-          COALESCE(ip_country, 'XX') AS ip_country,
-          source,
-          COUNT(*) AS download_cnt,
-          ? AS created_at
-        FROM download_records
-        WHERE created_at < ?
-        GROUP BY stat_date, version, ip_country, source
-        ON CONFLICT(stat_date, version, ip_country, source)
-        DO UPDATE SET
-          download_cnt = download_cnt + excluded.download_cnt,
-          created_at = excluded.created_at
-      `).bind(nowIso, cutoffDate).run();
-
-      // Delete archived detailed records
-      await env.DB.prepare(`
-        DELETE FROM download_records WHERE created_at < ?
-      `).bind(cutoffDate).run();
+      // Aggregate and Upsert into daily_download_stats, then delete archived records in an atomic transaction (§7.6 / Phase 4)
+      await env.DB.batch([
+        env.DB.prepare(`
+          INSERT INTO daily_download_stats (stat_date, version, ip_country, source, download_cnt, created_at)
+          SELECT
+            substr(created_at, 1, 10) AS stat_date,
+            version,
+            COALESCE(ip_country, 'XX') AS ip_country,
+            source,
+            COUNT(*) AS download_cnt,
+            ? AS created_at
+          FROM download_records
+          WHERE created_at < ?
+          GROUP BY stat_date, version, ip_country, source
+          ON CONFLICT(stat_date, version, ip_country, source)
+          DO UPDATE SET
+            download_cnt = download_cnt + excluded.download_cnt,
+            created_at = excluded.created_at
+        `).bind(nowIso, cutoffDate),
+        env.DB.prepare(`
+          DELETE FROM download_records WHERE created_at < ?
+        `).bind(cutoffDate)
+      ]);
     } catch (archiveErr: any) {
       console.error("Failed to archive 90-day download records:", archiveErr);
     }
