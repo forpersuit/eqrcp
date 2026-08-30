@@ -8,6 +8,30 @@
 
 ---
 
+## 0. X (Twitter) 官方账号主页资料配置指南 (Profile Setup Guide)
+
+为保证账号专业度与国际化受众的信任转化，官方账号主页（Profile）推荐按以下标准配置：
+
+### 0.1 账号显示名称 (Display Name)
+* **标准版**：`EQT`
+* **定位强化版（推荐）**：`EQT — AirDrop for Any Device` 或 `EQT (Easy QR Transfer)`
+
+### 0.2 官方英文简介 (English Bio 选项矩阵 — 严格 <= 160 字符)
+
+| 选项定位 | 英文 Bio 文案 (可直接复制) | 字符数 (上限 160) | 适用场景 |
+| :--- | :--- | :---: | :--- |
+| **Option 1: 痛点击穿型<br>*(🌟 官方首选推荐)* | `AirDrop alternative for Windows, Linux & Android. Blazing-fast local file transfer & private chat via QR code. Zero mobile app • 100% Open Source ⚡` | **147** | 转化率最高，直击 Windows/Android 用户的 AirDrop 缺失痛点。 |
+| **Option 2: 极客与开发者型** | `Blazing-fast LAN file transfer & ephemeral chat in Go. Scan terminal QR code, transfer at gigabit speed. Zero cloud, zero mobile app • 100% Open Source.` | **154** | 面向 GitHub、开源社区、Go 语言开发者与隐私极客。 |
+| **Option 3: 场景与功能型** | `Transfer 4K videos & sync clipboards across PC, Mac, iOS & Android over local WiFi. 🚀 Scan QR code to transfer instantly. Zero cables • Zero mobile app.` | **152** | 面向多设备混合办公族、创作者与大文件传输用户。 |
+| **Option 4: 极简科技型** | `Fast, private cross-device file sharing & local chat. Scan a QR code, transfer at full LAN speed. No cables, no cloud, no mobile app needed. Built with Go.` | **155** | 极简克制，强调本地网络与无云端隐私。 |
+
+### 0.3 其它资料字段推荐
+* **Location（位置）**：`Global / Localhost` 或 `Decentralized / LAN`
+* **Website（网址）**：`https://eqt.net.im`
+* **Pinned Tweet（置顶推文）**：置顶本文档中的 **[方案四：官方主打 6 推 Thread]**，评论区带上 GitHub 开源链接。
+
+---
+
 ## 1. Twitter (X) 算法推荐逻辑与发推黄金法则
 
 ### 1.1 零外链降权原则 (No-Link Penalty)
