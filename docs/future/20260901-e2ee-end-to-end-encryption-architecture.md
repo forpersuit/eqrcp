@@ -665,6 +665,25 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
     * 「对 goroutine 做核心锁定」是 Go 反模式——goroutine 不直接占有 CPU，M:N 调度器会在 OS 线程间迁移，手动 CPU 亲和/核绑定会与调度器对抗且不可移植。针对「后台被降频」的真实机制是 Windows **Power Throttling**（Win10 1709+）：应调用 `SetThreadInformation(ThreadPowerThrottling)` 关闭执行速度节流（或 `SetProcessInformation(ProcessPowerThrottling)`），再确保 `GOMAXPROCS` 不被人工压低即可；
     * 与意见 18（移动端 Screen WakeLock）互补：长时大文件传输需链路两端同时保活，PC 防休眠与手机防锁屏缺一不可。
 
+### 意见 27:客户端 IP 漂移与连接漫游容错（严格以 UUID 鉴权，解耦 IP:Port）
+* **背景评估**：在移动端扫码下载/上传大文件时，手机在 Wi-Fi 边缘可能发生频段漫游（如 5GHz 切换到 2.4GHz）或 DHCP 续约，导致手机的局域网 IP 短暂改变。若服务端基于客户端 `RemoteAddr`（IP:Port）做会话鉴权或黑白名单匹配，会引发误中断。
+* **工程对策**：
+  * PC 服务端（`pkg/server/`）的会话认证、黑名单拦截（`sessionBannedClients`）与断点恢复状态机**严格绑定 `X-Client-Instance-Id` (UUID)**，严禁绑定 IP 地址；
+  * 移动端在 IP 漂移后携带原 UUID 发起后续分块请求，PC 端透明识别为同一会话，无感续传。
+
+### 意见 28:多文件分享时的流式 ZIP 归档策略（规避移动端浏览器多文件拦截墙）
+* **背景评估**：当 PC 一次性分享包含数十个文件的文件夹时，若客户端 JS 尝试为每个文件连续触发原生 `<a>.click()` 下载，iOS Safari 与 Android Chrome 会触发安全拦截（弹出“此网站正在尝试下载多个文件，是否允许”等阻塞窗口或直接丢弃后续下载）。
+* **工程对策**：
+  * 在 E2EE Share 模式下，对于多文件分享：
+    1. 前端提供“文件列表逐个手动下载/预览”模式；
+    2. 对于“全部下载 (Download All)”，PC 服务端以**流式内存 ZIP 容器（Virtual Streamed ZIP）**在内存中实时打包并经 4MB XChaCha20 逐块加密，移动端解密后仅触发 1 次单文件 `.zip` 下载，彻底规避移动端浏览器的多文件拦截墙。
+
+### 意见 29:响应式安全徽章与端内非阻塞通知规范 (In-App Notification Standard)
+* **背景评估**：遵循项目工程规范，严禁使用破坏用户体验的浏览器原生 `alert()` / `confirm()` 阻塞弹窗，必须保证在网络波动、降级明文或被屏蔽时的平滑端内反馈。
+* **工程对策**：
+  * **响应式安全徽章**：前端页面顶栏展示绿色「🔒 E2EE Active (XChaCha20)」盾牌；当 DRM 不可达降级为明文时，盾牌变为灰色「🔓 Standard LAN」；
+  * **端内非阻塞通知**：所有提示（新设备接入、离线降级、网络波动重试、被屏蔽提示）全部使用端内轻量 Toast / 顶部横幅，保持优雅与非打扰。
+
 ---
 
 ## 10. 商业化分级与版本限制策略 (Free vs Plus/Pro Tier)
@@ -704,6 +723,8 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
   - Go 后端与 Svelte 前端实现消息/剪贴板透明加解密。
 - [ ] **Phase 4:Receive / Share 4MB 分块流式加解密与设备管理控制**
   - Receive:弃用 Multipart，采用专用 REST 端点 `POST /receive/:path/chunk`(意见 15)+ 前端 `File.slice()` 3 级流水线(Read→Encrypt→POST,并发度 2)(意见 12)+ Go `ChunkedXChaChaReader` 零临时文件写盘 + `chunk_status` 断点恢复;
+  - 客户端 UUID 鉴权解耦 IP 地址，支持 Wi-Fi 漫游与 IP 漂移无感续传(意见 27);
+  - 多文件分享流式内存 ZIP 归档传输，规避浏览器多文件拦截弹窗(意见 28);
   - 移动端 Web Worker 定长环形 Buffer 池化，防百 GB 传输 OOM(意见 24);
   - 端到端明文 SHA-256 流式全量哈希双重校验(意见 25);
   - 移动端 WebKit 屏幕常亮保活 Screen WakeLock 与切后台断点恢复(意见 18);
@@ -714,6 +735,7 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
   - 分块加解密统一置于 Web Worker(意见 11)。
 - [ ] **Phase 5:Settings 开关、GUI 设备管理卡片与海外隐私营销**
   - `pkg/config/settings.go` 新增 `EnableE2EE` 字段与 Settings 界面开关;
+  - 响应式安全徽章与端内非阻塞通知标准，杜绝原生 alert(意见 29);
   - 桌面端后台加密传输防休眠与 CPU 核心调度优化(意见 26);
   - 桌面 GUI 传输监控面板实现设备列表可视化与 `[🚫 屏蔽]` / `[✅ 恢复]` 交互按钮(§7.3);
   - 桌面端后台 30 秒周期探活 DRM 服务与内存状态缓存防抖(意见 21);
