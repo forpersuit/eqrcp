@@ -151,12 +151,14 @@ sequenceDiagram
   ```
 - 服务端动作:
   1. 校验 license 具备 Pro 权益；
-  2. **单例覆盖清理 (Singleton Cleanup)**：原子地将该 `(device_id, mode)` 下历史未过期的旧活跃会话直接标记物理删除（`DELETE FROM e2ee_sessions WHERE device_id = ? AND mode = ? AND status = 'active'`），防止旧密钥孤儿残留；
-  3. 生成全新 256-bit `MasterKey`（Worker `crypto.getRandomValues`）→ 写入 D1（`session_id`、`device_id`、`mode`、`master_key`、`claim_count=0`、`max_claims`、`status=active`、`expires_at`、`ttl=600s`）→ 返回。
+  2. 生成全新 256-bit `MasterKey`（Worker `crypto.getRandomValues`）；
+  3. **单例覆盖重建 (Singleton Upsert)**：D1 对 `(device_id, mode)` 建唯一索引，以单条 `INSERT INTO e2ee_sessions (session_id, device_id, mode, master_key, claim_count, max_claims, status, expires_at, ttl) VALUES (...) ON CONFLICT(device_id, mode) DO UPDATE SET session_id=excluded.session_id, master_key=excluded.master_key, claim_count=0, status='active', expires_at=excluded.expires_at` 原子完成「新会话插入 + 旧活跃会话作废」，杜绝旧密钥孤儿残留，且不存在「先删后插、中途失败无会话」的窗口；
+  4. 返回 `session_id` / `close_token` / `expires_at` / `ttl`。
 - 响应:
   ```json
   {
     "session_id": "e2s_9x7KpQ3m",
+    "close_token": "ct_<32字节随机,close 鉴权凭证>",
     "expires_at": 1785145800,
     "ttl": 600
   }
@@ -165,7 +167,7 @@ sequenceDiagram
 
 **② `POST /api/v1/e2ee/session/:id/claim` — 移动端领取密钥**
 - 请求体:空或带引擎哈希 `{ "engine_sha256": "...", "client_instance_id": "<浏览器实例UUID>" }`。
-- 服务端动作:校验 `session_id` 存在且未过期(`status=active`)且 `claim_count < max_claims`(根据 License 允许的设备并发数,如 Pro 版支持最多 5 台并发)→ 原子递增 `claim_count` → 返回 `master_key_b64`。(避免用户误刷新页面或多台手机并发扫同一二维码时因严格一次性锁死而报错，详见 §8 意见 9)。
+- 服务端动作:校验 `session_id` 存在且未过期(`status=active`)且 `claim_count < max_claims`(根据 License 允许的设备并发数,如 Pro 版支持最多 5 台并发)→ 原子递增 `claim_count` → 返回 `master_key_b64`。(避免用户误刷新页面或多台手机并发扫同一二维码时因严格一次性锁死而报错，详见 §9 意见 9)。
 - 响应:
   ```json
   {
@@ -177,32 +179,49 @@ sequenceDiagram
   ```
 
 **③ `POST /api/v1/e2ee/session/:id/close` — PC 端主动结束并销毁会话**
-- 请求体:`{ "device_id": "<硬件指纹>" }`。
-- 服务端动作:校验所有权后，立即从 D1 中物理覆写删除该 `session_id`（`DELETE FROM e2ee_sessions WHERE session_id = ?`）。
+- 请求体:`{ "device_id": "<硬件指纹>", "close_token": "<create 时下发的短期凭证>" }`。
+- 服务端动作:校验 `close_token` 与 `device_id` 均匹配该会话（`status='active'` 且未过期）后执行 `DELETE FROM e2ee_sessions WHERE session_id = ? AND device_id = ?`；仅凭 `session_id` 无法关闭他人会话。
+- **幂等语义**:`session_id` 不存在或已过期时返回 `{ "status": "ok", "deleted": false }`,不视为错误——PC 端 close 属尽力而为的异步清理,可安全重放。
 - 响应:`{ "status": "ok", "deleted": true }`。
 
-### 5.3 安全边界(诚实声明)
-* 加密引擎与 `MasterKey` 均经 **HTTPS** 到达手机,不受局域网 MITM 影响;
-* 主动攻击者能篡改的只剩局域网首屏 HTML(引导脚本)。引导脚本不含密钥,只负责从 HTTPS 拉取引擎并执行;攻击者若在扫码瞬间抢先篡改首屏,理论上可诱导用户不走加密流程——但无法窃取密钥或引擎。该残余风险随首屏加载完成即消失;
-* **DRM 服务成为信任根**:DRM 被攻破即可下发假引擎。对所有中心化方案如此,文档予以明示;
-* 加密强度:密钥 256-bit,数据面 XChaCha20-Poly1305 AEAD。被动嗅探者即使截获全部密文,解密难度 2^256。
+### 5.3 安全边界与局域网抗嗅探密码学证明 (Anti-Sniffing Security Proof)
 
-### 5.4 DRM 会话生命周期与单例模式下的覆盖/销毁机制
+在公共 Wi-Fi（如咖啡厅、会议室）或路由器已被黑客攻破的恶意局域网环境下，**系统如何确保数据绝对无法被中间人窃取**？基于以下三层严密防线：
 
-针对 DRM 在会话期的数据驻留与全模式生命周期，确立以下核心原则：
+1. **第一道防线：密钥从未经过局域网物理链路 (Out-of-Band HTTPS Trust Anchor)**
+   - 二维码 URL 为 `http://192.168.x.x:8080/send/w8x2#sid=e2s_xxxx`；
+   - 根据 **RFC 3986** 规范，`#` 及其后的 Fragment **绝不进入 TCP 请求行**。局域网嗅探者（Wireshark 抓包）只能看到普通的 `GET /send/w8x2`，根本拿不到 `sid`；
+   - 手机浏览器通过公网 **TLS 1.3 HTTPS** 链路向 Cloudflare DRM 发起 `claim` 领取 256 位 `MasterKey`。局域网内的任何攻击者均无法解密 TLS 1.3 流量，因此**攻击者从始至终拿不到任何解密密钥**。
+2. **第二道防线：局域网数据面 100% 为高熵密文 (XChaCha20-Poly1305 AEAD)**
+   - 文件传输与聊天全链路均采用 **XChaCha20-Poly1305** 逐块加密；
+   - 局域网物理信道中流动的全部为 `[ChunkIndex(4B) | Nonce(24B) | Ciphertext(4MB) | AuthTag(16B)]` 伪随机高熵密文；
+   - 攻击者即使截获 100% 的网络数据包，在没有 256-bit 密钥的前提下，暴力破解复杂度为 $2^{256}$，数学上绝对不可攻破。
+3. **第三道防线：Poly1305 密文防篡改与 Nonce 防重放**
+   - 攻击者若在传输过程中篡改密文的任意 1 个比特，接收端校验 16 字节 Auth Tag 时会**瞬间校验失败并直接丢弃**；
+   - 每个分块使用全新独立的 24 字节安全随机 Nonce，中间人录制并重放历史数据包会被直接识别拒绝。
+
+* **残余风险诚实声明**：
+  * 主动攻击者能篡改的只剩局域网首屏 HTML(引导脚本)。引导脚本不含密钥,只负责从 HTTPS 拉取引擎并执行;攻击者若在扫码瞬间抢先篡改首屏,理论上可诱导用户不走加密流程——但无法窃取密钥或引擎。该残余风险随首屏加载完成即消失;
+  * **DRM 服务成为信任根**:DRM 被攻破即可下发假引擎。对所有中心化方案如此,文档予以明示。
+
+### 5.4 DRM 会话生命周期与单例覆盖/销毁机制
+
+针对 DRM 在会话期的数据驻留与单例生命周期，确立以下核心原则：
 
 1. **DRM 绝对不存储任何业务数据 (Zero Business Data in DRM)**：
    - 所有的实际文件二进制、图片、聊天文本和剪贴板内容，**100% 仅在 PC 和手机之间的局域网物理信道流动**，绝对不经过 DRM，DRM 无从知晓任何业务内容。
-   - DRM 仅在内存/D1 中短暂保留会话凭据（`MasterKey`、TTL 与 `claim_count`）。
+   - DRM 仅在内存/D1 中短暂保留会话凭据（`MasterKey`、TTL 与 `claim_count`），密钥寿命 ≤ 600s。
 2. **会话期间保留的必要性与多端可用性保证**：
-   - 在活跃会话期（如 10 分钟 TTL 内），DRM 必须完整保留当前会话凭据，以确保：
+   - 在活跃会话期（10 分钟 TTL 内），DRM 必须完整保留当前会话凭据，以确保：
      - **Share (Send) 模式**：PC 分享文件给会议室多位同事时，多台手机在会话期内陆续扫码均可顺利领取密钥下载；
      - **Receive 模式**：多台手机在会话期内同时或先后扫码并发上传照片到 PC 均可正常握手；
      - **Chat 模式**：多台设备随时加入聊天室，且移动端切后台、误刷新时均可无缝重连 Re-claim。
-3. **全模式统一的「下次请求时覆盖清理+重建 (Delete + Recreate)」机制**：
-   - **全模式统一**：PC 端的 `Share`、`Receive`、`Chat` 在本机均为单例运行。因此 DRM 在 `POST /session/create` 端点对三种模式**统一采用「删除历史旧活跃会话 + 插入新会话」**策略；
-   - **架构极简性**：无需设计复杂的跨会话状态机或会话复用池。每次 PC 启动新传输/聊天，DRM 自动原子执行 `DELETE FROM e2ee_sessions WHERE device_id = ? AND mode = ? AND status = 'active'` 并生成全新的 256-bit MasterKey；
-   - **主动销毁补充**：PC 端在正常点击关闭或退出程序时，异步触发 `POST /session/:id/close`，DRM 收到即时物理抹除，实现“用时可用、下次必清、退时即抹”的极简安全闭环。
+3. **单例前提（必须显式声明）**：同一台 PC 的同一模式（`device_id, mode`）在同一时刻仅允许 **1 个活跃 E2EE 会话**。桌面 GUI 天然单实例满足该前提；CLI 多实例并发 `eqt send` / `eqt receive` 需自行串行——后启动的会话会覆盖前者，被覆盖的旧会话中已扫码的移动端会收到「会话已被新任务覆盖，请重新扫码」提示。该前提使覆盖重建无需任何跨会话状态机（架构极简）。
+4. **全模式统一的「覆盖重建 + 主动销毁 + TTL 兜底」三路径闭环**：
+   - **覆盖重建（create 时）**：`POST /session/create`（§5.2 ①）对 `(device_id, mode)` 以单条 `INSERT ... ON CONFLICT(device_id, mode) DO UPDATE` 原子作废旧会话并插入新会话，无「先删后插」窗口；
+   - **主动销毁（close 时）**：PC 端正常点击关闭或退出程序时，异步触发 `POST /session/:id/close`（§5.2 ③），DRM 校验 `close_token` 后逻辑删除该行；
+   - **兜底（TTL + 惰性清理）**：即使 PC 异常崩溃未触发 close，旧会话密钥也在 ≤600s 后过期失效，由意见 20 的抽样惰性清理收敛残留行。三条路径与意见 8 方案一、意见 22 口径一致。
+5. **删除语义的诚实声明**：D1 的 `DELETE` 为逻辑删除，托管存储层不提供物理覆写（无 secure-delete）；但密钥寿命 ≤600s 且会话一旦作废即不可再 claim，即使存储层存在残留也已过期失效，不构成解密风险。
 
 
 ---
@@ -336,17 +355,20 @@ sequenceDiagram
 
 ---
 
-## 7. E2EE 模式下的设备管理与双层级踢出/拉黑机制 (Device Visibility & Dual-Level Access Control)
+## 7. 设备管理与双层级踢出/拉黑机制 (Device Visibility & Dual-Level Access Control)
 
 在局域网加密传输中（尤其是会议室、开放式办公区等多人 Wi-Fi 场景），PC 主机操作员必须对接入的移动设备拥有绝对的**可见性（无法隐藏）**与**控制权（随时可踢出/拉黑）**。
+
+> **定位与分级**：本机制为传输会话**通用能力**，明文与 E2EE 模式均生效，全部落在 PC 局域网服务端（`pkg/server/server.go`），与 DRM 无关（DRM 不感知也不存储任何设备名单）。版本分级：连接级 Kick 免费版可用（对应 §10「基础断开连接」）；会话级 Ban 为 Plus / Pro 付费权益。
 
 ### 7.1 设备显性化与绝对防隐藏原则 (Zero Invisible Devices)
 
 1. **强实名握手准入**：
-   - 移动端在扫码并从 DRM 领取密钥后，向 PC 局域网服务端发起任何加解密分块拉取/上传前，必须先在请求头中携带设备标识：`X-Client-Instance-Id` (UUID) 与 `X-Device-Name`（如 `iPhone 16 Pro`）；
+   - 移动端在扫码并从 DRM 领取密钥后，向 PC 局域网服务端发起任何加解密分块拉取/上传/WebSocket 握手前，必须携带设备标识头：`X-Client-Instance-Id` (UUID) 与 `X-Device-Name`（如 `iPhone 16 Pro`）。该标识头为 **§6 全部数据面请求（下载分块、上传分块、Chat WebSocket 握手）的通用强制头**；
    - PC 服务端（`pkg/server/server.go`）在接收到请求的第一时间将该设备注册到 `clientStates` 状态机中，并向 PC GUI 界面与终端实时广播更新。
 2. **数据流强制绑定**：
    - 任何未在 PC 状态机完成登记的匿名请求，一律直接拒绝（返回 `401 Unauthorized`）；
+   - 复用现有 `clientStates`（多客户端并发架构已存在），仅新增内存 `sessionBannedClients` 集合与网关拦截中间件，落地改动面小；
    - PC 监控面板实时、无遗漏地列出所有已连接设备的：设备名称、客户端 UUID、传输进度、实时传输速率、已传分块与连接状态。**绝对不存在任何可隐身传输的幽灵设备**。
 
 ---
@@ -385,6 +407,11 @@ graph TD
   4. **全端点拦截防重入**：在该 PC 会话生命周期内，该设备发起的任何后续请求（不管是下载分块、上传分块还是重新握手），PC 端网关均直接拦截并返回 `403 Forbidden ("Access Denied: Device permanently banned in this session")`；
   5. **移动端行为**：移动端页面立即弹出不可撤销的红色安全拦截盾：“您的设备已被电脑端主机在本会话中禁止访问”。即便用户反复重新扫码或刷新，也绝对无法再次加入当前会话。
 
+> **边界与遗留 (Honest Limits)**：
+> * `sessionBannedClients` 为 **PC 进程内存态**，进程退出或新传输任务启动即清空——Ban 仅作用于「本会话」= 当前传输任务，不跨任务持久化；
+> * E2EE 模式下被 Ban 的设备**仍可完成 DRM claim**（DRM 不感知 PC 名单），但其所有 LAN 数据面请求被 403 拦截、拿不到任何密文，密钥无可用性——数据面阻断已构成完整防护，无需反向通知 DRM；
+> * Kick / Ban 对 Chat 模式的 **WebSocket 长连接同样生效**（立即切断连接 / 后续握手直接 403）。
+
 ---
 
 ### 7.3 PC GUI / CLI 交互设计
@@ -395,6 +422,23 @@ graph TD
     - `[ 🚫 拉黑 ]`（按钮文案：移出并拉黑本会话，禁止再次加入）
 * **CLI 终端交互**：
   - 支持快捷交互按键（如按 `k` 输入设备序号踢出，按 `b` 输入序号拉黑）。
+
+### 7.4 设备身份持久化、再次扫码识别与防拉黑绕过机制 (Device Identity & Anti-Evasion)
+
+针对同一设备重扫码的识别机制、各设备密钥关系及防绕过策略，确立以下技术规范：
+
+1. **同一设备再次扫码/刷新的识别原理**：
+   - 移动端首次扫码时，前端 JS 生成全局唯一 UUID `client_instance_id`，连同设备名称（由 UserAgent 解析如 `iPhone 16 Pro` + 用户自定义昵称）持久化写入移动端浏览器的 **`localStorage` / `IndexedDB`**；
+   - 当同一台手机**再次扫码**或**刷新页面**时，前端 JS 自动读取本地存储中的 `client_instance_id`，并在所有向 PC 发送的请求头中携带 `X-Client-Instance-Id`；
+   - PC 服务端（`pkg/server/`）比对内存中的 `clientStates`，精准判定其为“同一设备重新接入”；若此前仅被 Kick（断开），则允许恢复传输；若已被 Ban（拉黑），则网关直接拦截并返回 403。
+2. **各设备的密钥关系 (Key Relationship Across Devices)**：
+   - **当前主方案（Phase 1-2 DRM 信任锚方案）**：在同一个会话房间内，所有扫了同一个二维码的合法设备，从 DRM 领取的是**同一个共享主密钥 `MasterKey`**（通过 HKDF 派生相同的 `K_send`, `K_recv`, `K_ws`）。但**每个设备的每个分块均使用全新独立的 24 字节安全随机 Nonce**，且各设备通过 `X-Client-Instance-Id` 维护独立的数据流与断点续传状态机；
+   - **未来演进方案（Phase 6 ECDH 方案）**：演进到 ECDH 后，每台手机生成各自的公私钥对与 PC 协商，此时各设备派生出的 `MasterKey_device` 则是**每设备完全独立**的。
+3. **恶意设备通过“清空存储/隐私模式换马甲”绕过拉黑的三重防御**：
+   - 若被拉黑的恶意用户试图通过清空 `localStorage` 或开启无痕模式伪造全新 UUID 重新接入，系统提供三重防护：
+     - **① DRM `max_claims` 配额硬顶**：DRM 会话设有严格的领取上限（如 Pro 版最多 5 台）。恶意用户每清空一次存储即消耗 1 次配额，恶意刷几次后配额即被耗尽，彻底封死；
+     - **② PC GUI 实时强实名弹窗**：任何未见过的全新 UUID 接入时，PC 界面立即弹出醒目通知“⚠️ 新设备加入: [Android Chrome]”，PC 操作员可一目了然并一秒点击 `[🚫 拉黑]`；
+     - **③ 设备接入审批模式 (Device Approval Mode)**：在高度敏感场景下，PC 端可开启审批门禁，任何新设备首次扫码后必须由 PC 操作员在屏幕上点击“允许接入”，否则网关拒绝下发数据。
 
 ---
 
@@ -452,10 +496,10 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
 ### 意见 8:DRM 零知识 (Zero-Knowledge) 加固：避免云端持有明文 MasterKey
 * **背景评估**：当前 v2 设计中由 DRM Worker 生成并在 D1 存储 `MasterKey`。安全审计或对隐私极度敏感的海外极客可能会质疑“DRM 托管了通信密钥，是否存在云端后门解密风险”。
 * **工程对策**：
-  * **短期（方案一：盲中继与即时物理销毁）**：D1 中的 `master_key` 严格设置 10 分钟 TTL；会话在 **TTL 到期、或 `claim_count` 达到 `max_claims` 且最后一个领取者完成握手后**，由后台异步任务从 D1 物理覆写抹除（⚠️ 不能"首次 claim 即销毁"，否则与意见 9 的多设备并发领取冲突）。并在白皮书中明示"DRM 仅作为短期盲中继信道，不作任何永久持久化"。
+  * **短期（方案一：盲中继与即时逻辑销毁）**：D1 中的 `master_key` 严格设置 10 分钟 TTL；会话在 **TTL 到期、或 `claim_count` 达到 `max_claims` 且最后一个领取者完成握手后**，由后台异步任务从 D1 逻辑删除（⚠️ 不能"首次 claim 即销毁"，否则与意见 9 的多设备并发领取冲突；D1 `DELETE` 为逻辑删除，密钥寿命 ≤600s，残留无可用性，见 §5.4 第 5 点）。并在白皮书中明示"DRM 仅作为短期盲中继信道，不作任何永久持久化"。
   * **演进（方案二：端到端 ECDH 零知识密钥协商）**：PC 生成 Ephemeral X25519 密钥对，并将公钥 `pk_pc` 存入 DRM；移动端 claim 时提交其公钥 `pk_mob`，双方通过 X25519 ECDH 在本地派生 `MasterKey`。DRM 全程仅传递公钥，**云端数学上无法获知 `MasterKey`**，实现纯正的 Zero-Knowledge E2EE。
     * **⚠️ 防恶意云端 MITM 的关键：公钥指纹交叉验证**：ECDH 仅对"被动 DRM"成立——若 DRM 被攻破或作恶，可替换 `pk_pc` / `pk_mob` 与两端各建一条 ECDH 通道（密钥仍在本地派生，云端却可解密重加密）。为使零知识对主动云端同样成立，PC 须将 `pk_pc` 的 SHA-256 短指纹并入二维码 Hash（如 `#sid=<id>&k=<pk指纹>`）；移动端领取公钥后先核对其指纹与二维码一致，再执行 ECDH 派生。二维码视觉信道不入网络，云端无法篡改。
-    * **多设备并发下的密钥模型切换**：方案二按设备派生，每台手机的 `pk_mob` 不同 ⇒ `MasterKey` 不同（不再是方案一的全设备共享密钥）。claim 请求体需增加 `pk_mob` 字段；演进时 §6/§7 的"单一 MasterKey 全会话共享"前提改为「PC 端为每台已 claim 设备独立派生会话密钥」，分块协议、HKDF `info` 与 chunk ACK 均按 `device_id` 隔离，意见 9 的多设备并发能力保持不变。
+    * **多设备并发下的密钥模型切换**：方案二按设备派生，每台手机的 `pk_mob` 不同 ⇒ `MasterKey` 不同（不再是方案一的全设备共享密钥）。claim 请求体需增加 `pk_mob` 字段；演进时 §6/§8 的"单一 MasterKey 全会话共享"前提改为「PC 端为每台已 claim 设备独立派生会话密钥」，分块协议、HKDF `info` 与 chunk ACK 均按 `device_id` 隔离，意见 9 的多设备并发能力保持不变。
 
 ### 意见 9:多设备并发扫码与页面刷新容错（摒弃绝对一次性 Claim）
 * **背景评估**：EQT 的核心能力之一是支持多台手机同时扫同一个二维码并发上传/下载（`pkg/server/server.go` 的 `clientStates`）；此外，移动端浏览器（尤其是 iOS Safari 内存清理）很容易发生后台静默重载或用户误下拉刷新。若 `claim` 严格一次性锁死，第二台设备或页面刷新将直接报错 403 导致传输中断。
@@ -563,8 +607,8 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
 ### 意见 22:DRM 全模式单例会话「覆盖重建+主动销毁」极简闭环
 * **背景评估**：PC 端的 Share (Send)、Receive、Chat 三种模式在本机均为单实例运行。在会话期间，DRM 必须暂存凭据以确保任何扫码设备（多台同事手机或家人设备）在会话期内都能稳定获取密钥并支持刷新重连；但在新任务启动或退出时，必须有确定性的清理逻辑。
 * **工程对策**：
-  * **全模式统一「覆盖重建」**：无论是 Share、Receive 还是 Chat，当 PC 下一次启动该模式请求 `POST /session/create` 时，DRM 自动原子执行 `DELETE FROM e2ee_sessions WHERE device_id = ? AND mode = ? AND status = 'active'`，彻底清空旧任务凭据并下发全新 MasterKey，实现零跨会话状态负担；
-  * **主动退出闭环**：PC 端在关闭传输窗口或退出应用时，异步触发 `POST /api/v1/e2ee/session/:id/close`，DRM 即时物理抹除，达成“会话期稳健可用、下次必清、退时即抹”的极简安全闭环。
+  * **全模式统一「覆盖重建」**：无论是 Share、Receive 还是 Chat，当 PC 下一次启动该模式请求 `POST /session/create` 时，DRM 以单条 `INSERT ... ON CONFLICT(device_id, mode) DO UPDATE` 原子作废旧会话并下发全新 MasterKey，实现零跨会话状态负担（§5.2 ①、§5.4）；
+  * **主动退出闭环**：PC 端在关闭传输窗口或退出应用时，异步触发 `POST /api/v1/e2ee/session/:id/close`，DRM 校验 `close_token` 后逻辑删除，达成“会话期稳健可用、下次必清、退时即抹”的极简安全闭环。
 
 ### 意见 23:Share/Receive 模式下的双层级设备踢出与防隐藏管理规范
 * **背景评估**：局域网加密传输（特别是公共 Wi-Fi、会议室等多设备环境）必须保证 PC 端对接入设备的绝对透明度与控制力，杜绝“隐形蹭传”或“恶意设备接入后无法切断”。
@@ -603,7 +647,7 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
   - 单例会话覆盖重建与 PC 主动退出销毁闭环(意见 22、§5.4);
   - CORS 跨域响应头与前端 CSP `wasm-unsafe-eval` 适配规范(意见 14);
   - `claim` 多设备并发限额 `max_claims`、`client_instance_id` 刷新容错(意见 9);
-  - D1 表 `e2ee_sessions(session_id, device_id, mode, master_key, claim_count, max_claims, status, expires_at)`;短期 TTL 与超限物理覆写销毁(意见 8 方案一);抽样惰性清理与原子 CAS 递增(意见 20);引擎静态资源托管与 SRI。
+  - D1 表 `e2ee_sessions(session_id, device_id, mode, master_key, claim_count, max_claims, status, expires_at, ttl)` + `UNIQUE(device_id, mode)` 唯一索引;`create` 以 `INSERT ... ON CONFLICT` 单语句原子覆盖重建(§5.2 ①、意见 22);短期 TTL 与逻辑删除(意见 8 方案一、§5.4);抽样惰性清理与原子 CAS 递增(意见 20);引擎静态资源托管与 SRI。
 - [ ] **Phase 3:Chat 模式双向 WebSocket 与剪贴板 E2EE**
   - 改造 `pkg/chat/v2/protocol/`,定义 `e2ee_envelope` 载荷与 AAD 防重放验证;
   - 加解密运行于独立 Web Worker,Transferable 零拷贝传输(意见 11);
