@@ -98,21 +98,213 @@ sequenceDiagram
 
 ---
 
-### 4.2 Receive / Share 模式：大文件流式分块加解密 (Chunked Streaming E2EE)
-对于 4K 视频、几 GB 的大文件，手机端采用 **Web Streams API + WebCrypto** 实现分块流式加解密，避免爆内存：
+## 4. 全链路端到端加解密协议与数据传输结合方案 (Share / Receive / Chat 模式专项设计)
 
-1. **分块规范**：固定按 **4MB (4,194,304 字节)** 为一个分块 (Chunk)。
-2. **Chunk 封包格式**：
-   ```text
-   +-----------------------+---------------------+-------------------------------+--------------------------+
-   | Chunk Index (4 Bytes) | IV Nonce (12 Bytes) | Ciphertext (Up to 4MB Payload)| Auth Tag (16 Bytes GCM)  |
-   +-----------------------+---------------------+-------------------------------+--------------------------+
-   ```
-3. **断点续传与随机寻址**：由于每个 4MB 分块拥有独立的 IV 和 GCM 认证标签，接收端可直接根据 `Chunk Index * 4MB` 准确定位偏移，天然无缝兼容高并发断点续传与多线程下载。
+本章节深入剖析 E2EE 如何与 EQT 现有的三种核心数据传输模式（`Share` / `Receive` / `Chat`）无缝结合，并针对各自的数据流向、协议特征与浏览器运行环境提供针对性的工程架构。
 
 ---
 
-## 5. 商业化分级与版本限制策略 (Free vs Plus/Pro Tier)
+### 4.1 Share (Send) 模式：PC 发送 -> 移动端浏览器接收下载
+
+#### 1. 现有数据传输链路
+* **链路现状**：PC 端启动 HTTP 服务并展示包含随机路径的二维码（如 `http://192.168.1.5:8080/send/w8x2`）。手机扫码打开后，服务端渲染 `pages.Download` 模板；点击下载时，浏览器发起 `GET /send/w8x2?download=true&item=0`，Go 服务端通过 `http.ServeContent` 或流式 I/O 将原始二进制直接作为 HTTP 响应体吐给客户端。
+* **面临挑战**：若服务端直接下发加密二进制，原生浏览器 `<a href="..." download>` 无法在内存中透明解密，用户手机将下载到一个无法识别的 `.enc` 密文文件。
+
+#### 2. E2EE 结合改造架构
+```mermaid
+sequenceDiagram
+    autonumber
+    participant PC as PC 服务端 (Go)
+    participant QR as 二维码
+    participant Browser as 移动端浏览器 (JS Engine)
+    participant FS as 手机存储 / 下载器
+
+    Note over PC: 生成 256-bit MasterKey 并派生 K_send
+    PC->>QR: 渲染 URL: http://192.168.1.5:8080/send/w8x2#k=BASE64_KEY
+    Browser->>PC: 扫码访问 GET /send/w8x2 (Hash 留在本地)
+    PC-->>Browser: 下发包含 E2EE 解密引擎的 download.tmpl.html
+    Note over Browser: 读取 #k= 派生 K_send，并执行 replaceState 清空 URL
+    
+    Browser->>PC: 发起流式分块拉取 GET /send/w8x2?download=true&e2ee=1
+    Note over PC: 按 4MB 独立 Nonce 流式加密文件
+    PC-->>Browser: 传输 4MB 分块密文流 [Index|IV|Ciphertext|Tag]
+    Note over Browser: WebCrypto 分块解密 (AES-256-GCM) 校验 Tag
+    Browser->>FS: 通过 StreamSaver / Blob 管道流式落盘为明文文件
+```
+
+#### 3. 核心技术细节
+* **分块流式下发协议**：
+  * 请求参数携带 `?e2ee=1`，服务端使用 `K_send` 按照固定 **4MB** 分块进行实时流式加密。
+  * 每个分块包含独立头部：`[ChunkIndex: 4B | IV: 12B | Tag: 16B | Ciphertext: <= 4MB]`。
+* **HTTP Range 与随机定位支持**：
+  * 当客户端或视频播放器发起 `Range: bytes=start-end` 时，服务端根据公式将字节范围转换为分块索引：`ChunkStart = floor(start / 4194304)`，`ChunkEnd = floor(end / 4194304)`。
+  * 每块拥有独立的 IV 和 GCM Tag，无需依赖前序块，天然支持高并发多线程下载与视频拖拽寻址。
+
+---
+
+### 4.2 Receive 模式：移动端浏览器发送 -> PC 服务端接收落盘
+
+#### 1. 现有数据传输链路
+* **链路现状**：PC 启动 `Receive` 服务（`http://192.168.1.5:8080/receive/w8x2`），手机端访问后呈现 `pages.Upload` 上传界面。文件上传通过标准 `multipart/form-data` POST 或基于 `tus.min.js` 的断点续传协议传输至 `/receive/w8x2/tus/`。Go 后端通过 `r.MultipartReader()` 或 tus handler 将字节流原样写入目标目录。
+
+#### 2. E2EE 结合改造架构
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Browser as 移动端浏览器 (JS Engine)
+    participant Network as 局域网传输 (Wi-Fi)
+    participant Server as PC 服务端 (Go Stream Decryptor)
+    participant Disk as PC 本地磁盘
+
+    Note over Browser: 用户选择文件，使用 File.slice() 切片 (4MB)
+    Note over Browser: WebCrypto AES-256-GCM 加密，生成随机 12B IV 与 16B Tag
+    Browser->>Network: 发送加密分块 POST /receive/w8x2/chunk
+    Note over Network: 嗅探者仅能看到无规则高熵密文
+    Network->>Server: 接收加密分块
+    Note over Server: 使用 K_recv 校验 16B Auth Tag 并实时解密
+    Server->>Disk: 解密明文直接流式写入目标文件 (无需二次落盘)
+    Server-->>Browser: 返回分块确认 ACK { chunkIndex: 0, status: "ok" }
+```
+
+#### 3. 核心技术细节
+* **前端分块加密流水线**：
+  * 前端利用 WebCrypto 的硬件加速能力，以 Worker 线程或异步 Promise 队列读取 `File.slice(offset, offset + 4MB)`。
+  * 生成 12 字节安全随机 IV，调用 `crypto.subtle.encrypt` 输出密文与 Tag。
+* **Go 服务端零临时文件解密流 (`E2EEDecryptReader`)**：
+  * 服务端设计流式解密接口，接收分块数据时即时校验 GCM Tag。
+  * 校验通过后直接写入最终目标文件（如 `receive/iPhone-15/photo.jpg`），**杜绝“先存密文临时文件、传输完毕再遍历解密落盘”的双重磁盘 I/O 损耗**。
+* **断点续传极简恢复**：
+  * 若网络意外中断，前端重连后仅需发起 `GET /receive/w8x2/chunk_status?file_id=xxx`。
+  * 服务端返回已落盘的最大连续分块号 $M$，前端直接从第 $M+1$ 块继续加密发送，避免传统流式加密极其复杂的字节级偏移错位。
+
+---
+
+### 4.3 Chat 模式：PC 与移动端双向实时交互 (WebSocket + HTTP)
+
+#### 1. 现有数据传输链路
+* **链路现状**：PC 与手机建立 WebSocket 长连接（`pkg/chat/v2/transport/websocket.go`），实现双向实时文本聊天、剪贴板自动同步、输入状态与心跳。大文件附件则通过 `/upload` 和 `/download` 走 HTTP 管道传输。
+
+#### 2. E2EE 结合改造架构
+* **双通道隔离体系**：
+  * **控制面 / 消息面 (WebSocket)**：全量通信帧采用统一的 `e2ee_envelope` 容器包裹。
+  * **数据面 / 附件传输 (HTTP)**：附件在客户端加密后上传，接收端下载密文后在浏览器或本地解密。
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Mobile as 手机端 Chat Web
+    participant WS as WebSocket 管道 (明文 ws://)
+    participant PC as PC 端 (Go Backend / GUI)
+
+    Note over Mobile: 1. 用户输入文本 / 同步剪贴板
+    Note over Mobile: 2. 构造明文 JSON + 递增 Seq + Timestamp
+    Note over Mobile: 3. WebCrypto (K_ws) AES-256-GCM 加密，生成 12B IV
+    Mobile->>WS: 发送 E2EE 封包: { type: "e2ee_envelope", seq: 101, iv: "...", ciphertext: "...", tag: "..." }
+    Note over WS: 抓包者无法获取文本内容与剪贴板 Token
+    WS->>PC: 接收 WebSocket 帧
+    Note over PC: 4. Go 后端校验 Seq 防重放，解密明文并推送到 GUI 界面
+    
+    Note over PC: 5. PC 端发送回复文本
+    PC->>WS: 发送 PC 加密帧 (K_ws)
+    WS->>Mobile: 手机端实时解密并渲染对话气泡
+```
+
+#### 3. 核心技术细节
+* **WebSocket 加密封包规范**：
+  ```json
+  {
+    "type": "e2ee_envelope",
+    "version": 1,
+    "seq": 42,
+    "timestamp": 1725105600123,
+    "iv": "dGhpcy1pcy0xMmJ5dGUtaXY=",
+    "ciphertext": "base64_payload...",
+    "tag": "base64_16byte_auth_tag..."
+  }
+  ```
+* **解密后的明文载荷**：
+  ```json
+  {
+    "action": "chat_message", // "chat_message" | "clipboard_sync" | "typing"
+    "sender": "iPhone-16-Pro",
+    "content": "Secret API Key: sk-proj-xxxx"
+  }
+  ```
+
+---
+
+## 5. 密码学架构体系与子密钥派生规范 (HKDF Key Hierarchy)
+
+为避免单一主密钥在不同传输信道间高频复用引发密码学碰撞或 Nonce 耗尽风险，系统引入标准 **HKDF-SHA256 (RFC 5869)** 派生分层密钥：
+
+```mermaid
+graph TD
+    MasterKey["MasterKey (256-bit 随机主密钥, 来自 URL Hash #k=)"] --> HKDF["HKDF-SHA256 密钥派生函数"]
+    HKDF -->|"info = 'eqt-ws-v1'"| K_ws["K_ws (WebSocket 实时消息加密密钥)"]
+    HKDF -->|"info = 'eqt-send-v1'"| K_send["K_send (Share 模式文件下载加密密钥)"]
+    HKDF -->|"info = 'eqt-recv-v1'"| K_recv["K_recv (Receive 模式文件上传加密密钥)"]
+    HKDF -->|"info = 'eqt-auth-v1'"| K_auth["K_auth (API 签名与会话认证密钥)"]
+```
+
+### 5.1 密钥域隔离优势
+1. **密码学独立性**：即使某个文件分块传输过程中出现罕见的 Nonce 碰撞，也不会波及 WebSocket 实时聊天通道与鉴权通道。
+2. **零明文传输**：`MasterKey` 仅存在于二维码 URL Hash 与客户端/服务端内存中，所有网络传输仅使用派生出的专用子密钥。
+3. **会话阅后即焚与内存安全 (Zeroize Memory)**：
+   - 浏览器端在会话结束（关闭标签页或点击断开）时，显式调用 `crypto.getRandomValues()` 覆写存放密钥的 `Uint8Array` 内存。
+   - 服务端退出或清理会话时，主动对 Go 内存中的 key byte slice 执行清零覆写。
+
+---
+
+## 6. 核心架构评审意见与工程避坑指南 (Architectural Opinions & Recommendations)
+
+基于对 EQT 现有代码库（`pkg/server/`、`pkg/chat/v2/`、`pkg/pages/`）的深度技术审计，针对 E2EE 落地提出以下 **6 项关键意见与设计决议**：
+
+### 意见 1：明确废弃单纯的 AES-CTR，全面统一为 4MB Chunked AES-256-GCM
+* **背景评估**：历史文档 `docs/crypto/resumable-e2ee-design.md` 曾讨论过 AES-CTR 流式加密。
+* **决议与理由**：
+  * ❌ **AES-CTR 存在严重安全缺陷**：CTR 模式缺乏消息完整性认证（No Authentication）。局域网内的恶意篡改者可以通过翻转密文特定比特，精准篡改用户传输的可执行文件或文档明文，而接收端无法察觉。
+  * ❌ **字节级 Counter 对齐极其脆弱**：CTR 续传需要精确换算 `floor(N / 16)` 并在起始块丢弃前置字节，一旦网络截断导致写入偏移产生 1 字节偏差，后续解密将全部乱码。
+  * ✅ **4MB Chunked AES-256-GCM 是最优解**：每个 4MB 分块拥有独立的 12 字节 Nonce 和 16 字节 GCM Auth Tag。既具备 AEAD 硬件级防篡改保护，又将断点续传与 Range 随机寻址天然收敛到分块粒度。
+
+### 意见 2：移动端浏览器（WebKit）大文件下载的“内存墙”破局策略
+* **背景评估**：在 Share 模式下，PC 将大文件加密下发给手机浏览器。手机端必须先解密再提供给用户保存。然而 iOS Safari 和部分 Android Chrome 存在极严格的单页面内存限制（通常为 500MB ~ 1GB）。若直接使用 `new Blob([decryptedChunks])` 会导致 WebKit 进程因 OOM 瞬间崩溃刷新。
+* **工程对策**：
+  * **阶梯式适配策略**：
+    1. **小文件 (< 300MB)**：采用标准的 In-Memory Blob + `<a download>` 触发原生下载，体验最轻快。
+    2. **超大文件 (> 300MB ~ 几十GB)**：集成 `StreamSaver.js`（利用 Service Worker 的 `fetch` 拦截管道创建模拟下载流）或现代浏览器的 `showSaveFilePicker()` / `FileSystemWritableFileStream`，实现边解密边写入磁盘，内存常驻仅需 8MB。
+    3. **极端环境降级**：若用户设备不支持 Service Worker 且文件超限，界面主动友好提示切换为标准局域网模式或分卷传输。
+
+### 意见 3：Go 服务端实施流式解密 Reader，杜绝临时密文二次 I/O
+* **背景评估**：在 Receive 模式下，若服务端先接收密文存为 `.tmp.enc`，接收完毕后再读取该文件解密为最终文件，将导致磁盘 I/O 翻倍，并在传输数十 GB 视频时产生严重的卡顿和硬盘磨损。
+* **工程对策**：
+  * 在 `pkg/server/` 中封装 `ChunkedGCMReader`，直接包装 HTTP 请求的 Body 输入流。
+  * 服务端以流式管道逐块读取 `[Header|IV|Tag|Ciphertext]` -> 校验 GCM Tag -> 实时解密 -> 直接写入目标文件 `targetFile.Write(plaintext)`。
+  * 磁盘写入性能维持在局域网全速（80~110 MB/s），CPU 占用因 Go 汇编优化几乎无感。
+
+### 意见 4：WebSocket 必须引入单调递增序号（Seq）与时间戳 AAD 防重放
+* **背景评估**：局域网嗅探者即便无法解密 WebSocket 密文，但可以通过抓取包含特定操作的密文帧（如同步剪贴板指令、断开连接指令）并发起重放攻击（Replay Attack）。
+* **工程对策**：
+  * 在每个 WebSocket 帧中强制加入单调递增的 `seq` 序号与毫秒级 `timestamp`。
+  * 将 `seq || timestamp` 作为 AES-GCM 的 **AAD (Additional Authenticated Data)** 传入加解密函数。
+  * 接收端维护最近收到的窗口序号，任何序号倒退、时间戳偏差 > 30 秒或 AAD 校验失败的帧直接丢弃并记录告警。
+
+### 意见 5：严格遵守前端模块化分离，严禁向 main.js / 模板直接堆砌密码学逻辑
+* **背景评估**：遵循仓库规范 `AGENTS.md` 中的“前端开发规范（Modularity & Separation of Concerns）”。
+* **工程对策**：
+  * 将所有 WebCrypto 密钥导入、HKDF 派生、分块加解密、Worker 通信逻辑封装为独立模块 `pkg/pages/assets/crypto-engine.js`。
+  * 在 Chat V2 中解耦为独立 Svelte Store / Service (`pkg/chat/v2/web/src/lib/e2ee/`)。
+  * UI 模板仅通过清晰的 Promise API 进行调用，保持视图层纯粹。
+
+### 意见 6：平滑降级与无 Hash 访问防呆处理
+* **背景评估**：用户可能通过历史书签、手动输入 IP:Port、或未扫完整二维码访问。
+* **工程对策**：
+  * 当客户端检测到 `window.location.hash` 不包含 `#k=` 时：
+    * 若服务端开启了强制 E2EE 策略：页面展示友好引导屏（“当前处于加密会话，请使用手机相机重新扫描屏幕上的完整二维码”）。
+    * 若服务端处于兼容/免费模式：自动平滑回退到标准原生传输链路，确保系统鲁棒性。
+
+---
+
+## 7. 商业化分级与版本限制策略 (Free vs Plus/Pro Tier)
 
 端到端加密（E2EE）在欧美注重隐私的市场属于**极具溢价能力的杀手级卖点 (Privacy Power Feature)**：
 
@@ -126,17 +318,22 @@ sequenceDiagram
 
 ---
 
-## 6. 开发实施与演进排期 (Implementation Roadmap)
+## 8. 开发实施与演进排期 (Implementation Roadmap)
 
-- [ ] **Phase 1: WebCrypto 原型验证与 URL Hash 密钥注入**
-  - 在 `pkg/pages/` 中集成 `crypto.subtle` 生成 AES-GCM 密钥与解密逻辑。
-  - 验证 iOS Safari、Android Chrome、Firefox 扫码读取 `#k=` 后正常握手解密。
-- [ ] **Phase 2: Chat 模式 WebSocket 协议 E2EE 升级**
-  - 改造 `pkg/chat/v2/protocol/`，引入 `e2ee_message` 消息类型。
-  - Go 后端引入 `crypto/cipher` 与 `crypto/aes` 进行高效内存解密。
-- [ ] **Phase 3: Receive / Share 4MB 分块流式加密大文件**
-  - 在移动端 JavaScript 中实现 `ReadableStream` 分块加密管道。
-  - 服务端实现分块 GCM 校验与流式写盘，确保 80MB/s 局域网满速吞吐。
-- [ ] **Phase 4: 安全审计与欧美隐私营销整合**
-  - 编写独立的 `/security/e2ee-whitepaper` 页面，详细披露密码学数学模型。
-  - 在 Twitter、Reddit 与 Product Hunt 上将 “Zero-Config E2EE for Windows & Mobile” 作为主力宣传卖点。
+- [ ] **Phase 1: WebCrypto 密码学基础库与 HKDF 密钥派生引擎**
+  - 在 `pkg/pages/assets/` 中编写独立的 `crypto-engine.js`。
+  - 实现 URL Hash 解析、`history.replaceState` 阅后即焚、HKDF-SHA256 子密钥派生与 AES-256-GCM 硬件加速调用。
+  - 验证 iOS Safari、Android Chrome、Edge、Firefox 跨平台一致性。
+- [ ] **Phase 2: Chat 模式双向 WebSocket 与剪贴板 E2EE**
+  - 改造 `pkg/chat/v2/protocol/`，定义 `e2ee_envelope` 协议载荷与 AAD 防重放验证。
+  - Go 后端与 Svelte 前端实现实时消息/剪贴板透明加解密。
+- [ ] **Phase 3: Receive 模式 4MB 分块流式加密上传与服务端零临时文件写盘**
+  - 前端基于 `File.slice()` 实现多 Worker 分块流水线加密。
+  - Go 服务端实现 `E2EEDecryptReader`，实现分块校验即时落盘与极简断点恢复。
+- [ ] **Phase 4: Share 模式分块流式解密下发与 StreamSaver 内存墙破局**
+  - Go 服务端实现 `Range` 兼容的 4MB 分块加密下发。
+  - 移动端集成小文件 Blob / 大文件 StreamSaver 流式解密下载管道。
+- [ ] **Phase 5: 商业化授权门禁、UI 安全盾牌与海外隐私营销**
+  - 结合 `pkg/config/` DRM 授权验证体系，实现付费版自动开启与安全徽章点亮。
+  - 编写隐私白皮书，在海外社区重点宣发。
+

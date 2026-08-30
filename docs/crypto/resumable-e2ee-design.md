@@ -1,9 +1,9 @@
 # E2EE Aligned Resumable Uploads
 ## 端到端加密 (E2EE) 与断点续传的协同设计方案
 
-> **📘 状态：设计提案（尚未在 chat/v2 落地）**
+> **📘 状态：历史设计提案（已被 4MB Chunked AES-256-GCM 方案演进取代）**
 >
-> 现行 Chat V2 的附件上传走 `/upload` 流式 multipart（`pkg/chat/v2/http/attachments.go` 的 `handleUpload`），**未实现**本设计中的 `query_temp_size` 探测、AES-CTR 分片加密或分块接口。本文为拟议方案，落地前须先落实 §5 的密钥管理、认证与偏移对齐修正。
+> 现行 Chat V2 的附件上传走 `/upload` 流式 multipart（`pkg/chat/v2/http/attachments.go` 的 `handleUpload`）。本文原拟议的 AES-CTR 方案因缺乏 AEAD 认证与字节对齐脆弱性，**已在 [20260901-e2ee-end-to-end-encryption-architecture.md](../future/20260901-e2ee-end-to-end-encryption-architecture.md) 中全面演进为「4MB 分块 AES-256-GCM + URL Hash 零知识密钥协商」方案**。
 >
 > **威胁模型提示**：本方案密钥若由会话 token 派生，则"端到端"是指「手机 ⇄ 持有 token 的接收端 PC」之间的保密性，PC 即为接收端点、可解密；**并非** Signal 式「服务端为哑中继」的 E2EE。真正的服务端透传式 E2EE 见 `docs/pro/architecture-and-design.md`（WebRTC DataChannel, DTLS-SRTP）。
 
