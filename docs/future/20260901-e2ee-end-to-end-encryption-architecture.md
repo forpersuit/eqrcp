@@ -146,10 +146,13 @@ sequenceDiagram
   {
     "license_code": "EQT-PRO-20260727-XXXXXX-YYYY",
     "device_id": "<硬件指纹>",
-    "mode": "send"
+    "mode": "send" // "send" | "receive" | "chat"
   }
   ```
-- 服务端动作:校验 license 具备 Pro 权益 → 生成 256-bit `MasterKey`(Worker `crypto.getRandomValues`)→ 写入 D1(`session_id`、`master_key`、`status=active`、`expires_at`、`ttl=600s`)→ 返回。
+- 服务端动作:
+  1. 校验 license 具备 Pro 权益；
+  2. **单例覆盖清理 (Singleton Cleanup)**：原子地将该 `(device_id, mode)` 下历史未过期的旧活跃会话直接标记物理删除（`DELETE FROM e2ee_sessions WHERE device_id = ? AND mode = ? AND status = 'active'`），防止旧密钥孤儿残留；
+  3. 生成全新 256-bit `MasterKey`（Worker `crypto.getRandomValues`）→ 写入 D1（`session_id`、`device_id`、`mode`、`master_key`、`claim_count=0`、`max_claims`、`status=active`、`expires_at`、`ttl=600s`）→ 返回。
 - 响应:
   ```json
   {
@@ -173,11 +176,30 @@ sequenceDiagram
   }
   ```
 
+**③ `POST /api/v1/e2ee/session/:id/close` — PC 端主动结束并销毁会话**
+- 请求体:`{ "device_id": "<硬件指纹>" }`。
+- 服务端动作:校验所有权后，立即从 D1 中物理覆写删除该 `session_id`（`DELETE FROM e2ee_sessions WHERE session_id = ?`）。
+- 响应:`{ "status": "ok", "deleted": true }`。
+
 ### 5.3 安全边界(诚实声明)
 * 加密引擎与 `MasterKey` 均经 **HTTPS** 到达手机,不受局域网 MITM 影响;
 * 主动攻击者能篡改的只剩局域网首屏 HTML(引导脚本)。引导脚本不含密钥,只负责从 HTTPS 拉取引擎并执行;攻击者若在扫码瞬间抢先篡改首屏,理论上可诱导用户不走加密流程——但无法窃取密钥或引擎。该残余风险随首屏加载完成即消失;
 * **DRM 服务成为信任根**:DRM 被攻破即可下发假引擎。对所有中心化方案如此,文档予以明示;
 * 加密强度:密钥 256-bit,数据面 XChaCha20-Poly1305 AEAD。被动嗅探者即使截获全部密文,解密难度 2^256。
+
+### 5.4 DRM 会话生命周期与单例模式下的覆盖/销毁机制
+
+针对 DRM 在会话期的数据驻留与单例生命周期，确立以下核心原则：
+
+1. **DRM 绝对不存储任何业务数据 (Zero Business Data in DRM)**：
+   - 所有的实际文件二进制、图片、聊天文本和剪贴板内容，**100% 仅在 PC 和手机之间的局域网物理信道流动**，绝对不经过 DRM，DRM 无从知晓任何业务内容。
+   - DRM 仅在内存/D1 中短暂保留会话凭据（`MasterKey`、TTL 与 `claim_count`）。
+2. **会话期间保留的必要性**：
+   - 在活跃会话期（如 10 分钟 TTL 内），DRM 必须暂存凭据，以支持：① 后续多台手机陆续扫码加入同一个 Chat/传输会话；② 移动端切后台、误刷新或 Safari 内存回收重载时的重连 Re-claim。
+3. **单例模式下的「覆盖+删除+重建」机制**：
+   - 由于 PC 端的 Chat / Share / Receive 是单例运行的，当用户在 PC 端关闭当前会话时，PC 触发 `POST /session/:id/close` 主动通知 DRM 立即物理抹除密钥；
+   - 若 PC 异常退出未发送关闭请求，当该设备下一次启动同模式传输并请求 `POST /session/create` 时，DRM 会自动原子执行 **“Purge Old Sessions for (device_id, mode) + Insert New Session”**，确保旧会话密钥彻底作废并物理抹除。
+
 
 ---
 
@@ -472,6 +494,12 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
   * 生成二维码时直接读取内存状态，零延迟秒级决策是否开启 E2EE 二维码；
   * 连续 2 次探活失败才标记为不可达，防止网络微抖动引发误降级。
 
+### 意见 22:DRM 单例会话覆盖重建与 PC 主动销毁闭环 (`POST /session/:id/close`)
+* **背景评估**：PC 端的 Chat、Share、Receive 均为单实例运行。在会话期间，DRM 暂存会话凭据以支持多设备接入与刷新重连；但在会话关闭或下次启动同模式时，必须有确定的销毁逻辑，杜绝旧凭据长期滞留。
+* **工程对策**：
+  * **主动退出闭环**：PC 端在关闭会话或退出程序时，异步调用 `POST /api/v1/e2ee/session/:id/close`，DRM 收到后立即从 D1 中物理抹除该会话记录；
+  * **单例覆盖重建 (Singleton Invalidation)**：下次该 PC 重新启动同模式请求 `create` 时，DRM 自动原子执行 `DELETE FROM e2ee_sessions WHERE device_id = ? AND mode = ? AND status = 'active'`，彻底消除孤儿会话。
+
 ---
 
 ## 9. 商业化分级与版本限制策略 (Free vs Plus/Pro Tier)
@@ -497,10 +525,11 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
   - WASM 渐进式加载与 CDN 强缓存(`Cache-Control: immutable`)、骨架屏异步初始化(意见 10);
   - 验证 iOS Safari、Android Chrome、Edge、Firefox 在局域网 HTTP 页面的跨平台一致性。
 - [ ] **Phase 2:DRM 会话密钥与引擎分发端点**
-  - `cloudflare/eqt-drm-api`:新增 `POST /api/v1/e2ee/session/create` 与 `POST /api/v1/e2ee/session/:id/claim`,复用 license 校验、rate-limit、cf-access-jwt;
+  - `cloudflare/eqt-drm-api`:新增 `POST /api/v1/e2ee/session/create`、`POST /api/v1/e2ee/session/:id/claim` 与 `POST /api/v1/e2ee/session/:id/close`,复用 license 校验、rate-limit、cf-access-jwt;
+  - 单例会话覆盖重建与 PC 主动退出销毁闭环(意见 22、§5.4);
   - CORS 跨域响应头与前端 CSP `wasm-unsafe-eval` 适配规范(意见 14);
   - `claim` 多设备并发限额 `max_claims`、`client_instance_id` 刷新容错(意见 9);
-  - D1 表 `e2ee_sessions(session_id, master_key, claim_count, max_claims, status, expires_at)`;短期 TTL 与超限物理覆写销毁(意见 8 方案一);抽样惰性清理与原子 CAS 递增(意见 20);引擎静态资源托管与 SRI。
+  - D1 表 `e2ee_sessions(session_id, device_id, mode, master_key, claim_count, max_claims, status, expires_at)`;短期 TTL 与超限物理覆写销毁(意见 8 方案一);抽样惰性清理与原子 CAS 递增(意见 20);引擎静态资源托管与 SRI。
 - [ ] **Phase 3:Chat 模式双向 WebSocket 与剪贴板 E2EE**
   - 改造 `pkg/chat/v2/protocol/`,定义 `e2ee_envelope` 载荷与 AAD 防重放验证;
   - 加解密运行于独立 Web Worker,Transferable 零拷贝传输(意见 11);
