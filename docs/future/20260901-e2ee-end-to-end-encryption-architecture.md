@@ -276,8 +276,8 @@ sequenceDiagram
 * 请求参数携带 `?e2ee=1`,服务端使用 `K_send` 按 4MB 分块实时流式加密;
 * **HTTP Range 随机定位**:`Range: bytes=start-end` 时服务端换算分块索引 `ChunkStart = floor(start / 4194304)`、`ChunkEnd = floor(end / 4194304)`,独立 Nonce/Tag 使视频拖拽寻址无需解密前序块;
 * **浏览器内存墙破局**(阶梯适配):
-  1. 小文件 (< 300MB):In-Memory Blob + `<a download>` 原生下载;
-  2. 超大文件 (≥ 300MB):`fetch` 流式读取(`response.body.getReader()`)→ 逐块解密 → 以分件 Blob 写入 **IndexedDB**,传输完成后由用户触发「导出」重装或分卷导出,内存常驻仅 ~8MB(**StreamSaver / `showSaveFilePicker` / OPFS 均属 Secure Context 门禁,局域网 HTTP 下不可用,见 §4.1 同源陷阱全景**);
+  1. 小文件 (< 500MB):In-Memory Blob + `<a download>` 原生下载;
+  2. 超大文件 (≥ 500MB):`fetch` 流式读取(`response.body.getReader()`)→ 逐块解密 → 以分件 Blob 写入 **IndexedDB**,传输完成后由用户触发「导出」重装或分卷导出,内存常驻仅 ~8MB(**StreamSaver / `showSaveFilePicker` / OPFS 均属 Secure Context 门禁,局域网 HTTP 下不可用,见 §4.1 同源陷阱全景**);
   3. 极端降级:IndexedDB 配额受限(如 iOS Safari 隐私模式,配额约 1GB 量级)且文件超限 → 提示切换标准明文模式或分卷传输。
 
 ### 6.3 Receive 模式:移动端浏览器发送 → PC 服务端接收落盘
@@ -493,7 +493,7 @@ graph TD
 ## 9. 架构评审意见与工程避坑指南 (38 项落地细则与 8 大核心准则)
 
 > **极简实施核心导图 (Executive Tenets)**：为在编码实施中保持高效简洁、杜绝代码过度设计，全链路 38 项细则高度收敛为以下 **8 大核心工程原则**：
-> 1. **密码学基石**：全链路统一 4MB XChaCha20-Poly1305 + HKDF-SHA256 派生 + 密文内增量 SHA-256 校验 + WASM 引擎内联/哈希防篡改；
+> 1. **密码学基石**：全链路统一 4MB XChaCha20-Poly1305 + HKDF-SHA256 派生 + AEAD 信封内明文增量 SHA-256 校验（防意外损坏，主动篡改由逐块 Poly1305 兜底）+ WASM 引擎内联/哈希防篡改；
 > 2. **信任锚与生命周期**：PC 各模式单例原子覆盖重建（`INSERT ... ON CONFLICT`），退出主动 `close`，10 分钟 TTL 物理抹除，DRM 应用层零日志；
 > 3. **数据面流式 I/O**：专用 REST 端点 `POST /receive/:path/chunk`，Go 服务端 `sync.Pool` 4MB 内存池化，多文件流式 ZIP 归档传输；
 > 4. **移动端沙箱与落盘**：libsodium (WASM) 运行于 Worker（Transferable 零拷贝），落盘阶梯（<500MB 内存 Blob $\rightarrow$ $\ge$500MB IndexedDB 分件落盘，明确纯 HTTP 下单文件 ≈1GB 诚实边界）；
@@ -744,9 +744,9 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
   * **评审补充**：SRI 只作用于 `<script>`/`<link>` 标签加载的资源；libsodium.js 运行时自行 `fetch()` 的 `.wasm` **不会走 SRI**。作为防 CDN 被攻破的纵深防御，须在 `crypto-engine.js` 内显式比对 wasm 字节的 SHA-256（或直接将 wasm base64 内联进 JS，消除外部替换面）。
 
 ### 意见 35:移动端 Safari 无痕模式与存储配额受限下的降级兜底
-* **背景评估**：在 iOS Safari 隐私无痕浏览模式（Private Browsing Mode）下，`localStorage` 与 OPFS 磁盘配额可能被严格限制在很小范围（如 <50MB），导致写盘抛出 `QuotaExceededError`。
+* **背景评估**：在 iOS Safari 隐私无痕浏览模式（Private Browsing Mode）下，`localStorage` 与 **IndexedDB**（insecure context 下大文件落盘底座，见 §4.1）配额可能被严格限制在很小范围（如 <50MB），导致写盘抛出 `QuotaExceededError`。
 * **工程对策**：
-  * 前端在尝试写入 OPFS / localStorage 时加入 `try-catch`；
+  * 前端在尝试写入 IndexedDB / localStorage 时加入 `try-catch`；
   * 若捕获到配额超出错误，自动降级为“单分块解密 + 边解密边触发系统原生流式下载”管道，并在页面内通过非阻塞提示通知用户“当前处于隐私浏览模式，建议使用标准标签页以支持超大文件极速传输”。
 
 ### 意见 36:多网卡 (Multi-NIC) / 虚拟网卡环境下的 E2EE 局域网绑定与二维码一致性
@@ -811,7 +811,7 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
   - Go 后端与 Svelte 前端实现消息/剪贴板透明加解密。
 - [ ] **Phase 4:Receive / Share 4MB 分块流式加解密与设备管理控制**
   - Receive:弃用 Multipart，采用专用 REST 端点 `POST /receive/:path/chunk`(意见 15)+ 前端 `File.slice()` 3 级流水线(Read→Encrypt→POST,并发度 2)(意见 12)+ Go `ChunkedXChaChaReader` 零临时文件写盘 + `chunk_status` 断点恢复;
-  - 移动端超大文件落盘引入 OPFS (Origin Private File System) 阶梯适配(意见 30);
+  - 移动端超大文件落盘引入 IndexedDB 分件流式落盘阶梯(意见 30；OPFS / File System Access 仅未来 HTTPS 增强);
   - 移动端 Safari 隐私模式配额受限降级兜底(意见 35);
   - 客户端 UUID 鉴权解耦 IP 地址，支持 Wi-Fi 漫游与 IP 漂移无感续传(意见 27);
   - 多文件分享流式内存 ZIP 归档传输，规避浏览器多文件拦截弹窗(意见 28);
