@@ -642,6 +642,7 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
   * 在 Web Worker 内部维护容量为 3~4 个分块的 **环形复用 ArrayBuffer 池**；
   * 结合 `postMessage(buf, [buf])` Transferable 所有权转移与主线程回收归还机制；
   * 将移动端浏览器在百 GB 级超大文件流式传输中的峰值内存稳定压制在 35MB 以内。
+  * **评审补充**：`35MB` 峰值以「单 Worker 环形池」计；若叠加意见 19 的多 Worker 并发，须以 `Worker 数 × 池容量` 全局设上限（如 4 Worker × 4 分块 × 4MB ≈ 64MB），避免为省 GC 反而堆爆内存；主线程 XHR 完成后须以 Transferable 原路归还，归还链路不得引入二次拷贝。
 
 ### 意见 25:端到端明文 SHA-256 流式校验（分块 AEAD + 全局哈希双保险）
 * **背景评估**：尽管每个 4MB 分块均具备独立 Poly1305 Auth Tag 保证单块不被篡改，但为防范偶发的分块索引错位、多文件流边界截断或磁盘落盘静默损坏，需有整文件维度的完整性证明。
@@ -649,12 +650,20 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
   * 发送端在分块读取明文时，同步进行流式 SHA-256 计算并在握手/结束帧附带 `file_sha256`；
   * 接收端在逐块解密落盘的同时流式计算明文 SHA-256，落盘完成比对一致后才触发最终原子提交与重命名；
   * 构筑“分块 XChaCha20-Poly1305 AEAD + 全局 SHA-256”双重数学级完整性保证。
+  * **评审补充（关键）**：
+    * `file_sha256` 必须置于 **E2EE 加密信封（AEAD 密文 + Poly1305 认证）内**随结束帧传输，禁止明文帧外发——否则在 §1 的主动 MITM 威胁模型下，攻击者可同时替换数据与哈希（SHA-256 本身不是 MAC，防的是「意外损坏」而非「主动篡改」，主动篡改已由逐块 Poly1305 兜底）；
+    * 流式 SHA-256 **不能使用 `crypto.subtle.digest`**：它是整块 API，且与 §4.1 同源——局域网 HTTP insecure context 下 `crypto.subtle === undefined`。必须改用 libsodium 的 `crypto_hash_sha256` 增量接口（init/update/final），与 XChaCha 同源、同样不依赖 Secure Context；
+    * 多文件队列（意见 23）下**每文件独立 `file_sha256`** 挂在其各自文件结束帧，禁止跨文件共享全局哈希，否则无法定位具体损坏文件。
 
 ### 意见 26:桌面端后台加密传输防休眠与 CPU 核心调度优化
 * **背景评估**：在笔记本电池供电模式下，若传输窗口最小化或转入后台托盘运行，操作系统可能会将后台进程调度至能效核（E-Core）或降低 CPU 时钟频率，导致 100MB/s 的局域网加密吞吐断崖式下跌至 10~15MB/s。
 * **工程对策**：
   * Windows 端在活跃加解密传输期间调用 Win32 API `SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED)` 防止系统进入低功耗待机；
   * Go 端对高吞吐加解密工作 goroutine 实施适当的核心锁定或调度优先级保护，传输结束后自动释放。
+  * **评审补充**：
+    * `ES_AWAYMODE_REQUIRED` 是 Vista 时代媒体中心遗留旗标，现代 Windows 下不阻止睡眠，可省略；有效组合为 `ES_SYSTEM_REQUIRED`（防待机）± `ES_DISPLAY_REQUIRED`（保屏常亮以展示进度），`ES_CONTINUOUS` 常驻 + 传输结束后置 0 释放的逻辑不变；
+    * 「对 goroutine 做核心锁定」是 Go 反模式——goroutine 不直接占有 CPU，M:N 调度器会在 OS 线程间迁移，手动 CPU 亲和/核绑定会与调度器对抗且不可移植。针对「后台被降频」的真实机制是 Windows **Power Throttling**（Win10 1709+）：应调用 `SetThreadInformation(ThreadPowerThrottling)` 关闭执行速度节流（或 `SetProcessInformation(ProcessPowerThrottling)`），再确保 `GOMAXPROCS` 不被人工压低即可；
+    * 与意见 18（移动端 Screen WakeLock）互补：长时大文件传输需链路两端同时保活，PC 防休眠与手机防锁屏缺一不可。
 
 ---
 
