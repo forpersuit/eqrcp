@@ -636,6 +636,26 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
   * **静默数据面门禁**：PC GUI 操作员点击 `[🚫 屏蔽]`，服务端仅在内存中标记 `sessionBannedClients[ID]=true` 并停止对其响应数据面分块，无需向移动端推送惊扰弹窗（§7.2.1）；
   * **随时可逆与从头重置 (Clean Reset)**：操作员可随时点击 `[✅ 恢复]` 解除屏蔽；但传输中途被放开的设备**严禁盲目恢复断点，必须从第 0 块从头重新发起全新传输**，保证 100% 密码学状态与文件数据完整性（§7.2.2）。
 
+### 意见 24:移动端 Web Worker 定长环形 Buffer 池化（杜绝百 GB 大文件 WebKit OOM）
+* **背景评估**：在批量传输上百张高清照片或数十 GB 蓝光视频时，若 Web Worker 持续高频 `new Uint8Array(4*1024*1024)`，iOS Safari / Chrome 的垃圾回收器（GC）在高吞吐下无法及时释放堆内存，易引发 WebKit 内存峰值过高被系统强杀（OOM Crash）。
+* **工程对策**：
+  * 在 Web Worker 内部维护容量为 3~4 个分块的 **环形复用 ArrayBuffer 池**；
+  * 结合 `postMessage(buf, [buf])` Transferable 所有权转移与主线程回收归还机制；
+  * 将移动端浏览器在百 GB 级超大文件流式传输中的峰值内存稳定压制在 35MB 以内。
+
+### 意见 25:端到端明文 SHA-256 流式校验（分块 AEAD + 全局哈希双保险）
+* **背景评估**：尽管每个 4MB 分块均具备独立 Poly1305 Auth Tag 保证单块不被篡改，但为防范偶发的分块索引错位、多文件流边界截断或磁盘落盘静默损坏，需有整文件维度的完整性证明。
+* **工程对策**：
+  * 发送端在分块读取明文时，同步进行流式 SHA-256 计算并在握手/结束帧附带 `file_sha256`；
+  * 接收端在逐块解密落盘的同时流式计算明文 SHA-256，落盘完成比对一致后才触发最终原子提交与重命名；
+  * 构筑“分块 XChaCha20-Poly1305 AEAD + 全局 SHA-256”双重数学级完整性保证。
+
+### 意见 26:桌面端后台加密传输防休眠与 CPU 核心调度优化
+* **背景评估**：在笔记本电池供电模式下，若传输窗口最小化或转入后台托盘运行，操作系统可能会将后台进程调度至能效核（E-Core）或降低 CPU 时钟频率，导致 100MB/s 的局域网加密吞吐断崖式下跌至 10~15MB/s。
+* **工程对策**：
+  * Windows 端在活跃加解密传输期间调用 Win32 API `SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED)` 防止系统进入低功耗待机；
+  * Go 端对高吞吐加解密工作 goroutine 实施适当的核心锁定或调度优先级保护，传输结束后自动释放。
+
 ---
 
 ## 10. 商业化分级与版本限制策略 (Free vs Plus/Pro Tier)
@@ -675,6 +695,8 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
   - Go 后端与 Svelte 前端实现消息/剪贴板透明加解密。
 - [ ] **Phase 4:Receive / Share 4MB 分块流式加解密与设备管理控制**
   - Receive:弃用 Multipart，采用专用 REST 端点 `POST /receive/:path/chunk`(意见 15)+ 前端 `File.slice()` 3 级流水线(Read→Encrypt→POST,并发度 2)(意见 12)+ Go `ChunkedXChaChaReader` 零临时文件写盘 + `chunk_status` 断点恢复;
+  - 移动端 Web Worker 定长环形 Buffer 池化，防百 GB 传输 OOM(意见 24);
+  - 端到端明文 SHA-256 流式全量哈希双重校验(意见 25);
   - 移动端 WebKit 屏幕常亮保活 Screen WakeLock 与切后台断点恢复(意见 18);
   - 多核多 Worker 线程池并发加解密，冲刺 150MB/s+ 吞吐(意见 19);
   - Go 服务端引入 `sync.Pool` 4MB 缓冲池，消除百兆吞吐下的 GC 停顿(意见 16);
@@ -683,6 +705,7 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
   - 分块加解密统一置于 Web Worker(意见 11)。
 - [ ] **Phase 5:Settings 开关、GUI 设备管理卡片与海外隐私营销**
   - `pkg/config/settings.go` 新增 `EnableE2EE` 字段与 Settings 界面开关;
+  - 桌面端后台加密传输防休眠与 CPU 核心调度优化(意见 26);
   - 桌面 GUI 传输监控面板实现设备列表可视化与 `[🚫 屏蔽]` / `[✅ 恢复]` 交互按钮(§7.3);
   - 桌面端后台 30 秒周期探活 DRM 服务与内存状态缓存防抖(意见 21);
   - 联网检测与离线降级通知;免费版提示升级;安全徽章点亮;
