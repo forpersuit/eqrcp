@@ -132,14 +132,26 @@ wails build -clean -o E:/developer/results/eqt-desktop.exe -platform windows/amd
 
 ## 使用技巧
 
-### 跳过Hook
+### 1. 快速提交（跳过重编译与副作用）
 
-如果需要跳过hook直接提交：
+**方法 A：使用 Git 原生 `--no-verify` / `-n` 参数（直接跳过 Hook）**
 ```bash
+git commit -n -m "commit message"
+# 或
 git commit --no-verify -m "commit message"
 ```
 
-### 卸载Hook
+**方法 B：使用环境变量（保留 Hook 逻辑但跳过耗时重构建）**
+```bash
+EQT_FAST_COMMIT=1 git commit -m "commit message"
+# 或者在当前终端会话全局启用：
+export EQT_FAST_COMMIT=1
+```
+
+**方法 C：纯文档/Markdown 改动智能免编译（自动触发）**
+- 当暂存的文件全部属于 `docs/`、`*.md`、`.gitignore` 等文档/元数据文件时，Pre-commit Hook 会**自动识别并智能跳过** Wails 构建与 Windows 编译，实现 0.05 秒纯提交，绝无副作用！
+
+### 2. 卸载 Hook
 
 ```bash
 # Windows
