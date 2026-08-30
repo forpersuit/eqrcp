@@ -131,12 +131,12 @@ sequenceDiagram
     PC-->>MB: 6. 下发不含机密的页面 + 引导脚本
     MB->>DRM: 7. HTTPS 拉取加密引擎 crypto-engine.js (SRI 校验)
     MB->>DRM: 8. POST /e2ee/session/<sid>/claim (HTTPS, 领取 MasterKey)
-    DRM-->>MB: 9. 返回 MasterKey,一次性失效
+    DRM-->>MB: 9. 返回 MasterKey (max_claims 并发限额内, TTL 到期销毁)
     MB->>PC: 10. 建立分块加密传输 (XChaCha20-Poly1305), 全程局域网
     Note over Network: 嗅探者只能看到高熵密文;密钥与引擎从未经过局域网
 ```
 
-**Hash 信道论证**(RFC 3986):浏览器构建 HTTP 请求时,`#` 及其后的 Fragment **绝不进入 TCP 请求行**,只作为客户端锚点。故 `#sid=` 引用只在手机本地可见。`session_id` 是短引用而非机密,即使被窥屏泄露也无法独立换取密钥(领取需一次性 + 短 TTL + 并发防抢)。
+**Hash 信道论证**(RFC 3986):浏览器构建 HTTP 请求时,`#` 及其后的 Fragment **绝不进入 TCP 请求行**,只作为客户端锚点。故 `#sid=` 引用只在手机本地可见。`session_id` 是短引用而非机密,即使被窥屏泄露也无法独立换取密钥(领取受 `max_claims` 并发限额约束 + 短 TTL)。
 
 ### 5.2 端点契约(新增至 `cloudflare/eqt-drm-api/src/routes/drm.ts` 的 `handleDrmRoutes`)
 
@@ -352,7 +352,7 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
 所有 libsodium 初始化、HKDF 派生、分块加解密、Worker 通信封装为独立模块 `pkg/pages/assets/crypto-engine.js`;Chat V2 中解耦为独立 Store / Service (`pkg/chat/v2/web/src/lib/e2ee/`);UI 模板仅通过 Promise API 调用,保持视图层纯粹。禁向 `main.js` / 模板直接堆砌密码学逻辑。
 
 ### 意见 6:无会话访问与领取失败防呆
-* 页面检测 `location.hash` 无 `#sid=`、或 `claim` 返回 404/403(会话已领/过期)时:显示友好引导屏「当前会话不可用,请使用手机相机重新扫描屏幕上的完整二维码」;
+* 页面检测 `location.hash` 无 `#sid=`、或 `claim` 返回 403(并发已满/会话过期)时:显示友好引导屏「当前会话不可用,请使用手机相机重新扫描屏幕上的完整二维码」;
 * 免费版或 `enableE2EE=false`:直接走标准明文链路,页面显示「标准局域网模式」徽章。
 
 ### 意见 7:加密状态可视化与离线降级透明
@@ -364,8 +364,10 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
 ### 意见 8:DRM 零知识 (Zero-Knowledge) 加固：避免云端持有明文 MasterKey
 * **背景评估**：当前 v2 设计中由 DRM Worker 生成并在 D1 存储 `MasterKey`。安全审计或对隐私极度敏感的海外极客可能会质疑“DRM 托管了通信密钥，是否存在云端后门解密风险”。
 * **工程对策**：
-  * **短期（方案一：盲中继与即时物理销毁）**：D1 中的 `master_key` 严格设置 10 分钟 TTL，会话一旦被 claim 或超时后，后台异步任务或 TTL 机制立即从 D1 物理覆写抹除。并在白皮书中明示“DRM 仅作为短期盲中继信道，不作任何永久持久化”。
+  * **短期（方案一：盲中继与即时物理销毁）**：D1 中的 `master_key` 严格设置 10 分钟 TTL；会话在 **TTL 到期、或 `claim_count` 达到 `max_claims` 且最后一个领取者完成握手后**，由后台异步任务从 D1 物理覆写抹除（⚠️ 不能"首次 claim 即销毁"，否则与意见 9 的多设备并发领取冲突）。并在白皮书中明示"DRM 仅作为短期盲中继信道，不作任何永久持久化"。
   * **演进（方案二：端到端 ECDH 零知识密钥协商）**：PC 生成 Ephemeral X25519 密钥对，并将公钥 `pk_pc` 存入 DRM；移动端 claim 时提交其公钥 `pk_mob`，双方通过 X25519 ECDH 在本地派生 `MasterKey`。DRM 全程仅传递公钥，**云端数学上无法获知 `MasterKey`**，实现纯正的 Zero-Knowledge E2EE。
+    * **⚠️ 防恶意云端 MITM 的关键：公钥指纹交叉验证**：ECDH 仅对"被动 DRM"成立——若 DRM 被攻破或作恶，可替换 `pk_pc` / `pk_mob` 与两端各建一条 ECDH 通道（密钥仍在本地派生，云端却可解密重加密）。为使零知识对主动云端同样成立，PC 须将 `pk_pc` 的 SHA-256 短指纹并入二维码 Hash（如 `#sid=<id>&k=<pk指纹>`）；移动端领取公钥后先核对其指纹与二维码一致，再执行 ECDH 派生。二维码视觉信道不入网络，云端无法篡改。
+    * **多设备并发下的密钥模型切换**：方案二按设备派生，每台手机的 `pk_mob` 不同 ⇒ `MasterKey` 不同（不再是方案一的全设备共享密钥）。claim 请求体需增加 `pk_mob` 字段；演进时 §6/§7 的"单一 MasterKey 全会话共享"前提改为「PC 端为每台已 claim 设备独立派生会话密钥」，分块协议、HKDF `info` 与 chunk ACK 均按 `device_id` 隔离，意见 9 的多设备并发能力保持不变。
 
 ### 意见 9:多设备并发扫码与页面刷新容错（摒弃绝对一次性 Claim）
 * **背景评估**：EQT 的核心能力之一是支持多台手机同时扫同一个二维码并发上传/下载（`pkg/server/server.go` 的 `clientStates`）；此外，移动端浏览器（尤其是 iOS Safari 内存清理）很容易发生后台静默重载或用户误下拉刷新。若 `claim` 严格一次性锁死，第二台设备或页面刷新将直接报错 403 导致传输中断。
@@ -424,17 +426,23 @@ iOS Safari 与部分 Android Chrome 单页内存限制(通常 500MB ~ 1GB),直�
 
 - [ ] **Phase 1:WASM 密码学基础库与 HKDF 密钥派生引擎**
   - `pkg/pages/assets/crypto-engine.js`:libsodium.js 初始化、HKDF-SHA256 派生、XChaCha20-Poly1305 分块加解密、Worker 通信;
+  - WASM 渐进式加载与 CDN 强缓存(`Cache-Control: immutable`)、骨架屏异步初始化(意见 10);
   - 验证 iOS Safari、Android Chrome、Edge、Firefox 在局域网 HTTP 页面的跨平台一致性。
 - [ ] **Phase 2:DRM 会话密钥与引擎分发端点**
   - `cloudflare/eqt-drm-api`:新增 `POST /api/v1/e2ee/session/create` 与 `POST /api/v1/e2ee/session/:id/claim`,复用 license 校验、rate-limit、cf-access-jwt;
-  - D1 表 `e2ee_sessions(session_id, master_key, status, expires_at)`;引擎静态资源托管与 SRI。
+  - `claim` 多设备并发限额 `max_claims`、`client_instance_id` 刷新容错(意见 9);
+  - D1 表 `e2ee_sessions(session_id, master_key, claim_count, max_claims, status, expires_at)`;短期 TTL 与超限物理覆写销毁(意见 8 方案一);引擎静态资源托管与 SRI。
 - [ ] **Phase 3:Chat 模式双向 WebSocket 与剪贴板 E2EE**
   - 改造 `pkg/chat/v2/protocol/`,定义 `e2ee_envelope` 载荷与 AAD 防重放验证;
+  - 加解密运行于独立 Web Worker,Transferable 零拷贝传输(意见 11);
   - Go 后端与 Svelte 前端实现消息/剪贴板透明加解密。
 - [ ] **Phase 4:Receive / Share 4MB 分块流式加解密**
-  - Receive:前端 `File.slice()` 分块流水线 + Go `ChunkedXChaChaReader` 零临时文件写盘 + `chunk_status` 断点恢复;
-  - Share:Go 端 `Range` 兼容分块加密下发 + 移动端 Blob / StreamSaver 流式解密下载管道。
+  - Receive:前端 `File.slice()` 3 级流水线(Read→Encrypt→POST,并发度 2)(意见 12)+ Go `ChunkedXChaChaReader` 零临时文件写盘 + `chunk_status` 断点恢复;
+  - Share:Go 端 `Range` 兼容分块加密下发 + 移动端 Blob / StreamSaver 流式解密下载管道;
+  - 分块加解密统一置于 Web Worker(意见 11)。
 - [ ] **Phase 5:Settings 开关、付费门禁与海外隐私营销**
   - `pkg/config/settings.go` 新增 `EnableE2EE` 字段与 Settings 界面开关;
   - 联网检测与离线降级通知;免费版提示升级;安全徽章点亮;
   - 编写隐私白皮书,海外社区重点宣发。
+
+> **未来演进(暂不排期)**:ECDH 零知识密钥协商与二维码公钥指纹交叉验证(意见 8 方案二);Air-Gapped 离线加密 PWA + SAS 配对码(意见 13)。两者依赖 Phase 1-2 的数据面与 DRM 端点稳定后再评估。
