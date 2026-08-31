@@ -33,7 +33,8 @@
   - [ ] 封装分块加解密纯函数：输入 `[PlaintextChunk, Nonce, Key, ChunkIndex]` $\rightarrow$ 输出 `[ChunkIndex(4B) | Nonce(24B) | Ciphertext | Tag(16B)]`；
   - [ ] 主线程与 Worker 通信全面采用 `Transferable Objects`（`postMessage(buf, [buf])`）实现零内存拷贝；
   - [ ] 建立定长环形 ArrayBuffer 复用池，多 Worker 全局内存硬顶限制在 `< 64MB`，杜绝 WebKit OOM；
-  - [ ] 显式生命周期管理：在传输完成、取消或页面卸载时触发 `worker.terminate()` 彻底回收 WASM 线性内存。
+  - [ ] 显式生命周期管理：在传输完成、取消或页面卸载时触发 `worker.terminate()` 彻底回收 WASM 线性内存；
+  - [ ] 注意：`terminate()` 仅回收内存 ≠ 密钥字节物理清零——终止前须在 Worker 内部对密钥副本先执行 `sodium.memzero()`（与 Task 1.3 主线程 `wipeKey` 互补，防 freed 页 / swap / 转储残留）。
 - [ ] **Task 1.3: 内存安全与防御性清零**
   - [ ] 实现 `wipeKey(keyUint8Array)` 显式调用 `sodium.memzero()` 物理擦除 WASM 线性内存；
   - [ ] 编写跨浏览器（iOS Safari、Android Chrome、Edge、Firefox）局域网 HTTP 兼容性测试脚本。
@@ -109,6 +110,7 @@
   - [ ] 新增 `POST /receive/:path/chunk` 端点，解析 `X-File-ID`、`X-Chunk-Index` 二进制切片；
   - [ ] 封装 Go `ChunkedXChaChaReader`，边验签边流式解密；
   - [ ] 利用 4MB 定长切片物理偏移确定性（`offset = chunkIndex * 4MB`），支持 `os.File.WriteAt` 并发乱序直写物理文件，免去内存滑动窗口队列；
+  - [ ] 乱序直写两前提：① 分块 AEAD 的 AAD 须绑定 `chunkIndex`（含会话/文件 ID），防止「合法块被重放到错误偏移」仍通过逐块验签；② 保留一个极小连续位图跟踪器维护「最大连续块 M」——`chunk_status`（Task 4.3）只以连续 M 为准，按「最高已写块」续传会在空洞处产生文件洞，最终仅 `file_sha256` 兜底；
   - [ ] 引入 `sync.Pool` 4MB 缓冲区，明文 Buffer 归还前执行 `clear(b)` 与 `runtime.KeepAlive`。
 - [ ] **Task 4.2: 移动端 3 级流水线并发与存储落盘** (`pkg/pages/upload.tmpl.html` & `download.tmpl.html`)
   - [ ] 实现 Read $\rightarrow$ Encrypt $\rightarrow$ POST 3 级并发流水线；
