@@ -72,6 +72,7 @@ try {
 
 **Chunk 信封**：`[ChunkIndex(4B BE) | Nonce(24B) | Ciphertext | Tag(16B)]`，AAD=fileID\|\|uint32_be(chunkIndex)。
 **Packet 信封**：`[Nonce(24B) | Ciphertext | Tag(16B)]`，AAD=uint64_be(seq)。
+**附件信封**：`[Nonce(24B) | Ciphertext | Tag(16B)]`（同 Packet 但无 4B 头），AAD=fileID 字节；`cross_test.go` **未覆盖附件**——审查附件互通时用临时 Go 测试内嵌 `node -e` 双向验证（Go Encrypt(kSend)→JS Decrypt + JS Encrypt(kRecv)→Go Decrypt），跑完即删。
 
 ## 5. 吞吐基准陷阱 (Throughput Benchmark Caveats)
 
@@ -86,4 +87,5 @@ try {
 - **方向性密钥误解**：decryptChunk 默认 kRecv，benchmark 用 encrypt 生成的密文 + 默认 decrypt 会报 "ciphertext cannot be decrypted using that key"——需显式传 keyType='send'。
 - **Node 模拟删除 crypto.subtle 失败**：直接赋值 global.crypto 静默失败，须用 finally 恢复原对象。
 - **数字文档矛盾**：同一指标（如吞吐）在 Task 列表、DoD、delta 表三处数字不一致时，以实测为准统一。
+- **防重放 seq 空间必须按发送者隔离**：若 `ReplayFilter` 为 Session 级共享而前端 `e2eeOutSeq` 每客户端实例从 1 起，房间内第二个客户端首条消息（seq=1）会被误判重放拒绝（D9，`c428455a` 复现：`duplicate packet seq 1 replayed`）。审查 E2EE 防重放实现时检查是否按 `(senderPeer, seq)` 分键。
 - **三元运算优先级**：`(a.meta as any)?.changes ?? a.success ? 1 : 0` 中 `??` 优先级低于 `?:`，实际等价 `(changes ?? success) ? 1 : 0`；9ebbddc7 已修复为 `?? (a.success ? 1 : 0)`。审查 D1/SQL 类代码时留意同类表达式。
