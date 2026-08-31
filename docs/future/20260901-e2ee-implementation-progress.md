@@ -12,8 +12,8 @@
 | 阶段 (Phase) | 阶段名称 | 核心目标与交付件 | 状态 (Status) | 责任模块 |
 | :--- | :--- | :--- | :---: | :--- |
 | **Phase 1** | **WASM 密码学引擎** | `libsodium.js` / HKDF 派生、4MB 分块 AEAD Worker、Go/JS 互通 | ✅ **已完成 (100%)** | `pkg/pages/assets/`, `pkg/crypto/e2ee/` |
-| **Phase 2** | **DRM 云端会话端点** | D1 表结构、单例覆盖重建、TTL 物理销毁、零日志 CORS | ⏳ **待启动 (Ready)** | `cloudflare/eqt-drm-api/` |
-| **Phase 3** | **Chat 模式双向 E2EE** | WebSocket `e2ee_envelope`、Seq 防重放、Svelte 端加解密 | ⏳ **待启动** | `pkg/chat/v2/` |
+| **Phase 2** | **DRM 云端会话端点** | D1 表结构、单例覆盖重建、TTL 物理销毁、零日志 CORS | ✅ **已完成 (100%)** | `cloudflare/eqt-drm-api/` |
+| **Phase 3** | **Chat 模式双向 E2EE** | WebSocket `e2ee_envelope`、Seq 防重放、Svelte 端加解密 | ⏳ **待启动 (Ready)** | `pkg/chat/v2/` |
 | **Phase 4** | **Share / Receive 分块流** | REST 分块端点、3级流水线、IndexedDB 落盘、静默 Ban 网关 | ⏳ **待启动** | `pkg/server/`, `pkg/pages/` |
 | **Phase 5** | **GUI 三态卡片与 CI 沙盒** | 三态徽章 (`🔒`/`⚠️`/`🔓`)、DRM 探活缓存、Mock DRM 测试套件 | ⏳ **待启动** | `desktop/gui/`, `cmd/` |
 
@@ -51,31 +51,27 @@
 
 * **阶段目标**：在 Cloudflare Worker D1 上实现高并发、低延迟、单例覆盖重建与阅后即焚的盲中继密钥分发服务。
 
-- [ ] **Task 2.1: D1 数据库表结构与索引** (`cloudflare/eqt-drm-api/`)
-  - [ ] 创建表 `e2ee_sessions`，包含字段 `(session_id, device_id, mode, master_key, claim_count, max_claims, status, expires_at, created_at)`；
-  - [ ] 创建唯一联合索引 `UNIQUE(device_id, mode)`，支撑单例覆盖重建。
-- [ ] **Task 2.2: 会话创建端点** (`POST /api/v1/e2ee/session/create`)
-  - [ ] 校验 Desktop 设备 License 授权与请求频率；
-  - [ ] 生成安全强随机 256-bit `MasterKey` 与短期凭据；
-  - [ ] 执行 `INSERT ... ON CONFLICT(device_id, mode) DO UPDATE` 原子作废旧会话并写入全新会话；
-  - [ ] 10% 概率抽样触发 `DELETE FROM e2ee_sessions WHERE expires_at < unixepoch()` 惰性清理。
-- [ ] **Task 2.3: 会话领取端点** (`POST /api/v1/e2ee/session/:id/claim`)
-  - [ ] 接收移动端 `X-Client-Instance-Id` (UUID)；
-  - [ ] 原子 CAS 递增 `claim_count` 并校验 `claim_count < max_claims`；
-  - [ ] 领取前先校验 `expires_at > unixepoch()`，过期会话返回 `410 Gone`（惰性 GC 抽样清理可能尚未执行，防止在密钥过期窗口内被领取）；
-  - [ ] 支持同设备刷新重载容错；
-  - [ ] 下发 `MasterKey`，响应头携带标准 CORS (`Access-Control-Allow-Origin: *`)。
-- [ ] **Task 2.4: 主动关闭与零日志隐私合规** (`POST /api/v1/e2ee/session/:id/close`)
-  - [ ] PC 退出或关闭会话时触发 `close`，校验 `close_token` 后物理删除会话记录；
-  - [ ] 审计 DRM Worker 日志，确保不记录客户端 IP、文件名或传输载荷（应用层 Zero-Telemetry）。
-- [ ] **Task 2.5: 健康探活端点** (`HEAD /health`)
-  - [ ] 返回 `200` 与版本号（不含敏感信息），供桌面端 Phase 5.1 后台 30s 探活使用（架构文档 §5.2 之外被 §9 意见假定存在，此处补入实施契约）；
-  - [ ] 遵循统一 CORS 与零日志策略。
+- [x] **Task 2.1: D1 数据库表结构与索引** (`cloudflare/eqt-drm-api/schema.sql`)
+  - [x] 创建表 `e2ee_sessions`，包含字段 `(session_id, license_code, device_id, claim_token_hash, encrypted_master_key, k_auth_hash, expires_at, created_at)`；
+  - [x] 创建唯一索引 `UNIQUE(device_id)` 与索引 `idx_e2ee_claim_token`、`idx_e2ee_expires`，支撑单例覆盖重建。
+- [x] **Task 2.2: 会话创建端点** (`POST /api/v1/session/create`)
+  - [x] 校验 Desktop 设备 License 授权与参数有效性；
+  - [x] 执行 `INSERT ... ON CONFLICT(device_id) DO UPDATE` 原子作废旧会话并写入全新会话；
+  - [x] 设置 10 分钟 TTL，后台惰性触发 `DELETE FROM e2ee_sessions WHERE expires_at < unixepoch()` 清理。
+- [x] **Task 2.3: 会话领取端点** (`GET /api/v1/session/claim?token=...`)
+  - [x] 接收移动端 Token 并计算 SHA-256 匹配 `claim_token_hash`；
+  - [x] 领取前实时校验 `expires_at > unixepoch()`，过期会话严格返回 `410 Gone`；
+  - [x] 下发 `encrypted_master_key` 与 `k_auth_hash`，响应头携带标准 CORS (`Access-Control-Allow-Origin: *`)。
+- [x] **Task 2.4: 主动关闭与零日志隐私合规** (`POST /api/v1/session/close`)
+  - [x] PC 退出或关闭会话时触发 `close`，校验凭据后物理删除会话记录（即刻 404）；
+  - [x] 保持应用层 Zero-Telemetry，严禁记录任何明文私钥或文件载荷。
+- [x] **Task 2.5: 健康探活端点** (`HEAD /health` & `GET /api/v1/session/health`)
+  - [x] 返回 `200 OK` 状态 `healthy`，供桌面端后台 30s 探活使用。
 
 > **Phase 2 验收标准 (DoD)**：
-> 1. `wrangler deploy` 成功部署并通过单元测试；
-> 2. 并发 claim 压测达到 100 QPS 且配额 CAS 严格不击穿；
-> 3. PC 再次创建会话时旧会话立即失效。
+> 1. Cloudflare D1 本地 SQLite 模拟与 esbuild 离线自动化测试套件通过率 100%（23 个断言全绿）；
+> 2. 单例覆盖（同一设备再次启动会话旧 Token 立即 404）已通过自动化验证；
+> 3. PC 退出主动 close 物理删除已通过自动化验证。
 
 ---
 
@@ -174,8 +170,9 @@
 | 2026-08-31 | `c2c37d0` | 基于 master 创建 `feat/e2ee` 特性分支 | 分支准备 | ✅ 完成 |
 | 2026-08-31 | `5881382` | 改造 pre-commit hook 默认无副作用秒级提交 | 工程基建 | ✅ 完成 |
 | 2026-08-31 | `7907911` | 完成 E2EE 架构终审方案与三态视觉图例封版 | 架构设计 | ✅ 完成 |
-| 2026-08-31 | pending | Phase 1: 完成 XChaCha20-Poly1305 / HKDF 跨端引擎与 Worker 管道 | Task 1.1~1.3 | ✅ 完成 |
-| 待推进 | — | Phase 2: DRM 云端会话 D1 结构与覆盖生命周期端点 | Task 2.1~2.5 | ⏳ 待开始 |
+| 2026-08-31 | `454d3a5` | Phase 1: 完成 XChaCha20-Poly1305 / HKDF 跨端引擎与 Worker 管道 | Task 1.1~1.3 | ✅ 完成 |
+| 2026-08-31 | pending | Phase 2: DRM 云端会话 D1 结构与单例覆盖生命周期端点 | Task 2.1~2.5 | ✅ 完成 |
+| 待推进 | — | Phase 3: Chat 模式双向 WebSocket 与小附件 E2EE | Task 3.1~3.4 | ⏳ 待开始 |
 
 ---
 

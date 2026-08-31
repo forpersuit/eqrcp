@@ -255,6 +255,20 @@ CREATE TABLE IF NOT EXISTS daily_download_stats (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_download_dim ON daily_download_stats(stat_date, version, ip_country, source);
 CREATE INDEX IF NOT EXISTS idx_daily_download_date ON daily_download_stats(stat_date);
 
+-- E2EE Session Storage (RFC 5869 / Phase 2)
+-- Ephemeral 10-minute TTL session token exchange table.
+-- device_id is UNIQUE to enforce 1 PC = 1 active session singleton.
+CREATE TABLE IF NOT EXISTS e2ee_sessions (
+    session_id TEXT PRIMARY KEY,
+    license_code TEXT NOT NULL,
+    device_id TEXT NOT NULL,
+    claim_token_hash TEXT NOT NULL,
+    encrypted_master_key TEXT NOT NULL,
+    k_auth_hash TEXT NOT NULL,
+    expires_at INTEGER NOT NULL,  -- Unix epoch timestamp (seconds)
+    created_at INTEGER NOT NULL   -- Unix epoch timestamp (seconds)
+);
 
-
-
+CREATE UNIQUE INDEX IF NOT EXISTS idx_e2ee_device ON e2ee_sessions(device_id);
+CREATE INDEX IF NOT EXISTS idx_e2ee_claim_token ON e2ee_sessions(claim_token_hash);
+CREATE INDEX IF NOT EXISTS idx_e2ee_expires ON e2ee_sessions(expires_at);

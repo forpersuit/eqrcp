@@ -8,6 +8,7 @@ import { handleAuthRoutes } from './routes/auth';
 import { handlePortalRoutes } from './routes/portal';
 import { handlePaddleRoutes } from './routes/paddle';
 import { handleDrmRoutes } from './routes/drm';
+import { handleSessionRoutes } from './routes/session';
 import { handleCrashReport } from './routes/crash-report';
 import { handleTelemetryRoutes } from './routes/telemetry';
 import { assertEnvironmentAlignment } from './utils/env-guard';
@@ -95,6 +96,11 @@ export default {
       // 5.6 Route to Telemetry endpoints (/api/v1/telemetry/*, no auth required — rate-limited per IP)
       if (!response && url.pathname.startsWith("/api/v1/telemetry/")) {
         response = await handleTelemetryRoutes(request, env, ctx, url, corsHeaders);
+      }
+
+      // 5.7 Route to E2EE Session endpoints (/api/v1/session/*)
+      if (!response && (url.pathname.startsWith("/api/v1/session/") || url.pathname === "/health")) {
+        response = await handleSessionRoutes(request, env, ctx, url, corsHeaders);
       }
 
       // 6. Route to Client DRM endpoints (/api/v1/activate, /api/v1/verify, /api/v1/update/check)
