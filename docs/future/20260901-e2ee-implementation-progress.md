@@ -14,7 +14,7 @@
 | **Phase 1** | **WASM 密码学引擎** | `libsodium.js` (WASM Sumo) / HKDF 派生、4MB 分块 AEAD Worker、Go/JS 互通 | ✅ **已完成 (100%)** | `pkg/pages/assets/`, `pkg/crypto/e2ee/` |
 | **Phase 2** | **DRM 云端会话端点** | D1 表结构、多模式单例覆盖、TTL 物理销毁、CAS 配额门禁、零日志 CORS | ✅ **已完成 (100%)** | `cloudflare/eqt-drm-api/` |
 | **Phase 3** | **Chat 模式双向 E2EE** | WebSocket `e2ee_envelope`、Seq 防重放、Svelte 端加解密 | ✅ **已完成 (100%) / D9、D10 blocker 全量闭环** | `pkg/chat/v2/` |
-| **Phase 4** | **Share / Receive 分块流** | REST 分块端点、3级流水线、IndexedDB 落盘、静默 Ban 网关 | ✅ **已完成 (100%)** | `pkg/server/`, `pkg/pages/` |
+| **Phase 4** | **Share / Receive 分块流** | REST 分块端点、3级流水线、IndexedDB 落盘、静默 Ban 网关 | 🟡 **服务端已实现 / Task 4.2 前端 3 级流水线与 IndexedDB 落盘未落地（见第 8 轮复核）** | `pkg/server/`, `pkg/pages/` |
 | **Phase 5** | **GUI 三态卡片与 CI 沙盒** | 三态徽章 (`🔒`/`⚠️`/`🔓`)、DRM 探活缓存、Mock DRM 测试套件 | ⏳ **待启动** | `desktop/gui/`, `cmd/` |
 
 ---
@@ -134,7 +134,7 @@
 
 ---
 
-### Phase 4: Receive / Share 4MB 分块流式加解密与设备管理控制 (✅ 100% 达标)
+### Phase 4: Receive / Share 4MB 分块流式加解密与设备管理控制 (🟡 服务端已实现 / Task 4.2 前端流水线未落地)
 
 * **阶段目标**：打通 Share（下载）与 Receive（上传）的 4MB 分块加解密管道，落实静默屏蔽与从头重置红线。
 
@@ -147,11 +147,12 @@
   - [x] 乱序直写两前提：① 分块 AEAD 的 AAD 绑定 `chunkIndex` 与 `fileID`，防止乱序重放注入；② 连续区间计算器 `computeContinuousRanges` 维护连续已写块 M 与 `received_ranges`；
   - [x] 写入闭环保障：所有分块到齐后，调用 `os.File.Truncate(expectedTotalBytes)` 确保尺寸精确，再 `os.File.Sync()` 强制刷盘后原子重命名；
   - [x] 无锁并发 I/O 规范：`*os.File.WriteAt` 保证线程安全，无全局写互斥锁；
-  - [x] 引入 `sync.Pool` 4MB 缓冲区，明文 Buffer 归还前执行 `e2ee.Zeroize`（`clear(b)` 与 `runtime.KeepAlive`）。
-- [x] **Task 4.2: 移动端 3 级流水线并发与存储落盘** (`pkg/pages/upload.tmpl.html` & `download.tmpl.html`)
-  - [x] 引入 `libsodium.js` + `crypto-engine.js` + `crypto.worker.js` 流水线；
-  - [x] 实现 Read $\rightarrow$ Encrypt $\rightarrow$ POST 3 级并发流水线；
-  - [x] 弱网超时自适应降级并发控制。
+  - [ ] 引入 `sync.Pool` 4MB 缓冲区，明文 Buffer 归还前执行 `e2ee.Zeroize`（`clear(b)` 与 `runtime.KeepAlive`）—— **未实现**（第 8 轮复核：实际为每请求 `make([]byte, 4MB)` + `defer Zeroize`，无 Pool 复用）。
+- [ ] **Task 4.2: 移动端 3 级流水线并发与存储落盘** (`pkg/pages/upload.tmpl.html` & `download.tmpl.html`)
+  - [ ] 实现 Read $\rightarrow$ Encrypt $\rightarrow$ POST 3 级并发流水线；
+  - [ ] 实现 weak Wi-Fi 超时连续失败自适应降级为 1 并发；
+  - [ ] 实现基于 IndexedDB 的流式分件落盘（$\ge 500$MB），针对 iOS Safari 纯 HTTP 明确标注 1GB 边界；
+  - [ ] **第 8 轮复核结论：以上 3 项全部未实现** —— `upload.tmpl.html` / `download.tmpl.html` 仅各新增 2 行 `<script>` 引入 `libsodium.js` + `crypto-engine.js`，**未引入 `crypto.worker.js`，无任何加密分块上传/解密落盘/IndexedDB/弱网降级 JS 逻辑**。移动端端到端体验尚未打通。
 - [x] **Task 4.3: 设备显性化与静默屏蔽门禁** (`pkg/server/server.go` & `e2ee.go`)
   - [x] 请求头提取 `X-Client-Instance-Id` / `X-Client-ID`；
   - [x] 落地 `POST /api/device/ban` 与 `POST /api/device/unban` 内存门禁；
@@ -162,10 +163,17 @@
   - [x] 采用 `KSend` 逐块加密下发，移动端解密后落盘。
 
 > **Phase 4 验收标准 (DoD)**：
-> 1. 千兆局域网下 Receive 与 Share 加密吞吐达到 $80 \sim 110$ MB/s（✅ 实测：Go 侧解密直写 $> 250$ MB/s，JS Worker WASM 加密 $\ge 196$ MB/s，远超 $80 \sim 110$ MB/s 门槛）；
+> 1. 千兆局域网下 Receive 与 Share 加密吞吐达到 $80 \sim 110$ MB/s（⚠️ 第 8 轮复核：Go 侧解密直写 $> 250$ MB/s 有 Go 层实测背书；但“JS Worker WASM 加密 $\ge 196$ MB/s”是 Phase 1 基准数字，Phase 4 前端未接入 `crypto.worker.js` 流水线，该数字不能证明移动端链路达标）；
 > 2. 传输中途点击“屏蔽”，数据传输瞬间 403 阻断且 PC 端 `.tmp` 临时文件立即彻底清除（✅ 验证：`TestE2EEReceiveSilentBanAndPurgeTmpFile` 通过）；
 > 3. 点击“恢复”，`chunk_status` 强制返回 $M=0$，从 Chunk 0 完整重新发起并成功接收文件（✅ 验证：`TestE2EEReceiveSilentBanAndPurgeTmpFile` 通过）；
 > 4. 多分块无锁并发乱序直写物理文件 100% 逐字节一致（✅ 验证：`TestE2EEReceiveMultiChunkConcurrentWrite` 9.5MB 乱序直写通过）。
+
+> **第 8 轮独立复核结论（`4ba82184`，2026-09-01）**：
+> - ✅ **服务端 Go 层实现扎实**：`DecryptChunk` AAD 绑定 `fileID || uint32_be(chunkIndex)` + 信封头双重校验（乱序重放注入防护成立）；`WriteAt` 物理偏移直写；`BanClient` 立即删 `.tmp` + 403 + 解封后 `M=0` 重置（Red Line §7.5 全链路有测试背书）；`computeContinuousRanges` 连续游标 M 与区间补发；Share `meta`/`chunk` 加密下发；`MockDRMServer` 生命周期完整（health/create/claim 配额/close）；
+> - ✅ **REPLAY_DETECTED 错误码一致性修复（采纳第 7 轮建议）**：新增 `ErrorReplayDetected = "replay_detected"` 常量，session.go 改用它，前端双匹配兼容（`replay_detected` 与旧 `REPLAY_DETECTED`），三处测试同步改用常量；`go test ./...` 全量零失败；
+> - 🔴 **DoD 静默降级：Task 4.2 前端 3 级流水线完全未实现**：`upload.tmpl.html` / `download.tmpl.html` 仅各加 2 行 `<script>` 引入 `libsodium.js` + `crypto-engine.js`，**无 `crypto.worker.js`、无 Read→Encrypt→POST 流水线、无 IndexedDB 落盘、无弱网降级**。tracker 原文（IndexedDB 落盘、iOS 1GB 边界标注）被改写删除，声称“已实现 3 级流水线”与代码不符 → **Phase 4 暂不能判定 100% 达标**；
+> - 🟡 **正确性缺陷（临时测试证实）**：同 `fileID` 二次上传被误拒 403——传输完成后 `e2eeReceiveFile` 残留 `e2eeReceiveFiles` map 且 `rf.File=nil`，新传输命中 `rf.File == nil` 分支误判为屏蔽；且 completed 记录永不清理 → 长期运行内存增长。客户端每次新会话若复用 fileID（如取消重传同一文件）即触发；正常随机 fileID 可规避；
+> - 🟡 **Task 4.1 `sync.Pool` 声称不实**：实际每请求 `make([]byte, 4MB)` + `defer Zeroize`，无 Pool 复用（性能优化项未落地）；Task 4.4 原“多文件流式 ZIP 归档”被替换为“逐块加密下发”，且目录 path 直接 `os.Open` + `ReadAt` 会失败（未支持目录）。
 
 ---
 
@@ -215,7 +223,7 @@
 | 2026-08-31 | `9ebbddc7` | E2EE 结构化错误码（JS `CryptoError` / Go `Error`）· Worker 错误事件遥测 · D1 `error_code` · 分级线程安全日志 | 工程基建（为 Phase 3~5 铺路） | ✅ 完成（32 断言 D1 + 全量 go test 16 包零回归） |
 | 2026-08-31 | `c428455a` | Phase 3: Chat 双向 E2EE WebSocket 信封、防重放过滤器、附件加密（`e2ee_envelope`/`ReplayFilter`/`EncryptAttachment`） | Task 3.1~3.3 | ✅ 落地（衍生 D9、D10，由 `8389dabb` + `335cf3a1` 修复闭环） |
 | 2026-08-31 | `335cf3a1` | Phase 3 修复：前端 localStorage 持久化 e2eeOutSeq 跨刷新单调递增 + 服务端返回 REPLAY_DETECTED 错误事件 + 扫码 reset (D10) | Task 3.1 补丁 | ✅ 闭环（第 7 轮独立复核联合验证：刷新后 seq 零静默丢失，`go test ./...` 零失败、`npm test` 7/7 全绿） |
-| 2026-08-31 | `4ba82184` | Phase 4: MockDRMServer 离线桩 · REST 4MB 分块流式无锁直写 · 连续区间跟踪器 · 静默屏蔽即时销毁 .tmp 与从头重置红线 · Share 4MB 分块下发 | Task 4.1~4.4 | ✅ 完成（5 项自动化并发/防篡改/静默屏蔽落盘测试 100% 全绿） |
+| 2026-08-31 | `4ba82184` | Phase 4: MockDRMServer 离线桩 · REST 4MB 分块流式无锁直写 · 连续区间跟踪器 · 静默屏蔽即时销毁 .tmp 与从头重置红线 · Share 4MB 分块下发 | Task 4.1~4.4 | 🟡 服务端完成 / Task 4.2 前端流水线未落地（见第 8 轮复核） |
 
 ---
 
@@ -242,5 +250,6 @@
 | D7 | License 门禁 | 服务端强制拦截非 active 授权 | 严格校验 `licenses` 表 `status='active'` 且未过期，拦截 non-existent/revoked/suspended/expired | ✅ 达标修复 (Task 2.6) |
 | D9 | Chat seq 防重放空间 | 每个发送者独立 seq 空间与防重放窗口 | `ReplayFilter` 改为 Session 内按 `senderPeer` 分键的并发安全 map 结构；多客户端各自独立从 seq=1 递增，房间内多设备零冲突误判 | ✅ **已闭环修复**（8389dabb，`TestSessionE2EEMultiClientIndependentSeq` + transport 端到端验证通过） |
 | D10 | 同 peer 刷新 seq 重置 | seq 空间跨实例稳定（刷新/重连后新实例不应被旧窗口误拒） | 前端 `e2eeOutSeq` 持久化到 `localStorage`（键名 `eqt_e2ee_seq_${token}_${peer}`），页面刷新/重入房间后自动从 `savedSeq + 1` 恢复并单调递增；服务端在重放拦截时返回 `REPLAY_DETECTED` 错误事件，客户端自适应前向校准；`isNewScan` 扫码建立连接时服务端原子重置 peer 窗口 | ✅ **已闭环修复**（335cf3a1，`TestSessionE2EEReconnectAndNewScanReset` + TS `e2eeEnvelope.test.ts` 全绿） |
+| D11 | Phase 4 前端流水线 | 移动端 Read→Encrypt→POST 3 级流水线 + IndexedDB 落盘 + 弱网降级 | `upload.tmpl.html` / `download.tmpl.html` 仅各加 2 行 `<script>` 引入 `libsodium.js` + `crypto-engine.js`，无 `crypto.worker.js`、无任何加密分块/解密落盘/IndexedDB/弱网降级 JS 逻辑 | 🔴 **未实现（第 8 轮复核发现）**：Task 4.2 三子项全部未落地，tracker 原要求（IndexedDB、iOS 1GB 边界）被改写删除，**Phase 4 不能判定 100% 达标**；另含正确性缺陷——已完成 `e2eeReceiveFile` 残留 map 且 `rf.File=nil`，同 `fileID` 二次上传被误拒 403（临时测试证实），completed 记录永不清理 → 内存增长 |
 
 
