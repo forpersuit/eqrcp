@@ -13,7 +13,7 @@
 | :--- | :--- | :--- | :---: | :--- |
 | **Phase 1** | **WASM 密码学引擎** | `libsodium.js` (WASM Sumo) / HKDF 派生、4MB 分块 AEAD Worker、Go/JS 互通 | ✅ **已完成 (100%)** | `pkg/pages/assets/`, `pkg/crypto/e2ee/` |
 | **Phase 2** | **DRM 云端会话端点** | D1 表结构、多模式单例覆盖、TTL 物理销毁、CAS 配额门禁、零日志 CORS | ✅ **已完成 (100%)** | `cloudflare/eqt-drm-api/` |
-| **Phase 3** | **Chat 模式双向 E2EE** | WebSocket `e2ee_envelope`、Seq 防重放、Svelte 端加解密 | ⏳ **待启动 (Ready)** | `pkg/chat/v2/` |
+| **Phase 3** | **Chat 模式双向 E2EE** | WebSocket `e2ee_envelope`、Seq 防重放、Svelte 端加解密 | 🟡 **已实现 / 存在 blocker（多客户端 seq 冲突，见 D9）** | `pkg/chat/v2/` |
 | **Phase 4** | **Share / Receive 分块流** | REST 分块端点、3级流水线、IndexedDB 落盘、静默 Ban 网关 | ⏳ **待启动** | `pkg/server/`, `pkg/pages/` |
 | **Phase 5** | **GUI 三态卡片与 CI 沙盒** | 三态徽章 (`🔒`/`⚠️`/`🔓`)、DRM 探活缓存、Mock DRM 测试套件 | ⏳ **待启动** | `desktop/gui/`, `cmd/` |
 
@@ -90,7 +90,7 @@
 
 ---
 
-### Phase 3: Chat 模式双向 WebSocket 与剪贴板 E2EE (✅ 已完成 / 100% 达标)
+### Phase 3: Chat 模式双向 WebSocket 与剪贴板 E2EE (🟡 实现落地 / 存在 blocker：多客户端 seq 冲突)
 
 * **阶段目标**：在局域网 Chat 模式下实现消息、剪贴板与附件的端到端透明加解密。
 
@@ -109,6 +109,12 @@
 > **Phase 3 验收标准 (DoD)**：
 > 1. Wireshark 抓包局域网 WebSocket 数据帧，全量显示为高熵随机密文（✅ 验证：全量传输 `e2ee_envelope` 容器，载荷为 Base64 密文）；
 > 2. 聊天消息、图片与剪贴板同步正常展示，时延增加 $< 5$ms（✅ 验证：单帧加密/解密耗时 $\le 0.15$ms）。
+
+> **第 5 轮独立复核结论（`c428455a`，2026-08-31）**：
+> - ✅ Go↔JS 信封 AAD（`BuildPacketAAD` vs `_makePacketAAD`，`[uint64_be(seq)|int64_be(ts)]` 16B）逐字节一致；附件信封 `[Nonce(24B)|Ct+Tag(16B)]`、AAD=`fileID` 两端一致；
+> - ✅ 附件真实跨语言互通双向通过（临时验证：Go Encrypt(kSend)→JS Decrypt、JS Encrypt(kRecv)→Go Decrypt，100% 还原）；
+> - ✅ `node interop_test.js` 全绿（新增 §8 附件、§9 E2EEEnvelope，吞吐 206.2/279.1 MB/s）；前端 7 项 TS 测试全绿；
+> - ❌ **发现 blocker（D9）**：前端 `e2eeOutSeq` 每客户端实例从 1 起，而 Go `ReplayFilter` 为 Session 级共享且未按发送者隔离 → 房间内第二个客户端首条 E2EE 消息（seq=1）被误判为「重放」拒绝（已用临时 Go 测试复现：`duplicate packet seq 1 replayed`）。**Phase 3 暂不能判定 100% 达标**，需修复后重新验收。
 
 ---
 
@@ -190,7 +196,8 @@
 | 2026-08-31 | `f5e54ad4` | libsodium WASM 引擎 + JS 篡改向量 + D1 门禁/配额/并发闭环 | Task 1.4, 2.6 | ✅ 完成（HKDF insecure-context → Task 1.5） |
 | 2026-08-31 | `555c78f3` | HKDF 彻底移出 `crypto.subtle`，改用 libsodium WASM `crypto_auth_hmacsha256` 实现 RFC 5869 | Task 1.5 | ✅ 完成（独立 Python 向量复核实测 100% 吻合，insecure-context 仿真通过） |
 | 2026-08-31 | `9ebbddc7` | E2EE 结构化错误码（JS `CryptoError` / Go `Error`）· Worker 错误事件遥测 · D1 `error_code` · 分级线程安全日志 | 工程基建（为 Phase 3~5 铺路） | ✅ 完成（32 断言 D1 + 全量 go test 16 包零回归） |
-| 待推进 | — | Phase 3: Chat 模式双向 WebSocket 与小附件 E2EE | Task 3.1~3.4 | ⏳ 待开始 |
+| 2026-08-31 | `c428455a` | Phase 3: Chat 双向 E2EE WebSocket 信封、防重放过滤器、附件加密（`e2ee_envelope`/`ReplayFilter`/`EncryptAttachment`） | Task 3.1~3.3 | 🟡 已落地 / 复核发现 blocker D9（多客户端 seq 冲突），修复后需重新验收 |
+| 待推进 | — | Phase 3 修复：ReplayFilter 按 `(senderPeer, seq)` 分键隔离各发送者独立 seq 窗口 | Task 3.1 补丁 | ⏳ 待修复 |
 
 ---
 
@@ -215,4 +222,5 @@
 | D5 | 主密钥存储 | TLS 1.3 盲中继传输 | `master_key_b64` 经 TLS 1.3 直达移动端，手机端原生 WASM 直接初始化 | ✅ 达标闭环 (Task 2.6) |
 | D6 | 领取代验 | 实时过期校验 | `expires_at > unixepoch()` 实时校验，过期严格 `410 Gone` | ✅ 达标通过 |
 | D7 | License 门禁 | 服务端强制拦截非 active 授权 | 严格校验 `licenses` 表 `status='active'` 且未过期，拦截 non-existent/revoked/suspended/expired | ✅ 达标修复 (Task 2.6) |
+| D9 | Chat seq 防重放空间 | 每个发送者独立 seq 空间与防重放窗口 | `ReplayFilter` 为 Session 级共享单实例，未按发送者分键；前端 `e2eeOutSeq` 每客户端实例从 1 起 → 房间内第二个客户端首条 E2EE 消息被误判重放拒绝 | ❌ **待修复**：`HandleE2EEEnvelope` 按 `(senderPeer, seq)` 建立独立 `ReplayFilter` 窗口（并发安全 map），重验收通过后关闭 |
 
