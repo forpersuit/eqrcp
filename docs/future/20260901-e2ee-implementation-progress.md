@@ -35,7 +35,8 @@
   - [ ] 建立定长环形 ArrayBuffer 复用池，多 Worker 全局内存硬顶限制在 `< 64MB`，杜绝 WebKit OOM；
   - [ ] 显式生命周期管理：在传输完成、取消或页面卸载时触发 `worker.terminate()` 彻底回收 WASM 线性内存；
   - [ ] 注意：`terminate()` 仅回收内存 ≠ 密钥字节物理清零——终止前须在 Worker 内部对密钥副本先执行 `sodium.memzero()`（与 Task 1.3 主线程 `wipeKey` 互补，防 freed 页 / swap / 转储残留）；
-  - [ ] 异常容错机制：捕获 `worker.onerror` 并支持 Worker 自动重新孵化（Auto-Respawn），失败分块自动重入等待队列，防止单次 Worker 异常挂起传输流水线。
+  - [ ] 异常容错机制：捕获 `worker.onerror` 并支持 Worker 自动重新孵化（Auto-Respawn），失败分块自动重入等待队列，防止单次 Worker 异常挂起传输流水线；
+  - [ ] Auto-Respawn 前提：主线程须保留 `MasterKey`（或可重派生副本）直至传输完成，不得在首次下发 Worker 后即按 意见 31 清零——新 Worker 孵化后须重新注入密钥并完成异步初始化，否则崩溃重孵化会因无密钥挂死。
 - [ ] **Task 1.3: 内存安全与防御性清零**
   - [ ] 实现 `wipeKey(keyUint8Array)` 显式调用 `sodium.memzero()` 物理擦除 WASM 线性内存；
   - [ ] 编写跨浏览器（iOS Safari、Android Chrome、Edge、Firefox）局域网 HTTP 兼容性测试脚本。
@@ -112,7 +113,7 @@
   - [ ] 封装 Go `ChunkedXChaChaReader`，边验签边流式解密；
   - [ ] 利用 4MB 定长切片物理偏移确定性（`offset = chunkIndex * 4MB`），支持 `os.File.WriteAt` 并发乱序直写物理文件，免去内存滑动窗口队列；
   - [ ] 乱序直写两前提：① 分块 AEAD 的 AAD 须绑定 `chunkIndex`（含会话/文件 ID），防止「合法块被重放到错误偏移」仍通过逐块验签；② 保留一个极小连续位图跟踪器维护「最大连续块 M」——`chunk_status`（Task 4.3）只以连续 M 为准，按「最高已写块」续传会在空洞处产生文件洞，最终仅 `file_sha256` 兜底；
-  - [ ] 写入闭环保障：当所有分块到齐后，显式调用 `os.File.Truncate(expectedTotalBytes)` 消除末块稀疏空洞，并执行 `os.File.Sync()` 强制刷盘完成；
+  - [ ] 写入闭环保障：当所有分块到齐后，显式调用 `os.File.Truncate(expectedTotalBytes)` 确保文件尺寸精确等于期望总长（幂等、仅定尺寸，**不填充中间空洞**——中间空洞由 Task 4.3 `received_ranges` 定向补发闭合），再 `os.File.Sync()` 强制刷盘后按 §7.5 原子重命名；
   - [ ] 引入 `sync.Pool` 4MB 缓冲区，明文 Buffer 归还前执行 `clear(b)` 与 `runtime.KeepAlive`。
 - [ ] **Task 4.2: 移动端 3 级流水线并发与存储落盘** (`pkg/pages/upload.tmpl.html` & `download.tmpl.html`)
   - [ ] 实现 Read $\rightarrow$ Encrypt $\rightarrow$ POST 3 级并发流水线；
@@ -123,7 +124,7 @@
   - [ ] 联动现有设备改名接口 `POST /api/device/rename`，即时无刷新更新 PC 卡片；
   - [ ] 实现 `sessionBannedClients` 内存门禁（`sync.RWMutex` 保护），屏蔽时切断后续块（返回 403）；
   - [ ] 落实 §7.5 红线：Receive 被屏蔽时立即删除 `.tmp` 临时文件；解封后 `chunk_status` 强制返回 $M=0$，强制从 Chunk 0 重置；
-  - [ ] `chunk_status` 响应支持返回主连续游标 `continuous_index: M` 及可选区间 `received_ranges`，允许客户端针对性补发空洞分块，避免大文件因偶发丢单块导致全量后置块重传。
+  - [ ] `chunk_status` 响应支持返回主连续游标 `continuous_index: M` 及可选区间 `received_ranges`，允许客户端针对性补发空洞分块，避免大文件因偶发丢单块导致全量后置块重传（解封重置时 `received_ranges` 与 `M` 一并归零，与服务端已删的 `.tmp` 保持一致）。
 - [ ] **Task 4.4: 多文件流式 ZIP 归档传输**
   - [ ] PC 端在内存中以虚拟流式 ZIP 容器逐块加密下发，移动端解密后单文件下载，规避多文件拦截弹窗。
 
