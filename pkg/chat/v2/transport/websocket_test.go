@@ -651,7 +651,12 @@ func TestWebSocketE2EEEnvelopeBlindRelayAndAntiReplay(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 5. Bob receives blind relayed EventE2EEEnvelope
+	// 5. Alice receives echo and Bob receives blind relayed EventE2EEEnvelope
+	aliceEcho := readEvent(ctx, t, connA)
+	if aliceEcho.Type != protocol.EventE2EEEnvelope {
+		t.Fatalf("expected EventE2EEEnvelope echo on Alice, got %s", aliceEcho.Type)
+	}
+
 	bobEv := readEvent(ctx, t, connB)
 	if bobEv.Type != protocol.EventE2EEEnvelope {
 		t.Fatalf("expected EventE2EEEnvelope on Bob, got %s", bobEv.Type)
@@ -669,12 +674,51 @@ func TestWebSocketE2EEEnvelopeBlindRelayAndAntiReplay(t *testing.T) {
 		t.Fatalf("Decrypted text mismatch: got %q, want %q", string(decrypted), secretText)
 	}
 
-	// 7. Anti-Replay: Attempt to resend duplicate packet with same Seq
+	// 7. Multi-client independent seq (D9 verification): Bob sends E2EE message with same seq=101
+	bobSecret := "Bob reply with same seq space (seq=101)"
+	bobEnv, err := protocol.EncryptE2EEEnvelope([]byte(bobSecret), 101, ts, kWS)
+	if err != nil {
+		t.Fatalf("Failed to encrypt Bob E2EE envelope: %v", err)
+	}
+
+	if err := wsjson.Write(ctx, connB, protocol.CommandEnvelope{
+		Type:       protocol.CommandE2EEEnvelope,
+		CommandID:  "cmd-bob-e2ee-1",
+		Version:    bobEnv.Version,
+		Seq:        bobEnv.Seq,
+		Timestamp:  bobEnv.Timestamp,
+		Nonce:      bobEnv.Nonce,
+		Ciphertext: bobEnv.Ciphertext,
+		Tag:        bobEnv.Tag,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Alice must receive Bob's seq=101 message successfully
+	aliceEv := readEvent(ctx, t, connA)
+	if aliceEv.Type != protocol.EventE2EEEnvelope {
+		t.Fatalf("expected EventE2EEEnvelope on Alice from Bob, got %s", aliceEv.Type)
+	}
+	decryptedBob, err := protocol.DecryptE2EEEnvelope(aliceEv.E2EE, kWS)
+	if err != nil {
+		t.Fatalf("Alice failed to decrypt Bob envelope: %v", err)
+	}
+	if string(decryptedBob) != bobSecret {
+		t.Fatalf("Bob message mismatch: got %q, want %q", string(decryptedBob), bobSecret)
+	}
+
+	// Drain Bob's own echo
+	bobEcho := readEvent(ctx, t, connB)
+	if bobEcho.Type != protocol.EventE2EEEnvelope {
+		t.Fatalf("expected EventE2EEEnvelope echo on Bob, got %s", bobEcho.Type)
+	}
+
+	// 8. Anti-Replay: Attempt to resend duplicate packet with same Seq from Alice
 	if err := wsjson.Write(ctx, connA, protocol.CommandEnvelope{
 		Type:       protocol.CommandE2EEEnvelope,
 		CommandID:  "cmd-e2ee-replay",
 		Version:    env.Version,
-		Seq:        env.Seq, // DUPLICATE SEQ
+		Seq:        env.Seq, // DUPLICATE SEQ for Alice
 		Timestamp:  env.Timestamp,
 		Nonce:      env.Nonce,
 		Ciphertext: env.Ciphertext,
@@ -682,12 +726,26 @@ func TestWebSocketE2EEEnvelopeBlindRelayAndAntiReplay(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Verify Bob does NOT receive the replayed packet
-	drainCtx, drainCancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-	defer drainCancel()
-	var replayedEv protocol.EventEnvelope
-	err = wsjson.Read(drainCtx, connB, &replayedEv)
-	if err == nil {
-		t.Fatalf("Expected replayed packet to be dropped by server, but Bob received: %+v", replayedEv)
+	// Alice can send subsequent fresh seq=102 without issue
+	aliceEnv2, err := protocol.EncryptE2EEEnvelope([]byte("Fresh Alice Seq 102"), 102, ts, kWS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := wsjson.Write(ctx, connA, protocol.CommandEnvelope{
+		Type:       protocol.CommandE2EEEnvelope,
+		CommandID:  "cmd-alice-102",
+		Version:    aliceEnv2.Version,
+		Seq:        102,
+		Timestamp:  ts,
+		Nonce:      aliceEnv2.Nonce,
+		Ciphertext: aliceEnv2.Ciphertext,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Bob receives seq=102 (and did not get duplicate seq=101)
+	bobEv2 := readEvent(ctx, t, connB)
+	if bobEv2.Type != protocol.EventE2EEEnvelope || bobEv2.E2EE.Seq != 102 {
+		t.Fatalf("expected Bob to receive fresh seq=102, got: %+v", bobEv2)
 	}
 }

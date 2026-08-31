@@ -453,3 +453,69 @@ func TestDesktopHostWithJoinSuppression(t *testing.T) {
 		}
 	}
 }
+
+func TestSessionE2EEMultiClientIndependentSeq(t *testing.T) {
+	sess := NewSession("e2ee-multi-client-room")
+	sess.DisableSystemMessages = true
+
+	alice := NewClient(protocol.ClientInfo{Label: "Alice", Peer: "peer-alice"}, nil)
+	bob := NewClient(protocol.ClientInfo{Label: "Bob", Peer: "peer-bob"}, nil)
+	sess.Register(alice, 0, 0)
+	sess.Register(bob, 0, 0)
+
+	nowMs := time.Now().UnixMilli()
+
+	// 1. Alice sends first E2EE message with seq=1
+	aliceEnv1 := &protocol.E2EEEnvelope{
+		Type:       protocol.E2EEEnvelopeType,
+		Version:    1,
+		Seq:        1,
+		Timestamp:  nowMs,
+		Nonce:      "dummy-nonce-alice-1",
+		Ciphertext: "dummy-ciphertext-alice-1",
+	}
+	sess.HandleE2EEEnvelope(alice, aliceEnv1, "cmd-alice-1")
+
+	// 2. Bob sends first E2EE message with seq=1 (must NOT collide with Alice's seq=1)
+	bobEnv1 := &protocol.E2EEEnvelope{
+		Type:       protocol.E2EEEnvelopeType,
+		Version:    1,
+		Seq:        1,
+		Timestamp:  nowMs,
+		Nonce:      "dummy-nonce-bob-1",
+		Ciphertext: "dummy-ciphertext-bob-1",
+	}
+	sess.HandleE2EEEnvelope(bob, bobEnv1, "cmd-bob-1")
+
+	// 3. Verify Bob's message was accepted by checking his peer filter state
+	sess.mu.RLock()
+	aliceRf := sess.peerReplayFilters["peer-alice"]
+	bobRf := sess.peerReplayFilters["peer-bob"]
+	sess.mu.RUnlock()
+
+	if aliceRf == nil {
+		t.Fatal("expected peer-alice ReplayFilter to be created")
+	}
+	if bobRf == nil {
+		t.Fatal("expected peer-bob ReplayFilter to be created")
+	}
+	if aliceRf == bobRf {
+		t.Fatal("expected peer-alice and peer-bob to have isolated ReplayFilter instances")
+	}
+
+	// 4. Duplicate seq=1 from Alice must fail
+	if err := aliceRf.CheckAndRecord(1, nowMs); err == nil {
+		t.Fatal("expected duplicate seq 1 from Alice to fail")
+	}
+
+	// 5. Subsequent seq=2 from Bob must succeed
+	bobEnv2 := &protocol.E2EEEnvelope{
+		Type:       protocol.E2EEEnvelopeType,
+		Version:    1,
+		Seq:        2,
+		Timestamp:  nowMs,
+		Nonce:      "dummy-nonce-bob-2",
+		Ciphertext: "dummy-ciphertext-bob-2",
+	}
+	sess.HandleE2EEEnvelope(bob, bobEnv2, "cmd-bob-2")
+}

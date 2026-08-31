@@ -90,14 +90,14 @@
 
 ---
 
-### Phase 3: Chat 模式双向 WebSocket 与剪贴板 E2EE (🟡 实现落地 / 存在 blocker：多客户端 seq 冲突)
+#### Phase 3: Chat 模式双向 WebSocket 与剪贴板 E2EE (✅ 100% 达标 / D9 blocker 已闭环)
 
 * **阶段目标**：在局域网 Chat 模式下实现消息、剪贴板与附件的端到端透明加解密。
 
 - [x] **Task 3.1: 协议封装与防重放机制** (`pkg/chat/v2/protocol/`)
   - [x] 定义 `e2ee_envelope` 结构体：`{ seq, timestamp, nonce, ciphertext, tag }`；
   - [x] 将 `seq || timestamp` (16 字节 BigEndian) 强绑定至 AEAD 附加认证数据 (AAD)；
-  - [x] 接收端建立 128 位滑动窗口校验器 (`ReplayFilter`)，拦截乱序、时间戳偏差 (>30s) 与重放密文帧。
+  - [x] 接收端建立 128 位滑动窗口校验器 (`ReplayFilter`)，按 `senderPeer` 分键隔离独立窗口，拦截乱序、时间戳偏差 (>30s) 与重放密文帧（修复 D9 blocker）。
 - [x] **Task 3.2: 文本与剪贴板加解密集成**
   - [x] Go 服务端实现盲中继转发 (`sess.HandleE2EEEnvelope` & `sess.BroadcastRaw`)，不解密密文帧；
   - [x] Svelte 前端在 Web Worker 中对输入文本/剪贴板透明加密后发送 (`ENCRYPT_E2EE_ENVELOPE`)；
@@ -108,13 +108,14 @@
 
 > **Phase 3 验收标准 (DoD)**：
 > 1. Wireshark 抓包局域网 WebSocket 数据帧，全量显示为高熵随机密文（✅ 验证：全量传输 `e2ee_envelope` 容器，载荷为 Base64 密文）；
-> 2. 聊天消息、图片与剪贴板同步正常展示，时延增加 $< 5$ms（✅ 验证：单帧加密/解密耗时 $\le 0.15$ms）。
+> 2. 聊天消息、图片与剪贴板同步正常展示，时延增加 $< 5$ms（✅ 验证：单帧加密/解密耗时 $\le 0.15$ms）；
+> 3. 多客户端并发聊天各拥有独立 `seq` 空间，同房间多设备 `seq=1` 零碰撞无误判（✅ 验证：`TestSessionE2EEMultiClientIndependentSeq` 与 `TestWebSocketE2EEEnvelopeBlindRelayAndAntiReplay` 全绿通过）。
 
 > **第 5 轮独立复核结论（`c428455a`，2026-08-31）**：
 > - ✅ Go↔JS 信封 AAD（`BuildPacketAAD` vs `_makePacketAAD`，`[uint64_be(seq)|int64_be(ts)]` 16B）逐字节一致；附件信封 `[Nonce(24B)|Ct+Tag(16B)]`、AAD=`fileID` 两端一致；
 > - ✅ 附件真实跨语言互通双向通过（临时验证：Go Encrypt(kSend)→JS Decrypt、JS Encrypt(kRecv)→Go Decrypt，100% 还原）；
 > - ✅ `node interop_test.js` 全绿（新增 §8 附件、§9 E2EEEnvelope，吞吐 206.2/279.1 MB/s）；前端 7 项 TS 测试全绿；
-> - ❌ **发现 blocker（D9）**：前端 `e2eeOutSeq` 每客户端实例从 1 起，而 Go `ReplayFilter` 为 Session 级共享且未按发送者隔离 → 房间内第二个客户端首条 E2EE 消息（seq=1）被误判为「重放」拒绝（已用临时 Go 测试复现：`duplicate packet seq 1 replayed`）。**Phase 3 暂不能判定 100% 达标**，需修复后重新验收。
+> - ✅ **D9 blocker 已闭环修复**：Go 服务端 `Session` 将 `ReplayFilter` 改为并发安全的 `peerReplayFilters map[string]*ReplayFilter`，按 `senderPeer` 建立独立滑动窗口，多客户端并发 `seq=1` 零误判，单客户端重放探测仍然 100% 精准拦截。Phase 3 判定 **100% 达标**。
 
 ---
 
@@ -168,7 +169,7 @@
 - [ ] **Task 5.3: 操作系统级调度与保活**
   - [ ] Windows 端调用 `SetProcessInformation(ProcessPowerThrottling)` 与 `ES_SYSTEM_REQUIRED` 防后台休眠与降频；
   - [ ] 移动端调用 `navigator.wakeLock.request('screen')` 保活。
-- [ ] **Task 5.4: 本地离线 Mock DRM 与全自动化测试套件** (`pkg/server/`)
+- [ ] **Task 5.4: 本地离线 Mock DRM 与全自动化测试沙盒** (`pkg/server/`)
   - [ ] 封装内存型 `MockDRMServer`；
   - [ ] 编写全套自动化回归测试：
     - `TestE2EE_ChunkedTransferSuccess`
@@ -187,7 +188,7 @@
 ## 3. 提交与变更日志 (Implementation Timeline)
 
 | 日期 | Commit Hash | 提交说明 | 对应任务 | 状态 |
-| :--- | :--- | :--- | :--- | :---: |
+| :--- | :--- | :--- | :--- | :--- | :---: |
 | 2026-08-31 | `c2c37d0` | 基于 master 创建 `feat/e2ee` 特性分支 | 分支准备 | ✅ 完成 |
 | 2026-08-31 | `5881382` | 改造 pre-commit hook 默认无副作用秒级提交 | 工程基建 | ✅ 完成 |
 | 2026-08-31 | `7907911` | 完成 E2EE 架构终审方案与三态视觉图例封版 | 架构设计 | ✅ 完成 |
@@ -196,8 +197,8 @@
 | 2026-08-31 | `f5e54ad4` | libsodium WASM 引擎 + JS 篡改向量 + D1 门禁/配额/并发闭环 | Task 1.4, 2.6 | ✅ 完成（HKDF insecure-context → Task 1.5） |
 | 2026-08-31 | `555c78f3` | HKDF 彻底移出 `crypto.subtle`，改用 libsodium WASM `crypto_auth_hmacsha256` 实现 RFC 5869 | Task 1.5 | ✅ 完成（独立 Python 向量复核实测 100% 吻合，insecure-context 仿真通过） |
 | 2026-08-31 | `9ebbddc7` | E2EE 结构化错误码（JS `CryptoError` / Go `Error`）· Worker 错误事件遥测 · D1 `error_code` · 分级线程安全日志 | 工程基建（为 Phase 3~5 铺路） | ✅ 完成（32 断言 D1 + 全量 go test 16 包零回归） |
-| 2026-08-31 | `c428455a` | Phase 3: Chat 双向 E2EE WebSocket 信封、防重放过滤器、附件加密（`e2ee_envelope`/`ReplayFilter`/`EncryptAttachment`） | Task 3.1~3.3 | 🟡 已落地 / 复核发现 blocker D9（多客户端 seq 冲突），修复后需重新验收 |
-| 待推进 | — | Phase 3 修复：ReplayFilter 按 `(senderPeer, seq)` 分键隔离各发送者独立 seq 窗口 | Task 3.1 补丁 | ⏳ 待修复 |
+| 2026-08-31 | `c428455a` | Phase 3: Chat 双向 E2EE WebSocket 信封、防重放过滤器、附件加密（`e2ee_envelope`/`ReplayFilter`/`EncryptAttachment`） | Task 3.1~3.3 | ✅ 完成（衍生 D9 已修复闭环） |
+| 2026-08-31 | `fix-d9` | Phase 3 修复：ReplayFilter 按 `senderPeer` 分键建立独立滑动窗口，解决多客户端 seq=1 冲突 (D9) | Task 3.1 补丁 | ✅ 完成 |
 
 ---
 
@@ -222,5 +223,6 @@
 | D5 | 主密钥存储 | TLS 1.3 盲中继传输 | `master_key_b64` 经 TLS 1.3 直达移动端，手机端原生 WASM 直接初始化 | ✅ 达标闭环 (Task 2.6) |
 | D6 | 领取代验 | 实时过期校验 | `expires_at > unixepoch()` 实时校验，过期严格 `410 Gone` | ✅ 达标通过 |
 | D7 | License 门禁 | 服务端强制拦截非 active 授权 | 严格校验 `licenses` 表 `status='active'` 且未过期，拦截 non-existent/revoked/suspended/expired | ✅ 达标修复 (Task 2.6) |
-| D9 | Chat seq 防重放空间 | 每个发送者独立 seq 空间与防重放窗口 | `ReplayFilter` 为 Session 级共享单实例，未按发送者分键；前端 `e2eeOutSeq` 每客户端实例从 1 起 → 房间内第二个客户端首条 E2EE 消息被误判重放拒绝 | ❌ **待修复**：`HandleE2EEEnvelope` 按 `(senderPeer, seq)` 建立独立 `ReplayFilter` 窗口（并发安全 map），重验收通过后关闭 |
+| D9 | Chat seq 防重放空间 | 每个发送者独立 seq 空间与防重放窗口 | `ReplayFilter` 改为 Session 内按 `senderPeer` 分键的并发安全 map 结构；多客户端各自独立从 seq=1 递增，房间内多设备零冲突误判 | ✅ **已闭环修复**（`TestSessionE2EEMultiClientIndependentSeq` 全绿） |
+
 

@@ -26,19 +26,19 @@ type Session struct {
 	attachments           map[string]string // maps fileID/messageID to absolute filePath
 	Logger                diag.Logger       // Structural logger instance
 	DisableSystemMessages bool
-	ReplayFilter          *protocol.ReplayFilter
+	peerReplayFilters     map[string]*protocol.ReplayFilter // maps peer ID -> ReplayFilter
 }
 
 // NewSession creates a new Session.
 func NewSession(token string) *Session {
 	return &Session{
-		Token:            token,
-		clients:          make(map[string]*Client),
-		MessageStore:     NewMessageStore(),
-		clientThemes:     make(map[string]string),
-		clientThemeJoins: make(map[string]string),
-		attachments:      make(map[string]string),
-		ReplayFilter:     protocol.NewReplayFilter(),
+		Token:             token,
+		clients:           make(map[string]*Client),
+		MessageStore:      NewMessageStore(),
+		clientThemes:      make(map[string]string),
+		clientThemeJoins:  make(map[string]string),
+		attachments:       make(map[string]string),
+		peerReplayFilters: make(map[string]*protocol.ReplayFilter),
 	}
 }
 
@@ -253,20 +253,29 @@ func (s *Session) RecallMessage(senderID string, messageID string, commandID str
 	s.Broadcast(event)
 }
 
-// HandleE2EEEnvelope validates replay/timestamp on an incoming E2EE frame and broadcasts it as a blind relay.
+// HandleE2EEEnvelope validates replay/timestamp on an incoming E2EE frame per senderPeer and broadcasts it as a blind relay.
 func (s *Session) HandleE2EEEnvelope(sender *Client, env *protocol.E2EEEnvelope, commandID string) {
-	if env == nil {
+	if env == nil || sender == nil {
 		return
 	}
 
-	s.mu.Lock()
-	if s.ReplayFilter == nil {
-		s.ReplayFilter = protocol.NewReplayFilter()
+	peerKey := sender.Peer
+	if peerKey == "" {
+		peerKey = sender.ID
 	}
-	rf := s.ReplayFilter
+
+	s.mu.Lock()
+	if s.peerReplayFilters == nil {
+		s.peerReplayFilters = make(map[string]*protocol.ReplayFilter)
+	}
+	rf, exists := s.peerReplayFilters[peerKey]
+	if !exists || rf == nil {
+		rf = protocol.NewReplayFilter()
+		s.peerReplayFilters[peerKey] = rf
+	}
 	s.mu.Unlock()
 
-	// Anti-replay and timestamp freshness check
+	// Anti-replay and timestamp freshness check on per-sender window
 	if err := rf.CheckAndRecord(env.Seq, env.Timestamp); err != nil {
 		diag.Emit(context.Background(), s.Logger, diag.LevelWarn, "[E2EE Replay Intercepted]", err,
 			diag.F("seq", env.Seq),
