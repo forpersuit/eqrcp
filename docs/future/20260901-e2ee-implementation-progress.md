@@ -32,7 +32,8 @@
 - [ ] **Task 1.2: 4MB 分块加解密 Web Worker 管道** (`pkg/pages/assets/crypto.worker.js`)
   - [ ] 封装分块加解密纯函数：输入 `[PlaintextChunk, Nonce, Key, ChunkIndex]` $\rightarrow$ 输出 `[ChunkIndex(4B) | Nonce(24B) | Ciphertext | Tag(16B)]`；
   - [ ] 主线程与 Worker 通信全面采用 `Transferable Objects`（`postMessage(buf, [buf])`）实现零内存拷贝；
-  - [ ] 建立定长环形 ArrayBuffer 复用池，多 Worker 全局内存硬顶限制在 `< 64MB`，杜绝 WebKit OOM。
+  - [ ] 建立定长环形 ArrayBuffer 复用池，多 Worker 全局内存硬顶限制在 `< 64MB`，杜绝 WebKit OOM；
+  - [ ] 显式生命周期管理：在传输完成、取消或页面卸载时触发 `worker.terminate()` 彻底回收 WASM 线性内存。
 - [ ] **Task 1.3: 内存安全与防御性清零**
   - [ ] 实现 `wipeKey(keyUint8Array)` 显式调用 `sodium.memzero()` 物理擦除 WASM 线性内存；
   - [ ] 编写跨浏览器（iOS Safari、Android Chrome、Edge、Firefox）局域网 HTTP 兼容性测试脚本。
@@ -40,7 +41,7 @@
 > **Phase 1 验收标准 (DoD)**：
 > 1. 在本地 HTTP 页面成功加载并初始化 libsodium WASM；
 > 2. 4MB 分块单核加密吞吐 $\ge 60$MB/s，解密验签失败时能准确抛出 Authentication Tag 异常；
-> 3. Worker 内存稳定在 35MB 以内无内存泄露。
+> 3. Worker 内存稳定在 35MB 以内，任务结束后 `worker.terminate()` 内存无泄漏。
 
 ---
 
@@ -106,7 +107,8 @@
 
 - [ ] **Task 4.1: Receive REST 分块上传端点** (`pkg/server/`)
   - [ ] 新增 `POST /receive/:path/chunk` 端点，解析 `X-File-ID`、`X-Chunk-Index` 二进制切片；
-  - [ ] 封装 Go `ChunkedXChaChaReader`，边验签边流式解密直接写入物理文件；
+  - [ ] 封装 Go `ChunkedXChaChaReader`，边验签边流式解密；
+  - [ ] 利用 4MB 定长切片物理偏移确定性（`offset = chunkIndex * 4MB`），支持 `os.File.WriteAt` 并发乱序直写物理文件，免去内存滑动窗口队列；
   - [ ] 引入 `sync.Pool` 4MB 缓冲区，明文 Buffer 归还前执行 `clear(b)` 与 `runtime.KeepAlive`。
 - [ ] **Task 4.2: 移动端 3 级流水线并发与存储落盘** (`pkg/pages/upload.tmpl.html` & `download.tmpl.html`)
   - [ ] 实现 Read $\rightarrow$ Encrypt $\rightarrow$ POST 3 级并发流水线；
@@ -149,6 +151,7 @@
     - `TestE2EE_ChunkedTransferSuccess`
     - `TestE2EE_TamperedCiphertextAuthFailure`
     - `TestE2EE_SilentBanAndChunk0Reset`
+    - `TestE2EE_InFlightBan_ContextCancelAndFileCleanup`
     - `TestE2EE_OfflineDRMFallback`
   - [ ] 确保 `go test ./...` 100% 通过且现有明文/tus 链路零回归。
 
