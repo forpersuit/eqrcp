@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
 	"eqt/pkg/body"
 	"eqt/pkg/config"
@@ -532,5 +533,94 @@ func TestE2EEShareArchiveDirectory(t *testing.T) {
 	}
 	if len(plain) == 0 {
 		t.Fatal("empty decrypted archive chunk")
+	}
+}
+
+func TestE2EEReceiveStaleCleanup(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "eqt-stale-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	cfg := &config.Config{Interface: "lo", Port: 0, Bind: "127.0.0.1", KeepAlive: true}
+	srv, _ := New(cfg)
+	_ = srv.ReceiveTo(tempDir)
+
+	masterKey, _ := e2ee.GenerateMasterKey()
+	_ = srv.EnableE2EE(masterKey, "sess-stale-cleanup")
+	keys, _ := e2ee.DeriveKeys(masterKey)
+
+	// Create a physical stale .tmp file
+	staleTmpPath := filepath.Join(tempDir, "stale-upload.tmp")
+	staleFile, err := os.OpenFile(staleTmpPath, os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = staleFile.WriteString("stale chunk data")
+
+	// Inject a stale entry (created 35 minutes ago)
+	srv.e2eeReceiveFilesMu.Lock()
+	if srv.e2eeReceiveFiles == nil {
+		srv.e2eeReceiveFiles = make(map[string]*e2eeReceiveFile)
+	}
+	staleRf := &e2eeReceiveFile{
+		FileID:    "stale-file-123",
+		FileName:  "stale-upload.dat",
+		TempPath:  staleTmpPath,
+		FinalPath: filepath.Join(tempDir, "stale-upload.dat"),
+		File:      staleFile,
+		CreatedAt: time.Now().Add(-35 * time.Minute),
+	}
+	srv.e2eeReceiveFiles["stale-file-123"] = staleRf
+	srv.e2eeReceiveFilesMu.Unlock()
+
+	// Verify that the stale file exists before cleanup
+	if _, err := os.Stat(staleTmpPath); err != nil {
+		t.Fatalf("expected stale tmp file to exist before request: %v", err)
+	}
+
+	// Trigger a normal chunk request which runs the stale purge
+	validPayload := []byte("hello fresh chunk")
+	encChunk, err := e2ee.EncryptChunk(validPayload, 0, keys.RecvKey[:], "fresh-file-456")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("POST", srv.ReceiveURL+"/chunk", bytes.NewReader(encChunk))
+	req.Header.Set("X-File-ID", "fresh-file-456")
+	req.Header.Set("X-Chunk-Index", "0")
+	req.Header.Set("X-Total-Chunks", "1")
+	req.Header.Set("X-Total-Bytes", fmt.Sprintf("%d", len(validPayload)))
+	req.Header.Set("X-File-Name", "fresh.dat")
+	req.Header.Set("X-Client-ID", "client-test")
+
+	w := httptest.NewRecorder()
+	srv.handleE2EEReceiveChunk(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", w.Code)
+	}
+
+	// Verify that the stale entry was removed from map
+	srv.e2eeReceiveFilesMu.Lock()
+	_, stillExists := srv.e2eeReceiveFiles["stale-file-123"]
+	srv.e2eeReceiveFilesMu.Unlock()
+
+	if stillExists {
+		t.Fatal("expected stale entry to be purged from map")
+	}
+
+	// Verify that stale file handle was closed, Cancelled set, and .tmp removed from disk
+	staleRf.mu.Lock()
+	if staleRf.File != nil {
+		t.Fatal("expected stale file handle to be set to nil")
+	}
+	if !staleRf.Cancelled {
+		t.Fatal("expected stale entry Cancelled flag to be true")
+	}
+	staleRf.mu.Unlock()
+
+	if _, err := os.Stat(staleTmpPath); !os.IsNotExist(err) {
+		t.Fatalf("expected stale .tmp file to be physically removed from disk, stat err: %v", err)
 	}
 }

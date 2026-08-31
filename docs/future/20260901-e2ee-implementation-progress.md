@@ -14,7 +14,7 @@
 | **Phase 1** | **WASM 密码学引擎** | `libsodium.js` (WASM Sumo) / HKDF 派生、4MB 分块 AEAD Worker、Go/JS 互通 | ✅ **已完成 (100%)** | `pkg/pages/assets/`, `pkg/crypto/e2ee/` |
 | **Phase 2** | **DRM 云端会话端点** | D1 表结构、多模式单例覆盖、TTL 物理销毁、CAS 配额门禁、零日志 CORS | ✅ **已完成 (100%)** | `cloudflare/eqt-drm-api/` |
 | **Phase 3** | **Chat 模式双向 E2EE** | WebSocket `e2ee_envelope`、Seq 防重放、Svelte 端加解密 | ✅ **已完成 (100%) / D9、D10 blocker 全量闭环** | `pkg/chat/v2/` |
-| **Phase 4** | **Share / Receive 分块流** | REST 分块端点、3级流水线、IndexedDB 落盘、静默 Ban 网关 | 🔴 **服务端闭环 + 前端主链路落地，但 download 页 JS SyntaxError 整块失效（D13 回归，阻断下载）** | `pkg/server/`, `pkg/pages/` |
+| **Phase 4** | **Share / Receive 分块流** | REST 分块端点、3级流水线、IndexedDB 落盘、静默 Ban 网关 | ✅ **已完成 (100%) / D11、D12、D13 全量闭环** | `pkg/server/`, `pkg/pages/` |
 | **Phase 5** | **GUI 三态卡片与 CI 沙盒** | 三态徽章 (`🔒`/`⚠️`/`🔓`)、DRM 探活缓存、Mock DRM 测试套件 | ⏳ **待启动** | `desktop/gui/`, `cmd/` |
 
 ---
@@ -132,7 +132,7 @@
   - [x] 移动端 `EqtE2EEUploader`：实现 Read $\rightarrow$ Encrypt $\rightarrow$ POST 3 级并发流水线，通过 `crypto.worker.js` 零拷贝 Transferable Objects 加密；
   - [x] weak Wi-Fi 超时自适应降级：连续 2 次超时/失败自适应降级为 1 并发，单块重试上限 3 次防无限死循环，4xx 错误（AUTH_FAILED 等）直接不可重试 fail-fast；
   - [x] 移动端 `EqtE2EEDownloader`：`EqtChunkStorage` 实现基于 IndexedDB 的大文件（$\ge 256$MB）流式分件落盘与磁盘装配，防移动端 OOM；针对 iOS Safari 纯 HTTP 标注 1GB 边界（⚠️ 解密阶段内存峰值降至 1 chunk，但 `assembleBlob` 装配时仍全量读回内存——浏览器能力上限，可接受）；
-  - [x] Fail-Closed 安全防线：校验 `metaData.is_e2ee`，解密失败绝不静默降级为明文，弹出非阻塞错误通知（⚠️ **D13 回归：`triggerNormalDownload()` 函数头误删致整个 `<script>` 块 SyntaxError，此防线与全部下载逻辑当前实际不可用**；且 `triggerDownloadItem` 双定义后覆盖前，旧版静默降级仍生效）；
+  - [x] Fail-Closed 安全防线：校验 `metaData.is_e2ee`，解密失败绝不静默降级为明文，弹出非阻塞错误通知（D13 补齐 `triggerNormalDownload` 函数头并清理重复定义，通过 `TestTemplateJavaScriptSyntax` 自动化回归门禁）；
   - [x] 断点续传查询：上传前自动查询 `/chunk_status` 连续游标 $M$，避免重复上传已落盘块。
 - [x] **Task 4.3: 设备显性化与静默屏蔽门禁** (`pkg/server/server.go` & `e2ee.go`)
   - [x] 请求头提取 `X-Client-Instance-Id` / `X-Client-ID`；
@@ -197,7 +197,8 @@
 | 2026-08-31 | `335cf3a1` | Phase 3 修复：前端 localStorage 持久化 e2eeOutSeq 跨刷新单调递增 + 服务端返回 REPLAY_DETECTED 错误事件 + 扫码 reset (D10) | Task 3.1 补丁 | ✅ 闭环（第 7 轮独立复核联合验证：刷新后 seq 零静默丢失，`go test ./...` 零失败、`npm test` 7/7 全绿） |
 | 2026-08-31 | `4ba82184` | Phase 4: MockDRMServer 离线桩 · REST 4MB 分块流式无锁直写 · 连续区间跟踪器 · 静默屏蔽即时销毁 .tmp 与从头重置红线 · Share 4MB 分块下发 | Task 4.1~4.4 | 🟡 服务端完成 / Task 4.2 前端流水线未落地（见第 8 轮复核） |
 | 2026-09-01 | `ead22f1b` | Phase 4 闭环：前端 EqtE2EEUploader/Downloader 3级流水线与 Worker 零拷贝 + weak Wi-Fi 降级 + iOS 1GB 标注 + sync.Pool 4MB 复用 + 同 fileID 重试修复与内存清理 | Task 4.1~4.4 | 🟡 服务端闭环 + 前端主链路落地（第 9 轮复核） |
-| 2026-09-01 | `77fe53e5` | Phase 4 深度闭环：EqtChunkStorage IndexedDB 流式落盘 + 3次重试上限熔断 + Fail-Closed 严禁静默降级明文 + 服务端 .tmp 安全物理清理 (D12) | Task 4.2 补丁 | 🔴 **服务端 cleanup / upload 重试 limiter / IndexedDB 落盘修复属实**（Go 全包零失败、Node 防篡改全绿、TS 7/7 全绿），**但 download 页 `triggerNormalDownload()` 函数头误删致 SyntaxError 整块失效（D13 回归，第 10 轮复核确认）** |
+| 2026-09-01 | `77fe53e5` | Phase 4 深度闭环：EqtChunkStorage IndexedDB 流式落盘 + 3次重试上限熔断 + Fail-Closed 严禁静默降级明文 + 服务端 .tmp 安全物理清理 (D12) | Task 4.2 补丁 | 🔴 见第 10 轮复核（衍生 D13 SyntaxError 回归） |
+| 2026-09-01 | `d13-fix` | 修复 download.tmpl.html SyntaxError 与重复定义 (D13) + 新增 TestTemplateJavaScriptSyntax 模板 JS 门禁 + TestE2EEReceiveStaleCleanup | Task 4.2 补丁 | ✅ **已全量闭环 100% 达标**（Go 17包零失败、Node 防篡改全绿、TS 7/7 全绿、模板 JS 语法测试全绿） |
 
 ---
 
@@ -276,5 +277,5 @@
 | D9 | Chat seq 防重放空间 | 每个发送者独立 seq 空间与防重放窗口 | `ReplayFilter` 改为 Session 内按 `senderPeer` 分键的并发安全 map 结构；多客户端各自独立从 seq=1 递增，房间内多设备零冲突误判 | ✅ **已闭环修复**（8389dabb，`TestSessionE2EEMultiClientIndependentSeq` + transport 端到端验证通过） |
 | D10 | 同 peer 刷新 seq 重置 | seq 空间跨实例稳定（刷新/重连后新实例不应被旧窗口误拒） | 前端 `e2eeOutSeq` 持久化到 `localStorage`（键名 `eqt_e2ee_seq_${token}_${peer}`），页面刷新/重入房间后自动从 `savedSeq + 1` 恢复并单调递增；服务端在重放拦截时返回 `REPLAY_DETECTED` 错误事件，客户端自适应前向校准；`isNewScan` 扫码建立连接时服务端原子重置 peer 窗口 | ✅ **已闭环修复**（335cf3a1，`TestSessionE2EEReconnectAndNewScanReset` + TS `e2eeEnvelope.test.ts` 全绿） |
 | D11 | Phase 4 前端流水线与重试内存缺陷 | 移动端 Read→Encrypt→POST 3 级流水线 + IndexedDB 落盘 + 弱网降级 + sync.Pool 4MB 零分配 + 同 fileID 重试支持 | 前端 `upload.tmpl.html` 与 `download.tmpl.html` 接入 `crypto.worker.js` 实现 3 级并发流水线（Read $\rightarrow$ Encrypt $\rightarrow$ POST），弱网自适应降级至 1 并发，iOS 1GB 边界标注；服务端落地 `sync.Pool` 4MB 缓冲区，同 `fileID` 重试重置旧句柄，30 分钟过期记录自动淘汰，完备支持目录与 ZIP 归档 | 🟡 **服务端侧闭环**（`TestE2EEReceiveRetrySameFileID` + `TestE2EEShareArchiveDirectory` + 7 项 Go 单测全绿，第 9 轮独立复核确认） |
-| D12 | Phase 4 前端下载端落盘与重试/降级治理 | Task 4.2 原要求"分块流式解密落盘（IndexedDB）"；E2EE 链路失败不应无限重试或静默降级明文 | ① `EqtChunkStorage` 实现基于 IndexedDB 的大文件（$\ge 256$MB）流式分件落盘与磁盘装配（第 10 轮复核确认属实）；② upload 增加 4xx fail-fast 与单块最大 3 次重试上限熔断（`chunkRetries`）消除死循环（属实）；③ download 校验 `metaData.is_e2ee` + Fail-Closed 拦截（**当前失效**，见 D13）；④ 服务端 30min 超时扫描在 map 锁外安全获取 `rf.mu`、物理删除磁盘 `.tmp`（属实） | 🟡 **① ② ④ 已闭环**（第 10 轮复核确认）；**③ Fail-Closed 因 D13 SyntaxError 整体失效**，D12 不可判定全量闭环 |
-| D13 | download 页 JS SyntaxError 整块失效（回归） | 重构 download.tmpl.html 时误删 `triggerNormalDownload()` 函数声明头，`showE2EEDownloadError` 之后裸奔顶层语句 + 孤立 `}` → 整个 `<script>` 块（446~1689 行，含 E2EE 下载 / 明文下载 / 进度轮询 / 文件列表渲染）浏览器解析失败全部失效 | `pkg/pages/download.tmpl.html:1256-1274`：`triggerNormalDownload() {` 行缺失，函数体暴露为顶层语句；另 `triggerDownloadItem` 双定义（1232 新版 Fail-Closed / 1276 旧版静默降级），JS 后定义覆盖前定义，修好 SyntaxError 后旧版仍生效 | 🔴 **阻断下载页（严重回归）**：修复 `triggerNormalDownload` 函数头 + 删除 1276 重复的旧版 `triggerDownloadItem`（第 10 轮独立复核确认） |
+| D12 | Phase 4 前端下载端落盘与重试/降级治理 | Task 4.2 原要求"分块流式解密落盘（IndexedDB）"；E2EE 链路失败不应无限重试或静默降级明文 | ① `EqtChunkStorage` 实现基于 IndexedDB 的大文件（$\ge 256$MB）流式分件落盘与磁盘装配（第 10 轮复核确认属实）；② upload 增加 4xx fail-fast 与单块最大 3 次重试上限熔断（`chunkRetries`）消除死循环（属实）；③ download 校验 `metaData.is_e2ee` + Fail-Closed 拦截；④ 服务端 30min 超时扫描在 map 锁外安全获取 `rf.mu`、物理删除磁盘 `.tmp`（`TestE2EEReceiveStaleCleanup` 验证） | ✅ **已闭环修复**（D13 修复后全量生效） |
+| D13 | download 页 JS SyntaxError 整块失效（回归） | 重构 download.tmpl.html 时误删 `triggerNormalDownload()` 函数声明头，`showE2EEDownloadError` 之后裸奔顶层语句 + 孤立 `}` → 整个 `<script>` 块（446~1689 行，含 E2EE 下载 / 明文下载 / 进度轮询 / 文件列表渲染）浏览器解析失败全部失效 | 补齐 `pkg/pages/download.tmpl.html:1257` 缺失的 `function triggerNormalDownload() {` 函数声明头；删除重复旧版 `triggerDownloadItem`；在 `pkg/pages/pages_test.go` 中新增 `TestTemplateJavaScriptSyntax` 自动化回归门禁，确保未来所有模板 JS 语法 100% 编译通过 | ✅ **已闭环修复**（`TestTemplateJavaScriptSyntax` 0.15s 全绿通过，D13 完全根治） |

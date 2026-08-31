@@ -1254,6 +1254,8 @@
             var actionBtnRow = document.getElementById('action-btn-row');
             if (actionBtnRow) actionBtnRow.style.display = 'flex';
         }
+
+        function triggerNormalDownload() {
             startStatusPolling();
             if (downloadTriggered) {
                 window.location.href = window.location.pathname + '?download=1&client_id=' + getOrGenerateClientId() + '&_t=' + Date.now();
@@ -1271,18 +1273,6 @@
             
             var progressContainer = document.getElementById('download-progress-container');
             if (progressContainer) progressContainer.style.display = 'block';
-        }
-  
-        function triggerDownloadItem(index) {
-            var masterKey = EqtE2EEDownloader.getMasterKey();
-            if (masterKey) {
-                startE2EEDownload(index).catch(function(err) {
-                    console.error("E2EE download item error, fallback: ", err);
-                    triggerNormalDownloadItem(index);
-                });
-                return;
-            }
-            triggerNormalDownloadItem(index);
         }
 
         function triggerNormalDownloadItem(index) {
