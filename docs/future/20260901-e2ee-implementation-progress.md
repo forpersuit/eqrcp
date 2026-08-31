@@ -11,8 +11,8 @@
 
 | 阶段 (Phase) | 阶段名称 | 核心目标与交付件 | 状态 (Status) | 责任模块 |
 | :--- | :--- | :--- | :---: | :--- |
-| **Phase 1** | **WASM 密码学引擎** | `libsodium.js` / HKDF 派生、4MB 分块 AEAD Worker、Go/JS 互通 | ✅ **已完成 (100%)** | `pkg/pages/assets/`, `pkg/crypto/e2ee/` |
-| **Phase 2** | **DRM 云端会话端点** | D1 表结构、单例覆盖重建、TTL 物理销毁、零日志 CORS | ✅ **已完成 (100%)** | `cloudflare/eqt-drm-api/` |
+| **Phase 1** | **WASM 密码学引擎** | `libsodium.js` / HKDF 派生、4MB 分块 AEAD Worker、Go/JS 互通 | ⚠️ **核心完成 / 前端引擎不达标**（Task 1.4 阻断项） | `pkg/pages/assets/`, `pkg/crypto/e2ee/` |
+| **Phase 2** | **DRM 云端会话端点** | D1 表结构、单例覆盖重建、TTL 物理销毁、零日志 CORS | ✅ **已完成 (100%)**（Task 2.6 补强） | `cloudflare/eqt-drm-api/` |
 | **Phase 3** | **Chat 模式双向 E2EE** | WebSocket `e2ee_envelope`、Seq 防重放、Svelte 端加解密 | ⏳ **待启动 (Ready)** | `pkg/chat/v2/` |
 | **Phase 4** | **Share / Receive 分块流** | REST 分块端点、3级流水线、IndexedDB 落盘、静默 Ban 网关 | ⏳ **待启动** | `pkg/server/`, `pkg/pages/` |
 | **Phase 5** | **GUI 三态卡片与 CI 沙盒** | 三态徽章 (`🔒`/`⚠️`/`🔓`)、DRM 探活缓存、Mock DRM 测试套件 | ⏳ **待启动** | `desktop/gui/`, `cmd/` |
@@ -40,10 +40,20 @@
   - [x] 跨语言互通测试：`TestCrossLanguageInterop`（Go 加密 $\rightarrow$ Node.js 解密，Node.js 加密 $\rightarrow$ Go 解密，100% 互通）；
   - [x] Go 4MB 单核加密吞吐达到 **1,278 MB/s**，解密吞吐 **1,150 MB/s**，全绿通过。
 
-> **Phase 1 验收标准 (DoD)**：
-> 1. Go 端与前端 JS 成功实现标准 XChaCha20-Poly1305 与 HKDF-SHA256 跨端互通（测试通过率 100%）；
-> 2. 4MB 分块单核吞吐突破 1.1GB/s，篡改 1 bit 密文或 AAD 均 100% 抛出验签失败异常；
-> 3. Go embed 与路由静态托管 `/assets/crypto-engine.js`、`/assets/crypto.worker.js` 就绪。
+> **Phase 1 验收标准 (DoD)——恢复原版前端要求并逐项核查**：
+> 1. ✅ Go 端与前端 JS 成功实现标准 XChaCha20-Poly1305 与 HKDF-SHA256 跨端互通（`TestCrossLanguageInterop` Go⇄Node 100% 通过）；
+> 2. ✅ Go 4MB 单核加密 1,278 MB/s / 解密 1,150 MB/s，篡改 1 bit 密文或 AAD 均 100% 抛验签失败（Go 侧 `TestTamperedChunkIndexAAD`）；
+> 3. ❌ **原 DoD「本地 HTTP 页面成功加载并初始化 libsodium WASM」未满足**——实现改为纯 JS BigInt 引擎，未引入 libsodium WASM；
+> 4. ❌ **原 DoD「前端 4MB 分块单核加密吞吐 ≥ 60MB/s」未满足**——实测纯 JS 引擎仅 **9.2 MB/s（加密）/ 9.8 MB/s（解密）**（Node v24 桌面 V8，移动端 Safari/Chrome 预计更低），离 60MB/s 差约 6.5 倍、离 Phase 4 的 80~110MB/s 差约一个数量级；且 BigInt Poly1305（`(a+n)*r mod P`）**非恒定时间**，存在时序侧信道，与「防 Wi-Fi 嗅探」的卖点相悖 → 强制纳入 **Task 1.4 换回恒定时间 WASM 引擎**；
+> 5. ⏳ Worker 内存稳定 ≤35MB / 任务结束 `terminate()` 无泄漏：待 Task 1.4 落地后复测。
+
+- [ ] **Task 1.4: 前端引擎达标改造（恒定时间 WASM，阻断项）** (`pkg/pages/assets/`)
+  - [ ] 将前端加解密引擎替换为**恒定时间**实现（首选 libsodium WASM，与架构 §4.3 / 意见 1 一致；SRI + Base64 内联或运行时 SHA-256 校验）——纯 JS BigInt Poly1305 实测仅 ~9 MB/s 且非恒定时间，既不满足原 DoD ≥60MB/s，也不满足 Phase 4 的 80~110MB/s；
+  - [ ] 新增 JS 侧篡改向量测试：密文 / AAD / ChunkIndex 各翻转 1 bit 必须 100% 抛验签失败（当前篡改测试仅覆盖 Go 侧，JS 引擎缺少防伪向量验证）；
+  - [ ] 复测 Worker 内存峰值 ≤35MB，任务结束 `terminate()` 后无泄漏；
+  - [ ] 维持 HKDF / XChaCha20 互通向量 100% 吻合（Go ⇄ 新引擎回归）。
+
+> **Task 1.4 退出标准**：前端 4MB 单核加密 ≥ 60MB/s（基准值；移动端现场实测不低于 30MB/s）、恒定时间实现、篡改 1 bit 100% 拒验、`go test ./...` 与互通测试全绿。
 
 ---
 
@@ -67,6 +77,11 @@
   - [x] 保持应用层 Zero-Telemetry，严禁记录任何明文私钥或文件载荷。
 - [x] **Task 2.5: 健康探活端点** (`HEAD /health` & `GET /api/v1/session/health`)
   - [x] 返回 `200 OK` 状态 `healthy`，供桌面端后台 30s 探活使用。
+- [ ] **Task 2.6: claim 主密钥解包与门禁补强（Phase 2 完成度核查）** (`cloudflare/eqt-drm-api/src/routes/session.ts`)
+  - [ ] **claim 返回 `encrypted_master_key` 密文但全程无解包步骤**：手机端无法从响应中获得可用明文 MasterKey，密钥引导链路不完整——须服务端在 claim 时用 Worker 密钥环境变量解包后返回明文，或明确定义手机侧解包协议（当前实现二者皆缺，Phase 2 的 100% 完成度因此失真）；
+  - [ ] `close` 凭据错误（`k_auth_hash` 不匹配）时 `DELETE` 影响 0 行却仍返回 `200 {ok:true}`——应检查 `meta.changes > 0` 并返回 404/403，否则「主动关闭已校验凭据」的 DoD 声明不成立；
+  - [ ] `create` 的 license 门禁过弱：`lic.status === 'revoked'` 之外，license 不存在 / `suspended` 也放行——付费 E2EE 门禁应在服务端强制 `status = 'active'`（Phase 5 客户端开关未落地前，DRM 是唯一拦截面）；
+  - [ ] 补充离线断言：非 active / 不存在 license 的 `create` → `403`。
 
 > **Phase 2 验收标准 (DoD)**：
 > 1. Cloudflare D1 本地 SQLite 模拟与 esbuild 离线自动化测试套件通过率 100%（23 个断言全绿）；
@@ -170,8 +185,8 @@
 | 2026-08-31 | `c2c37d0` | 基于 master 创建 `feat/e2ee` 特性分支 | 分支准备 | ✅ 完成 |
 | 2026-08-31 | `5881382` | 改造 pre-commit hook 默认无副作用秒级提交 | 工程基建 | ✅ 完成 |
 | 2026-08-31 | `7907911` | 完成 E2EE 架构终审方案与三态视觉图例封版 | 架构设计 | ✅ 完成 |
-| 2026-08-31 | `454d3a5` | Phase 1: 完成 XChaCha20-Poly1305 / HKDF 跨端引擎与 Worker 管道 | Task 1.1~1.3 | ✅ 完成 |
-| 2026-08-31 | pending | Phase 2: DRM 云端会话 D1 结构与单例覆盖生命周期端点 | Task 2.1~2.5 | ✅ 完成 |
+| 2026-08-31 | `454d3a5` | Phase 1: 完成 XChaCha20-Poly1305 / HKDF 跨端引擎与 Worker 管道 | Task 1.1~1.3 | ⚠️ 核心完成（前端引擎不达标 → Task 1.4） |
+| 2026-08-31 | `1491f98` | Phase 2: DRM 云端会话 D1 结构与单例覆盖生命周期端点 | Task 2.1~2.5 | ✅ 完成（Task 2.6 补强） |
 | 待推进 | — | Phase 3: Chat 模式双向 WebSocket 与小附件 E2EE | Task 3.1~3.4 | ⏳ 待开始 |
 
 ---
@@ -182,3 +197,19 @@
 2. **零副作用提交**：日常提交保持快速（$<0.05$s），仅在需要部署 Windows 验收产物时使用 `EQT_DEPLOY_ON_COMMIT=1`；
 3. **推送规范**：在 WSL 环境下推送到 GitHub 必须统一使用 `./scripts/git-push-smart.sh origin feat/e2ee`；
 4. **进度同步**：每完成一个子任务，在本文档中更新对应 `[x]` 复选框并记录 Commit Hash，确保研发进度 100% 透明可控。
+
+---
+
+## 5. 实现偏差记录与架构同步清单 (Implementation Deltas vs Architecture v2)
+
+以下为 Phase 1/2 实现与[架构基准文档](./20260901-e2ee-end-to-end-encryption-architecture.md) §5.2 契约的偏差。处置原则（Rule 7）：逐项裁决为「有意取舍 → 补架构文档」或「回归 → 修复」，不静默平均。
+
+| # | 偏差项 | 架构设计 | 实际实现 | 处置 |
+| :-- | :--- | :--- | :--- | :--- |
+| D1 | 前端引擎 | libsodium WASM（§4.3 / 意见 1：恒定时间、近 C 性能） | 纯 JS BigInt Poly1305（实测 9.2 MB/s、非恒定时间） | **回归 → Task 1.4 换回恒定时间 WASM** |
+| D2 | Session 端点路径 | `/api/v1/e2ee/session/*` | `/api/v1/session/*` | 有意简化 → 同步 `docs/admin/api-contract.md` / `docs/portal/api-contract.md` |
+| D3 | Claim 流程 | POST + 设备实例 ID + `max_claims` 配额 | `GET ?token=` + `claim_token_hash`，无领取配额 | 有意简化（10min TTL 内 token 可被无限领取）→ 需在架构文档补风险标注 |
+| D4 | 会话唯一性 | `UNIQUE(device_id, mode)`（一设备可并发 send / receive / chat 会话） | `UNIQUE(device_id)`（一设备仅 1 活跃会话；同机并发会覆盖旧 token → 404） | 需裁决：接受「1 PC 1 会话」并补架构文档，或补回 `mode` 列 |
+| D5 | 主密钥存储 | 明文 `master_key` 列 | `encrypted_master_key`（at-rest 加密，**强于原设计**） | 保留为改进；解包流程见 Task 2.6 |
+| D6 | 领取代验 | 依赖惰性 GC | `expires_at > unixepoch()` 实时校验，过期严格 `410 Gone` | 符合架构 ✅ |
+| D7 | License 门禁 | 付费功能服务端强制拦截 | 仅拦截 `revoked`；license 不存在 / `suspended` 放行 | **回归 → Task 2.6 强制 `status='active'`** |
