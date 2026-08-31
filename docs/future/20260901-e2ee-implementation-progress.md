@@ -189,6 +189,7 @@
 | 2026-08-31 | `1491f98` | Phase 2: DRM 云端会话 D1 结构与单例覆盖生命周期端点 | Task 2.1~2.5 | ✅ 完成 |
 | 2026-08-31 | `f5e54ad4` | libsodium WASM 引擎 + JS 篡改向量 + D1 门禁/配额/并发闭环 | Task 1.4, 2.6 | ✅ 完成（HKDF insecure-context → Task 1.5） |
 | 2026-08-31 | `555c78f3` | HKDF 彻底移出 `crypto.subtle`，改用 libsodium WASM `crypto_auth_hmacsha256` 实现 RFC 5869 | Task 1.5 | ✅ 完成（独立 Python 向量复核实测 100% 吻合，insecure-context 仿真通过） |
+| 2026-08-31 | `9ebbddc7` | E2EE 结构化错误码（JS `CryptoError` / Go `Error`）· Worker 错误事件遥测 · D1 `error_code` · 分级线程安全日志 | 工程基建（为 Phase 3~5 铺路） | ✅ 完成（32 断言 D1 + 全量 go test 16 包零回归） |
 | 待推进 | — | Phase 3: Chat 模式双向 WebSocket 与小附件 E2EE | Task 3.1~3.4 | ⏳ 待开始 |
 
 ---
@@ -206,7 +207,7 @@
 
 | # | 偏差项 | 架构设计 | 最终落地实现 | 裁决与状态 |
 | :-- | :--- | :--- | :--- | :--- |
-| D1 | 前端引擎 | libsodium WASM（恒定时间、近 C 性能） | 打包独立 `libsodium.js` (WASM)，多轮实测加密 182~197 MB/s / 解密 261~278 MB/s（`interop_test.js` 基准，随负载波动） | ✅ 达标修复 (Task 1.4)；衍生 D8 |
+| D1 | 前端引擎 | libsodium WASM（恒定时间、近 C 性能） | 打包独立 `libsodium.js` (WASM)，多轮实测加密 177~197 MB/s / 解密 233~278 MB/s（`interop_test.js` 基准，随负载波动） | ✅ 达标修复 (Task 1.4)；衍生 D8 |
 | D8 | HKDF 派生 | WASM 内恒定时间实现（不依赖 WebCrypto） | 修复 AEAD 时改用 `crypto.subtle.deriveBits` 派生子密钥，insecure-context（LAN HTTP）下 `crypto.subtle` 为 `undefined`，`init()` 实测抛 TypeError | **✅ 已闭环 → Task 1.5 移出 `crypto.subtle`（libsodium `crypto_auth_hmacsha256` 实现 RFC 5869），555c78f3 独立向量复核实测通过** |
 | D2 | Session 端点路径 | `/api/v1/e2ee/session/*` | 同时兼容 `/api/v1/e2ee/session/*` 与 `/api/v1/session/*` | ✅ 双向兼容 |
 | D3 | Claim 流程 | `max_claims` 领取配额与 CAS 递增 | 原子 CAS `claim_count < max_claims`，超限精准返回 `403 limit_exceeded` | ✅ 达标修复 (Task 2.6) |

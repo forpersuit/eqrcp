@@ -65,7 +65,7 @@ try {
 | `pkg/pages/assets/libsodium.js` | WASM 运行时 | 481KB，wasm 内嵌无外部 `.wasm` 依赖 |
 | `pkg/pages/assets/crypto.worker.js` | Worker 管道 | Transferable postMessage + 终止前 wipe |
 | `pkg/crypto/e2ee/e2ee.go` | Go 引擎 | `golang.org/x/crypto/hkdf` + chacha20poly1305，AAD=fileID\|\|uint32_be(chunkIndex) |
-| `pkg/crypto/e2ee/interop_test.js` | JS 全套测试 | 篡改向量 4 项 + insecure-context 仿真 + 吞吐 DoD ≥60MB/s |
+| `pkg/crypto/e2ee/interop_test.js` | JS 全套测试 | 篡改向量 4 项 + insecure-context 仿真 + 吞吐 DoD ≥60MB/s；9ebbddc7 起断言改为检查 `err.code === AUTH_FAILED` / `retryable === false`（结构化 CryptoError） |
 | `pkg/crypto/e2ee/cross_test.go` | Go↔JS 互通 | Go Encrypt→JS Decrypt（send 方向）+ JS Encrypt(recv)→Go Decrypt（RecvKey） |
 | `cloudflare/eqt-drm-api/src/routes/session.ts` | DRM 端点 | Fail-Closed license、CAS claim、close changes===0→404 |
 | `cloudflare/eqt-drm-api/schema.sql` | D1 表 | `e2ee_sessions` + `UNIQUE(device_id, mode)` |
@@ -81,7 +81,9 @@ try {
 
 ## 6. 常见陷阱总结
 
+- **libsodium AEAD 解密失败是抛异常，不是返回 null**：`crypto_aead_xchacha20poly1305_ietf_decrypt` 验签失败抛 `Error("ciphertext cannot be decrypted using that key")`。9ebbddc7 起引擎统一 try/catch 转成 `CryptoError(AUTH_FAILED)`——审查时若篡改向量断言匹配失败，先确认断言是否已从 `/ciphertext cannot be decrypted/` 正则改为 `err.code === AUTH_FAILED`。
 - **DoD 静默降级**：开发者把 DoD 要求替换成不同措辞（如把前端 JS 要求换成 Go 数字）。用 `git show <hash>~1:<file>` 恢复原始文本比对。
 - **方向性密钥误解**：decryptChunk 默认 kRecv，benchmark 用 encrypt 生成的密文 + 默认 decrypt 会报 "ciphertext cannot be decrypted using that key"——需显式传 keyType='send'。
 - **Node 模拟删除 crypto.subtle 失败**：直接赋值 global.crypto 静默失败，须用 finally 恢复原对象。
 - **数字文档矛盾**：同一指标（如吞吐）在 Task 列表、DoD、delta 表三处数字不一致时，以实测为准统一。
+- **三元运算优先级**：`(a.meta as any)?.changes ?? a.success ? 1 : 0` 中 `??` 优先级低于 `?:`，实际等价 `(changes ?? success) ? 1 : 0`；9ebbddc7 已修复为 `?? (a.success ? 1 : 0)`。审查 D1/SQL 类代码时留意同类表达式。
