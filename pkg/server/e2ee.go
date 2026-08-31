@@ -17,12 +17,19 @@ import (
 	"eqt/pkg/crypto/e2ee"
 )
 
-const (
-	// E2EEChunkPlaintextSize is the default plaintext chunk size (4MB).
-	E2EEChunkPlaintextSize = 4 * 1024 * 1024
-	// E2EEMaxChunkEnvelopeSize is 4MB + 28B header + 16B tag + buffer margin.
-	E2EEMaxChunkEnvelopeSize = E2EEChunkPlaintextSize + 28 + 16 + 1024
-)
+// E2EEChunkPlaintextSize is the default plaintext chunk size (4MB).
+const E2EEChunkPlaintextSize = 4 * 1024 * 1024
+
+// E2EEMaxChunkEnvelopeSize is 4MB + 28B header + 16B tag + buffer margin.
+const E2EEMaxChunkEnvelopeSize = E2EEChunkPlaintextSize + 28 + 16 + 1024
+
+// chunkPool4MB implements sync.Pool for zero-allocation 4MB buffers across concurrent chunks.
+var chunkPool4MB = sync.Pool{
+	New: func() any {
+		b := make([]byte, E2EEChunkPlaintextSize)
+		return &b
+	},
+}
 
 // e2eeReceiveFile tracks the assembly and concurrent write of an incoming encrypted file.
 type e2eeReceiveFile struct {
@@ -240,7 +247,42 @@ func (s *Server) handleE2EEReceiveChunk(w http.ResponseWriter, r *http.Request) 
 	if s.e2eeReceiveFiles == nil {
 		s.e2eeReceiveFiles = make(map[string]*e2eeReceiveFile)
 	}
+
+	// Purge stale entries (>30m)
+	now := time.Now()
+	for k, v := range s.e2eeReceiveFiles {
+		if now.Sub(v.CreatedAt) > 30*time.Minute {
+			if v.File != nil {
+				_ = v.File.Close()
+			}
+			delete(s.e2eeReceiveFiles, k)
+		}
+	}
+
 	rf, exists := s.e2eeReceiveFiles[fileID]
+	if exists && (rf.Completed || rf.Cancelled) {
+		if chunkIndex == 0 {
+			// New transfer restarting with same fileID
+			if rf.File != nil {
+				_ = rf.File.Close()
+			}
+			delete(s.e2eeReceiveFiles, fileID)
+			exists = false
+		} else if rf.Completed {
+			// Idempotent 200 OK for already-completed file
+			s.e2eeReceiveFilesMu.Unlock()
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"ok":          true,
+				"file_id":     fileID,
+				"chunk_index": chunkIndex,
+				"completed":   true,
+			})
+			return
+		}
+	}
+
 	if !exists {
 		cleanName := filepath.Base(fileName)
 		if cleanName == "" || cleanName == "." {
@@ -544,35 +586,58 @@ func (s *Server) handleE2EEShareMeta(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var files []E2EEShareFileInfo
-	for idx, p := range s.body.Paths {
-		fi, err := os.Stat(p)
-		if err != nil {
-			continue
+	if s.body.Archive || (s.body.Path != "" && len(s.body.Paths) == 0) {
+		// Archive mode (single virtual or real ZIP archive)
+		archiveName := s.body.Filename
+		if archiveName == "" {
+			archiveName = "archive.zip"
 		}
 		var size int64
-		if fi.IsDir() {
-			_ = filepath.Walk(p, func(_ string, info os.FileInfo, err error) error {
-				if err == nil && !info.IsDir() {
-					size += info.Size()
-				}
-				return nil
-			})
-		} else {
+		if fi, err := os.Stat(s.body.Path); err == nil {
 			size = fi.Size()
 		}
-
 		totalChunks := uint32((size + E2EEChunkPlaintextSize - 1) / E2EEChunkPlaintextSize)
 		if totalChunks == 0 {
 			totalChunks = 1
 		}
-
 		files = append(files, E2EEShareFileInfo{
-			FileID:      fmt.Sprintf("f-%d", idx),
-			FileName:    filepath.Base(p),
+			FileID:      "f-0",
+			FileName:    archiveName,
 			FileSize:    size,
 			TotalChunks: totalChunks,
 			ChunkSize:   E2EEChunkPlaintextSize,
 		})
+	} else {
+		for idx, p := range s.body.Paths {
+			fi, err := os.Stat(p)
+			if err != nil {
+				continue
+			}
+			var size int64
+			if fi.IsDir() {
+				// Directories are handled via archive path if zipped
+				if s.body.Path != "" {
+					if afi, aErr := os.Stat(s.body.Path); aErr == nil {
+						size = afi.Size()
+					}
+				}
+			} else {
+				size = fi.Size()
+			}
+
+			totalChunks := uint32((size + E2EEChunkPlaintextSize - 1) / E2EEChunkPlaintextSize)
+			if totalChunks == 0 {
+				totalChunks = 1
+			}
+
+			files = append(files, E2EEShareFileInfo{
+				FileID:      fmt.Sprintf("f-%d", idx),
+				FileName:    filepath.Base(p),
+				FileSize:    size,
+				TotalChunks: totalChunks,
+				ChunkSize:   E2EEChunkPlaintextSize,
+			})
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -607,13 +672,25 @@ func (s *Server) handleE2EEShareChunk(w http.ResponseWriter, r *http.Request) {
 	if fileID == "" {
 		fileID = "f-0"
 	}
-	var fileIndex int
-	fmt.Sscanf(fileID, "f-%d", &fileIndex)
-	if fileIndex < 0 || fileIndex >= len(s.body.Paths) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotFound)
-		_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "error_code": "FILE_NOT_FOUND"})
-		return
+
+	var filePath string
+	if s.body.Archive || (s.body.Path != "" && len(s.body.Paths) == 0) {
+		filePath = s.body.Path
+	} else {
+		var fileIndex int
+		fmt.Sscanf(fileID, "f-%d", &fileIndex)
+		if fileIndex < 0 || fileIndex >= len(s.body.Paths) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "error_code": "FILE_NOT_FOUND"})
+			return
+		}
+		p := s.body.Paths[fileIndex]
+		if fi, err := os.Stat(p); err == nil && fi.IsDir() && s.body.Path != "" {
+			filePath = s.body.Path
+		} else {
+			filePath = p
+		}
 	}
 
 	chunkIndexStr := r.URL.Query().Get("chunk_index")
@@ -626,7 +703,6 @@ func (s *Server) handleE2EEShareChunk(w http.ResponseWriter, r *http.Request) {
 	}
 	chunkIndex := uint32(chunkIndex64)
 
-	filePath := s.body.Paths[fileIndex]
 	f, err := os.Open(filePath)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
@@ -637,7 +713,13 @@ func (s *Server) handleE2EEShareChunk(w http.ResponseWriter, r *http.Request) {
 	defer f.Close()
 
 	offset := int64(chunkIndex) * int64(E2EEChunkPlaintextSize)
-	buffer := make([]byte, E2EEChunkPlaintextSize)
+	bufPtr := chunkPool4MB.Get().(*[]byte)
+	buffer := *bufPtr
+	defer func() {
+		e2ee.Zeroize(buffer)
+		chunkPool4MB.Put(bufPtr)
+	}()
+
 	n, readErr := f.ReadAt(buffer, offset)
 	if readErr != nil && readErr != io.EOF && n == 0 {
 		w.Header().Set("Content-Type", "application/json")
@@ -646,7 +728,6 @@ func (s *Server) handleE2EEShareChunk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	plaintext := buffer[:n]
-	defer e2ee.Zeroize(buffer)
 
 	ciphertext, err := e2ee.EncryptChunk(plaintext, chunkIndex, keys.SendKey[:], fileID)
 	if err != nil {

@@ -32,6 +32,7 @@ self.onmessage = async function(e) {
         await engine.init(data.masterKey);
         self.postMessage({
           type: 'INIT_SUCCESS',
+          reqId: data.reqId,
           durationMs: Date.now() - startTime
         });
         break;
@@ -48,6 +49,7 @@ self.onmessage = async function(e) {
           // Zero-copy transfer back to main thread
           self.postMessage({
             type: 'ENCRYPT_SUCCESS',
+            reqId: data.reqId,
             chunkIndex: data.chunkIndex,
             fileId: data.fileId,
             buffer: envelope.buffer,
@@ -69,6 +71,7 @@ self.onmessage = async function(e) {
           // Zero-copy transfer back to main thread
           self.postMessage({
             type: 'DECRYPT_SUCCESS',
+            reqId: data.reqId,
             chunkIndex: data.chunkIndex,
             fileId: data.fileId,
             buffer: decrypted.buffer,
@@ -89,6 +92,7 @@ self.onmessage = async function(e) {
 
           self.postMessage({
             type: 'ENCRYPT_ATTACHMENT_SUCCESS',
+            reqId: data.reqId,
             fileId: data.fileId,
             buffer: envelope.buffer,
             byteLength: envelope.byteLength,
@@ -108,6 +112,7 @@ self.onmessage = async function(e) {
 
           self.postMessage({
             type: 'DECRYPT_ATTACHMENT_SUCCESS',
+            reqId: data.reqId,
             fileId: data.fileId,
             buffer: decrypted.buffer,
             byteLength: decrypted.byteLength,
@@ -124,6 +129,7 @@ self.onmessage = async function(e) {
           const env = engine.encryptE2EEEnvelope(data.payload, data.seq, data.timestamp || Date.now());
           self.postMessage({
             type: 'ENCRYPT_E2EE_ENVELOPE_SUCCESS',
+            reqId: data.reqId,
             envelope: env,
             commandId: data.commandId,
             durationMs: Date.now() - startTime
@@ -148,6 +154,7 @@ self.onmessage = async function(e) {
 
           self.postMessage({
             type: 'DECRYPT_E2EE_ENVELOPE_SUCCESS',
+            reqId: data.reqId,
             seq: data.envelope.seq,
             text: textPayload,
             payload: parsedPayload,
@@ -162,7 +169,7 @@ self.onmessage = async function(e) {
           engine.wipe();
           engine = null;
         }
-        self.postMessage({ type: 'ZEROIZE_SUCCESS', durationMs: Date.now() - startTime });
+        self.postMessage({ type: 'ZEROIZE_SUCCESS', reqId: data.reqId, durationMs: Date.now() - startTime });
         self.close();
         break;
 
@@ -173,11 +180,13 @@ self.onmessage = async function(e) {
     const isCryptoErr = err && err.name === 'CryptoError';
     self.postMessage({
       type: 'ERROR',
+      reqId: data.reqId,
       code: isCryptoErr ? err.code : 'UNKNOWN_ERROR',
       op: data.type,
       chunkIndex: data.chunkIndex !== undefined ? data.chunkIndex : null,
       fileId: data.fileId || null,
       error: err.message || String(err),
+      message: err.message || String(err),
       retryable: isCryptoErr ? err.retryable : false,
       durationMs: Date.now() - startTime
     });

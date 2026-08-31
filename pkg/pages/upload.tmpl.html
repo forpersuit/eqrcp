@@ -1723,22 +1723,286 @@
                 upload.start();
             }
 
-            // Send init request to register all files before starting TUS upload loop
-            var initXhr = new XMLHttpRequest();
-            initXhr.open('POST', '{{.Route}}?init=true&client_id=' + encodeURIComponent(clientID));
-            initXhr.setRequestHeader('Content-Type', 'application/json');
-            initXhr.onload = function() {
-                startNextTusUpload();
-            };
-            initXhr.onerror = function() {
-                startNextTusUpload();
-            };
-            var initData = {
-                files: filesToUpload.map(function(f) {
-                    return { name: f.name, size: f.size };
-                })
-            };
-            initXhr.send(JSON.stringify(initData));
+            var EqtE2EEUploader = (function() {
+                var CHUNK_SIZE = 4 * 1024 * 1024; // 4MB
+                var DEFAULT_CONCURRENCY = 3;
+                var MIN_CONCURRENCY = 1;
+
+                function getMasterKeyFromLocation() {
+                    var hash = window.location.hash || '';
+                    var match = hash.match(/[#&]master_key=([^&]+)/) || window.location.search.match(/[?&]master_key=([^&]+)/);
+                    if (match && match[1]) {
+                        try { return decodeURIComponent(match[1]); } catch (e) { return match[1]; }
+                    }
+                    var stored = localStorage.getItem('eqt_e2ee_master_key');
+                    if (stored) return stored;
+                    return null;
+                }
+
+                class Pipeline {
+                    constructor(masterKeyB64) {
+                        this.masterKeyB64 = masterKeyB64;
+                        this.worker = null;
+                        this.workerReady = false;
+                        this.concurrency = DEFAULT_CONCURRENCY;
+                        this.consecutiveFailures = 0;
+                        this.pendingTasks = {};
+                        this.reqIdCounter = 1;
+                    }
+
+                    async init() {
+                        return new Promise((resolve, reject) => {
+                            try {
+                                this.worker = new Worker('/assets/crypto.worker.js');
+                                this.worker.onmessage = (e) => {
+                                    var data = e.data;
+                                    if (!data) return;
+                                    if (data.type === 'INIT_SUCCESS') {
+                                        this.workerReady = true;
+                                        resolve(true);
+                                    } else if (data.type === 'ENCRYPT_SUCCESS') {
+                                        var cb = this.pendingTasks[data.reqId];
+                                        if (cb) {
+                                            delete this.pendingTasks[data.reqId];
+                                            cb.resolve(data);
+                                        }
+                                    } else if (data.type === 'ERROR') {
+                                        var cb = this.pendingTasks[data.reqId];
+                                        if (cb) {
+                                            delete this.pendingTasks[data.reqId];
+                                            cb.reject(new Error(data.message || 'Worker encryption failed'));
+                                        }
+                                    }
+                                };
+                                this.worker.onerror = (err) => reject(err);
+                                this.worker.postMessage({
+                                    type: 'INIT_KEYS',
+                                    reqId: this.reqIdCounter++,
+                                    masterKey: this.masterKeyB64
+                                });
+                            } catch (err) {
+                                reject(err);
+                            }
+                        });
+                    }
+
+                    encryptChunk(chunkBuffer, chunkIndex, fileId) {
+                        return new Promise((resolve, reject) => {
+                            var reqId = this.reqIdCounter++;
+                            this.pendingTasks[reqId] = { resolve, reject };
+                            this.worker.postMessage({
+                                type: 'ENCRYPT_CHUNK',
+                                reqId: reqId,
+                                buffer: chunkBuffer,
+                                chunkIndex: chunkIndex,
+                                fileId: fileId,
+                                useRecvKey: true
+                            }, [chunkBuffer]);
+                        });
+                    }
+
+                    async uploadFile(item, fileId, onProgress) {
+                        var blob = item.type === 'text' ? item.blob : item.file;
+                        var fileName = item.name || (item.file && item.file.name) || 'file.dat';
+                        var totalBytes = blob.size;
+                        var totalChunks = Math.max(1, Math.ceil(totalBytes / CHUNK_SIZE));
+                        var uploadedBytes = 0;
+
+                        // Check status for continuous resumption
+                        var startChunk = 0;
+                        try {
+                            var statusRes = await fetch('{{.Route}}/chunk_status?file_id=' + encodeURIComponent(fileId) + '&client_id=' + encodeURIComponent(clientID));
+                            if (statusRes.ok) {
+                                var statusData = await statusRes.json();
+                                if (statusData && statusData.continuous_index > 0) {
+                                    startChunk = statusData.continuous_index;
+                                    uploadedBytes = Math.min(totalBytes, startChunk * CHUNK_SIZE);
+                                    if (onProgress) onProgress(uploadedBytes, totalBytes);
+                                }
+                            }
+                        } catch (e) {}
+
+                        var chunkQueue = [];
+                        for (var idx = startChunk; idx < totalChunks; idx++) {
+                            chunkQueue.push(idx);
+                        }
+
+                        var activeWorkers = 0;
+                        var hasError = null;
+
+                        return new Promise((resolve, reject) => {
+                            var processNext = async () => {
+                                if (isUploadStopped) {
+                                    return reject(new Error('Transfer manually stopped'));
+                                }
+                                if (hasError) return;
+                                if (chunkQueue.length === 0 && activeWorkers === 0) {
+                                    return resolve(true);
+                                }
+                                while (chunkQueue.length > 0 && activeWorkers < this.concurrency && !hasError && !isUploadStopped) {
+                                    var chunkIdx = chunkQueue.shift();
+                                    activeWorkers++;
+                                    this._processChunk(blob, chunkIdx, totalChunks, totalBytes, fileId, fileName)
+                                        .then((bytesSent) => {
+                                            activeWorkers--;
+                                            uploadedBytes += bytesSent;
+                                            this.consecutiveFailures = 0;
+                                            if (this.concurrency < DEFAULT_CONCURRENCY) {
+                                                this.concurrency = Math.min(DEFAULT_CONCURRENCY, this.concurrency + 1);
+                                            }
+                                            if (onProgress) onProgress(uploadedBytes, totalBytes);
+                                            processNext();
+                                        })
+                                        .catch((err) => {
+                                            activeWorkers--;
+                                            this.consecutiveFailures++;
+                                            if (this.consecutiveFailures >= 2) {
+                                                this.concurrency = MIN_CONCURRENCY; // Weak Wi-Fi fallback
+                                            }
+                                            if (err && err.retryable !== false && !isUploadStopped) {
+                                                chunkQueue.unshift(chunkIdx);
+                                                setTimeout(processNext, 1000);
+                                            } else {
+                                                hasError = err;
+                                                reject(err);
+                                            }
+                                        });
+                                }
+                            };
+                            processNext();
+                        });
+                    }
+
+                    async _processChunk(blob, chunkIdx, totalChunks, totalBytes, fileId, fileName) {
+                        var start = chunkIdx * CHUNK_SIZE;
+                        var end = Math.min(totalBytes, start + CHUNK_SIZE);
+                        var slice = blob.slice(start, end);
+                        var arrayBuf = await slice.arrayBuffer();
+                        var sliceBytes = arrayBuf.byteLength;
+
+                        var encRes = await this.encryptChunk(arrayBuf, chunkIdx, fileId);
+
+                        var controller = new AbortController();
+                        var timeoutId = setTimeout(() => controller.abort(), 15000);
+                        try {
+                            var postRes = await fetch('{{.Route}}/chunk', {
+                                method: 'POST',
+                                headers: {
+                                    'X-File-ID': fileId,
+                                    'X-Chunk-Index': String(chunkIdx),
+                                    'X-Total-Chunks': String(totalChunks),
+                                    'X-Total-Bytes': String(totalBytes),
+                                    'X-File-Name': encodeURIComponent(fileName),
+                                    'X-Client-ID': clientID
+                                },
+                                body: encRes.buffer,
+                                signal: controller.signal
+                            });
+                            clearTimeout(timeoutId);
+                            if (!postRes.ok) {
+                                var errBody = await postRes.json().catch(() => ({}));
+                                var err = new Error(errBody.error || ('Server error ' + postRes.status));
+                                err.status = postRes.status;
+                                if (postRes.status === 403) {
+                                    err.retryable = false;
+                                }
+                                throw err;
+                            }
+                            return sliceBytes;
+                        } catch (err) {
+                            clearTimeout(timeoutId);
+                            throw err;
+                        }
+                    }
+
+                    destroy() {
+                        if (this.worker) {
+                            this.worker.terminate();
+                            this.worker = null;
+                        }
+                    }
+                }
+
+                return {
+                    getMasterKey: getMasterKeyFromLocation,
+                    Pipeline: Pipeline
+                };
+            })();
+
+            var masterKey = EqtE2EEUploader.getMasterKey();
+            if (masterKey) {
+                // E2EE 3-Stage Pipeline Mode
+                var pipeline = new EqtE2EEUploader.Pipeline(masterKey);
+                pipeline.init().then(async function() {
+                    for (var fIdx = 0; fIdx < filesToUpload.length; fIdx++) {
+                        if (isUploadStopped) break;
+                        var item = filesToUpload[fIdx];
+                        var fileId = 'f-' + Date.now() + '-' + fIdx;
+                        try {
+                            await pipeline.uploadFile(item, fileId, function(bytes, total) {
+                                bytesUploadedMap[fIdx] = bytes;
+                                if (item.index !== undefined) {
+                                    var percent = total > 0 ? (bytes / total) : 0;
+                                    var circle = document.getElementById('progress-circle-' + item.index);
+                                    var text = document.getElementById('progress-text-' + item.index);
+                                    if (circle) {
+                                        var offset = 100 - (percent * 100);
+                                        circle.style.strokeDashoffset = offset;
+                                    }
+                                    if (text) {
+                                        text.textContent = Math.round(percent * 100) + '%';
+                                    }
+                                }
+                            });
+                            if (item.index !== undefined) {
+                                var circle = document.getElementById('progress-circle-' + item.index);
+                                var text = document.getElementById('progress-text-' + item.index);
+                                if (circle) {
+                                    circle.style.strokeDashoffset = 0;
+                                    circle.classList.add('completed');
+                                    circle.style.stroke = 'var(--success)';
+                                }
+                                if (text) {
+                                    text.textContent = '✓';
+                                    text.style.color = 'var(--success)';
+                                }
+                            }
+                        } catch (err) {
+                            pipeline.destroy();
+                            handleError(err.status || 500, err.message);
+                            return;
+                        }
+                    }
+                    pipeline.destroy();
+                    if (!isUploadStopped) {
+                        uploadIndex = filesToUpload.length;
+                        startNextTusUpload(); // triggers ?done=true completion
+                    }
+                }).catch(function(err) {
+                    console.error("E2EE worker init failed, fallback to TUS: ", err);
+                    startTusInit();
+                });
+            } else {
+                startTusInit();
+            }
+
+            function startTusInit() {
+                var initXhr = new XMLHttpRequest();
+                initXhr.open('POST', '{{.Route}}?init=true&client_id=' + encodeURIComponent(clientID));
+                initXhr.setRequestHeader('Content-Type', 'application/json');
+                initXhr.onload = function() {
+                    startNextTusUpload();
+                };
+                initXhr.onerror = function() {
+                    startNextTusUpload();
+                };
+                var initData = {
+                    files: filesToUpload.map(function(f) {
+                        return { name: f.name, size: f.size };
+                    })
+                };
+                initXhr.send(JSON.stringify(initData));
+            }
         });
 
         var stopButton = document.getElementById('stop-btn');

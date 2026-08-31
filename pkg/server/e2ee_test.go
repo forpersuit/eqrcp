@@ -425,3 +425,112 @@ func TestE2EEShareBannedClientBlocked(t *testing.T) {
 		t.Fatalf("expected 403 Forbidden for banned client, got %d", wChunk.Code)
 	}
 }
+
+func TestE2EEReceiveRetrySameFileID(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "eqt-retry-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	cfg := &config.Config{Interface: "lo", Port: 0, Bind: "127.0.0.1", KeepAlive: true}
+	srv, _ := New(cfg)
+	_ = srv.ReceiveTo(tempDir)
+
+	masterKey, _ := e2ee.GenerateMasterKey()
+	_ = srv.EnableE2EE(masterKey, "sess-retry-test")
+	keys, _ := e2ee.DeriveKeys(masterKey)
+
+	fileID := "file-retry-id-123"
+	plain := []byte("Initial transfer content")
+	enc, _ := e2ee.EncryptChunk(plain, 0, keys.RecvKey[:], fileID)
+
+	// First upload: complete file
+	req1 := httptest.NewRequest("POST", srv.ReceiveURL+"/chunk", bytes.NewReader(enc))
+	req1.Header.Set("X-File-ID", fileID)
+	req1.Header.Set("X-Chunk-Index", "0")
+	req1.Header.Set("X-Total-Chunks", "1")
+	req1.Header.Set("X-Total-Bytes", fmt.Sprintf("%d", len(plain)))
+	req1.Header.Set("X-File-Name", "file.txt")
+	req1.Header.Set("X-Client-ID", "retry-client")
+
+	w1 := httptest.NewRecorder()
+	srv.handleE2EEReceiveChunk(w1, req1)
+	if w1.Code != http.StatusOK {
+		t.Fatalf("first upload failed: %d", w1.Code)
+	}
+
+	// Second upload reusing same fileID (e.g. user retries): MUST NOT return 403
+	plain2 := []byte("Second transfer content")
+	enc2, _ := e2ee.EncryptChunk(plain2, 0, keys.RecvKey[:], fileID)
+
+	req2 := httptest.NewRequest("POST", srv.ReceiveURL+"/chunk", bytes.NewReader(enc2))
+	req2.Header.Set("X-File-ID", fileID)
+	req2.Header.Set("X-Chunk-Index", "0")
+	req2.Header.Set("X-Total-Chunks", "1")
+	req2.Header.Set("X-Total-Bytes", fmt.Sprintf("%d", len(plain2)))
+	req2.Header.Set("X-File-Name", "file.txt")
+	req2.Header.Set("X-Client-ID", "retry-client")
+
+	w2 := httptest.NewRecorder()
+	srv.handleE2EEReceiveChunk(w2, req2)
+	if w2.Code != http.StatusOK {
+		t.Fatalf("second upload with same fileID failed with code %d (expected 200, must not return 403): %s", w2.Code, w2.Body.String())
+	}
+}
+
+func TestE2EEShareArchiveDirectory(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "eqt-share-dir-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	f1 := filepath.Join(tempDir, "a.txt")
+	_ = os.WriteFile(f1, []byte("file a content"), 0644)
+	f2 := filepath.Join(tempDir, "b.txt")
+	_ = os.WriteFile(f2, []byte("file b content"), 0644)
+
+	cfg := &config.Config{Interface: "lo", Port: 0, Bind: "127.0.0.1", KeepAlive: true}
+	srv, _ := New(cfg)
+	b, err := body.FromArgs([]string{tempDir}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.Delete()
+	srv.Send(b)
+
+	masterKey, _ := e2ee.GenerateMasterKey()
+	_ = srv.EnableE2EE(masterKey, "sess-share-dir")
+	keys, _ := e2ee.DeriveKeys(masterKey)
+
+	// Meta
+	metaReq := httptest.NewRequest("GET", srv.SendURL+"/meta", nil)
+	wMeta := httptest.NewRecorder()
+	srv.handleE2EEShareMeta(wMeta, metaReq)
+
+	var metaRes struct {
+		OK    bool                `json:"ok"`
+		Files []E2EEShareFileInfo `json:"files"`
+	}
+	json.NewDecoder(wMeta.Body).Decode(&metaRes)
+	if !metaRes.OK || len(metaRes.Files) != 1 {
+		t.Fatalf("unexpected meta for directory: %+v", metaRes)
+	}
+
+	// Fetch chunk 0
+	chunkReq := httptest.NewRequest("GET", srv.SendURL+"/chunk?file_id=f-0&chunk_index=0", nil)
+	wChunk := httptest.NewRecorder()
+	srv.handleE2EEShareChunk(wChunk, chunkReq)
+	if wChunk.Code != http.StatusOK {
+		t.Fatalf("fetch directory chunk failed: %d, body: %s", wChunk.Code, wChunk.Body.String())
+	}
+
+	plain, err := e2ee.DecryptChunk(wChunk.Body.Bytes(), 0, keys.SendKey[:], "f-0")
+	if err != nil {
+		t.Fatalf("decrypt directory chunk failed: %v", err)
+	}
+	if len(plain) == 0 {
+		t.Fatal("empty decrypted archive chunk")
+	}
+}
