@@ -526,8 +526,8 @@ func TestSessionE2EEMultiClientIndependentSeq(t *testing.T) {
 		if ev.Type != protocol.EventError {
 			t.Fatalf("expected EventError sent to Alice on duplicate packet, got: %s", ev.Type)
 		}
-		if ev.Error == nil || ev.Error.Code != "REPLAY_DETECTED" {
-			t.Fatalf("expected Error code REPLAY_DETECTED, got: %+v", ev.Error)
+		if ev.Error == nil || ev.Error.Code != protocol.ErrorReplayDetected {
+			t.Fatalf("expected Error code %s, got: %+v", protocol.ErrorReplayDetected, ev.Error)
 		}
 	default:
 		t.Fatal("expected error notification on Alice sendChan")
@@ -606,8 +606,8 @@ func TestSessionE2EEReconnectAndNewScanReset(t *testing.T) {
 	sess.HandleE2EEEnvelope(c2, envOld, "cmd-old")
 	select {
 	case ev := <-c2.sendChan:
-		if ev.Type != protocol.EventError || ev.Error == nil || ev.Error.Code != "REPLAY_DETECTED" {
-			t.Fatalf("expected REPLAY_DETECTED on old seq replay, got: %+v", ev)
+		if ev.Type != protocol.EventError || ev.Error == nil || ev.Error.Code != protocol.ErrorReplayDetected {
+			t.Fatalf("expected %s on old seq replay, got: %+v", protocol.ErrorReplayDetected, ev)
 		}
 	default:
 		t.Fatal("expected error notification on c2 sendChan")

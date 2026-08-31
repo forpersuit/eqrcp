@@ -6,6 +6,7 @@ type ErrorCode string
 const (
 	ErrorBadCommand       ErrorCode = "bad_command"
 	ErrorUnauthorized     ErrorCode = "unauthorized"
+	ErrorReplayDetected   ErrorCode = "replay_detected"
 	ErrorSessionClosed    ErrorCode = "session_closed"
 	ErrorTransferNotFound ErrorCode = "transfer_not_found"
 	ErrorInternal         ErrorCode = "internal"

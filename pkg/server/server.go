@@ -31,6 +31,7 @@ import (
 	chatv2http "eqt/pkg/chat/v2/http"
 	chatv2session "eqt/pkg/chat/v2/session"
 	"eqt/pkg/config"
+	"eqt/pkg/crypto/e2ee"
 	"eqt/pkg/pages"
 	"eqt/pkg/util"
 	"eqt/pkg/version"
@@ -137,6 +138,15 @@ type Server struct {
 	clientSpeedTrackersMu  sync.Mutex
 	clientSubDirs          map[string]string
 	clientSubDirsMu        sync.Mutex
+	// E2EE state
+	e2eeActive           bool
+	e2eeMasterKey        []byte
+	e2eeKeys             *e2ee.DerivedKeys
+	e2eeSessionID        string
+	e2eeReceiveFiles     map[string]*e2eeReceiveFile
+	e2eeReceiveFilesMu   sync.RWMutex
+	sessionBannedClients map[string]bool
+	sessionBannedMu      sync.RWMutex
 }
 
 type clientSpeedTracker struct {
@@ -1651,6 +1661,12 @@ func (s *Server) registerClientActivityWithID(clientID string, r *http.Request) 
 }
 
 func (s *Server) getClientID(r *http.Request, w http.ResponseWriter) string {
+	if hID := r.Header.Get("X-Client-ID"); hID != "" {
+		return hID
+	}
+	if hID := r.Header.Get("X-Client-Instance-Id"); hID != "" {
+		return hID
+	}
 	if qID := r.URL.Query().Get("client_id"); qID != "" {
 		http.SetCookie(w, &http.Cookie{
 			Name:     "eqt_client_id",
@@ -2264,6 +2280,8 @@ func New(cfg *config.Config) (*Server, error) {
 	app.clientStates = make(map[string]*ClientTransferStateInfo)
 	app.clientReceiveCounted = make(map[string]bool)
 	app.expectedBytes = make(map[int]int64)
+	app.e2eeReceiveFiles = make(map[string]*e2eeReceiveFile)
+	app.sessionBannedClients = make(map[string]bool)
 	// Get the address of the configured interface to bind the server to.
 	// If `bind` configuration parameter has been configured, it takes precedence
 	bind, err := util.GetInterfaceAddress(cfg.Interface)
@@ -2370,6 +2388,15 @@ func New(cfg *config.Config) (*Server, error) {
 	app.tusPath = "/receive/" + path + "/tus/"
 	app.registerRoute(app.tusPath, app.handleTusUpload)
 	app.registerRoute("/send/"+path+"/status", app.statusHandler)
+
+	// E2EE Chunked Share Endpoints
+	mux.HandleFunc("/send/"+path+"/chunk", func(w http.ResponseWriter, r *http.Request) {
+		app.handleE2EEShareChunk(w, r)
+	})
+	mux.HandleFunc("/send/"+path+"/meta", func(w http.ResponseWriter, r *http.Request) {
+		app.handleE2EEShareMeta(w, r)
+	})
+
 	mux.HandleFunc("/send/"+path, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("stop") != "" {
 			clientID := app.getClientID(r, w)
@@ -2919,6 +2946,23 @@ func New(cfg *config.Config) (*Server, error) {
 			app.recordStatus()
 		}
 	})
+
+	// E2EE Chunked Receive Endpoints
+	mux.HandleFunc("/receive/"+path+"/chunk", func(w http.ResponseWriter, r *http.Request) {
+		app.handleE2EEReceiveChunk(w, r)
+	})
+	mux.HandleFunc("/receive/"+path+"/chunk_status", func(w http.ResponseWriter, r *http.Request) {
+		app.handleE2EEReceiveChunkStatus(w, r)
+	})
+
+	// Device ban management
+	mux.HandleFunc("/api/device/ban", func(w http.ResponseWriter, r *http.Request) {
+		app.handleDeviceBan(w, r)
+	})
+	mux.HandleFunc("/api/device/unban", func(w http.ResponseWriter, r *http.Request) {
+		app.handleDeviceUnban(w, r)
+	})
+
 	// Upload handler (serves the upload page)
 	mux.HandleFunc("/receive/"+path, func(w http.ResponseWriter, r *http.Request) {
 		if !cfg.KeepAlive {

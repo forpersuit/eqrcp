@@ -728,8 +728,8 @@ func TestWebSocketE2EEEnvelopeBlindRelayAndAntiReplay(t *testing.T) {
 
 	// Alice receives REPLAY_DETECTED error from server
 	aliceReplayErr := readEvent(ctx, t, connA)
-	if aliceReplayErr.Type != protocol.EventError || aliceReplayErr.Error == nil || aliceReplayErr.Error.Code != "REPLAY_DETECTED" {
-		t.Fatalf("expected EventError REPLAY_DETECTED on Alice, got: %+v", aliceReplayErr)
+	if aliceReplayErr.Type != protocol.EventError || aliceReplayErr.Error == nil || aliceReplayErr.Error.Code != protocol.ErrorReplayDetected {
+		t.Fatalf("expected EventError %s on Alice, got: %+v", protocol.ErrorReplayDetected, aliceReplayErr)
 	}
 
 	// Alice can send subsequent fresh seq=102 without issue

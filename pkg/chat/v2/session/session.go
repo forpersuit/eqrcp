@@ -293,7 +293,7 @@ func (s *Session) HandleE2EEEnvelope(sender *Client, env *protocol.E2EEEnvelope,
 			CommandID: commandID,
 			Time:      time.Now(),
 			Error: &protocol.ErrorPayload{
-				Code:    "REPLAY_DETECTED",
+				Code:    protocol.ErrorReplayDetected,
 				Message: fmt.Sprintf("E2EE envelope rejected: %v", err),
 			},
 		})

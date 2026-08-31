@@ -475,7 +475,7 @@ export class ChatWebSocketClient {
 
       case 'error':
         if (event.error) {
-          if (event.error.code === 'REPLAY_DETECTED') {
+          if (event.error.code === 'replay_detected' || event.error.code === 'REPLAY_DETECTED') {
             this.e2eeOutSeq += 1000;
             try {
               localStorage.setItem(this.getE2EESeqStorageKey(), String(this.e2eeOutSeq));
