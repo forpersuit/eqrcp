@@ -113,7 +113,7 @@
 
 ---
 
-### Phase 4: Receive / Share 4MB 分块流式加解密与设备管理控制 (🟡 服务端 100% / 前端主链路落地，下载端落盘子项未达标)
+### Phase 4: Receive / Share 4MB 分块流式加解密与设备管理控制 (✅ 100% 闭环 / D11、D12、D13 全量达标)
 
 * **阶段目标**：打通 Share（下载）与 Receive（上传）的 4MB 分块加解密管道，落实静默屏蔽与从头重置红线。
 
@@ -250,6 +250,23 @@
 - D12 修复**无任何新增测试**（前端 JS 逻辑 + 服务端 cleanup 均无测试覆盖，仅靠既有全量测试保持绿）——违反 Rule 9（测试验证意图），建议补 `TestE2EEReceiveStaleCleanupPurgesTmp` 类测试与前端 JS 语法 CI 检查。
 
 **裁决**：D12 的 ①②④ 三项修复属实可验收；③ Fail-Closed 因 D13 SyntaxError 当前**实际不可用**，且 `triggerDownloadItem` 旧版覆盖使单文件入口仍静默降级明文。Phase 4 状态 **🔴 阻断**（下载页整体失效），D13 必须先修复。D12 不可判定全量闭环。
+
+### 第 11 轮独立复核结论（2026-09-01，审查 `aa718556` + `49c2e739`）
+
+> 审查对象：D13 修复提交 `aa718556`（恢复 `triggerNormalDownload` 函数头 + 删除重复 `triggerDownloadItem` + 新增模板 JS 语法门禁 `TestTemplateJavaScriptSyntax` + 服务端 stale cleanup 测试 `TestE2EEReceiveStaleCleanup`）与 tracker 记录提交 `49c2e739`。方法：`git show` 逐文件比对 + `go test ./...` / `npm test` / `node interop_test.js` 三重测试 + **四模板独立 python 抽取 `node --check` 语法复验**。
+
+**✅ 已验证通过（D13 根治，D12 ③ Fail-Closed 实际生效）**：
+1. `pkg/pages/download.tmpl.html:1258` 恢复 `function triggerNormalDownload() {` 声明头；`:1232` 为**唯一** `triggerDownloadItem`（Fail-Closed 版：有 masterKey → E2EE 下载失败即阻断提示；无 masterKey → `triggerNormalDownloadItem(index)` 明文单文件），旧版静默降级入口已彻底删除（`rg` 计数 1 处）；
+2. 四模板（qr/upload/done/download）独立 python 抽取 + `node --check` 全部 SYNTAX_OK——与 `TestTemplateJavaScriptSyntax` 双重复验；此前 D13 只能靠人工 `node --check` 抓到，现已有自动化门禁防复发；
+3. `TestE2EEReceiveStaleCleanup` 覆盖 safe-cleanup 五要素（35min 注入 > 30min 阈值触发 / map 锁外持 `rf.mu` / `Close` + `File=nil` / `os.Remove(TempPath)` 仅 `!Completed` / `Cancelled=true`），与 `pkg/server/e2ee.go:251-273` 实现逐条吻合，测试有真实断言价值；
+4. `go test ./...` 17 包零失败；`npm test` 7/7 全绿；`node interop_test.js` 全绿（加密 210.5 MB/s / 解密 272.7 MB/s ≥ DoD 60）；
+5. 版本 v1.36.36 → v1.36.37（D13 修复正确触发 minor +1）。
+
+**🟡 附带观察（不阻断 DoD）**：
+- "IndexedDB 流式落盘" 精确语义：小文件（$< 256$MB）走内存 Blob 拼接，仅大文件启用 IndexedDB 分件落盘；`assembleBlob` 装配仍为全内存读回——浏览器 capability 边界，非缺陷；
+- download 端仍为顺序单块下载（并发度 1），upload 端 3 并发 + weak Wi-Fi 降级已落地（D11）。
+
+**裁决**：D13 全量根治且自动化门禁防复发；D12 ①③④ 经第 11 轮实测全部生效（② 第 10 轮已确认）。Phase 4 六项 DoD 验收标准（吞吐 / 静默屏蔽即时清 .tmp / `chunk_status` M=0 恢复 / 多分块乱序直写 / 同 fileID 重试 / 目录归档）全部有测试背书。**Phase 4 升格 ✅ 100% 闭环**（与 §1 行 17 milestone 统一），`feat/e2ee` 四阶段（Phase 1~4）全部达标。
 
 ---
 
