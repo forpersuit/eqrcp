@@ -14,7 +14,7 @@
 | **Phase 1** | **WASM 密码学引擎** | `libsodium.js` (WASM Sumo) / HKDF 派生、4MB 分块 AEAD Worker、Go/JS 互通 | ✅ **已完成 (100%)** | `pkg/pages/assets/`, `pkg/crypto/e2ee/` |
 | **Phase 2** | **DRM 云端会话端点** | D1 表结构、多模式单例覆盖、TTL 物理销毁、CAS 配额门禁、零日志 CORS | ✅ **已完成 (100%)** | `cloudflare/eqt-drm-api/` |
 | **Phase 3** | **Chat 模式双向 E2EE** | WebSocket `e2ee_envelope`、Seq 防重放、Svelte 端加解密 | ✅ **已完成 (100%) / D9、D10 blocker 全量闭环** | `pkg/chat/v2/` |
-| **Phase 4** | **Share / Receive 分块流** | REST 分块端点、3级流水线、IndexedDB 落盘、静默 Ban 网关 | ✅ **已完成 (100%) / D11、D12 全量闭环** | `pkg/server/`, `pkg/pages/` |
+| **Phase 4** | **Share / Receive 分块流** | REST 分块端点、3级流水线、IndexedDB 落盘、静默 Ban 网关 | 🔴 **服务端闭环 + 前端主链路落地，但 download 页 JS SyntaxError 整块失效（D13 回归，阻断下载）** | `pkg/server/`, `pkg/pages/` |
 | **Phase 5** | **GUI 三态卡片与 CI 沙盒** | 三态徽章 (`🔒`/`⚠️`/`🔓`)、DRM 探活缓存、Mock DRM 测试套件 | ⏳ **待启动** | `desktop/gui/`, `cmd/` |
 
 ---
@@ -131,8 +131,8 @@
 - [x] **Task 4.2: 移动端 3 级流水线并发与存储落盘** (`pkg/pages/upload.tmpl.html` & `download.tmpl.html`)
   - [x] 移动端 `EqtE2EEUploader`：实现 Read $\rightarrow$ Encrypt $\rightarrow$ POST 3 级并发流水线，通过 `crypto.worker.js` 零拷贝 Transferable Objects 加密；
   - [x] weak Wi-Fi 超时自适应降级：连续 2 次超时/失败自适应降级为 1 并发，单块重试上限 3 次防无限死循环，4xx 错误（AUTH_FAILED 等）直接不可重试 fail-fast；
-  - [x] 移动端 `EqtE2EEDownloader`：`EqtChunkStorage` 实现基于 IndexedDB 的大文件（$\ge 256$MB）流式分件落盘与磁盘装配，防移动端 OOM；针对 iOS Safari 纯 HTTP 标注 1GB 边界；
-  - [x] Fail-Closed 安全防线：校验 `metaData.is_e2ee`，解密失败绝不静默降级为明文，弹出非阻塞错误通知；
+  - [x] 移动端 `EqtE2EEDownloader`：`EqtChunkStorage` 实现基于 IndexedDB 的大文件（$\ge 256$MB）流式分件落盘与磁盘装配，防移动端 OOM；针对 iOS Safari 纯 HTTP 标注 1GB 边界（⚠️ 解密阶段内存峰值降至 1 chunk，但 `assembleBlob` 装配时仍全量读回内存——浏览器能力上限，可接受）；
+  - [x] Fail-Closed 安全防线：校验 `metaData.is_e2ee`，解密失败绝不静默降级为明文，弹出非阻塞错误通知（⚠️ **D13 回归：`triggerNormalDownload()` 函数头误删致整个 `<script>` 块 SyntaxError，此防线与全部下载逻辑当前实际不可用**；且 `triggerDownloadItem` 双定义后覆盖前，旧版静默降级仍生效）；
   - [x] 断点续传查询：上传前自动查询 `/chunk_status` 连续游标 $M$，避免重复上传已落盘块。
 - [x] **Task 4.3: 设备显性化与静默屏蔽门禁** (`pkg/server/server.go` & `e2ee.go`)
   - [x] 请求头提取 `X-Client-Instance-Id` / `X-Client-ID`；
@@ -197,7 +197,7 @@
 | 2026-08-31 | `335cf3a1` | Phase 3 修复：前端 localStorage 持久化 e2eeOutSeq 跨刷新单调递增 + 服务端返回 REPLAY_DETECTED 错误事件 + 扫码 reset (D10) | Task 3.1 补丁 | ✅ 闭环（第 7 轮独立复核联合验证：刷新后 seq 零静默丢失，`go test ./...` 零失败、`npm test` 7/7 全绿） |
 | 2026-08-31 | `4ba82184` | Phase 4: MockDRMServer 离线桩 · REST 4MB 分块流式无锁直写 · 连续区间跟踪器 · 静默屏蔽即时销毁 .tmp 与从头重置红线 · Share 4MB 分块下发 | Task 4.1~4.4 | 🟡 服务端完成 / Task 4.2 前端流水线未落地（见第 8 轮复核） |
 | 2026-09-01 | `ead22f1b` | Phase 4 闭环：前端 EqtE2EEUploader/Downloader 3级流水线与 Worker 零拷贝 + weak Wi-Fi 降级 + iOS 1GB 标注 + sync.Pool 4MB 复用 + 同 fileID 重试修复与内存清理 | Task 4.1~4.4 | 🟡 服务端闭环 + 前端主链路落地（第 9 轮复核） |
-| 2026-09-01 | `77fe53e5` | Phase 4 深度闭环：EqtChunkStorage IndexedDB 流式落盘 + 3次重试上限熔断 + Fail-Closed 严禁静默降级明文 + 服务端 .tmp 安全物理清理 (D12) | Task 4.2 补丁 | ✅ **已全量闭环 100% 达标**（Go 全包零失败、Node 防篡改全绿、TS 7/7 全绿） |
+| 2026-09-01 | `77fe53e5` | Phase 4 深度闭环：EqtChunkStorage IndexedDB 流式落盘 + 3次重试上限熔断 + Fail-Closed 严禁静默降级明文 + 服务端 .tmp 安全物理清理 (D12) | Task 4.2 补丁 | 🔴 **服务端 cleanup / upload 重试 limiter / IndexedDB 落盘修复属实**（Go 全包零失败、Node 防篡改全绿、TS 7/7 全绿），**但 download 页 `triggerNormalDownload()` 函数头误删致 SyntaxError 整块失效（D13 回归，第 10 轮复核确认）** |
 
 ---
 
@@ -228,6 +228,30 @@
 
 ---
 
+### 第 10 轮独立复核结论（2026-09-01，审查 `77fe53e5` + `76031814`）
+
+> 审查对象：D12 修复提交 `77fe53e5`（EqtChunkStorage IndexedDB 流式落盘 + upload 3 次重试熔断 + Fail-Closed 防静默降级 + 服务端 .tmp 安全清理）与 tracker 记录提交 `76031814`。方法：`git show` 逐文件比对 + `go test ./...` / `npm test` / `node interop_test.js` 三重测试 + **前端模板 JS 抽取 `node --check` 语法验证**（新增方法，抓到回归）。
+
+**✅ 已验证通过（修复属实）**：
+1. 三重测试全绿：`go test ./...` 全包零失败、`node interop_test.js` 全绿（insecure-context/篡改/吞吐 DoD）、TS 7/7 全绿；
+2. **服务端 safe cleanup**（`e2ee.go:250-273`）：stale 记录在 map lock 内收集 → `Unlock` → 逐个持 `rf.mu` close File + `os.Remove(TempPath)`（仅非 Completed）+ 置 `Cancelled=true` → 重新 Lock。锁粒度正确（IO 移出 map lock、持 per-file 锁防 WriteAt 竞争、物理删 .tmp），`TempPath` 字段存在（`e2ee.go:40`）；
+3. **Upload 重试 limiter**（`upload.tmpl.html:1860-1868`）：`chunkRetries[chunkIdx]` 每 chunk 独立计数，`<= 3` 熔断（实际最多 4 次尝试）；`_processChunk` 中 4xx 全设 `retryable=false`（400 AUTH_FAILED/403 BANNED/404 fail-fast）；`upload.tmpl.html` 抽取 `node --check` 语法 OK；
+4. **IndexedDB 流式落盘**（`download.tmpl.html:925-1000`）：`EqtChunkStorage`（`eqt_e2ee_download_db`/`chunks`）`putChunk` 逐 chunk 落盘 + `assembleBlob` 装配 + `clearFile` 装配后清空；阈值 `>= 256MB` 触发。解密阶段内存峰值降至 1 chunk（4MB），有效防移动端 OOM；`assembleBlob` 装配时仍全量读回内存属浏览器能力上限（无 File System Access API），判定合理；
+5. **版本号** v1.36.35 → v1.36.36 合规。
+
+**🔴 严重回归（D13，阻断下载页）**：
+- `download.tmpl.html` 抽取 `<script>` 块（446~1689 行）`node --check` 报 **SyntaxError**（`/tmp/down.js:829` 孤立 `}`）；对比 `77fe53e5~1`（`ead22f1b`）语法 OK，**回归由本提交引入**；
+- 根因：`showE2EEDownloadError`（1244-1256）结束后，原 `triggerNormalDownload()` **函数声明头 `function triggerNormalDownload() {` 被误删**，其函数体（`startStatusPolling()`、`?download=1` iframe 下载等）裸露为顶层语句（1257-1273），1274 行孤立 `}` 触发 SyntaxError；
+- 后果：**整个 `<script>` 块被浏览器丢弃**，download 页的 E2EE 下载、明文下载、进度轮询、文件列表渲染**全部失效**；
+- 次生：`triggerDownloadItem` **双定义**（1232 Fail-Closed 新版 / 1276 静默降级旧版），JS 后定义覆盖前定义，即使修好 SyntaxError，单文件下载入口仍走旧版静默降级明文。
+
+**🟡 附带观察**：
+- D12 修复**无任何新增测试**（前端 JS 逻辑 + 服务端 cleanup 均无测试覆盖，仅靠既有全量测试保持绿）——违反 Rule 9（测试验证意图），建议补 `TestE2EEReceiveStaleCleanupPurgesTmp` 类测试与前端 JS 语法 CI 检查。
+
+**裁决**：D12 的 ①②④ 三项修复属实可验收；③ Fail-Closed 因 D13 SyntaxError 当前**实际不可用**，且 `triggerDownloadItem` 旧版覆盖使单文件入口仍静默降级明文。Phase 4 状态 **🔴 阻断**（下载页整体失效），D13 必须先修复。D12 不可判定全量闭环。
+
+---
+
 ## 4. 实施阶段准入准出与交付守则 (Engineering Guidelines)
 
 1. **零回归原则 (Rule 13)**：修改 `pkg/server/` 或前端模板时，必须确保原有明文局域网传输与 `tus.min.js` 断点续传链路完全不受影响；
@@ -252,4 +276,5 @@
 | D9 | Chat seq 防重放空间 | 每个发送者独立 seq 空间与防重放窗口 | `ReplayFilter` 改为 Session 内按 `senderPeer` 分键的并发安全 map 结构；多客户端各自独立从 seq=1 递增，房间内多设备零冲突误判 | ✅ **已闭环修复**（8389dabb，`TestSessionE2EEMultiClientIndependentSeq` + transport 端到端验证通过） |
 | D10 | 同 peer 刷新 seq 重置 | seq 空间跨实例稳定（刷新/重连后新实例不应被旧窗口误拒） | 前端 `e2eeOutSeq` 持久化到 `localStorage`（键名 `eqt_e2ee_seq_${token}_${peer}`），页面刷新/重入房间后自动从 `savedSeq + 1` 恢复并单调递增；服务端在重放拦截时返回 `REPLAY_DETECTED` 错误事件，客户端自适应前向校准；`isNewScan` 扫码建立连接时服务端原子重置 peer 窗口 | ✅ **已闭环修复**（335cf3a1，`TestSessionE2EEReconnectAndNewScanReset` + TS `e2eeEnvelope.test.ts` 全绿） |
 | D11 | Phase 4 前端流水线与重试内存缺陷 | 移动端 Read→Encrypt→POST 3 级流水线 + IndexedDB 落盘 + 弱网降级 + sync.Pool 4MB 零分配 + 同 fileID 重试支持 | 前端 `upload.tmpl.html` 与 `download.tmpl.html` 接入 `crypto.worker.js` 实现 3 级并发流水线（Read $\rightarrow$ Encrypt $\rightarrow$ POST），弱网自适应降级至 1 并发，iOS 1GB 边界标注；服务端落地 `sync.Pool` 4MB 缓冲区，同 `fileID` 重试重置旧句柄，30 分钟过期记录自动淘汰，完备支持目录与 ZIP 归档 | 🟡 **服务端侧闭环**（`TestE2EEReceiveRetrySameFileID` + `TestE2EEShareArchiveDirectory` + 7 项 Go 单测全绿，第 9 轮独立复核确认） |
-| D12 | Phase 4 前端下载端落盘与重试/降级治理 | Task 4.2 原要求"分块流式解密落盘（IndexedDB）"；E2EE 链路失败不应无限重试或静默降级明文 | ① `EqtChunkStorage` 实现基于 IndexedDB 的大文件（$\ge 256$MB）流式分件落盘与磁盘装配，装配后立即清空对象仓库防磁盘堆积；② upload 增加 4xx fail-fast 与单块最大 3 次重试上限熔断（`chunkRetries`），消除死循环；③ download 严格校验 `metaData.is_e2ee`，失败执行 Fail-Closed 安全拦截与错误卡片提示，严禁静默回退明文；④ 服务端 30min 超时扫描提取待清理条目并在 map 锁外安全获取 `rf.mu`，物理删除磁盘 `.tmp` 并将句柄安全置空 | ✅ **已闭环修复**（全量 `go test ./...`、Node 互通与防篡改、TS 测试 100% 全绿） |
+| D12 | Phase 4 前端下载端落盘与重试/降级治理 | Task 4.2 原要求"分块流式解密落盘（IndexedDB）"；E2EE 链路失败不应无限重试或静默降级明文 | ① `EqtChunkStorage` 实现基于 IndexedDB 的大文件（$\ge 256$MB）流式分件落盘与磁盘装配（第 10 轮复核确认属实）；② upload 增加 4xx fail-fast 与单块最大 3 次重试上限熔断（`chunkRetries`）消除死循环（属实）；③ download 校验 `metaData.is_e2ee` + Fail-Closed 拦截（**当前失效**，见 D13）；④ 服务端 30min 超时扫描在 map 锁外安全获取 `rf.mu`、物理删除磁盘 `.tmp`（属实） | 🟡 **① ② ④ 已闭环**（第 10 轮复核确认）；**③ Fail-Closed 因 D13 SyntaxError 整体失效**，D12 不可判定全量闭环 |
+| D13 | download 页 JS SyntaxError 整块失效（回归） | 重构 download.tmpl.html 时误删 `triggerNormalDownload()` 函数声明头，`showE2EEDownloadError` 之后裸奔顶层语句 + 孤立 `}` → 整个 `<script>` 块（446~1689 行，含 E2EE 下载 / 明文下载 / 进度轮询 / 文件列表渲染）浏览器解析失败全部失效 | `pkg/pages/download.tmpl.html:1256-1274`：`triggerNormalDownload() {` 行缺失，函数体暴露为顶层语句；另 `triggerDownloadItem` 双定义（1232 新版 Fail-Closed / 1276 旧版静默降级），JS 后定义覆盖前定义，修好 SyntaxError 后旧版仍生效 | 🔴 **阻断下载页（严重回归）**：修复 `triggerNormalDownload` 函数头 + 删除 1276 重复的旧版 `triggerDownloadItem`（第 10 轮独立复核确认） |
