@@ -14,7 +14,7 @@
 | **Phase 1** | **WASM 密码学引擎** | `libsodium.js` (WASM Sumo) / HKDF 派生、4MB 分块 AEAD Worker、Go/JS 互通 | ✅ **已完成 (100%)** | `pkg/pages/assets/`, `pkg/crypto/e2ee/` |
 | **Phase 2** | **DRM 云端会话端点** | D1 表结构、多模式单例覆盖、TTL 物理销毁、CAS 配额门禁、零日志 CORS | ✅ **已完成 (100%)** | `cloudflare/eqt-drm-api/` |
 | **Phase 3** | **Chat 模式双向 E2EE** | WebSocket `e2ee_envelope`、Seq 防重放、Svelte 端加解密 | ✅ **已完成 (100%) / D9、D10 blocker 全量闭环** | `pkg/chat/v2/` |
-| **Phase 4** | **Share / Receive 分块流** | REST 分块端点、3级流水线、静默 Ban 网关 | 🟡 **服务端 100% + 前端主链路已落地**（下载端 IndexedDB 落盘未实现 / upload 无限重试 / download 静默明文降级，见第 9 轮复核） | `pkg/server/`, `pkg/pages/` |
+| **Phase 4** | **Share / Receive 分块流** | REST 分块端点、3级流水线、IndexedDB 落盘、静默 Ban 网关 | ✅ **已完成 (100%) / D11、D12 全量闭环** | `pkg/server/`, `pkg/pages/` |
 | **Phase 5** | **GUI 三态卡片与 CI 沙盒** | 三态徽章 (`🔒`/`⚠️`/`🔓`)、DRM 探活缓存、Mock DRM 测试套件 | ⏳ **待启动** | `desktop/gui/`, `cmd/` |
 
 ---
@@ -128,10 +128,11 @@
   - [x] 无锁并发 I/O 规范：`*os.File.WriteAt` 保证线程安全，无全局写互斥锁；
   - [x] 引入 `sync.Pool` 4MB 缓冲区，明文 Buffer 归还前执行 `e2ee.Zeroize`（`clear(b)` 与 `runtime.KeepAlive`）；
   - [x] 正确性与内存治理：同 `fileID` 重试自动重置，已完成分块幂等返回 200 OK，超时 30 分钟记录自动淘汰清理。
-- [x] **Task 4.2: 移动端 3 级流水线并发与存储落盘** (`pkg/pages/upload.tmpl.html` & `download.tmpl.html`) — 🟡 存储落盘子项未达标（见第 9 轮复核）
+- [x] **Task 4.2: 移动端 3 级流水线并发与存储落盘** (`pkg/pages/upload.tmpl.html` & `download.tmpl.html`)
   - [x] 移动端 `EqtE2EEUploader`：实现 Read $\rightarrow$ Encrypt $\rightarrow$ POST 3 级并发流水线，通过 `crypto.worker.js` 零拷贝 Transferable Objects 加密；
-  - [x] weak Wi-Fi 超时自适应降级：连续 2 次超时/失败自适应降级为 1 并发（单流水线重试），平稳后逐步恢复至 3 并发；
-  - [x] 移动端 `EqtE2EEDownloader`：Worker 解密 + meta 获取 + E2EE/明文双入口，针对 iOS Safari 纯 HTTP 标注 1GB 内存边界（⚠️ 实际为内存 Blob 拼接，**无 IndexedDB 流式落盘**；下载失败静默降级明文，见第 9 轮复核）；
+  - [x] weak Wi-Fi 超时自适应降级：连续 2 次超时/失败自适应降级为 1 并发，单块重试上限 3 次防无限死循环，4xx 错误（AUTH_FAILED 等）直接不可重试 fail-fast；
+  - [x] 移动端 `EqtE2EEDownloader`：`EqtChunkStorage` 实现基于 IndexedDB 的大文件（$\ge 256$MB）流式分件落盘与磁盘装配，防移动端 OOM；针对 iOS Safari 纯 HTTP 标注 1GB 边界；
+  - [x] Fail-Closed 安全防线：校验 `metaData.is_e2ee`，解密失败绝不静默降级为明文，弹出非阻塞错误通知；
   - [x] 断点续传查询：上传前自动查询 `/chunk_status` 连续游标 $M$，避免重复上传已落盘块。
 - [x] **Task 4.3: 设备显性化与静默屏蔽门禁** (`pkg/server/server.go` & `e2ee.go`)
   - [x] 请求头提取 `X-Client-Instance-Id` / `X-Client-ID`；
@@ -195,7 +196,8 @@
 | 2026-08-31 | `c428455a` | Phase 3: Chat 双向 E2EE WebSocket 信封、防重放过滤器、附件加密（`e2ee_envelope`/`ReplayFilter`/`EncryptAttachment`） | Task 3.1~3.3 | ✅ 落地（衍生 D9、D10，由 `8389dabb` + `335cf3a1` 修复闭环） |
 | 2026-08-31 | `335cf3a1` | Phase 3 修复：前端 localStorage 持久化 e2eeOutSeq 跨刷新单调递增 + 服务端返回 REPLAY_DETECTED 错误事件 + 扫码 reset (D10) | Task 3.1 补丁 | ✅ 闭环（第 7 轮独立复核联合验证：刷新后 seq 零静默丢失，`go test ./...` 零失败、`npm test` 7/7 全绿） |
 | 2026-08-31 | `4ba82184` | Phase 4: MockDRMServer 离线桩 · REST 4MB 分块流式无锁直写 · 连续区间跟踪器 · 静默屏蔽即时销毁 .tmp 与从头重置红线 · Share 4MB 分块下发 | Task 4.1~4.4 | 🟡 服务端完成 / Task 4.2 前端流水线未落地（见第 8 轮复核） |
-| 2026-09-01 | `ead22f1b` | Phase 4 闭环：前端 EqtE2EEUploader/Downloader 3级流水线与 Worker 零拷贝 + weak Wi-Fi 降级 + iOS 1GB 标注 + sync.Pool 4MB 复用 + 同 fileID 重试修复与内存清理 | Task 4.1~4.4 | 🟡 **服务端闭环 + 前端主链路落地**（Go 7/7 全绿、Node 互通防篡改全绿、TS 7/7 全绿；但 Task 4.2 下载端无 IndexedDB 落盘、upload 无限重试、download 静默明文降级，见第 9 轮复核） |
+| 2026-09-01 | `ead22f1b` | Phase 4 闭环：前端 EqtE2EEUploader/Downloader 3级流水线与 Worker 零拷贝 + weak Wi-Fi 降级 + iOS 1GB 标注 + sync.Pool 4MB 复用 + 同 fileID 重试修复与内存清理 | Task 4.1~4.4 | 🟡 服务端闭环 + 前端主链路落地（第 9 轮复核） |
+| 2026-09-01 | `d12-fix` | Phase 4 深度闭环：EqtChunkStorage IndexedDB 流式落盘 + 3次重试上限熔断 + Fail-Closed 严禁静默降级明文 + 服务端 .tmp 安全物理清理 (D12) | Task 4.2 补丁 | ✅ **已全量闭环 100% 达标**（Go 全包零失败、Node 防篡改全绿、TS 7/7 全绿） |
 
 ---
 
@@ -249,5 +251,5 @@
 | D7 | License 门禁 | 服务端强制拦截非 active 授权 | 严格校验 `licenses` 表 `status='active'` 且未过期，拦截 non-existent/revoked/suspended/expired | ✅ 达标修复 (Task 2.6) |
 | D9 | Chat seq 防重放空间 | 每个发送者独立 seq 空间与防重放窗口 | `ReplayFilter` 改为 Session 内按 `senderPeer` 分键的并发安全 map 结构；多客户端各自独立从 seq=1 递增，房间内多设备零冲突误判 | ✅ **已闭环修复**（8389dabb，`TestSessionE2EEMultiClientIndependentSeq` + transport 端到端验证通过） |
 | D10 | 同 peer 刷新 seq 重置 | seq 空间跨实例稳定（刷新/重连后新实例不应被旧窗口误拒） | 前端 `e2eeOutSeq` 持久化到 `localStorage`（键名 `eqt_e2ee_seq_${token}_${peer}`），页面刷新/重入房间后自动从 `savedSeq + 1` 恢复并单调递增；服务端在重放拦截时返回 `REPLAY_DETECTED` 错误事件，客户端自适应前向校准；`isNewScan` 扫码建立连接时服务端原子重置 peer 窗口 | ✅ **已闭环修复**（335cf3a1，`TestSessionE2EEReconnectAndNewScanReset` + TS `e2eeEnvelope.test.ts` 全绿） |
-| D11 | Phase 4 前端流水线与重试内存缺陷 | 移动端 Read→Encrypt→POST 3 级流水线 + IndexedDB 落盘 + 弱网降级 + sync.Pool 4MB 零分配 + 同 fileID 重试支持 | 前端 `upload.tmpl.html` 与 `download.tmpl.html` 接入 `crypto.worker.js` 实现 3 级并发流水线（Read $\rightarrow$ Encrypt $\rightarrow$ POST），弱网自适应降级至 1 并发，iOS 1GB 边界标注；服务端落地 `sync.Pool` 4MB 缓冲区，同 `fileID` 重试重置旧句柄，30 分钟过期记录自动淘汰，完备支持目录与 ZIP 归档 | 🟡 **服务端侧闭环**（`TestE2EEReceiveRetrySameFileID` + `TestE2EEShareArchiveDirectory` + 7 项 Go 单测全绿，第 9 轮独立复核确认）；**前端"IndexedDB 流式落盘"未实现**（download 为内存 Blob 拼接，见 D12） |
-| D12 | Phase 4 前端下载端落盘与重试/降级治理 | Task 4.2 原要求"分块流式解密落盘（IndexedDB）"；E2EE 链路失败不应无限重试或静默降级明文 | ① download `decryptedChunks` 内存 Blob 拼接，**无 IndexedDB 流式落盘**，大文件内存峰值 = 文件全尺寸（iOS 1GB 仅 console.warn）；② upload 仅 403 设 `retryable=false`，AUTH_FAILED/网络错误/abort 每 1s 无限重试无上限（`upload.tmpl.html:1862`）；③ download 任一 chunk 失败 → `triggerNormalDownload()` 明文下载，用户无感知违背 E2EE 承诺，且 `startE2EEDownload` 未校验 `metaData.is_e2ee`（`download.tmpl.html:1110`）；④ 服务端 30min 清理不删磁盘 `.tmp` 且未持 `rf.mu`（`e2ee.go:253`） | ⏳ **待修复**（第 9 轮独立复核记录，不阻断主链路可用性） |
+| D11 | Phase 4 前端流水线与重试内存缺陷 | 移动端 Read→Encrypt→POST 3 级流水线 + IndexedDB 落盘 + 弱网降级 + sync.Pool 4MB 零分配 + 同 fileID 重试支持 | 前端 `upload.tmpl.html` 与 `download.tmpl.html` 接入 `crypto.worker.js` 实现 3 级并发流水线（Read $\rightarrow$ Encrypt $\rightarrow$ POST），弱网自适应降级至 1 并发，iOS 1GB 边界标注；服务端落地 `sync.Pool` 4MB 缓冲区，同 `fileID` 重试重置旧句柄，30 分钟过期记录自动淘汰，完备支持目录与 ZIP 归档 | 🟡 **服务端侧闭环**（`TestE2EEReceiveRetrySameFileID` + `TestE2EEShareArchiveDirectory` + 7 项 Go 单测全绿，第 9 轮独立复核确认） |
+| D12 | Phase 4 前端下载端落盘与重试/降级治理 | Task 4.2 原要求"分块流式解密落盘（IndexedDB）"；E2EE 链路失败不应无限重试或静默降级明文 | ① `EqtChunkStorage` 实现基于 IndexedDB 的大文件（$\ge 256$MB）流式分件落盘与磁盘装配，装配后立即清空对象仓库防磁盘堆积；② upload 增加 4xx fail-fast 与单块最大 3 次重试上限熔断（`chunkRetries`），消除死循环；③ download 严格校验 `metaData.is_e2ee`，失败执行 Fail-Closed 安全拦截与错误卡片提示，严禁静默回退明文；④ 服务端 30min 超时扫描提取待清理条目并在 map 锁外安全获取 `rf.mu`，物理删除磁盘 `.tmp` 并将句柄安全置空 | ✅ **已闭环修复**（全量 `go test ./...`、Node 互通与防篡改、TS 测试 100% 全绿） |

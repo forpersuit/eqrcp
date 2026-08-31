@@ -250,15 +250,30 @@ func (s *Server) handleE2EEReceiveChunk(w http.ResponseWriter, r *http.Request) 
 
 	// Purge stale entries (>30m)
 	now := time.Now()
+	var toCleanStale []*e2eeReceiveFile
 	for k, v := range s.e2eeReceiveFiles {
 		if now.Sub(v.CreatedAt) > 30*time.Minute {
-			if v.File != nil {
-				_ = v.File.Close()
-			}
+			toCleanStale = append(toCleanStale, v)
 			delete(s.e2eeReceiveFiles, k)
 		}
 	}
+	s.e2eeReceiveFilesMu.Unlock()
 
+	// Safely close and purge temp files outside map lock
+	for _, staleRf := range toCleanStale {
+		staleRf.mu.Lock()
+		if staleRf.File != nil {
+			_ = staleRf.File.Close()
+			staleRf.File = nil
+		}
+		if !staleRf.Completed && staleRf.TempPath != "" {
+			_ = os.Remove(staleRf.TempPath)
+		}
+		staleRf.Cancelled = true
+		staleRf.mu.Unlock()
+	}
+
+	s.e2eeReceiveFilesMu.Lock()
 	rf, exists := s.e2eeReceiveFiles[fileID]
 	if exists && (rf.Completed || rf.Cancelled) {
 		if chunkIndex == 0 {

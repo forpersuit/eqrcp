@@ -922,8 +922,90 @@
         var downloadTriggered = false;
         var totalCount = {{.Count}};
 
+        var EqtChunkStorage = (function() {
+            var DB_NAME = 'eqt_e2ee_download_db';
+            var STORE_NAME = 'chunks';
+            var dbPromise = null;
+
+            function openDB() {
+                if (!window.indexedDB) return Promise.resolve(null);
+                if (dbPromise) return dbPromise;
+                dbPromise = new Promise(function(resolve) {
+                    try {
+                        var req = indexedDB.open(DB_NAME, 1);
+                        req.onupgradeneeded = function(e) {
+                            var db = e.target.result;
+                            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                                db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+                            }
+                        };
+                        req.onsuccess = function(e) { resolve(e.target.result); };
+                        req.onerror = function() { resolve(null); };
+                    } catch (e) { resolve(null); }
+                });
+                return dbPromise;
+            }
+
+            async function putChunk(fileId, chunkIndex, dataUint8) {
+                var db = await openDB();
+                if (!db) return false;
+                return new Promise(function(resolve) {
+                    try {
+                        var tx = db.transaction(STORE_NAME, 'readwrite');
+                        var store = tx.objectStore(STORE_NAME);
+                        store.put({ id: fileId + '_' + chunkIndex, fileId: fileId, chunkIndex: chunkIndex, data: dataUint8 });
+                        tx.oncomplete = function() { resolve(true); };
+                        tx.onerror = function() { resolve(false); };
+                    } catch (e) { resolve(false); }
+                });
+            }
+
+            async function assembleBlob(fileId, totalChunks, mimeType) {
+                var db = await openDB();
+                if (!db) return null;
+                var chunks = [];
+                for (var idx = 0; idx < totalChunks; idx++) {
+                    var chunkData = await getChunk(db, fileId, idx);
+                    if (!chunkData) return null;
+                    chunks.push(chunkData);
+                }
+                return new Blob(chunks, { type: mimeType || 'application/octet-stream' });
+            }
+
+            function getChunk(db, fileId, chunkIndex) {
+                return new Promise(function(resolve) {
+                    try {
+                        var tx = db.transaction(STORE_NAME, 'readonly');
+                        var store = tx.objectStore(STORE_NAME);
+                        var req = store.get(fileId + '_' + chunkIndex);
+                        req.onsuccess = function(e) { resolve(e.target.result ? e.target.result.data : null); };
+                        req.onerror = function() { resolve(null); };
+                    } catch (e) { resolve(null); }
+                });
+            }
+
+            async function clearFile(fileId, totalChunks) {
+                var db = await openDB();
+                if (!db) return;
+                try {
+                    var tx = db.transaction(STORE_NAME, 'readwrite');
+                    var store = tx.objectStore(STORE_NAME);
+                    for (var idx = 0; idx < totalChunks; idx++) {
+                        store.delete(fileId + '_' + idx);
+                    }
+                } catch (e) {}
+            }
+
+            return {
+                putChunk: putChunk,
+                assembleBlob: assembleBlob,
+                clearFile: clearFile
+            };
+        })();
+
         var EqtE2EEDownloader = (function() {
             var CHUNK_SIZE = 4 * 1024 * 1024; // 4MB
+            var LARGE_FILE_THRESHOLD = 256 * 1024 * 1024; // 256MB threshold for IndexedDB streaming
 
             function getMasterKeyFromLocation() {
                 var hash = window.location.hash || '';
@@ -1001,11 +1083,17 @@
                     var fileName = fileInfo.file_name || 'download.dat';
                     var totalChunks = fileInfo.total_chunks || 1;
                     var totalBytes = fileInfo.file_size || 0;
+                    var useIndexedDB = totalBytes >= LARGE_FILE_THRESHOLD && window.indexedDB;
 
                     // iOS Safari notice for large files >= 1GB in non-secure HTTP
                     var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
                     if (isIOS && totalBytes >= 1024 * 1024 * 1024) {
                         console.warn("[E2EE-Download] iOS Safari HTTP memory warning: large downloads >= 1GB may be constrained by WebKit RAM limits.");
+                        var notifTips = document.getElementById('download-notification-tips');
+                        if (notifTips) {
+                            notifTips.style.display = 'block';
+                            notifTips.innerText = '提示：iOS Safari 浏览器内存受限，单文件建议不超过 1GB 或使用桌面端接收。';
+                        }
                     }
 
                     var decryptedChunks = [];
@@ -1015,18 +1103,39 @@
                         var chunkUrl = window.location.pathname + '/chunk?file_id=' + encodeURIComponent(fileId) + '&chunk_index=' + idx + '&client_id=' + encodeURIComponent(getOrGenerateClientId());
                         var res = await fetch(chunkUrl);
                         if (!res.ok) {
-                            throw new Error('Failed to fetch encrypted chunk ' + idx + ' (HTTP ' + res.status + ')');
+                            var errBody = await res.json().catch(() => ({}));
+                            var err = new Error(errBody.error || ('HTTP ' + res.status));
+                            err.status = res.status;
+                            throw err;
                         }
                         var arrayBuf = await res.arrayBuffer();
                         var decRes = await this.decryptChunk(arrayBuf, idx, fileId);
                         var chunkData = new Uint8Array(decRes.buffer);
                         downloadedBytes += chunkData.byteLength;
-                        decryptedChunks.push(chunkData);
+
+                        if (useIndexedDB) {
+                            // Stream chunk directly into IndexedDB to protect mobile RAM
+                            await EqtChunkStorage.putChunk(fileId, idx, chunkData);
+                        } else {
+                            decryptedChunks.push(chunkData);
+                        }
 
                         if (onProgress) onProgress(downloadedBytes, totalBytes);
                     }
 
-                    var finalBlob = new Blob(decryptedChunks, { type: 'application/octet-stream' });
+                    var finalBlob = null;
+                    if (useIndexedDB) {
+                        finalBlob = await EqtChunkStorage.assembleBlob(fileId, totalChunks);
+                        // Clean up disk store immediately after assembly
+                        await EqtChunkStorage.clearFile(fileId, totalChunks);
+                    } else {
+                        finalBlob = new Blob(decryptedChunks, { type: 'application/octet-stream' });
+                    }
+
+                    if (!finalBlob) {
+                        throw new Error('Failed to assemble downloaded file');
+                    }
+
                     var blobUrl = URL.createObjectURL(finalBlob);
                     var a = document.createElement('a');
                     a.href = blobUrl;
@@ -1064,12 +1173,14 @@
             var metaUrl = window.location.pathname + '/meta?client_id=' + encodeURIComponent(getOrGenerateClientId());
             var metaRes = await fetch(metaUrl);
             if (!metaRes.ok) {
-                console.error("Failed to fetch E2EE meta: ", metaRes.status);
-                return false;
+                throw new Error("Failed to fetch E2EE metadata (HTTP " + metaRes.status + ")");
             }
             var metaData = await metaRes.json();
-            if (!metaData.ok || !metaData.files || metaData.files.length === 0) {
-                return false;
+            if (!metaData.ok || !metaData.is_e2ee) {
+                throw new Error("Server is not operating in E2EE mode");
+            }
+            if (!metaData.files || metaData.files.length === 0) {
+                throw new Error("No files available in shared session");
             }
 
             var pipeline = new EqtE2EEDownloader.Pipeline(masterKey);
@@ -1091,9 +1202,11 @@
                     var fillEl = document.getElementById('download-progress-fill');
                     var percentEl = document.getElementById('download-progress-percent');
                     var bytesEl = document.getElementById('download-progress-bytes');
+                    var statusEl = document.getElementById('download-progress-status');
                     if (fillEl) fillEl.style.width = percent + '%';
                     if (percentEl) percentEl.innerText = percent + '%';
                     if (bytesEl) bytesEl.innerText = formatBytes(currentTotal) + ' / ' + formatBytes(totalBytesAll);
+                    if (statusEl) statusEl.innerText = '🔒 Decrypting (' + (fIdx + 1) + '/' + filesToFetch.length + ')...';
                 });
                 completedBytesAll += (fileInfo.file_size || 0);
             }
@@ -1108,15 +1221,39 @@
             var masterKey = EqtE2EEDownloader.getMasterKey();
             if (masterKey) {
                 startE2EEDownload().catch(function(err) {
-                    console.error("E2EE download error, fallback to normal: ", err);
-                    triggerNormalDownload();
+                    console.error("E2EE download error (Fail-Closed, zero plaintext fallback): ", err);
+                    showE2EEDownloadError(err.message || 'Decryption failed or connection broken');
                 });
                 return;
             }
             triggerNormalDownload();
         }
 
-        function triggerNormalDownload() {
+        function triggerDownloadItem(index) {
+            var masterKey = EqtE2EEDownloader.getMasterKey();
+            if (masterKey) {
+                startE2EEDownload(index).catch(function(err) {
+                    console.error("E2EE download item error (Fail-Closed, zero plaintext fallback): ", err);
+                    showE2EEDownloadError(err.message || 'Decryption failed or connection broken');
+                });
+                return;
+            }
+            triggerNormalDownloadItem(index);
+        }
+
+        function showE2EEDownloadError(msg) {
+            var progressContainer = document.getElementById('download-progress-container');
+            if (progressContainer) progressContainer.style.display = 'block';
+            var statusEl = document.getElementById('download-progress-status');
+            if (statusEl) {
+                statusEl.innerText = '🔒 端到端解密失败: ' + msg + ' (未降级为明文以保护隐私)';
+                statusEl.style.color = 'var(--danger)';
+            }
+            var fillEl = document.getElementById('download-progress-fill');
+            if (fillEl) fillEl.style.background = 'var(--danger)';
+            var actionBtnRow = document.getElementById('action-btn-row');
+            if (actionBtnRow) actionBtnRow.style.display = 'flex';
+        }
             startStatusPolling();
             if (downloadTriggered) {
                 window.location.href = window.location.pathname + '?download=1&client_id=' + getOrGenerateClientId() + '&_t=' + Date.now();

@@ -1827,6 +1827,7 @@
                             chunkQueue.push(idx);
                         }
 
+                        var chunkRetries = {};
                         var activeWorkers = 0;
                         var hasError = null;
 
@@ -1859,7 +1860,8 @@
                                             if (this.consecutiveFailures >= 2) {
                                                 this.concurrency = MIN_CONCURRENCY; // Weak Wi-Fi fallback
                                             }
-                                            if (err && err.retryable !== false && !isUploadStopped) {
+                                            chunkRetries[chunkIdx] = (chunkRetries[chunkIdx] || 0) + 1;
+                                            if (err && err.retryable !== false && chunkRetries[chunkIdx] <= 3 && !isUploadStopped) {
                                                 chunkQueue.unshift(chunkIdx);
                                                 setTimeout(processNext, 1000);
                                             } else {
@@ -1903,7 +1905,8 @@
                                 var errBody = await postRes.json().catch(() => ({}));
                                 var err = new Error(errBody.error || ('Server error ' + postRes.status));
                                 err.status = postRes.status;
-                                if (postRes.status === 403) {
+                                // 4xx errors (e.g. 400 AUTH_FAILED, 403 BANNED, 404) are deterministic non-retryable
+                                if (postRes.status >= 400 && postRes.status < 500) {
                                     err.retryable = false;
                                 }
                                 throw err;
