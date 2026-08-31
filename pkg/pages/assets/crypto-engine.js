@@ -192,6 +192,17 @@
     }
 
     /**
+     * Constructs AAD for WebSocket / Chat packet: uint64_be(seq) || int64_be(timestamp) = 16 bytes
+     */
+    _makePacketAAD(seq, timestamp = 0) {
+      const aad = new Uint8Array(16);
+      const view = new DataView(aad.buffer, aad.byteOffset, aad.byteLength);
+      view.setBigUint64(0, BigInt(seq), false);
+      view.setBigInt64(8, BigInt(timestamp), false);
+      return aad;
+    }
+
+    /**
      * Constructs AAD for WebSocket / Chat packet: uint64_be(seq)
      */
     _makeSeqAAD(seq) {
@@ -263,6 +274,124 @@
         );
       } catch (err) {
         throw new CryptoError(CryptoErrorCode.AUTH_FAILED, "AEAD verification failed: chunk ciphertext/tag corrupted or wrong key", { op, chunkIndex, fileID });
+      }
+    }
+
+    /**
+     * Encrypts a small attachment (<= 20MB) as a single envelope without 4MB chunk index headers.
+     * Output format: [Nonce(24B) | Ciphertext + Tag(16B)]
+     */
+    encryptAttachment(fileBytes, fileID, keyType = 'send') {
+      const op = 'encryptAttachment';
+      this._ensureInit(op);
+      const key = keyType === 'send' ? this.keys.kSend : this.keys.kRecv;
+      const nonce = this.sodium.randombytes_buf(24);
+      const aad = this.sodium.from_string(fileID);
+
+      const ciphertextWithTag = this.sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+        fileBytes,
+        aad,
+        null,
+        nonce,
+        key
+      );
+
+      const envelope = new Uint8Array(24 + ciphertextWithTag.length);
+      envelope.set(nonce, 0);
+      envelope.set(ciphertextWithTag, 24);
+      return envelope;
+    }
+
+    /**
+     * Decrypts a small attachment (<= 20MB) envelope.
+     * Expects format: [Nonce(24B) | Ciphertext + Tag(16B)]
+     */
+    decryptAttachment(envelopeBytes, fileID, keyType = 'recv') {
+      const op = 'decryptAttachment';
+      this._ensureInit(op);
+      if (envelopeBytes.length < 24 + 16) {
+        throw new CryptoError(CryptoErrorCode.CIPHERTEXT_TOO_SHORT, `Attachment envelope too short: ${envelopeBytes.length} bytes`, { op, fileID });
+      }
+
+      const nonce = envelopeBytes.subarray(0, 24);
+      const ciphertextWithTag = envelopeBytes.subarray(24);
+      const key = keyType === 'recv' ? this.keys.kRecv : this.keys.kSend;
+      const aad = this.sodium.from_string(fileID);
+
+      try {
+        return this.sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+          null,
+          ciphertextWithTag,
+          aad,
+          nonce,
+          key
+        );
+      } catch (err) {
+        throw new CryptoError(CryptoErrorCode.AUTH_FAILED, "Attachment AEAD verification failed: corrupted payload or wrong fileID", { op, fileID });
+      }
+    }
+
+    /**
+     * Encrypts a JSON object or string into a standardized E2EEEnvelope JSON object.
+     * Matches Go's protocol.E2EEEnvelope shape.
+     */
+    encryptE2EEEnvelope(payload, seq, timestamp = Date.now()) {
+      const op = 'encryptE2EEEnvelope';
+      this._ensureInit(op);
+      let payloadBytes;
+      if (typeof payload === 'string') {
+        payloadBytes = this.sodium.from_string(payload);
+      } else if (payload instanceof Uint8Array) {
+        payloadBytes = payload;
+      } else {
+        payloadBytes = this.sodium.from_string(JSON.stringify(payload));
+      }
+
+      const nonce = this.sodium.randombytes_buf(24);
+      const aad = this._makePacketAAD(seq, timestamp);
+
+      const ciphertextWithTag = this.sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+        payloadBytes,
+        aad,
+        null,
+        nonce,
+        this.keys.kWS
+      );
+
+      return {
+        type: 'e2ee_envelope',
+        version: 1,
+        seq: Number(seq),
+        timestamp: Number(timestamp),
+        nonce: this.sodium.to_base64(nonce, this.sodium.base64_variants.ORIGINAL),
+        ciphertext: this.sodium.to_base64(ciphertextWithTag, this.sodium.base64_variants.ORIGINAL)
+      };
+    }
+
+    /**
+     * Decrypts an E2EEEnvelope JSON object into plaintext Uint8Array bytes.
+     */
+    decryptE2EEEnvelope(env) {
+      const op = 'decryptE2EEEnvelope';
+      this._ensureInit(op);
+      if (!env || env.type !== 'e2ee_envelope') {
+        throw new CryptoError(CryptoErrorCode.PARAM_ERROR, "Invalid envelope format", { op });
+      }
+
+      const nonce = this.sodium.from_base64(env.nonce, this.sodium.base64_variants.ORIGINAL);
+      const ciphertextWithTag = this.sodium.from_base64(env.ciphertext, this.sodium.base64_variants.ORIGINAL);
+      const aad = this._makePacketAAD(env.seq, env.timestamp);
+
+      try {
+        return this.sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+          null,
+          ciphertextWithTag,
+          aad,
+          nonce,
+          this.keys.kWS
+        );
+      } catch (err) {
+        throw new CryptoError(CryptoErrorCode.AUTH_FAILED, "WebSocket frame AEAD verification failed: tampered payload or sequence mismatch", { op, seq: env.seq });
       }
     }
 

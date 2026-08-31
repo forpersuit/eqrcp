@@ -230,6 +230,26 @@ func (h *WebSocketHandler) ServeWS(w http.ResponseWriter, r *http.Request, token
 			}
 			sess.SendText(cl, cmd.Text, cmd.CommandID)
 
+		case protocol.CommandE2EEEnvelope:
+			if cl == nil || sess == nil {
+				h.sendError(ctx, conn, cmd.CommandID, protocol.ErrorBadCommand, "not connected")
+				continue
+			}
+			version := cmd.Version
+			if version == 0 {
+				version = protocol.E2EEVersion
+			}
+			env := &protocol.E2EEEnvelope{
+				Type:       protocol.E2EEEnvelopeType,
+				Version:    version,
+				Seq:        cmd.Seq,
+				Timestamp:  cmd.Timestamp,
+				Nonce:      cmd.Nonce,
+				Ciphertext: cmd.Ciphertext,
+				Tag:        cmd.Tag,
+			}
+			sess.HandleE2EEEnvelope(cl, env, cmd.CommandID)
+
 		case protocol.CommandRecallMessage:
 			if cl == nil || sess == nil {
 				h.sendError(ctx, conn, cmd.CommandID, protocol.ErrorBadCommand, "not connected")

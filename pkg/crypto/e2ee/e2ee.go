@@ -240,6 +240,60 @@ func DecryptPacket(envelope []byte, key []byte, aad []byte) ([]byte, error) {
 	return plaintext, nil
 }
 
+// EncryptAttachment encrypts a single-chunk small attachment (<= 20MB) with XChaCha20-Poly1305.
+// Envelope Format: [Nonce(24B) | Ciphertext | Tag(16B)] (No ChunkIndex header)
+// AAD: fileID bytes
+func EncryptAttachment(plaintext []byte, key []byte, fileID string) ([]byte, error) {
+	if len(key) != KeySize {
+		return nil, WrapOpError(ErrCodeInvalidKeySize, "EncryptAttachment", "invalid key size", ErrInvalidKeySize)
+	}
+
+	aead, err := chacha20poly1305.NewX(key)
+	if err != nil {
+		return nil, WrapOpError(ErrCodeUninitialized, "EncryptAttachment", "failed to initialize XChaCha20-Poly1305", err)
+	}
+
+	nonce := make([]byte, NonceSize)
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return nil, WrapOpError(ErrCodeNonceGeneration, "EncryptAttachment", "failed to generate nonce", err)
+	}
+
+	aad := []byte(fileID)
+	out := make([]byte, NonceSize+len(plaintext)+TagSize)
+	copy(out[:NonceSize], nonce)
+
+	ciphertext := aead.Seal(out[:NonceSize], nonce, plaintext, aad)
+	return ciphertext, nil
+}
+
+// DecryptAttachment decrypts and authenticates a single-chunk small attachment (<= 20MB).
+// Envelope Format: [Nonce(24B) | Ciphertext | Tag(16B)]
+// AAD: fileID bytes
+func DecryptAttachment(envelope []byte, key []byte, fileID string) ([]byte, error) {
+	if len(key) != KeySize {
+		return nil, WrapOpError(ErrCodeInvalidKeySize, "DecryptAttachment", "invalid key size", ErrInvalidKeySize)
+	}
+	if len(envelope) < NonceSize+TagSize {
+		return nil, WrapOpError(ErrCodeCiphertextTooShort, "DecryptAttachment", "envelope too short", ErrCiphertextTooShort)
+	}
+
+	nonce := envelope[:NonceSize]
+	ciphertextWithTag := envelope[NonceSize:]
+
+	aead, err := chacha20poly1305.NewX(key)
+	if err != nil {
+		return nil, WrapOpError(ErrCodeUninitialized, "DecryptAttachment", "failed to initialize XChaCha20 cipher", err)
+	}
+
+	aad := []byte(fileID)
+	plaintext, err := aead.Open(nil, nonce, ciphertextWithTag, aad)
+	if err != nil {
+		return nil, WrapOpError(ErrCodeAuthFailed, "DecryptAttachment", "attachment AEAD verification failed (tampered ciphertext/tag or wrong fileID)", ErrAuthFailed)
+	}
+
+	return plaintext, nil
+}
+
 // NewXChaChaCipher returns a cipher.AEAD instance with the given 32-byte key.
 func NewXChaChaCipher(key []byte) (cipher.AEAD, error) {
 	if len(key) != KeySize {

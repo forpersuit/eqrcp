@@ -3,6 +3,7 @@ package e2ee
 import (
 	"bytes"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"io"
 	"testing"
@@ -207,6 +208,44 @@ func TestPacketEncryptionDecryption(t *testing.T) {
 	_, err = DecryptPacket(envelope, dk.WSKey[:], tamperedAAD)
 	if err == nil {
 		t.Fatalf("expected authentication error on tampered AAD, got nil")
+	}
+}
+
+func TestAttachmentEncryptionDecryption(t *testing.T) {
+	masterKey, err := GenerateMasterKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dk, _ := DeriveKeys(masterKey)
+
+	fileID := "attachment-photo.png"
+	plaintext := []byte("fake-png-binary-attachment-data-here-12345")
+
+	// Encrypt attachment (no chunk headers, AAD = fileID)
+	envelope, err := EncryptAttachment(plaintext, dk.SendKey[:], fileID)
+	if err != nil {
+		t.Fatalf("EncryptAttachment failed: %v", err)
+	}
+
+	expectedLen := NonceSize + len(plaintext) + TagSize
+	if len(envelope) != expectedLen {
+		t.Fatalf("expected envelope size %d, got %d", expectedLen, len(envelope))
+	}
+
+	// Decrypt attachment
+	decrypted, err := DecryptAttachment(envelope, dk.SendKey[:], fileID)
+	if err != nil {
+		t.Fatalf("DecryptAttachment failed: %v", err)
+	}
+
+	if !bytes.Equal(decrypted, plaintext) {
+		t.Fatalf("Decrypted attachment mismatch: got %s, want %s", decrypted, plaintext)
+	}
+
+	// Tampered fileID AAD
+	_, err = DecryptAttachment(envelope, dk.SendKey[:], "wrong-file.png")
+	if err == nil || !errors.Is(err, ErrAuthFailed) {
+		t.Fatalf("expected AuthFailed on tampered fileID, got: %v", err)
 	}
 }
 

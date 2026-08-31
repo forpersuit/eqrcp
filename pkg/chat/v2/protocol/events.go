@@ -23,6 +23,8 @@ const (
 	// EventHistoryPage accompanies a paged message replay (connect or load_history).
 	// It is not stored in MessageStore and does not advance client afterSeq.
 	EventHistoryPage EventType = "history_page"
+	// EventE2EEEnvelope delivers an encrypted, authenticated payload.
+	EventE2EEEnvelope EventType = "e2ee_envelope"
 )
 
 // HistoryPage describes a slice of message history delivered to one client.
@@ -118,4 +120,5 @@ type EventEnvelope struct {
 	Transfer  *TransferEvent `json:"transfer,omitempty"`
 	Error     *ErrorPayload  `json:"error,omitempty"`
 	History   *HistoryPage   `json:"history,omitempty"`
+	E2EE      *E2EEEnvelope  `json:"e2ee,omitempty"`
 }

@@ -457,6 +457,13 @@ export class ChatWebSocketClient {
         }
         break;
 
+      case 'e2ee_envelope':
+        if (event.e2ee || (event as any).ciphertext) {
+          const env = event.e2ee || (event as any);
+          this.handleIncomingE2EEEnvelope(env);
+        }
+        break;
+
       case 'error':
         if (event.error) {
           const currentLang = localStorage.getItem('eqt_lang') || 'zh';
@@ -574,7 +581,67 @@ export class ChatWebSocketClient {
     }
   }
 
+  private e2eeOutSeq = 1;
+
+  private handleIncomingE2EEEnvelope(env: any): void {
+    try {
+      const engine = typeof window !== 'undefined' ? (window as any).__eqt_crypto_engine : null;
+      if (engine && engine.initialized) {
+        const decryptedBytes = engine.decryptE2EEEnvelope(env);
+        const text = engine.sodium.to_string(decryptedBytes);
+        try {
+          const payload = JSON.parse(text);
+          if (payload.action === 'chat_message') {
+            chatActions.addMessage({
+              id: payload.id || `e2ee-${env.seq}-${env.timestamp}`,
+              senderId: payload.senderId || 'e2ee-peer',
+              sender: payload.sender || 'Peer',
+              avatar: payload.avatar || '',
+              theme: payload.theme || '',
+              type: 'text',
+              text: payload.content || '',
+              createdAt: payload.createdAt || new Date(env.timestamp).toISOString()
+            });
+            this.sendAck(payload.id || `e2ee-${env.seq}`);
+            return;
+          }
+        } catch (jsonErr) {
+          // Plain text fallback
+          chatActions.addMessage({
+            id: `e2ee-${env.seq}-${env.timestamp}`,
+            sender: 'Peer',
+            type: 'text',
+            text: text,
+            createdAt: new Date(env.timestamp).toISOString()
+          });
+          return;
+        }
+      }
+    } catch (err: any) {
+      chatActions.addSystemMessage('⚠️ 接收到加密消息，但解密失败（可能密钥不匹配或被篡改）');
+      this.sendLog(`[E2EE-ERROR] Decryption failed for seq ${env.seq}: ${err.message || err}`);
+    }
+  }
+
   public sendText(text: string): void {
+    const engine = typeof window !== 'undefined' ? (window as any).__eqt_crypto_engine : null;
+    if (engine && engine.initialized) {
+      const seq = this.e2eeOutSeq++;
+      const ts = Date.now();
+      const payload = {
+        action: 'chat_message',
+        sender: this.clientLabel,
+        senderId: this.clientPeer,
+        content: text,
+        avatar: this.clientAvatar,
+        theme: this.themeParam,
+        createdAt: new Date(ts).toISOString()
+      };
+      const envelope = engine.encryptE2EEEnvelope(payload, seq, ts);
+      this.sendCommand(envelope);
+      return;
+    }
+
     this.sendCommand({
       type: 'send_text',
       commandId: `txt-${Date.now()}`,

@@ -78,6 +78,85 @@ self.onmessage = async function(e) {
         }
         break;
 
+      case 'ENCRYPT_ATTACHMENT':
+        if (!engine || !engine.initialized) {
+          throw new CryptoError(CryptoErrorCode.UNINITIALIZED, "Worker cryptographic engine is not initialized", { op: 'ENCRYPT_ATTACHMENT', fileID: data.fileId });
+        }
+        {
+          const plainBuf = new Uint8Array(data.buffer);
+          const keyType = data.useRecvKey ? 'recv' : 'send';
+          const envelope = engine.encryptAttachment(plainBuf, data.fileId, keyType);
+
+          self.postMessage({
+            type: 'ENCRYPT_ATTACHMENT_SUCCESS',
+            fileId: data.fileId,
+            buffer: envelope.buffer,
+            byteLength: envelope.byteLength,
+            durationMs: Date.now() - startTime
+          }, [envelope.buffer]);
+        }
+        break;
+
+      case 'DECRYPT_ATTACHMENT':
+        if (!engine || !engine.initialized) {
+          throw new CryptoError(CryptoErrorCode.UNINITIALIZED, "Worker cryptographic engine is not initialized", { op: 'DECRYPT_ATTACHMENT', fileID: data.fileId });
+        }
+        {
+          const cipherBuf = new Uint8Array(data.buffer);
+          const keyType = data.useSendKey ? 'send' : 'recv';
+          const decrypted = engine.decryptAttachment(cipherBuf, data.fileId, keyType);
+
+          self.postMessage({
+            type: 'DECRYPT_ATTACHMENT_SUCCESS',
+            fileId: data.fileId,
+            buffer: decrypted.buffer,
+            byteLength: decrypted.byteLength,
+            durationMs: Date.now() - startTime
+          }, [decrypted.buffer]);
+        }
+        break;
+
+      case 'ENCRYPT_E2EE_ENVELOPE':
+        if (!engine || !engine.initialized) {
+          throw new CryptoError(CryptoErrorCode.UNINITIALIZED, "Worker cryptographic engine is not initialized", { op: 'ENCRYPT_E2EE_ENVELOPE' });
+        }
+        {
+          const env = engine.encryptE2EEEnvelope(data.payload, data.seq, data.timestamp || Date.now());
+          self.postMessage({
+            type: 'ENCRYPT_E2EE_ENVELOPE_SUCCESS',
+            envelope: env,
+            commandId: data.commandId,
+            durationMs: Date.now() - startTime
+          });
+        }
+        break;
+
+      case 'DECRYPT_E2EE_ENVELOPE':
+        if (!engine || !engine.initialized) {
+          throw new CryptoError(CryptoErrorCode.UNINITIALIZED, "Worker cryptographic engine is not initialized", { op: 'DECRYPT_E2EE_ENVELOPE' });
+        }
+        {
+          const decryptedBytes = engine.decryptE2EEEnvelope(data.envelope);
+          let parsedPayload = null;
+          let textPayload = "";
+          try {
+            textPayload = engine.sodium.to_string(decryptedBytes);
+            parsedPayload = JSON.parse(textPayload);
+          } catch (e) {
+            // Raw string or non-JSON
+          }
+
+          self.postMessage({
+            type: 'DECRYPT_E2EE_ENVELOPE_SUCCESS',
+            seq: data.envelope.seq,
+            text: textPayload,
+            payload: parsedPayload,
+            commandId: data.commandId,
+            durationMs: Date.now() - startTime
+          });
+        }
+        break;
+
       case 'ZEROIZE_AND_CLOSE':
         if (engine) {
           engine.wipe();

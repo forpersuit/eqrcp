@@ -567,3 +567,127 @@ func TestWebSocketKickOnlyHostAllowed(t *testing.T) {
 		t.Logf("host post-kick event type=%s", presAfterKick.Type)
 	}
 }
+
+func TestWebSocketE2EEEnvelopeBlindRelayAndAntiReplay(t *testing.T) {
+	logger := &diag.MemoryLogger{}
+	handler := NewWebSocketHandler(WebSocketConfig{Logger: logger, DisableSystemMessages: true})
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// 1. Alice connects
+	connA, _, err := websocket.Dial(ctx, wsURL(server.URL)+"/e2ee-room/ws", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connA.Close(websocket.StatusNormalClosure, "done")
+
+	_ = readEvent(ctx, t, connA) // initial hello
+
+	if err := wsjson.Write(ctx, connA, protocol.CommandEnvelope{
+		Type:      protocol.CommandConnect,
+		CommandID: "cmd-conn-a",
+		Client: protocol.ClientInfo{
+			Label: "Alice",
+			Peer:  "peer-alice",
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	_ = readEvent(ctx, t, connA) // connect hello
+	_ = readEvent(ctx, t, connA) // presence A
+
+	// 2. Bob connects
+	connB, _, err := websocket.Dial(ctx, wsURL(server.URL)+"/e2ee-room/ws", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connB.Close(websocket.StatusNormalClosure, "done")
+
+	_ = readEvent(ctx, t, connB) // initial hello
+
+	if err := wsjson.Write(ctx, connB, protocol.CommandEnvelope{
+		Type:      protocol.CommandConnect,
+		CommandID: "cmd-conn-b",
+		Client: protocol.ClientInfo{
+			Label: "Bob",
+			Peer:  "peer-bob",
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	_ = readEvent(ctx, t, connB) // connect hello
+	_ = readEvent(ctx, t, connA) // presence update for Alice (B joined)
+	_ = readEvent(ctx, t, connB) // presence update for Bob (sees A and B)
+
+	// 3. Alice encrypts an E2EE frame (K_ws)
+	kWS := make([]byte, 32)
+	for i := range kWS {
+		kWS[i] = byte(i + 1)
+	}
+
+	secretText := "Top Secret API Key: sk-live-12345678"
+	seq := uint64(101)
+	ts := time.Now().UnixMilli()
+
+	env, err := protocol.EncryptE2EEEnvelope([]byte(secretText), seq, ts, kWS)
+	if err != nil {
+		t.Fatalf("Failed to encrypt E2EE envelope: %v", err)
+	}
+
+	// 4. Alice sends CommandE2EEEnvelope over WebSocket
+	if err := wsjson.Write(ctx, connA, protocol.CommandEnvelope{
+		Type:       protocol.CommandE2EEEnvelope,
+		CommandID:  "cmd-e2ee-1",
+		Version:    env.Version,
+		Seq:        env.Seq,
+		Timestamp:  env.Timestamp,
+		Nonce:      env.Nonce,
+		Ciphertext: env.Ciphertext,
+		Tag:        env.Tag,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// 5. Bob receives blind relayed EventE2EEEnvelope
+	bobEv := readEvent(ctx, t, connB)
+	if bobEv.Type != protocol.EventE2EEEnvelope {
+		t.Fatalf("expected EventE2EEEnvelope on Bob, got %s", bobEv.Type)
+	}
+	if bobEv.E2EE == nil {
+		t.Fatalf("expected E2EE payload inside event on Bob")
+	}
+
+	// 6. Bob decrypts the frame with K_ws
+	decrypted, err := protocol.DecryptE2EEEnvelope(bobEv.E2EE, kWS)
+	if err != nil {
+		t.Fatalf("Bob failed to decrypt E2EE envelope: %v", err)
+	}
+	if string(decrypted) != secretText {
+		t.Fatalf("Decrypted text mismatch: got %q, want %q", string(decrypted), secretText)
+	}
+
+	// 7. Anti-Replay: Attempt to resend duplicate packet with same Seq
+	if err := wsjson.Write(ctx, connA, protocol.CommandEnvelope{
+		Type:       protocol.CommandE2EEEnvelope,
+		CommandID:  "cmd-e2ee-replay",
+		Version:    env.Version,
+		Seq:        env.Seq, // DUPLICATE SEQ
+		Timestamp:  env.Timestamp,
+		Nonce:      env.Nonce,
+		Ciphertext: env.Ciphertext,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify Bob does NOT receive the replayed packet
+	drainCtx, drainCancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer drainCancel()
+	var replayedEv protocol.EventEnvelope
+	err = wsjson.Read(drainCtx, connB, &replayedEv)
+	if err == nil {
+		t.Fatalf("Expected replayed packet to be dropped by server, but Bob received: %+v", replayedEv)
+	}
+}

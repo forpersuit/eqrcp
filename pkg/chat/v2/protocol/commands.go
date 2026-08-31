@@ -18,6 +18,8 @@ const (
 	// CommandLoadHistory requests an older page of message events
 	// (seq in (joinSeq, beforeSeq)), newest-first page of up to limit items.
 	CommandLoadHistory CommandType = "load_history"
+	// CommandE2EEEnvelope carries an encrypted, authenticated payload.
+	CommandE2EEEnvelope CommandType = "e2ee_envelope"
 )
 
 // ClientInfo describes a chat client at connection time.
@@ -53,4 +55,11 @@ type CommandEnvelope struct {
 	TransferID string `json:"transferId,omitempty"`
 	BytesDone  int64  `json:"bytesDone,omitempty"`
 	BytesTotal int64  `json:"bytesTotal,omitempty"`
+	// E2EE envelope fields (used when Type == "e2ee_envelope")
+	Version    int    `json:"version,omitempty"`
+	Seq        uint64 `json:"seq,omitempty"`
+	Timestamp  int64  `json:"timestamp,omitempty"`
+	Nonce      string `json:"nonce,omitempty"`
+	Ciphertext string `json:"ciphertext,omitempty"`
+	Tag        string `json:"tag,omitempty"`
 }

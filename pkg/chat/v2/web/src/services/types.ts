@@ -10,7 +10,8 @@ export type CommandType =
   | 'report_progress'
   | 'update_client'
   | 'kick_client'
-  | 'load_history';
+  | 'load_history'
+  | 'e2ee_envelope';
 
 export interface ClientInfo {
   token: string;
@@ -21,6 +22,16 @@ export interface ClientInfo {
   join?: string;
   localJoin?: string;
   isNewScan?: boolean;
+}
+
+export interface E2EEEnvelope {
+  type: 'e2ee_envelope';
+  version: number;
+  seq: number;
+  timestamp: number;
+  nonce: string;
+  ciphertext: string;
+  tag?: string;
 }
 
 export interface CommandEnvelope {
@@ -37,6 +48,12 @@ export interface CommandEnvelope {
   transferId?: string;
   bytesDone?: number;
   bytesTotal?: number;
+  version?: number;
+  seq?: number;
+  timestamp?: number;
+  nonce?: string;
+  ciphertext?: string;
+  tag?: string;
 }
 
 export type EventType =
@@ -54,7 +71,8 @@ export type EventType =
   | 'transfer_cancelled'
   | 'request_file_data'
   | 'error'
-  | 'history_page';
+  | 'history_page'
+  | 'e2ee_envelope';
 
 export interface HistoryPage {
   hasMore: boolean;
@@ -145,6 +163,7 @@ export interface EventEnvelope {
   transfer?: TransferEvent;
   error?: ErrorPayload;
   history?: HistoryPage;
+  e2ee?: E2EEEnvelope;
 }
 
 // ── Seeded HSL theme calculations re-exported from theme.ts ──

@@ -183,6 +183,83 @@ async function runTests() {
     global.crypto = origCrypto;
   }
 
+  // 8. Single-Chunk Small Attachment Encryption & Decryption (<= 20MB)
+  console.log("Running small attachment encryption/decryption tests...");
+  {
+    const engine8 = new EQTCryptoEngine();
+    await engine8.init(masterKeyHex);
+    const attachmentBytes = new Uint8Array(1024 * 1024); // 1MB
+    for (let i = 0; i < attachmentBytes.length; i++) attachmentBytes[i] = (i * 11 + 5) & 0xff;
+    const fileID = "attachment-doc-999.pdf";
+
+    // PC -> Mobile direction (kSend)
+    const encAttachment = engine8.encryptAttachment(attachmentBytes, fileID, 'send');
+    assert.strictEqual(encAttachment.length, 24 + attachmentBytes.length + 16, "Attachment envelope size mismatch");
+
+    const decAttachment = engine8.decryptAttachment(encAttachment, fileID, 'send');
+    assert.deepStrictEqual(decAttachment, attachmentBytes, "Decrypted attachment mismatch (kSend)");
+
+    // Mobile -> PC direction (kRecv)
+    const encAttachment2 = engine8.encryptAttachment(attachmentBytes, fileID, 'recv');
+    const decAttachment2 = engine8.decryptAttachment(encAttachment2, fileID, 'recv');
+    assert.deepStrictEqual(decAttachment2, attachmentBytes, "Decrypted attachment mismatch (kRecv)");
+
+    // Tampered fileID
+    try {
+      engine8.decryptAttachment(encAttachment, "wrong-attachment-id.pdf", 'send');
+      assert.fail("Should throw on wrong attachment fileID");
+    } catch (err) {
+      assert.strictEqual(err.code, CryptoErrorCode.AUTH_FAILED, "Attachment fileID mismatch throws AUTH_FAILED");
+    }
+    console.log("✓ Small attachment (<= 20MB) single-chunk encryption/decryption PASSED!");
+  }
+
+  // 9. Standardized E2EEEnvelope JSON Object Encryption & Decryption
+  console.log("Running E2EEEnvelope JSON object round-trip and tamper tests...");
+  {
+    const engine9 = new EQTCryptoEngine();
+    await engine9.init(masterKeyHex);
+
+    const chatPayload = {
+      action: "chat_message",
+      sender: "iPhone-16-Pro",
+      content: "Hello E2EE Chat World!"
+    };
+    const seq = 42;
+    const ts = 1725105600123;
+
+    const envelope = engine9.encryptE2EEEnvelope(chatPayload, seq, ts);
+    assert.strictEqual(envelope.type, "e2ee_envelope");
+    assert.strictEqual(envelope.version, 1);
+    assert.strictEqual(envelope.seq, seq);
+    assert.strictEqual(envelope.timestamp, ts);
+    assert(typeof envelope.nonce === 'string' && envelope.nonce.length > 0);
+    assert(typeof envelope.ciphertext === 'string' && envelope.ciphertext.length > 0);
+
+    const decryptedBytes = engine9.decryptE2EEEnvelope(envelope);
+    const decryptedPayload = JSON.parse(engine9.sodium.to_string(decryptedBytes));
+    assert.deepStrictEqual(decryptedPayload, chatPayload, "Decrypted E2EEEnvelope payload mismatch");
+
+    // Tampered seq
+    const tamperedEnv = Object.assign({}, envelope, { seq: 43 });
+    try {
+      engine9.decryptE2EEEnvelope(tamperedEnv);
+      assert.fail("Should throw on tampered seq");
+    } catch (err) {
+      assert.strictEqual(err.code, CryptoErrorCode.AUTH_FAILED, "Tampered envelope seq throws AUTH_FAILED");
+    }
+
+    // Tampered timestamp
+    const tamperedEnv2 = Object.assign({}, envelope, { timestamp: ts + 1000 });
+    try {
+      engine9.decryptE2EEEnvelope(tamperedEnv2);
+      assert.fail("Should throw on tampered timestamp");
+    } catch (err) {
+      assert.strictEqual(err.code, CryptoErrorCode.AUTH_FAILED, "Tampered envelope timestamp throws AUTH_FAILED");
+    }
+    console.log("✓ E2EEEnvelope JSON encryption/decryption & tamper resistance PASSED!");
+  }
+
   console.log("\n>>> ALL JS CRYPTO TESTS PASSED 100% <<<\n");
 }
 

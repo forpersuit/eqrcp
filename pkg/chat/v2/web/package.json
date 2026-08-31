@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json",
-    "test": "node --experimental-strip-types src/services/visibilityPolicy.test.ts && node --experimental-strip-types src/services/resumeConnection.test.ts && node --experimental-strip-types src/services/reconnectSeq.test.ts && node --experimental-strip-types src/services/uploadPolicy.test.ts && node --experimental-strip-types src/services/composerKey.test.ts && node --experimental-strip-types src/state/systemNotice.test.ts"
+    "test": "node --experimental-strip-types src/services/visibilityPolicy.test.ts && node --experimental-strip-types src/services/resumeConnection.test.ts && node --experimental-strip-types src/services/reconnectSeq.test.ts && node --experimental-strip-types src/services/uploadPolicy.test.ts && node --experimental-strip-types src/services/composerKey.test.ts && node --experimental-strip-types src/state/systemNotice.test.ts && node --experimental-strip-types src/services/e2eeEnvelope.test.ts"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.1.2",
