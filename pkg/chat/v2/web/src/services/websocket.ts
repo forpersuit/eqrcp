@@ -115,6 +115,15 @@ export class ChatWebSocketClient {
     this.clientToken = savedToken;
     localStorage.setItem('chat_token', savedToken);
 
+    // Initialize E2EE outgoing sequence number from persistent storage
+    const seqKey = this.getE2EESeqStorageKey();
+    try {
+      const savedSeq = parseInt(localStorage.getItem(seqKey) || '0', 10);
+      if (!isNaN(savedSeq) && savedSeq > 0) {
+        this.e2eeOutSeq = savedSeq + 1;
+      }
+    } catch (e) {}
+
     // Page visibility: Desktop stays active continuously; Mobile actively closes socket with 1000 page_hidden
     // on backgrounding to avoid OS timer throttling/half-open socket lag, and reconnects immediately on foreground.
     if (typeof document !== 'undefined') {
@@ -466,6 +475,20 @@ export class ChatWebSocketClient {
 
       case 'error':
         if (event.error) {
+          if (event.error.code === 'REPLAY_DETECTED') {
+            this.e2eeOutSeq += 1000;
+            try {
+              localStorage.setItem(this.getE2EESeqStorageKey(), String(this.e2eeOutSeq));
+            } catch (e) {}
+            this.sendLog(`[E2EE-REPLAY] Replay rejected by server. Advanced sequence counter to ${this.e2eeOutSeq}`);
+            const currentLang = localStorage.getItem('eqt_lang') || 'zh';
+            chatActions.addSystemMessage(
+              currentLang === 'en'
+                ? '⚠️ Encryption sequence out of sync. Counter auto-calibrated, please resend.'
+                : '⚠️ 加密序号不同步，已自动校准序列号，请重试发送。'
+            );
+            return;
+          }
           const currentLang = localStorage.getItem('eqt_lang') || 'zh';
           chatActions.addSystemMessage(
             currentLang === 'en' ? 'Something went wrong. Please try again.' : '操作失败，请稍后重试。'
@@ -583,6 +606,26 @@ export class ChatWebSocketClient {
 
   private e2eeOutSeq = 1;
 
+  private getE2EESeqStorageKey(): string {
+    return `eqt_e2ee_seq_${this.token}_${this.clientPeer || 'default'}`;
+  }
+
+  private getNextE2EESeq(): number {
+    const key = this.getE2EESeqStorageKey();
+    let current = 0;
+    try {
+      current = parseInt(localStorage.getItem(key) || '0', 10);
+      if (isNaN(current) || current < 0) current = 0;
+    } catch (e) {}
+
+    const next = Math.max(current + 1, this.e2eeOutSeq);
+    this.e2eeOutSeq = next + 1;
+    try {
+      localStorage.setItem(key, String(next));
+    } catch (e) {}
+    return next;
+  }
+
   private handleIncomingE2EEEnvelope(env: any): void {
     try {
       const engine = typeof window !== 'undefined' ? (window as any).__eqt_crypto_engine : null;
@@ -626,7 +669,7 @@ export class ChatWebSocketClient {
   public sendText(text: string): void {
     const engine = typeof window !== 'undefined' ? (window as any).__eqt_crypto_engine : null;
     if (engine && engine.initialized) {
-      const seq = this.e2eeOutSeq++;
+      const seq = this.getNextE2EESeq();
       const ts = Date.now();
       const payload = {
         action: 'chat_message',

@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -458,10 +459,22 @@ func TestSessionE2EEMultiClientIndependentSeq(t *testing.T) {
 	sess := NewSession("e2ee-multi-client-room")
 	sess.DisableSystemMessages = true
 
+	drainEvents := func(c *Client) {
+		for {
+			select {
+			case <-c.sendChan:
+			default:
+				return
+			}
+		}
+	}
+
 	alice := NewClient(protocol.ClientInfo{Label: "Alice", Peer: "peer-alice"}, nil)
 	bob := NewClient(protocol.ClientInfo{Label: "Bob", Peer: "peer-bob"}, nil)
 	sess.Register(alice, 0, 0)
 	sess.Register(bob, 0, 0)
+	drainEvents(alice)
+	drainEvents(bob)
 
 	nowMs := time.Now().UnixMilli()
 
@@ -503,9 +516,21 @@ func TestSessionE2EEMultiClientIndependentSeq(t *testing.T) {
 		t.Fatal("expected peer-alice and peer-bob to have isolated ReplayFilter instances")
 	}
 
-	// 4. Duplicate seq=1 from Alice must fail
-	if err := aliceRf.CheckAndRecord(1, nowMs); err == nil {
-		t.Fatal("expected duplicate seq 1 from Alice to fail")
+	drainEvents(alice)
+	drainEvents(bob)
+
+	// 4. Duplicate seq=1 from Alice must trigger REPLAY_DETECTED error to Alice
+	sess.HandleE2EEEnvelope(alice, aliceEnv1, "cmd-alice-dup")
+	select {
+	case ev := <-alice.sendChan:
+		if ev.Type != protocol.EventError {
+			t.Fatalf("expected EventError sent to Alice on duplicate packet, got: %s", ev.Type)
+		}
+		if ev.Error == nil || ev.Error.Code != "REPLAY_DETECTED" {
+			t.Fatalf("expected Error code REPLAY_DETECTED, got: %+v", ev.Error)
+		}
+	default:
+		t.Fatal("expected error notification on Alice sendChan")
 	}
 
 	// 5. Subsequent seq=2 from Bob must succeed
@@ -518,4 +543,87 @@ func TestSessionE2EEMultiClientIndependentSeq(t *testing.T) {
 		Ciphertext: "dummy-ciphertext-bob-2",
 	}
 	sess.HandleE2EEEnvelope(bob, bobEnv2, "cmd-bob-2")
+}
+
+func TestSessionE2EEReconnectAndNewScanReset(t *testing.T) {
+	sess := NewSession("e2ee-new-scan-room")
+	sess.DisableSystemMessages = true
+
+	drainEvents := func(c *Client) {
+		for {
+			select {
+			case <-c.sendChan:
+			default:
+				return
+			}
+		}
+	}
+
+	// 1. Client connects and sends seq 1..5
+	c1 := NewClient(protocol.ClientInfo{Label: "Mobile User", Peer: "peer-mobile-1"}, nil)
+	sess.Register(c1, 0, 0)
+	drainEvents(c1)
+	nowMs := time.Now().UnixMilli()
+
+	for seq := uint64(1); seq <= 5; seq++ {
+		env := &protocol.E2EEEnvelope{
+			Type:       protocol.E2EEEnvelopeType,
+			Version:    1,
+			Seq:        seq,
+			Timestamp:  nowMs,
+			Nonce:      "dummy-nonce",
+			Ciphertext: "dummy-ciphertext",
+		}
+		sess.HandleE2EEEnvelope(c1, env, fmt.Sprintf("cmd-%d", seq))
+	}
+
+	// 2. Normal warm reconnect with same peer (e.g. page refresh where localStorage continues at seq 6)
+	c2 := NewClient(protocol.ClientInfo{Label: "Mobile User", Peer: "peer-mobile-1"}, nil)
+	sess.Register(c2, 0, 0)
+	drainEvents(c2)
+
+	// Seq 6 must succeed
+	env6 := &protocol.E2EEEnvelope{
+		Type:       protocol.E2EEEnvelopeType,
+		Version:    1,
+		Seq:        6,
+		Timestamp:  nowMs,
+		Nonce:      "dummy-nonce",
+		Ciphertext: "dummy-ciphertext",
+	}
+	sess.HandleE2EEEnvelope(c2, env6, "cmd-6")
+	drainEvents(c2)
+
+	// Seq 1 (from old window) on same peer must be rejected
+	envOld := &protocol.E2EEEnvelope{
+		Type:       protocol.E2EEEnvelopeType,
+		Version:    1,
+		Seq:        1,
+		Timestamp:  nowMs,
+		Nonce:      "dummy-nonce",
+		Ciphertext: "dummy-ciphertext",
+	}
+	sess.HandleE2EEEnvelope(c2, envOld, "cmd-old")
+	select {
+	case ev := <-c2.sendChan:
+		if ev.Type != protocol.EventError || ev.Error == nil || ev.Error.Code != "REPLAY_DETECTED" {
+			t.Fatalf("expected REPLAY_DETECTED on old seq replay, got: %+v", ev)
+		}
+	default:
+		t.Fatal("expected error notification on c2 sendChan")
+	}
+
+	// 3. Fresh QR scan (isNewScan = true) explicitly resets the peer replay filter
+	cFresh := NewClient(protocol.ClientInfo{Label: "Mobile User", Peer: "peer-mobile-1", IsNewScan: true}, nil)
+	sess.Register(cFresh, 0, 0)
+	drainEvents(cFresh)
+
+	// Fresh seq 1 must now succeed
+	sess.HandleE2EEEnvelope(cFresh, envOld, "cmd-fresh-1")
+	sess.mu.RLock()
+	rf := sess.peerReplayFilters["peer-mobile-1"]
+	sess.mu.RUnlock()
+	if rf == nil {
+		t.Fatal("expected peer-mobile-1 replay filter after fresh scan")
+	}
 }

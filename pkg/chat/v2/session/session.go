@@ -73,6 +73,11 @@ func (s *Session) Register(c *Client, afterSeq, joinSeq int64) {
 		}
 	}
 	s.clients[c.ID] = c
+	if c.IsNewScan && c.Peer != "" {
+		if s.peerReplayFilters != nil {
+			delete(s.peerReplayFilters, c.Peer)
+		}
+	}
 	s.mu.Unlock()
 
 	// Drop previous sockets for this peer outside the lock.
@@ -283,6 +288,15 @@ func (s *Session) HandleE2EEEnvelope(sender *Client, env *protocol.E2EEEnvelope,
 			diag.F("senderPeer", sender.Peer),
 			diag.F("senderID", sender.ID),
 		)
+		sender.Send(protocol.EventEnvelope{
+			Type:      protocol.EventError,
+			CommandID: commandID,
+			Time:      time.Now(),
+			Error: &protocol.ErrorPayload{
+				Code:    "REPLAY_DETECTED",
+				Message: fmt.Sprintf("E2EE envelope rejected: %v", err),
+			},
+		})
 		return
 	}
 

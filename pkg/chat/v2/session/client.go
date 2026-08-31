@@ -23,6 +23,7 @@ type Client struct {
 	Token     string
 	Join      string
 	LocalJoin string
+	IsNewScan bool
 	LastSeen  time.Time
 	JoinTime  time.Time
 	Kicked    bool
@@ -49,6 +50,7 @@ func NewClient(info protocol.ClientInfo, conn *websocket.Conn) *Client {
 		Token:     info.Token,
 		Join:      info.Join,
 		LocalJoin: info.LocalJoin,
+		IsNewScan: info.IsNewScan,
 		LastSeen:  time.Now(),
 		JoinTime:  time.Now(),
 		sendChan:  make(chan protocol.EventEnvelope, 128),
