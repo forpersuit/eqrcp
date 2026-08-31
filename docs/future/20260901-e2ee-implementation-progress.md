@@ -195,7 +195,7 @@
 | 2026-08-31 | `c428455a` | Phase 3: Chat 双向 E2EE WebSocket 信封、防重放过滤器、附件加密（`e2ee_envelope`/`ReplayFilter`/`EncryptAttachment`） | Task 3.1~3.3 | ✅ 落地（衍生 D9、D10，由 `8389dabb` + `335cf3a1` 修复闭环） |
 | 2026-08-31 | `335cf3a1` | Phase 3 修复：前端 localStorage 持久化 e2eeOutSeq 跨刷新单调递增 + 服务端返回 REPLAY_DETECTED 错误事件 + 扫码 reset (D10) | Task 3.1 补丁 | ✅ 闭环（第 7 轮独立复核联合验证：刷新后 seq 零静默丢失，`go test ./...` 零失败、`npm test` 7/7 全绿） |
 | 2026-08-31 | `4ba82184` | Phase 4: MockDRMServer 离线桩 · REST 4MB 分块流式无锁直写 · 连续区间跟踪器 · 静默屏蔽即时销毁 .tmp 与从头重置红线 · Share 4MB 分块下发 | Task 4.1~4.4 | 🟡 服务端完成 / Task 4.2 前端流水线未落地（见第 8 轮复核） |
-| 2026-09-01 | `d11-fix` | Phase 4 闭环：前端 EqtE2EEUploader/Downloader 3级流水线与 Worker 零拷贝 + weak Wi-Fi 降级 + iOS 1GB 标注 + sync.Pool 4MB 复用 + 同 fileID 重试修复与内存清理 | Task 4.1~4.4 | ✅ **已闭环 100% 达标**（Go 7/7 全绿，Node 互通与防篡改全绿，TS 7/7 全绿） |
+| 2026-09-01 | `ead22f1b` | Phase 4 闭环：前端 EqtE2EEUploader/Downloader 3级流水线与 Worker 零拷贝 + weak Wi-Fi 降级 + iOS 1GB 标注 + sync.Pool 4MB 复用 + 同 fileID 重试修复与内存清理 | Task 4.1~4.4 | ✅ **已闭环 100% 达标**（Go 7/7 全绿，Node 互通与防篡改全绿，TS 7/7 全绿） |
 
 ---
 
