@@ -198,7 +198,7 @@
 | 2026-08-31 | `4ba82184` | Phase 4: MockDRMServer 离线桩 · REST 4MB 分块流式无锁直写 · 连续区间跟踪器 · 静默屏蔽即时销毁 .tmp 与从头重置红线 · Share 4MB 分块下发 | Task 4.1~4.4 | 🟡 服务端完成 / Task 4.2 前端流水线未落地（见第 8 轮复核） |
 | 2026-09-01 | `ead22f1b` | Phase 4 闭环：前端 EqtE2EEUploader/Downloader 3级流水线与 Worker 零拷贝 + weak Wi-Fi 降级 + iOS 1GB 标注 + sync.Pool 4MB 复用 + 同 fileID 重试修复与内存清理 | Task 4.1~4.4 | 🟡 服务端闭环 + 前端主链路落地（第 9 轮复核） |
 | 2026-09-01 | `77fe53e5` | Phase 4 深度闭环：EqtChunkStorage IndexedDB 流式落盘 + 3次重试上限熔断 + Fail-Closed 严禁静默降级明文 + 服务端 .tmp 安全物理清理 (D12) | Task 4.2 补丁 | 🔴 见第 10 轮复核（衍生 D13 SyntaxError 回归） |
-| 2026-09-01 | `d13-fix` | 修复 download.tmpl.html SyntaxError 与重复定义 (D13) + 新增 TestTemplateJavaScriptSyntax 模板 JS 门禁 + TestE2EEReceiveStaleCleanup | Task 4.2 补丁 | ✅ **已全量闭环 100% 达标**（Go 17包零失败、Node 防篡改全绿、TS 7/7 全绿、模板 JS 语法测试全绿） |
+| 2026-09-01 | `aa718556` | 修复 download.tmpl.html SyntaxError 与重复定义 (D13) + 新增 TestTemplateJavaScriptSyntax 模板 JS 门禁 + TestE2EEReceiveStaleCleanup | Task 4.2 补丁 | ✅ **已全量闭环 100% 达标**（Go 17包零失败、Node 防篡改全绿、TS 7/7 全绿、模板 JS 语法测试全绿） |
 
 ---
 
