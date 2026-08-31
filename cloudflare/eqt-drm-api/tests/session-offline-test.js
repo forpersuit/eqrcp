@@ -2,14 +2,23 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const { DatabaseSync } = require('node:sqlite');
+const esbuild = require('esbuild');
 
 console.log("=== Running E2EE Session Cloudflare DRM Offline Tests ===");
 
-// Load compiled handler
+// 1. Build TypeScript routes using esbuild
+const tsSrcPath = path.join(__dirname, '..', 'src', 'routes', 'session.ts');
 const compiledSessionPath = path.join(__dirname, 'compiled', 'session.js');
-if (!fs.existsSync(compiledSessionPath)) {
-  console.error("Compiled session handler not found. Building with esbuild...");
-}
+fs.mkdirSync(path.dirname(compiledSessionPath), { recursive: true });
+
+esbuild.buildSync({
+  entryPoints: [tsSrcPath],
+  bundle: true,
+  platform: 'node',
+  format: 'cjs',
+  outfile: compiledSessionPath,
+  external: ['node:sqlite']
+});
 
 const { handleSessionRoutes } = require(compiledSessionPath);
 
@@ -36,7 +45,7 @@ function assertEqual(actual, expected, msg) {
   }
 }
 
-// SQLite backed D1 Adapter
+// SQLite backed D1 Mock Adapter
 class SqliteD1Mock {
   constructor(db) {
     this.db = db;
@@ -69,20 +78,20 @@ class SqliteD1Mock {
           try {
             const stmt = rawDb.prepare(sql);
             const res = stmt.run(...args);
-            return { meta: { changes: res.changes } };
+            return { success: true, meta: { changes: res.changes } };
           } catch (e) {
             console.error("D1 Mock run error:", sql, e);
-            return { meta: { changes: 0 } };
+            return { success: false, meta: { changes: 0 } };
           }
         }
       }),
       run: async () => {
         try {
           rawDb.exec(sql);
-          return { meta: { changes: 1 } };
+          return { success: true, meta: { changes: 1 } };
         } catch (e) {
           console.error("D1 Mock direct run error:", sql, e);
-          return { meta: { changes: 0 } };
+          return { success: false, meta: { changes: 0 } };
         }
       }
     };
@@ -97,19 +106,29 @@ async function runTests() {
   const schemaSql = fs.readFileSync(path.join(__dirname, '..', 'schema.sql'), 'utf8');
   sqlite.exec(schemaSql);
 
+  // Seed sample licenses
+  sqlite.exec(`
+    INSERT INTO licenses (license_code, tier, status, max_devices, expires_at, created_at)
+    VALUES
+      ('LIC-ACTIVE-PRO', 'PRO', 'active', 5, 'LIFETIME', '2026-01-01T00:00:00Z'),
+      ('LIC-SUSPENDED', 'PLUS', 'suspended', 2, 'LIFETIME', '2026-01-01T00:00:00Z'),
+      ('LIC-REVOKED', 'PRO', 'revoked', 5, 'LIFETIME', '2026-01-01T00:00:00Z'),
+      ('LIC-EXPIRED', 'PRO', 'active', 5, '2020-01-01T00:00:00Z', '2019-01-01T00:00:00Z');
+  `);
+
   const env = { DB: d1 };
   const ctx = { waitUntil: (p) => Promise.resolve(p) };
   const corsHeaders = { "Access-Control-Allow-Origin": "*" };
 
   // 1. Health Probe
-  console.log("\n1. Testing Health Probe (HEAD /health & GET /api/v1/session/health)");
+  console.log("\n1. Testing Health Probe (HEAD /health & GET /api/v1/e2ee/session/health)");
   {
     const req = new Request("https://drm.eqt.im/health", { method: "HEAD" });
     const resp = await handleSessionRoutes(req, env, ctx, new URL(req.url), corsHeaders);
     assert(resp !== null, "Health HEAD response is not null");
     assertEqual(resp.status, 200, "Health HEAD status is 200");
 
-    const req2 = new Request("https://drm.eqt.im/api/v1/session/health", { method: "GET" });
+    const req2 = new Request("https://drm.eqt.im/api/v1/e2ee/session/health", { method: "GET" });
     const resp2 = await handleSessionRoutes(req2, env, ctx, new URL(req2.url), corsHeaders);
     assert(resp2 !== null, "Health GET response is not null");
     assertEqual(resp2.status, 200, "Health GET status is 200");
@@ -117,113 +136,201 @@ async function runTests() {
     assertEqual(body2.status, "healthy", "Health status is healthy");
   }
 
-  // 2. Session Create
-  console.log("\n2. Testing Session Create & Singleton Upsert");
-  const deviceId = "test-hardware-dev-001";
-  const claimToken = "0123456789abcdef0123456789abcdef";
-  const claimTokenHash = crypto.createHash('sha256').update(claimToken).digest('hex');
-  const masterKeyEnc = "BASE64_ENCRYPTED_MASTER_KEY_001";
+  // 2. License Fail-Closed Validation
+  console.log("\n2. Testing License Fail-Closed Gate (Rejects non-active / non-existent / expired)");
+  const deviceId = "test-pc-hardware-001";
+  const masterKeyB64 = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=";
   const kAuthHash = "694274bd605eb866d866f5737fb9bc7d6778a09b4a586739581bcf7a73c7a496";
-  let sessionId1 = "";
+  const closeToken = "my-secret-close-token-123";
 
+  // 2.1 Non-existent license
   {
-    const req = new Request("https://drm.eqt.im/api/v1/session/create", {
+    const req = new Request("https://drm.eqt.im/api/v1/e2ee/session/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        license_code: "EQT-PLUS-TEST-001",
+        license_code: "NON-EXISTENT-LIC",
         device_id: deviceId,
-        claim_token_hash: claimTokenHash,
-        encrypted_master_key: masterKeyEnc,
+        master_key_b64: masterKeyB64,
+        close_token: closeToken,
         k_auth_hash: kAuthHash
       })
     });
     const resp = await handleSessionRoutes(req, env, ctx, new URL(req.url), corsHeaders);
-    assert(resp !== null, "Session create response is not null");
-    assertEqual(resp.status, 200, "Session create status is 200");
-    const body = await resp.json();
-    assert(body.ok === true, "Session create ok is true");
-    assert(typeof body.session_id === 'string' && body.session_id.length > 0, "session_id is returned");
-    sessionId1 = body.session_id;
+    assertEqual(resp.status, 403, "Non-existent license rejected with 403");
   }
 
-  // 3. Session Claim (Success)
-  console.log("\n3. Testing Session Claim (Success)");
+  // 2.2 Suspended license
   {
-    const req = new Request(`https://drm.eqt.im/api/v1/session/claim?token=${claimToken}`, { method: "GET" });
-    const resp = await handleSessionRoutes(req, env, ctx, new URL(req.url), corsHeaders);
-    assert(resp !== null, "Session claim response is not null");
-    assertEqual(resp.status, 200, "Session claim status is 200");
-    const body = await resp.json();
-    assertEqual(body.ok, true, "Claim ok is true");
-    assertEqual(body.session_id, sessionId1, "Claim session_id matches created session");
-    assertEqual(body.encrypted_master_key, masterKeyEnc, "Claim encrypted_master_key matches");
-    assertEqual(body.k_auth_hash, kAuthHash, "Claim k_auth_hash matches");
-  }
-
-  // 4. Session Claim (Invalid Token -> 404)
-  console.log("\n4. Testing Session Claim (Invalid Token -> 404)");
-  {
-    const req = new Request("https://drm.eqt.im/api/v1/session/claim?token=wrongtoken123", { method: "GET" });
-    const resp = await handleSessionRoutes(req, env, ctx, new URL(req.url), corsHeaders);
-    assertEqual(resp.status, 404, "Invalid token returns 404 Not Found");
-  }
-
-  // 5. Singleton Upsert (Second PC session replaces the first one on the same device_id)
-  console.log("\n5. Testing Singleton Upsert (Same Device Replaces Old Session)");
-  const claimToken2 = "fedcba9876543210fedcba9876543210";
-  const claimTokenHash2 = crypto.createHash('sha256').update(claimToken2).digest('hex');
-  let sessionId2 = "";
-
-  {
-    const req = new Request("https://drm.eqt.im/api/v1/session/create", {
+    const req = new Request("https://drm.eqt.im/api/v1/e2ee/session/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        license_code: "EQT-PLUS-TEST-001",
-        device_id: deviceId, // SAME device_id
-        claim_token_hash: claimTokenHash2,
-        encrypted_master_key: "BASE64_ENCRYPTED_MASTER_KEY_002",
+        license_code: "LIC-SUSPENDED",
+        device_id: deviceId,
+        master_key_b64: masterKeyB64,
+        close_token: closeToken,
         k_auth_hash: kAuthHash
       })
     });
     const resp = await handleSessionRoutes(req, env, ctx, new URL(req.url), corsHeaders);
-    assertEqual(resp.status, 200, "Second session create on same device is 200");
-    const body = await resp.json();
-    sessionId2 = body.session_id;
-    assert(sessionId2 !== sessionId1, "New session_id generated");
-
-    // Old token should now be 404
-    const oldClaimReq = new Request(`https://drm.eqt.im/api/v1/session/claim?token=${claimToken}`, { method: "GET" });
-    const oldClaimResp = await handleSessionRoutes(oldClaimReq, env, ctx, new URL(oldClaimReq.url), corsHeaders);
-    assertEqual(oldClaimResp.status, 404, "Old token was overridden and returns 404");
-
-    // New token works
-    const newClaimReq = new Request(`https://drm.eqt.im/api/v1/session/claim?token=${claimToken2}`, { method: "GET" });
-    const newClaimResp = await handleSessionRoutes(newClaimReq, env, ctx, new URL(newClaimReq.url), corsHeaders);
-    assertEqual(newClaimResp.status, 200, "New token claim returns 200");
+    assertEqual(resp.status, 403, "Suspended license rejected with 403");
   }
 
-  // 6. Session Close (Active deletion on PC quit)
-  console.log("\n6. Testing Session Close (PC Quit)");
+  // 2.3 Revoked license
   {
-    const req = new Request("https://drm.eqt.im/api/v1/session/close", {
+    const req = new Request("https://drm.eqt.im/api/v1/e2ee/session/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        session_id: sessionId2,
+        license_code: "LIC-REVOKED",
+        device_id: deviceId,
+        master_key_b64: masterKeyB64,
+        close_token: closeToken,
         k_auth_hash: kAuthHash
       })
     });
     const resp = await handleSessionRoutes(req, env, ctx, new URL(req.url), corsHeaders);
-    assertEqual(resp.status, 200, "Session close status is 200");
-    const body = await resp.json();
-    assertEqual(body.closed, true, "Session closed flag is true");
+    assertEqual(resp.status, 403, "Revoked license rejected with 403");
+  }
 
-    // Trying to claim closed session returns 404
-    const claimReq = new Request(`https://drm.eqt.im/api/v1/session/claim?token=${claimToken2}`, { method: "GET" });
-    const claimResp = await handleSessionRoutes(claimReq, env, ctx, new URL(claimReq.url), corsHeaders);
-    assertEqual(claimResp.status, 404, "Closed session is immediately gone (404)");
+  // 2.4 Expired license
+  {
+    const req = new Request("https://drm.eqt.im/api/v1/e2ee/session/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        license_code: "LIC-EXPIRED",
+        device_id: deviceId,
+        master_key_b64: masterKeyB64,
+        close_token: closeToken,
+        k_auth_hash: kAuthHash
+      })
+    });
+    const resp = await handleSessionRoutes(req, env, ctx, new URL(req.url), corsHeaders);
+    assertEqual(resp.status, 403, "Expired license rejected with 403");
+  }
+
+  // 3. Valid Session Create & Claim (MasterKey Blind Relay & CAS Quota)
+  console.log("\n3. Testing Valid Session Creation, TLS 1.3 Blind Relay & CAS Quota");
+  let sendSessionId = "";
+  {
+    const req = new Request("https://drm.eqt.im/api/v1/e2ee/session/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        license_code: "LIC-ACTIVE-PRO",
+        device_id: deviceId,
+        mode: "send",
+        master_key_b64: masterKeyB64,
+        close_token: closeToken,
+        k_auth_hash: kAuthHash,
+        max_claims: 2 // Max 2 claims for testing
+      })
+    });
+    const resp = await handleSessionRoutes(req, env, ctx, new URL(req.url), corsHeaders);
+    assertEqual(resp.status, 200, "Active license session create returns 200");
+    const body = await resp.json();
+    assert(body.ok === true, "body.ok is true");
+    assert(typeof body.session_id === 'string' && body.session_id.length > 0, "session_id is generated");
+    sendSessionId = body.session_id;
+
+    // Claim 1: Success
+    const claim1Req = new Request(`https://drm.eqt.im/api/v1/e2ee/session/${sendSessionId}/claim`, { method: "POST" });
+    const claim1Resp = await handleSessionRoutes(claim1Req, env, ctx, new URL(claim1Req.url), corsHeaders);
+    assertEqual(claim1Resp.status, 200, "First claim returns 200");
+    const claim1Body = await claim1Resp.json();
+    assertEqual(claim1Body.master_key_b64, masterKeyB64, "Claim 1 returns exact master_key_b64");
+    assertEqual(claim1Body.k_auth_hash, kAuthHash, "Claim 1 returns exact k_auth_hash");
+
+    // Claim 2: Success
+    const claim2Req = new Request(`https://drm.eqt.im/api/v1/e2ee/session/${sendSessionId}/claim`, { method: "POST" });
+    const claim2Resp = await handleSessionRoutes(claim2Req, env, ctx, new URL(claim2Req.url), corsHeaders);
+    assertEqual(claim2Resp.status, 200, "Second claim returns 200 (within max_claims=2)");
+
+    // Claim 3: Quota Exceeded (403 limit_exceeded)
+    const claim3Req = new Request(`https://drm.eqt.im/api/v1/e2ee/session/${sendSessionId}/claim`, { method: "POST" });
+    const claim3Resp = await handleSessionRoutes(claim3Req, env, ctx, new URL(claim3Req.url), corsHeaders);
+    assertEqual(claim3Resp.status, 403, "Third claim returns 403 Forbidden");
+    const claim3Body = await claim3Resp.json();
+    assertEqual(claim3Body.limit_exceeded, true, "Returns limit_exceeded: true");
+  }
+
+  // 4. Multi-mode concurrency on the same PC (D4: send and receive do not override each other)
+  console.log("\n4. Testing Multi-Mode Concurrency (UNIQUE(device_id, mode))");
+  let recvSessionId = "";
+  {
+    // Create a receive session on the same deviceId
+    const req = new Request("https://drm.eqt.im/api/v1/e2ee/session/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        license_code: "LIC-ACTIVE-PRO",
+        device_id: deviceId, // SAME deviceId
+        mode: "receive",     // DIFFERENT mode
+        master_key_b64: masterKeyB64,
+        close_token: closeToken,
+        k_auth_hash: kAuthHash,
+        max_claims: 5
+      })
+    });
+    const resp = await handleSessionRoutes(req, env, ctx, new URL(req.url), corsHeaders);
+    assertEqual(resp.status, 200, "Receive session create on same device is 200");
+    const body = await resp.json();
+    recvSessionId = body.session_id;
+    assert(recvSessionId !== sendSessionId, "Receive session has distinct session_id");
+
+    // Verify both exist in DB
+    const sendRow = sqlite.prepare("SELECT * FROM e2ee_sessions WHERE session_id = ?").get(sendSessionId);
+    const recvRow = sqlite.prepare("SELECT * FROM e2ee_sessions WHERE session_id = ?").get(recvSessionId);
+    assert(sendRow !== null && sendRow !== undefined, "Send session still exists in DB");
+    assert(recvRow !== null && recvRow !== undefined, "Receive session exists concurrently in DB");
+  }
+
+  // 5. Deterministic Session Close & False Success Protection
+  console.log("\n5. Testing Deterministic Session Close & False Success Rejection");
+  {
+    // 5.1 Close with invalid close token -> 404
+    const wrongCloseReq = new Request("https://drm.eqt.im/api/v1/e2ee/session/close", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session_id: recvSessionId,
+        close_token: "wrong-close-token"
+      })
+    });
+    const wrongCloseResp = await handleSessionRoutes(wrongCloseReq, env, ctx, new URL(wrongCloseReq.url), corsHeaders);
+    assertEqual(wrongCloseResp.status, 404, "Wrong close token returns 404 (no false success)");
+
+    // 5.2 Close non-existent session -> 404
+    const nonExistCloseReq = new Request("https://drm.eqt.im/api/v1/e2ee/session/close", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session_id: "non-existent-session-id",
+        close_token: closeToken
+      })
+    });
+    const nonExistCloseResp = await handleSessionRoutes(nonExistCloseReq, env, ctx, new URL(nonExistCloseReq.url), corsHeaders);
+    assertEqual(nonExistCloseResp.status, 404, "Non-existent session returns 404");
+
+    // 5.3 Valid close -> 200 OK
+    const validCloseReq = new Request("https://drm.eqt.im/api/v1/e2ee/session/close", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session_id: recvSessionId,
+        close_token: closeToken
+      })
+    });
+    const validCloseResp = await handleSessionRoutes(validCloseReq, env, ctx, new URL(validCloseReq.url), corsHeaders);
+    assertEqual(validCloseResp.status, 200, "Valid close returns 200");
+    const closeBody = await validCloseResp.json();
+    assertEqual(closeBody.closed, true, "closed: true returned");
+
+    // Verify row deleted from DB
+    const checkRow = sqlite.prepare("SELECT * FROM e2ee_sessions WHERE session_id = ?").get(recvSessionId);
+    assertEqual(checkRow, undefined, "Session row immediately deleted from DB");
   }
 
   console.log(`\n=== Results: ${passed} passed, ${failed} failed ===`);

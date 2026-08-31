@@ -39,14 +39,22 @@ func TestCrossLanguageInterop(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to resolve crypto-engine.js path: %v", err)
 	}
+	libsodiumPath, err := filepath.Abs("../../pages/assets/libsodium.js")
+	if err != nil {
+		t.Fatalf("failed to resolve libsodium.js path: %v", err)
+	}
 
 	jsDecryptScript := fmt.Sprintf(`
-		const EQTCrypto = require('%s');
-		const keys = EQTCrypto.deriveKeys('%s');
-		const envelope = EQTCrypto.hexToBytes('%s');
-		const decrypted = EQTCrypto.decryptChunk(envelope, %d, keys.kSend, '%s');
-		process.stdout.write(EQTCrypto.bytesToString(decrypted));
-	`, cryptoEnginePath, masterKeyHex, goEnvelopeHex, chunkIndex, fileID)
+		require('%s');
+		const { EQTCryptoEngine } = require('%s');
+		(async () => {
+			const engine = new EQTCryptoEngine();
+			await engine.init('%s');
+			const envelope = Buffer.from('%s', 'hex');
+			const decrypted = engine.decryptChunk(new Uint8Array(envelope), %d, '%s', 'send');
+			process.stdout.write(Buffer.from(decrypted).toString('utf-8'));
+		})().catch(err => { console.error(err); process.exit(1); });
+	`, libsodiumPath, cryptoEnginePath, masterKeyHex, goEnvelopeHex, chunkIndex, fileID)
 
 	cmd := exec.Command("node", "-e", jsDecryptScript)
 	var out bytes.Buffer
@@ -64,12 +72,16 @@ func TestCrossLanguageInterop(t *testing.T) {
 
 	// 2. JS Encrypts -> Go Decrypts
 	jsEncryptScript := fmt.Sprintf(`
-		const EQTCrypto = require('%s');
-		const keys = EQTCrypto.deriveKeys('%s');
-		const plaintext = EQTCrypto.stringToBytes('%s');
-		const envelope = EQTCrypto.encryptChunk(plaintext, %d, keys.kRecv, '%s');
-		process.stdout.write(EQTCrypto.bytesToHex(envelope));
-	`, cryptoEnginePath, masterKeyHex, plaintext, chunkIndex, fileID)
+		require('%s');
+		const { EQTCryptoEngine } = require('%s');
+		(async () => {
+			const engine = new EQTCryptoEngine();
+			await engine.init('%s');
+			const plaintext = Buffer.from('%s', 'utf-8');
+			const envelope = engine.encryptChunk(new Uint8Array(plaintext), %d, '%s', 'recv');
+			process.stdout.write(Buffer.from(envelope).toString('hex'));
+		})().catch(err => { console.error(err); process.exit(1); });
+	`, libsodiumPath, cryptoEnginePath, masterKeyHex, plaintext, chunkIndex, fileID)
 
 	cmd2 := exec.Command("node", "-e", jsEncryptScript)
 	var jsEncOut bytes.Buffer

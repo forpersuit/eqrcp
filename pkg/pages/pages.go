@@ -44,6 +44,11 @@ var Favicon []byte
 //go:embed assets/tus.min.js
 var TusMinJS []byte
 
+// LibsodiumJS is the WebAssembly-compiled libsodium runtime.
+//
+//go:embed assets/libsodium.js
+var LibsodiumJS []byte
+
 // CryptoEngineJS is the E2EE client cryptographic engine.
 //
 //go:embed assets/crypto-engine.js

@@ -98,8 +98,8 @@ export default {
         response = await handleTelemetryRoutes(request, env, ctx, url, corsHeaders);
       }
 
-      // 5.7 Route to E2EE Session endpoints (/api/v1/session/*)
-      if (!response && (url.pathname.startsWith("/api/v1/session/") || url.pathname === "/health")) {
+      // 5.7 Route to E2EE Session endpoints (/api/v1/e2ee/session/*, /api/v1/session/*, or /health)
+      if (!response && (url.pathname.startsWith("/api/v1/e2ee/session") || url.pathname.startsWith("/api/v1/session/") || url.pathname === "/health")) {
         response = await handleSessionRoutes(request, env, ctx, url, corsHeaders);
       }
 
