@@ -88,4 +88,5 @@ try {
 - **Node 模拟删除 crypto.subtle 失败**：直接赋值 global.crypto 静默失败，须用 finally 恢复原对象。
 - **数字文档矛盾**：同一指标（如吞吐）在 Task 列表、DoD、delta 表三处数字不一致时，以实测为准统一。
 - **防重放 seq 空间必须按发送者隔离**：若 `ReplayFilter` 为 Session 级共享而前端 `e2eeOutSeq` 每客户端实例从 1 起，房间内第二个客户端首条消息（seq=1）会被误判重放拒绝（D9，`c428455a` 复现：`duplicate packet seq 1 replayed`）。审查 E2EE 防重放实现时检查是否按 `(senderPeer, seq)` 分键。
+- **seq 计数生命周期须与窗口生命周期匹配（D10 教训）**：即使按 peer 分键，若窗口会话级持久而前端 `e2eeOutSeq` 仅实例级（无 localStorage 持久化），同 peer 页面刷新/重进房间后新实例 seq 重置为 1 → 前 `旧maxSeq` 条被旧窗口误判重放**静默丢弃**（服务端仅 WARN 日志不返回错误）。审查时核对：前端 seq 计数是否持久化（`eqt_e2ee_seq_${token}` 类 localStorage）或服务端是否在 peer 替换时重建窗口。前端 `e2eeOutSeq` 类字段（如 `websocket.ts:584`）是典型风险信号。
 - **三元运算优先级**：`(a.meta as any)?.changes ?? a.success ? 1 : 0` 中 `??` 优先级低于 `?:`，实际等价 `(changes ?? success) ? 1 : 0`；9ebbddc7 已修复为 `?? (a.success ? 1 : 0)`。审查 D1/SQL 类代码时留意同类表达式。
