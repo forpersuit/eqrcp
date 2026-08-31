@@ -215,7 +215,7 @@
 | 2026-08-31 | `9ebbddc7` | E2EE 结构化错误码（JS `CryptoError` / Go `Error`）· Worker 错误事件遥测 · D1 `error_code` · 分级线程安全日志 | 工程基建（为 Phase 3~5 铺路） | ✅ 完成（32 断言 D1 + 全量 go test 16 包零回归） |
 | 2026-08-31 | `c428455a` | Phase 3: Chat 双向 E2EE WebSocket 信封、防重放过滤器、附件加密（`e2ee_envelope`/`ReplayFilter`/`EncryptAttachment`） | Task 3.1~3.3 | ✅ 落地（衍生 D9、D10，由 `8389dabb` + `335cf3a1` 修复闭环） |
 | 2026-08-31 | `335cf3a1` | Phase 3 修复：前端 localStorage 持久化 e2eeOutSeq 跨刷新单调递增 + 服务端返回 REPLAY_DETECTED 错误事件 + 扫码 reset (D10) | Task 3.1 补丁 | ✅ 闭环（第 7 轮独立复核联合验证：刷新后 seq 零静默丢失，`go test ./...` 零失败、`npm test` 7/7 全绿） |
-| 2026-08-31 | `phase-4` | Phase 4: MockDRMServer 离线桩 · REST 4MB 分块流式无锁直写 · 连续区间跟踪器 · 静默屏蔽即时销毁 .tmp 与从头重置红线 · Share 4MB 分块下发 | Task 4.1~4.4 | ✅ 完成（5 项自动化并发/防篡改/静默屏蔽落盘测试 100% 全绿） |
+| 2026-08-31 | `4ba82184` | Phase 4: MockDRMServer 离线桩 · REST 4MB 分块流式无锁直写 · 连续区间跟踪器 · 静默屏蔽即时销毁 .tmp 与从头重置红线 · Share 4MB 分块下发 | Task 4.1~4.4 | ✅ 完成（5 项自动化并发/防篡改/静默屏蔽落盘测试 100% 全绿） |
 
 ---
 
