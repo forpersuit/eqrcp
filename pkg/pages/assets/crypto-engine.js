@@ -2,9 +2,88 @@
  * EQT End-to-End Encryption (E2EE) Cryptographic Engine
  * RFC 8439 XChaCha20-Poly1305 AEAD + RFC 5869 HKDF-SHA256 Key Derivation
  * 100% Constant-Time via Libsodium WebAssembly (Zero reliance on crypto.subtle / Secure Context)
+ * Production-grade Structured Errors & Diagnostic Logging
  */
 (function(global) {
   'use strict';
+
+  /**
+   * Standard Machine-Readable Error Codes for E2EE Cryptography
+   */
+  const CryptoErrorCode = Object.freeze({
+    INVALID_KEY_SIZE:     'INVALID_KEY_SIZE',
+    CIPHERTEXT_TOO_SHORT: 'CIPHERTEXT_TOO_SHORT',
+    CHUNK_INDEX_MISMATCH: 'CHUNK_INDEX_MISMATCH',
+    AUTH_FAILED:          'AUTH_FAILED',
+    UNINITIALIZED:        'UNINITIALIZED',
+    WASM_LOAD_FAILED:     'WASM_LOAD_FAILED',
+    REPLAY_DETECTED:      'REPLAY_DETECTED',
+    PARAM_ERROR:          'PARAM_ERROR'
+  });
+
+  /**
+   * Structured Diagnostic Error for Cryptographic Operations
+   */
+  class CryptoError extends Error {
+    constructor(code, message, context = {}) {
+      super(message);
+      this.name = 'CryptoError';
+      this.code = code;
+      this.op = context.op || '';
+      this.chunkIndex = context.chunkIndex !== undefined ? context.chunkIndex : null;
+      this.fileID = context.fileID || null;
+      this.seq = context.seq !== undefined ? context.seq : null;
+      // AUTH_FAILED / INVALID_KEY_SIZE are fatal non-retryable errors
+      this.retryable = context.retryable !== undefined ? context.retryable : (code !== CryptoErrorCode.AUTH_FAILED && code !== CryptoErrorCode.INVALID_KEY_SIZE);
+      this.timestamp = Date.now();
+    }
+
+    toJSON() {
+      return {
+        name: this.name,
+        code: this.code,
+        op: this.op,
+        chunkIndex: this.chunkIndex,
+        fileID: this.fileID,
+        seq: this.seq,
+        retryable: this.retryable,
+        message: this.message,
+        timestamp: this.timestamp
+      };
+    }
+  }
+
+  /**
+   * Diagnostic Logger for E2EE Operations
+   */
+  const CryptoLogger = {
+    _enabled: true,
+    _format(level, op, msg, meta) {
+      const ts = new Date().toISOString();
+      const metaStr = meta ? ' ' + JSON.stringify(meta) : '';
+      return `[${ts}] [E2EE-${level}] [${op}] ${msg}${metaStr}`;
+    },
+    debug(op, msg, meta) {
+      if (this._enabled && (global.__EQT_DEBUG__ || (typeof process !== 'undefined' && process.env && process.env.EQT_DEBUG))) {
+        console.debug(this._format('DEBUG', op, msg, meta));
+      }
+    },
+    info(op, msg, meta) {
+      if (this._enabled) {
+        console.info(this._format('INFO', op, msg, meta));
+      }
+    },
+    warn(op, msg, meta) {
+      if (this._enabled) {
+        console.warn(this._format('WARN', op, msg, meta));
+      }
+    },
+    error(op, msg, meta) {
+      if (this._enabled) {
+        console.error(this._format('ERROR', op, msg, meta));
+      }
+    }
+  };
 
   class EQTCryptoEngine {
     constructor() {
@@ -24,12 +103,17 @@
      * @param {Uint8Array|string} masterKey - 32-byte Uint8Array or hex/base64 string
      */
     async init(masterKey) {
+      const op = 'init';
       // 1. Ensure libsodium WASM is ready
       const sodiumObj = global.sodium || (typeof require !== 'undefined' ? require('./libsodium.js') : null);
       if (!sodiumObj) {
-        throw new Error("libsodium WASM module is not loaded");
+        throw new CryptoError(CryptoErrorCode.WASM_LOAD_FAILED, "libsodium WASM module is not loaded in current scope", { op });
       }
-      await sodiumObj.ready;
+      try {
+        await sodiumObj.ready;
+      } catch (err) {
+        throw new CryptoError(CryptoErrorCode.WASM_LOAD_FAILED, "Failed to initialize libsodium WebAssembly runtime: " + (err.message || err), { op, cause: err });
+      }
       this.sodium = sodiumObj;
 
       // 2. Parse MasterKey to 32 bytes Uint8Array
@@ -38,16 +122,20 @@
         if (/^[0-9a-fA-F]{64}$/.test(masterKey)) {
           rawKey = this.sodium.from_hex(masterKey);
         } else {
-          rawKey = this.sodium.from_base64(masterKey, this.sodium.base64_variants.ORIGINAL_NO_PADDING);
+          try {
+            rawKey = this.sodium.from_base64(masterKey, this.sodium.base64_variants.ORIGINAL_NO_PADDING);
+          } catch (e) {
+            throw new CryptoError(CryptoErrorCode.INVALID_KEY_SIZE, "Failed to parse MasterKey Base64: " + e.message, { op });
+          }
         }
       } else if (masterKey instanceof Uint8Array) {
         rawKey = new Uint8Array(masterKey);
       } else {
-        throw new TypeError("MasterKey must be a 32-byte Uint8Array or Hex/Base64 string");
+        throw new CryptoError(CryptoErrorCode.PARAM_ERROR, "MasterKey must be a 32-byte Uint8Array or Hex/Base64 string", { op });
       }
 
       if (rawKey.length !== 32) {
-        throw new Error(`MasterKey must be exactly 32 bytes, got ${rawKey.length}`);
+        throw new CryptoError(CryptoErrorCode.INVALID_KEY_SIZE, `MasterKey must be exactly 32 bytes, got ${rawKey.length}`, { op });
       }
 
       this.keys.masterKey = rawKey;
@@ -81,12 +169,13 @@
 
       this.sodium.memzero(prk);
       this.initialized = true;
+      CryptoLogger.debug(op, "Engine successfully initialized with 4 derived subkeys");
       return this;
     }
 
-    _ensureInit() {
+    _ensureInit(op) {
       if (!this.initialized || !this.keys.masterKey) {
-        throw new Error("EQTCryptoEngine is not initialized. Call init(masterKey) first.");
+        throw new CryptoError(CryptoErrorCode.UNINITIALIZED, "EQTCryptoEngine is not initialized. Call init(masterKey) first.", { op });
       }
     }
 
@@ -117,7 +206,8 @@
      * Output format: [ChunkIndex(4B BE) | Nonce(24B) | Ciphertext + Tag(16B)]
      */
     encryptChunk(chunkBytes, chunkIndex, fileID, keyType = 'send') {
-      this._ensureInit();
+      const op = 'encryptChunk';
+      this._ensureInit(op);
       const key = keyType === 'send' ? this.keys.kSend : this.keys.kRecv;
       const nonce = this.sodium.randombytes_buf(24);
       const aad = this._makeChunkAAD(fileID, chunkIndex);
@@ -146,29 +236,34 @@
      * Expects envelope format: [ChunkIndex(4B BE) | Nonce(24B) | Ciphertext + Tag(16B)]
      */
     decryptChunk(envelopeBytes, chunkIndex, fileID, keyType = 'recv') {
-      this._ensureInit();
+      const op = 'decryptChunk';
+      this._ensureInit(op);
       if (envelopeBytes.length < 4 + 24 + 16) {
-        throw new Error(`Envelope too short: ${envelopeBytes.length} bytes`);
+        throw new CryptoError(CryptoErrorCode.CIPHERTEXT_TOO_SHORT, `Envelope too short: ${envelopeBytes.length} bytes (minimum 44 bytes required)`, { op, chunkIndex, fileID });
       }
 
       const view = new DataView(envelopeBytes.buffer, envelopeBytes.byteOffset, envelopeBytes.byteLength);
       const envIndex = view.getUint32(0, false);
       if (envIndex !== chunkIndex) {
-        throw new Error(`Chunk index mismatch: expected ${chunkIndex}, found ${envIndex}`);
+        throw new CryptoError(CryptoErrorCode.CHUNK_INDEX_MISMATCH, `Chunk index mismatch: expected ${chunkIndex}, found ${envIndex}`, { op, chunkIndex, fileID });
       }
 
       const nonce = envelopeBytes.subarray(4, 28);
       const ciphertextWithTag = envelopeBytes.subarray(28);
-      const key = keyType === 'recv' ? this.keys.kRecv : this.keys.sendKey || this.keys.kSend;
+      const key = keyType === 'recv' ? this.keys.kRecv : (this.keys.sendKey || this.keys.kSend);
       const aad = this._makeChunkAAD(fileID, chunkIndex);
 
-      return this.sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
-        null,
-        ciphertextWithTag,
-        aad,
-        nonce,
-        key
-      );
+      try {
+        return this.sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+          null,
+          ciphertextWithTag,
+          aad,
+          nonce,
+          key
+        );
+      } catch (err) {
+        throw new CryptoError(CryptoErrorCode.AUTH_FAILED, "AEAD verification failed: chunk ciphertext/tag corrupted or wrong key", { op, chunkIndex, fileID });
+      }
     }
 
     /**
@@ -176,7 +271,8 @@
      * Output format: [Nonce(24B) | Ciphertext + Tag(16B)]
      */
     encryptPacket(plaintextBytes, seq = 0, customKey = null) {
-      this._ensureInit();
+      const op = 'encryptPacket';
+      this._ensureInit(op);
       if (typeof plaintextBytes === 'string') {
         plaintextBytes = this.sodium.from_string(plaintextBytes);
       }
@@ -202,9 +298,10 @@
      * Decrypts an encrypted packet envelope.
      */
     decryptPacket(envelopeBytes, seq = 0, customKey = null) {
-      this._ensureInit();
+      const op = 'decryptPacket';
+      this._ensureInit(op);
       if (envelopeBytes.length < 24 + 16) {
-        throw new Error(`Packet envelope too short: ${envelopeBytes.length} bytes`);
+        throw new CryptoError(CryptoErrorCode.CIPHERTEXT_TOO_SHORT, `Packet envelope too short: ${envelopeBytes.length} bytes`, { op, seq });
       }
 
       const key = customKey || this.keys.kWS;
@@ -212,13 +309,17 @@
       const ciphertextWithTag = envelopeBytes.subarray(24);
       const aad = this._makeSeqAAD(seq);
 
-      return this.sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
-        null,
-        ciphertextWithTag,
-        aad,
-        nonce,
-        key
-      );
+      try {
+        return this.sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+          null,
+          ciphertextWithTag,
+          aad,
+          nonce,
+          key
+        );
+      } catch (err) {
+        throw new CryptoError(CryptoErrorCode.AUTH_FAILED, "Packet AEAD verification failed: corrupted payload or sequence mismatch", { op, seq });
+      }
     }
 
     /**
@@ -234,12 +335,16 @@
       }
       this.keys = { masterKey: null, kSend: null, kRecv: null, kWS: null, kAuth: null };
       this.initialized = false;
+      CryptoLogger.debug('wipe', "All cryptographic keys zeroized from memory");
     }
   }
 
   // Export to global scope & CommonJS
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { EQTCryptoEngine };
+    module.exports = { EQTCryptoEngine, CryptoError, CryptoErrorCode, CryptoLogger };
   }
   global.EQTCryptoEngine = EQTCryptoEngine;
+  global.CryptoError = CryptoError;
+  global.CryptoErrorCode = CryptoErrorCode;
+  global.CryptoLogger = CryptoLogger;
 })(typeof self !== 'undefined' ? self : (typeof window !== 'undefined' ? window : globalThis));

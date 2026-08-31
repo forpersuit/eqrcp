@@ -81,7 +81,9 @@ export async function handleSessionRoutes(
 
     if (!license_code || !device_id || !keyPayload || !k_auth_hash) {
       return new Response(JSON.stringify({
-        error: "Missing required fields: license_code, device_id, master_key_b64, k_auth_hash"
+        ok: false,
+        error: "Missing required fields: license_code, device_id, master_key_b64, k_auth_hash",
+        error_code: "INVALID_PAYLOAD"
       }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -96,7 +98,11 @@ export async function handleSessionRoutes(
       .first();
 
     if (!lic || lic.status !== 'active') {
-      return new Response(JSON.stringify({ error: "Invalid, expired, or non-active license" }), {
+      return new Response(JSON.stringify({
+        ok: false,
+        error: "Invalid, expired, or non-active license",
+        error_code: "LICENSE_INACTIVE"
+      }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -105,7 +111,11 @@ export async function handleSessionRoutes(
     if (lic.expires_at && lic.expires_at !== 'LIFETIME') {
       const expTime = new Date(lic.expires_at).getTime();
       if (!isNaN(expTime) && expTime < Date.now()) {
-        return new Response(JSON.stringify({ error: "License expired" }), {
+        return new Response(JSON.stringify({
+          ok: false,
+          error: "License expired",
+          error_code: "LICENSE_EXPIRED"
+        }), {
           status: 403,
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
@@ -192,7 +202,11 @@ export async function handleSessionRoutes(
     }
 
     if (!sessionId || sessionId.trim() === "") {
-      return new Response(JSON.stringify({ error: "Missing session_id parameter" }), {
+      return new Response(JSON.stringify({
+        ok: false,
+        error: "Missing session_id parameter",
+        error_code: "INVALID_PARAM"
+      }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -209,7 +223,7 @@ export async function handleSessionRoutes(
       WHERE session_id = ? AND claim_count < max_claims AND expires_at > ? AND status = 'active'
     `).bind(cleanSessionId, now).run();
 
-    const changes = (updateRes.meta as any)?.changes ?? updateRes.success ? 1 : 0;
+    const changes = (updateRes.meta as any)?.changes ?? (updateRes.success ? 1 : 0);
 
     if (changes > 0) {
       // Successfully claimed within quota
@@ -242,7 +256,12 @@ export async function handleSessionRoutes(
     `).bind(cleanSessionId).first();
 
     if (!existing) {
-      return new Response(JSON.stringify({ error: "Session not found", not_found: true }), {
+      return new Response(JSON.stringify({
+        ok: false,
+        error: "Session not found",
+        error_code: "SESSION_NOT_FOUND",
+        not_found: true
+      }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -252,20 +271,34 @@ export async function handleSessionRoutes(
       ctx.waitUntil(
         db.prepare("DELETE FROM e2ee_sessions WHERE session_id = ?").bind(cleanSessionId).run()
       );
-      return new Response(JSON.stringify({ error: "Session expired", expired: true }), {
+      return new Response(JSON.stringify({
+        ok: false,
+        error: "Session expired",
+        error_code: "SESSION_EXPIRED",
+        expired: true
+      }), {
         status: 410,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
     if (existing.claim_count >= existing.max_claims) {
-      return new Response(JSON.stringify({ error: "Claim limit exceeded", limit_exceeded: true }), {
+      return new Response(JSON.stringify({
+        ok: false,
+        error: "Claim limit exceeded",
+        error_code: "CLAIM_LIMIT_EXCEEDED",
+        limit_exceeded: true
+      }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
-    return new Response(JSON.stringify({ error: "Session is inactive or closed" }), {
+    return new Response(JSON.stringify({
+      ok: false,
+      error: "Session is inactive or closed",
+      error_code: "SESSION_INACTIVE"
+    }), {
       status: 403,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
@@ -330,7 +363,11 @@ export async function handleSessionRoutes(
 
     const changes = (deleteRes.meta as any)?.changes ?? (deleteRes.success ? 1 : 0);
     if (changes === 0) {
-      return new Response(JSON.stringify({ ok: false, error: "Session not found or invalid close credentials" }), {
+      return new Response(JSON.stringify({
+        ok: false,
+        error: "Session not found or invalid close credentials",
+        error_code: "SESSION_NOT_FOUND"
+      }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });

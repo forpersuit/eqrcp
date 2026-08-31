@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"runtime"
@@ -35,13 +34,6 @@ const (
 	HKDFInfoRecv = "eqt-e2ee-v2-recv"
 	HKDFInfoWS   = "eqt-e2ee-v2-ws"
 	HKDFInfoAuth = "eqt-e2ee-v2-auth"
-)
-
-var (
-	ErrInvalidKeySize     = errors.New("e2ee: master key must be exactly 32 bytes")
-	ErrCiphertextTooShort = errors.New("e2ee: ciphertext too short")
-	ErrChunkIndexMismatch = errors.New("e2ee: chunk index mismatch")
-	ErrAuthFailed         = errors.New("e2ee: message authentication failed")
 )
 
 // DerivedKeys holds the four domain-separated 256-bit symmetric subkeys.
@@ -168,15 +160,15 @@ func EncryptChunk(plaintext []byte, chunkIndex uint32, key []byte, fileID string
 // Envelope Format: [ChunkIndex(4B) | Nonce(24B) | Ciphertext | Tag(16B)]
 func DecryptChunk(envelope []byte, expectedChunkIndex uint32, key []byte, fileID string) ([]byte, error) {
 	if len(key) != KeySize {
-		return nil, ErrInvalidKeySize
+		return nil, WrapChunkError(ErrCodeInvalidKeySize, "DecryptChunk", fileID, expectedChunkIndex, "invalid key size", ErrInvalidKeySize)
 	}
 	if len(envelope) < ChunkHeaderSize+TagSize {
-		return nil, ErrCiphertextTooShort
+		return nil, WrapChunkError(ErrCodeCiphertextTooShort, "DecryptChunk", fileID, expectedChunkIndex, "envelope too short", ErrCiphertextTooShort)
 	}
 
 	actualChunkIndex := binary.BigEndian.Uint32(envelope[:4])
 	if actualChunkIndex != expectedChunkIndex {
-		return nil, fmt.Errorf("%w: expected %d, got %d", ErrChunkIndexMismatch, expectedChunkIndex, actualChunkIndex)
+		return nil, WrapChunkError(ErrCodeChunkIndexMismatch, "DecryptChunk", fileID, expectedChunkIndex, fmt.Sprintf("expected chunk %d, got %d", expectedChunkIndex, actualChunkIndex), ErrChunkIndexMismatch)
 	}
 
 	nonce := envelope[4:ChunkHeaderSize]
@@ -184,14 +176,14 @@ func DecryptChunk(envelope []byte, expectedChunkIndex uint32, key []byte, fileID
 
 	aead, err := chacha20poly1305.NewX(key)
 	if err != nil {
-		return nil, fmt.Errorf("e2ee: failed to initialize XChaCha20-Poly1305: %w", err)
+		return nil, WrapChunkError(ErrCodeUninitialized, "DecryptChunk", fileID, expectedChunkIndex, "failed to initialize XChaCha20 cipher", err)
 	}
 
 	aad := BuildChunkAAD(fileID, expectedChunkIndex)
 
 	plaintext, err := aead.Open(nil, nonce, ciphertextWithTag, aad)
 	if err != nil {
-		return nil, ErrAuthFailed
+		return nil, WrapChunkError(ErrCodeAuthFailed, "DecryptChunk", fileID, expectedChunkIndex, "AEAD authentication verification failed (tampered ciphertext/tag/aad or wrong key)", ErrAuthFailed)
 	}
 
 	return plaintext, nil
@@ -201,17 +193,17 @@ func DecryptChunk(envelope []byte, expectedChunkIndex uint32, key []byte, fileID
 // Envelope Format: [Nonce(24B) | Ciphertext | Tag(16B)]
 func EncryptPacket(plaintext []byte, key []byte, aad []byte) ([]byte, error) {
 	if len(key) != KeySize {
-		return nil, ErrInvalidKeySize
+		return nil, WrapOpError(ErrCodeInvalidKeySize, "EncryptPacket", "invalid key size", ErrInvalidKeySize)
 	}
 
 	aead, err := chacha20poly1305.NewX(key)
 	if err != nil {
-		return nil, fmt.Errorf("e2ee: failed to initialize XChaCha20-Poly1305: %w", err)
+		return nil, WrapOpError(ErrCodeUninitialized, "EncryptPacket", "failed to initialize XChaCha20 cipher", err)
 	}
 
 	nonce := make([]byte, NonceSize)
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return nil, fmt.Errorf("e2ee: failed to generate nonce: %w", err)
+		return nil, WrapOpError(ErrCodeNonceGeneration, "EncryptPacket", "failed to generate nonce", err)
 	}
 
 	// Output buffer: [Nonce(24B) | Ciphertext + Tag]
@@ -226,10 +218,10 @@ func EncryptPacket(plaintext []byte, key []byte, aad []byte) ([]byte, error) {
 // Envelope Format: [Nonce(24B) | Ciphertext | Tag(16B)]
 func DecryptPacket(envelope []byte, key []byte, aad []byte) ([]byte, error) {
 	if len(key) != KeySize {
-		return nil, ErrInvalidKeySize
+		return nil, WrapOpError(ErrCodeInvalidKeySize, "DecryptPacket", "invalid key size", ErrInvalidKeySize)
 	}
 	if len(envelope) < PacketHeaderSize+TagSize {
-		return nil, ErrCiphertextTooShort
+		return nil, WrapOpError(ErrCodeCiphertextTooShort, "DecryptPacket", "envelope too short", ErrCiphertextTooShort)
 	}
 
 	nonce := envelope[:PacketHeaderSize]
@@ -237,12 +229,12 @@ func DecryptPacket(envelope []byte, key []byte, aad []byte) ([]byte, error) {
 
 	aead, err := chacha20poly1305.NewX(key)
 	if err != nil {
-		return nil, fmt.Errorf("e2ee: failed to initialize XChaCha20-Poly1305: %w", err)
+		return nil, WrapOpError(ErrCodeUninitialized, "DecryptPacket", "failed to initialize XChaCha20 cipher", err)
 	}
 
 	plaintext, err := aead.Open(nil, nonce, ciphertextWithTag, aad)
 	if err != nil {
-		return nil, ErrAuthFailed
+		return nil, WrapOpError(ErrCodeAuthFailed, "DecryptPacket", "packet authentication verification failed", ErrAuthFailed)
 	}
 
 	return plaintext, nil

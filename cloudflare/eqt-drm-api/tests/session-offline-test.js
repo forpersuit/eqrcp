@@ -158,6 +158,8 @@ async function runTests() {
     });
     const resp = await handleSessionRoutes(req, env, ctx, new URL(req.url), corsHeaders);
     assertEqual(resp.status, 403, "Non-existent license rejected with 403");
+    const b = await resp.json();
+    assertEqual(b.error_code, "LICENSE_INACTIVE", "Non-existent license has error_code LICENSE_INACTIVE");
   }
 
   // 2.2 Suspended license
@@ -175,6 +177,8 @@ async function runTests() {
     });
     const resp = await handleSessionRoutes(req, env, ctx, new URL(req.url), corsHeaders);
     assertEqual(resp.status, 403, "Suspended license rejected with 403");
+    const b = await resp.json();
+    assertEqual(b.error_code, "LICENSE_INACTIVE", "Suspended license has error_code LICENSE_INACTIVE");
   }
 
   // 2.3 Revoked license
@@ -192,6 +196,8 @@ async function runTests() {
     });
     const resp = await handleSessionRoutes(req, env, ctx, new URL(req.url), corsHeaders);
     assertEqual(resp.status, 403, "Revoked license rejected with 403");
+    const b = await resp.json();
+    assertEqual(b.error_code, "LICENSE_INACTIVE", "Revoked license has error_code LICENSE_INACTIVE");
   }
 
   // 2.4 Expired license
@@ -209,6 +215,8 @@ async function runTests() {
     });
     const resp = await handleSessionRoutes(req, env, ctx, new URL(req.url), corsHeaders);
     assertEqual(resp.status, 403, "Expired license rejected with 403");
+    const b = await resp.json();
+    assertEqual(b.error_code, "LICENSE_EXPIRED", "Expired license has error_code LICENSE_EXPIRED");
   }
 
   // 3. Valid Session Create & Claim (MasterKey Blind Relay & CAS Quota)
@@ -254,6 +262,7 @@ async function runTests() {
     assertEqual(claim3Resp.status, 403, "Third claim returns 403 Forbidden");
     const claim3Body = await claim3Resp.json();
     assertEqual(claim3Body.limit_exceeded, true, "Returns limit_exceeded: true");
+    assertEqual(claim3Body.error_code, "CLAIM_LIMIT_EXCEEDED", "Quota exceeded returns error_code CLAIM_LIMIT_EXCEEDED");
   }
 
   // 4. Multi-mode concurrency on the same PC (D4: send and receive do not override each other)

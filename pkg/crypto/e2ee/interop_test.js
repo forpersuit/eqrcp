@@ -1,6 +1,7 @@
 /**
  * E2EE Interoperability & Security Test Suite
  * Validates libsodium WASM engine, constant-time AEAD, HKDF derivation, and tamper resistance.
+ * Validates structured CryptoError and machine-readable error codes.
  * Includes Non-Secure Context (HTTP LAN) simulation (crypto.subtle = undefined).
  */
 const path = require('path');
@@ -8,7 +9,7 @@ const assert = require('assert');
 
 // Load bundled libsodium and EQTCryptoEngine
 require('../../pages/assets/libsodium.js');
-const { EQTCryptoEngine } = require('../../pages/assets/crypto-engine.js');
+const { EQTCryptoEngine, CryptoError, CryptoErrorCode } = require('../../pages/assets/crypto-engine.js');
 
 async function runTests() {
   console.log("=== EQT E2EE Security & Interop Test Suite ===");
@@ -69,48 +70,65 @@ async function runTests() {
   assert(decThroughput >= 60, `Decryption throughput ${decThroughput.toFixed(1)} MB/s is below DoD requirement (>= 60 MB/s)`);
   console.log("✓ DoD Throughput standard (>= 60 MB/s) PASSED!");
 
-  // 4. JS-Side Tamper Resistance Test Vectors
-  console.log("Running JS tamper resistance tests...");
+  // 4. JS-Side Tamper Resistance Test Vectors & Structured Error Checks
+  console.log("Running JS tamper resistance & structured error tests...");
 
   // 4.1 Corrupted Ciphertext Bit
   {
     const tampered = new Uint8Array(envelope);
     tampered[50] ^= 0x01; // flip 1 bit in ciphertext
-    assert.throws(() => {
+    try {
       engine.decryptChunk(tampered, chunkIndex, fileID, 'send');
-    }, /ciphertext cannot be decrypted|incorrect tag|internal error/i, "Should reject corrupted ciphertext bit");
+      assert.fail("Should have thrown on corrupted ciphertext");
+    } catch (err) {
+      assert.strictEqual(err.name, 'CryptoError', "Error should be instance of CryptoError");
+      assert.strictEqual(err.code, CryptoErrorCode.AUTH_FAILED, "Error code should be AUTH_FAILED");
+      assert.strictEqual(err.retryable, false, "Auth failure is fatal non-retryable");
+    }
   }
 
   // 4.2 Corrupted Poly1305 Tag
   {
     const tampered = new Uint8Array(envelope);
     tampered[tampered.length - 1] ^= 0x80; // flip 1 bit in tag
-    assert.throws(() => {
+    try {
       engine.decryptChunk(tampered, chunkIndex, fileID, 'send');
-    }, /ciphertext cannot be decrypted|incorrect tag|internal error/i, "Should reject corrupted tag");
+      assert.fail("Should have thrown on corrupted tag");
+    } catch (err) {
+      assert.strictEqual(err.code, CryptoErrorCode.AUTH_FAILED, "Error code should be AUTH_FAILED");
+    }
   }
 
   // 4.3 Chunk Index AAD Mismatch
   {
-    assert.throws(() => {
+    try {
       engine.decryptChunk(envelope, chunkIndex + 1, fileID, 'send');
-    }, /Chunk index mismatch|ciphertext cannot be decrypted/i, "Should reject wrong chunk index");
+      assert.fail("Should have thrown on wrong chunk index");
+    } catch (err) {
+      assert.strictEqual(err.code, CryptoErrorCode.CHUNK_INDEX_MISMATCH, "Error code should be CHUNK_INDEX_MISMATCH");
+    }
   }
 
   // 4.4 FileID AAD Mismatch
   {
-    assert.throws(() => {
+    try {
       engine.decryptChunk(envelope, chunkIndex, "wrong-file-id", 'send');
-    }, /ciphertext cannot be decrypted|incorrect tag|internal error/i, "Should reject wrong fileID AAD");
+      assert.fail("Should have thrown on wrong fileID AAD");
+    } catch (err) {
+      assert.strictEqual(err.code, CryptoErrorCode.AUTH_FAILED, "Error code should be AUTH_FAILED");
+    }
   }
 
   // 4.5 Wrong Key
   {
-    assert.throws(() => {
+    try {
       engine.decryptChunk(envelope, chunkIndex, fileID, 'recv'); // used kRecv instead of kSend
-    }, /ciphertext cannot be decrypted|incorrect tag|internal error/i, "Should reject wrong key");
+      assert.fail("Should have thrown on wrong key");
+    } catch (err) {
+      assert.strictEqual(err.code, CryptoErrorCode.AUTH_FAILED, "Error code should be AUTH_FAILED");
+    }
   }
-  console.log("✓ All JS tamper resistance vectors PASSED!");
+  console.log("✓ All JS tamper resistance vectors & structured CryptoError codes PASSED!");
 
   // 5. Packet Encryption & Decryption (Chat / Sequence AAD)
   const packetMsg = "Hello E2EE Chat World!";
@@ -120,15 +138,24 @@ async function runTests() {
   assert.deepStrictEqual(decryptedPacket, engine.sodium.from_string(packetMsg), "Packet round-trip mismatch");
 
   // Tampered packet sequence
-  assert.throws(() => {
+  try {
     engine.decryptPacket(packetEnv, seq + 1);
-  }, /ciphertext cannot be decrypted|incorrect tag|internal error/i, "Should reject wrong packet sequence number");
+    assert.fail("Should have thrown on sequence mismatch");
+  } catch (err) {
+    assert.strictEqual(err.code, CryptoErrorCode.AUTH_FAILED, "Packet seq tampering code should be AUTH_FAILED");
+  }
   console.log("✓ Packet encryption/decryption with Sequence AAD PASSED!");
 
   // 6. Memory Wiping Test
   engine.wipe();
   assert.strictEqual(engine.initialized, false, "Engine should be uninitialized after wipe");
   assert.strictEqual(engine.keys.masterKey, null, "Keys should be null after wipe");
+  try {
+    engine.encryptPacket("test", 1);
+    assert.fail("Should throw when uninitialized");
+  } catch (err) {
+    assert.strictEqual(err.code, CryptoErrorCode.UNINITIALIZED, "Uninitialized call throws UNINITIALIZED error code");
+  }
   console.log("✓ Memory wiping test PASSED!");
 
   // 7. Non-Secure Context Test (Simulating http://192.168.x.x LAN mobile browser where crypto.subtle is undefined)
