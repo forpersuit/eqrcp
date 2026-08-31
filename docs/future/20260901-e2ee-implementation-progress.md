@@ -115,7 +115,7 @@
   - [ ] 利用 4MB 定长切片物理偏移确定性（`offset = chunkIndex * 4MB`），支持 `os.File.WriteAt` 并发乱序直写物理文件，免去内存滑动窗口队列；
   - [ ] 乱序直写两前提：① 分块 AEAD 的 AAD 须绑定 `chunkIndex`（含会话/文件 ID），防止「合法块被重放到错误偏移」仍通过逐块验签；② 保留一个极小连续位图跟踪器维护「最大连续块 M」——`chunk_status`（Task 4.3）只以连续 M 为准，按「最高已写块」续传会在空洞处产生文件洞，最终仅 `file_sha256` 兜底；
   - [ ] 写入闭环保障：当所有分块到齐后，显式调用 `os.File.Truncate(expectedTotalBytes)` 确保文件尺寸精确等于期望总长（幂等、仅定尺寸，**不填充中间空洞**——中间空洞由 Task 4.3 `received_ranges` 定向补发闭合），再 `os.File.Sync()` 强制刷盘后按 §7.5 原子重命名；
-  - [ ] 无锁并发 I/O 规范：`*os.File.WriteAt` 底层基于操作系统原生 `pwrite64` (Linux) / `WriteFile` (Windows) 保证线程安全，Go 服务端处理并发分块落盘时严禁套用全局写文件互斥锁，确保多 goroutine 磁盘吞吐最大化（前提：同一 `*os.File` 全程只走 `WriteAt` 定点写，严禁混用 `Write`/`Seek` 共享文件游标——锁自由仅对定点写成立；末块 `Truncate`/`Sync`/重命名须在全部并发写 goroutine join 之后执行）；
+  - [ ] 无锁并发 I/O 规范：`*os.File.WriteAt` 底层基于操作系统原生 `pwrite64` (Linux) / `WriteFile` (Windows) 保证线程安全，Go 服务端处理并发分块落盘时严禁套用全局写文件互斥锁，确保多 goroutine 磁盘吞吐最大化（前提：同一 `*os.File` 全程只走 `WriteAt` 定点写，严禁混用 `Write`/`Seek` 共享文件游标——锁自由仅对定点写成立；末块 `Truncate`/`Sync`/重命名须在全部并发写 goroutine 完成（通过 per-file 活跃写入计数器/`sync.WaitGroup` 安全 join）之后执行）；
   - [ ] 引入 `sync.Pool` 4MB 缓冲区，明文 Buffer 归还前执行 `clear(b)` 与 `runtime.KeepAlive`。
 - [ ] **Task 4.2: 移动端 3 级流水线并发与存储落盘** (`pkg/pages/upload.tmpl.html` & `download.tmpl.html`)
   - [ ] 实现 Read $\rightarrow$ Encrypt $\rightarrow$ POST 3 级并发流水线；
