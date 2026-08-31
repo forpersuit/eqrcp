@@ -1,6 +1,7 @@
 /**
  * E2EE Interoperability & Security Test Suite
  * Validates libsodium WASM engine, constant-time AEAD, HKDF derivation, and tamper resistance.
+ * Includes Non-Secure Context (HTTP LAN) simulation (crypto.subtle = undefined).
  */
 const path = require('path');
 const assert = require('assert');
@@ -17,7 +18,7 @@ async function runTests() {
   await engine.init(masterKeyHex);
   console.log("✓ Engine initialized with libsodium WASM");
 
-  // 1. HKDF Key Derivation Validation
+  // 1. HKDF Key Derivation Validation (Pure WASM HMAC-SHA256)
   const expectedKSend = "a018f378a93cb3bf437192eab4a6b46513ec5cf1e9a5a7211f936689fd9feffd";
   const expectedKRecv = "d1b5aaec98f0f930c7b5f94d82a6f19a16a92007454f6b9a2f4f74ceba803825";
   const expectedKWS = "c2f31346f033615a4af3cdbd8e4e612fe591b75d21223c999b5d2158607c63f7";
@@ -112,11 +113,11 @@ async function runTests() {
   console.log("✓ All JS tamper resistance vectors PASSED!");
 
   // 5. Packet Encryption & Decryption (Chat / Sequence AAD)
-  const packetMsg = new TextEncoder().encode("Hello E2EE Chat World!");
+  const packetMsg = "Hello E2EE Chat World!";
   const seq = 1001;
   const packetEnv = engine.encryptPacket(packetMsg, seq);
   const decryptedPacket = engine.decryptPacket(packetEnv, seq);
-  assert.deepStrictEqual(decryptedPacket, packetMsg, "Packet round-trip mismatch");
+  assert.deepStrictEqual(decryptedPacket, engine.sodium.from_string(packetMsg), "Packet round-trip mismatch");
 
   // Tampered packet sequence
   assert.throws(() => {
@@ -129,6 +130,31 @@ async function runTests() {
   assert.strictEqual(engine.initialized, false, "Engine should be uninitialized after wipe");
   assert.strictEqual(engine.keys.masterKey, null, "Keys should be null after wipe");
   console.log("✓ Memory wiping test PASSED!");
+
+  // 7. Non-Secure Context Test (Simulating http://192.168.x.x LAN mobile browser where crypto.subtle is undefined)
+  console.log("Running Non-Secure Context (HTTP LAN) simulation test (crypto.subtle = undefined)...");
+  const origCrypto = global.crypto;
+  try {
+    global.crypto = {
+      getRandomValues: (arr) => origCrypto.getRandomValues(arr)
+      // crypto.subtle is intentionally undefined!
+    };
+    const lanEngine = new EQTCryptoEngine();
+    await lanEngine.init(masterKeyHex);
+    assert.strictEqual(lanEngine.initialized, true, "Engine must initialize without crypto.subtle");
+    assert.strictEqual(lanEngine.sodium.to_hex(lanEngine.keys.kSend), expectedKSend, "kSend matches in LAN context");
+    assert.strictEqual(lanEngine.sodium.to_hex(lanEngine.keys.kRecv), expectedKRecv, "kRecv matches in LAN context");
+    assert.strictEqual(lanEngine.sodium.to_hex(lanEngine.keys.kWS), expectedKWS, "kWS matches in LAN context");
+    assert.strictEqual(lanEngine.sodium.to_hex(lanEngine.keys.kAuth), expectedKAuth, "kAuth matches in LAN context");
+
+    const testPlain = new Uint8Array([10, 20, 30, 40, 50]);
+    const testEnv = lanEngine.encryptChunk(testPlain, 0, "lan-file-01", 'send');
+    const testDec = lanEngine.decryptChunk(testEnv, 0, "lan-file-01", 'send');
+    assert.deepStrictEqual(testDec, testPlain, "LAN context chunk encryption/decryption works 100%");
+    console.log("✓ Non-Secure Context (HTTP LAN) simulation PASSED with zero crypto.subtle dependency!");
+  } finally {
+    global.crypto = origCrypto;
+  }
 
   console.log("\n>>> ALL JS CRYPTO TESTS PASSED 100% <<<\n");
 }

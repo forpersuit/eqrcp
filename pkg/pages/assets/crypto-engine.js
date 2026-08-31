@@ -1,6 +1,7 @@
 /**
  * EQT End-to-End Encryption (E2EE) Cryptographic Engine
- * RFC 8439 XChaCha20-Poly1305 AEAD (via libsodium WASM) + RFC 5869 HKDF-SHA256 Key Derivation
+ * RFC 8439 XChaCha20-Poly1305 AEAD + RFC 5869 HKDF-SHA256 Key Derivation
+ * 100% Constant-Time via Libsodium WebAssembly (Zero reliance on crypto.subtle / Secure Context)
  */
 (function(global) {
   'use strict';
@@ -51,35 +52,34 @@
 
       this.keys.masterKey = rawKey;
 
-      // 3. Derive subkeys using standard RFC 5869 HKDF-SHA256 (WebCrypto / Native fallback)
-      const baseKey = await global.crypto.subtle.importKey(
-        'raw',
-        rawKey,
-        { name: 'HKDF' },
-        false,
-        ['deriveBits']
-      );
-
-      const expand = async (infoStr) => {
-        const info = new TextEncoder().encode(infoStr);
-        const bits = await global.crypto.subtle.deriveBits(
-          {
-            name: 'HKDF',
-            hash: 'SHA-256',
-            salt: new Uint8Array(32), // 32 zero bytes per architecture spec
-            info: info
-          },
-          baseKey,
-          256
-        );
-        return new Uint8Array(bits);
+      // 3. Derive subkeys using RFC 5869 HKDF-SHA256 via libsodium WASM HMAC-SHA256
+      // NOTE: Zero reliance on crypto.subtle to guarantee 100% operation in non-secure LAN HTTP (http://192.168.x.x).
+      // In libsodium: crypto_auth_hmacsha256(message, key) computes HMAC-SHA256(key, message)
+      const hmacSha256 = (key, msg) => {
+        return this.sodium.crypto_auth_hmacsha256(msg, key);
       };
 
-      this.keys.kSend = await expand('eqt-e2ee-v2-send');
-      this.keys.kRecv = await expand('eqt-e2ee-v2-recv');
-      this.keys.kWS = await expand('eqt-e2ee-v2-ws');
-      this.keys.kAuth = await expand('eqt-e2ee-v2-auth');
+      // HKDF-Extract(salt, IKM) -> PRK (salt is 32 zero bytes per architecture spec)
+      const zeroSalt = new Uint8Array(32);
+      const prk = hmacSha256(zeroSalt, rawKey);
 
+      // HKDF-Expand(PRK, info, L=32) -> OKM
+      const expand = (infoStr) => {
+        const infoBytes = this.sodium.from_string(infoStr);
+        const msg = new Uint8Array(infoBytes.length + 1);
+        msg.set(infoBytes, 0);
+        msg[infoBytes.length] = 1; // 0x01 for block 1 (32 bytes)
+        const okm = hmacSha256(prk, msg);
+        this.sodium.memzero(msg);
+        return okm;
+      };
+
+      this.keys.kSend = expand('eqt-e2ee-v2-send');
+      this.keys.kRecv = expand('eqt-e2ee-v2-recv');
+      this.keys.kWS = expand('eqt-e2ee-v2-ws');
+      this.keys.kAuth = expand('eqt-e2ee-v2-auth');
+
+      this.sodium.memzero(prk);
       this.initialized = true;
       return this;
     }
@@ -94,7 +94,7 @@
      * Constructs Additional Authenticated Data (AAD) for chunk: fileID || uint32_be(chunkIndex)
      */
     _makeChunkAAD(fileID, chunkIndex) {
-      const fileIDBytes = new TextEncoder().encode(fileID);
+      const fileIDBytes = this.sodium.from_string(fileID);
       const aad = new Uint8Array(fileIDBytes.length + 4);
       aad.set(fileIDBytes, 0);
       const view = new DataView(aad.buffer, aad.byteOffset, aad.byteLength);
@@ -159,7 +159,7 @@
 
       const nonce = envelopeBytes.subarray(4, 28);
       const ciphertextWithTag = envelopeBytes.subarray(28);
-      const key = keyType === 'recv' ? this.keys.kRecv : this.keys.kSend;
+      const key = keyType === 'recv' ? this.keys.kRecv : this.keys.sendKey || this.keys.kSend;
       const aad = this._makeChunkAAD(fileID, chunkIndex);
 
       return this.sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
@@ -178,7 +178,7 @@
     encryptPacket(plaintextBytes, seq = 0, customKey = null) {
       this._ensureInit();
       if (typeof plaintextBytes === 'string') {
-        plaintextBytes = new TextEncoder().encode(plaintextBytes);
+        plaintextBytes = this.sodium.from_string(plaintextBytes);
       }
       const key = customKey || this.keys.kWS;
       const nonce = this.sodium.randombytes_buf(24);
