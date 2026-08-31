@@ -3384,6 +3384,16 @@ func registerBrandAssets(mux *http.ServeMux) {
 		w.Header().Set("Cache-Control", "public, max-age=86400")
 		_, _ = w.Write(pages.TusMinJS)
 	})
+	mux.HandleFunc("/assets/crypto-engine.js", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/javascript")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		_, _ = w.Write(pages.CryptoEngineJS)
+	})
+	mux.HandleFunc("/assets/crypto.worker.js", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/javascript")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		_, _ = w.Write(pages.CryptoWorkerJS)
+	})
 }
 
 func (s *Server) handleTusUpload(w http.ResponseWriter, r *http.Request) {

@@ -43,3 +43,13 @@ var Favicon []byte
 //
 //go:embed assets/tus.min.js
 var TusMinJS []byte
+
+// CryptoEngineJS is the E2EE client cryptographic engine.
+//
+//go:embed assets/crypto-engine.js
+var CryptoEngineJS []byte
+
+// CryptoWorkerJS is the E2EE 4MB chunk background worker pipeline.
+//
+//go:embed assets/crypto.worker.js
+var CryptoWorkerJS []byte
