@@ -11,7 +11,7 @@
 
 | 阶段 (Phase) | 阶段名称 | 核心目标与交付件 | 状态 (Status) | 责任模块 |
 | :--- | :--- | :--- | :---: | :--- |
-| **Phase 1** | **WASM 密码学引擎** | `libsodium.js` (WASM) / HKDF 派生、4MB 分块 AEAD Worker、Go/JS 互通 | ✅ **已完成 (100%)** | `pkg/pages/assets/`, `pkg/crypto/e2ee/` |
+| **Phase 1** | **WASM 密码学引擎** | `libsodium.js` (WASM) / HKDF 派生、4MB 分块 AEAD Worker、Go/JS 互通 | ⚠️ **AEAD 达标 / HKDF insecure-context 阻断**（Task 1.5） | `pkg/pages/assets/`, `pkg/crypto/e2ee/` |
 | **Phase 2** | **DRM 云端会话端点** | D1 表结构、多模式单例覆盖、TTL 物理销毁、CAS 配额门禁、零日志 CORS | ✅ **已完成 (100%)** | `cloudflare/eqt-drm-api/` |
 | **Phase 3** | **Chat 模式双向 E2EE** | WebSocket `e2ee_envelope`、Seq 防重放、Svelte 端加解密 | ⏳ **待启动 (Ready)** | `pkg/chat/v2/` |
 | **Phase 4** | **Share / Receive 分块流** | REST 分块端点、3级流水线、IndexedDB 落盘、静默 Ban 网关 | ⏳ **待启动** | `pkg/server/`, `pkg/pages/` |
@@ -44,11 +44,16 @@
   - [x] 前端 4MB 单核分块实测性能：**加密吞吐 154.2 MB/s / 解密吞吐 242.9 MB/s**，远超 DoD $\ge 60$MB/s 标准；
   - [x] 完备的 JS 侧篡改向量测试 (`interop_test.js`)：密文篡改 1 bit、Tag 篡改 1 bit、ChunkIndex 错位、FileID AAD 错位、密钥错位 100% 拒验；
   - [x] Worker 生命周期物理清零与异常熔断机制全面验证通过。
+- [ ] **Task 1.5: HKDF 移出 `crypto.subtle`（insecure-context 阻断项）** (`pkg/pages/assets/crypto-engine.js`)
+  - [ ] 当前 `init()` 用 `global.crypto.subtle.importKey / deriveBits` 派生 `K_send / K_recv / K_ws / K_auth`——**局域网 HTTP（insecure context）下 `crypto.subtle` 为 `undefined`，干净模拟实测 `init()` 抛 `TypeError: Cannot read properties of undefined (reading 'importKey')`**，手机经 `http://192.168.x.x` 访问的真实部署环境无法初始化引擎（Secure Context 陷阱回归，AEAD 已换 WASM、HKDF 却仍依赖 subtle）；
+  - [ ] 改用 libsodium `crypto_auth_hmacsha256` 在 WASM 内实现 RFC 5869 HKDF extract / expand（extract salt = 32 零字节，expand info 标签 `eqt-e2ee-v2-send/recv/ws/auth` 不变，恒定时间、不依赖 `crypto.subtle`），Go ⇄ JS 互通向量保持 100% 复验；
+  - [ ] 在 `interop_test.js` 增加「无 `crypto.subtle` 环境 `init()` 成功」断言，防回归。
 
 > **Phase 1 验收标准 (DoD)**：
-> 1. ✅ 本地 HTTP 页面加载 libsodium WASM 成功，4MB 单核加密吞吐 **154.2 MB/s**（$\ge 60$MB/s DoD 达标）；
+> 1. ✅ 本地 HTTP 页面加载 libsodium WASM 成功（wasm 内嵌于 `libsodium.js`，无外部 `.wasm` 依赖）；本机实测 4MB 单核**加密 196.9 MB/s / 解密 277.5 MB/s**（Node v24，≥60MB/s DoD 达标，高于文档记录值 154.2/242.9）；
 > 2. ✅ Go 端与前端 JS 跨端互通 100% 吻合（`TestCrossLanguageInterop` 100% PASS）；
-> 3. ✅ 篡改 1 bit 密文、Tag 或 AAD 均 100% 抛出验签失败异常。
+> 3. ✅ 篡改 1 bit 密文、Tag 或 AAD 均 100% 抛出验签失败异常（JS 侧 `interop_test.js` 篡改向量全过）；
+> 4. ❌ **insecure-context 可用性未达标**：无 `crypto.subtle` 环境下 `init()` 抛 TypeError → **Task 1.5 阻断**，修复前不得进入 Phase 3/4 联调。
 
 ---
 
@@ -182,7 +187,7 @@
 | 2026-08-31 | `7907911` | 完成 E2EE 架构终审方案与三态视觉图例封版 | 架构设计 | ✅ 完成 |
 | 2026-08-31 | `454d3a5` | Phase 1: 完成 XChaCha20-Poly1305 / HKDF 跨端引擎与 Worker 管道 | Task 1.1~1.3 | ✅ 完成 |
 | 2026-08-31 | `1491f98` | Phase 2: DRM 云端会话 D1 结构与单例覆盖生命周期端点 | Task 2.1~2.5 | ✅ 完成 |
-| 2026-08-31 | (当前) | 阻断项清零：WASM 恒定时间引擎 (154MB/s) + 篡改测试 + D1 门禁/配额/并发闭环 | Task 1.4, 2.6 | ✅ 完成 (100%) |
+| 2026-08-31 | `f5e54ad4` | libsodium WASM 引擎 + JS 篡改向量 + D1 门禁/配额/并发闭环 | Task 1.4, 2.6 | ✅ 完成（HKDF insecure-context → Task 1.5） |
 | 待推进 | — | Phase 3: Chat 模式双向 WebSocket 与小附件 E2EE | Task 3.1~3.4 | ⏳ 待开始 |
 
 ---
@@ -200,7 +205,8 @@
 
 | # | 偏差项 | 架构设计 | 最终落地实现 | 裁决与状态 |
 | :-- | :--- | :--- | :--- | :--- |
-| D1 | 前端引擎 | libsodium WASM（恒定时间、近 C 性能） | 打包独立 `libsodium.js` (WASM)，实测 154.2 MB/s 加密 / 242.9 MB/s 解密 | ✅ 达标修复 (Task 1.4) |
+| D1 | 前端引擎 | libsodium WASM（恒定时间、近 C 性能） | 打包独立 `libsodium.js` (WASM)，本机实测 196.9 MB/s 加密 / 277.5 MB/s 解密 | ✅ 达标修复 (Task 1.4)；衍生 D8 |
+| D8 | HKDF 派生 | WASM 内恒定时间实现（不依赖 WebCrypto） | 修复 AEAD 时改用 `crypto.subtle.deriveBits` 派生子密钥，insecure-context（LAN HTTP）下 `crypto.subtle` 为 `undefined`，`init()` 实测抛 TypeError | **回归 → Task 1.5 移出 `crypto.subtle`（libsodium `crypto_auth_hmacsha256` 实现 RFC 5869）** |
 | D2 | Session 端点路径 | `/api/v1/e2ee/session/*` | 同时兼容 `/api/v1/e2ee/session/*` 与 `/api/v1/session/*` | ✅ 双向兼容 |
 | D3 | Claim 流程 | `max_claims` 领取配额与 CAS 递增 | 原子 CAS `claim_count < max_claims`，超限精准返回 `403 limit_exceeded` | ✅ 达标修复 (Task 2.6) |
 | D4 | 会话唯一性 | `UNIQUE(device_id, mode)` | 表结构与索引为 `UNIQUE(device_id, mode)`，同 PC 并发多模式完全隔离 | ✅ 达标修复 (Task 2.6) |
