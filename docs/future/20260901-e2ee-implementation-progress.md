@@ -59,11 +59,15 @@
 - [ ] **Task 2.3: 会话领取端点** (`POST /api/v1/e2ee/session/:id/claim`)
   - [ ] 接收移动端 `X-Client-Instance-Id` (UUID)；
   - [ ] 原子 CAS 递增 `claim_count` 并校验 `claim_count < max_claims`；
+  - [ ] 领取前先校验 `expires_at > unixepoch()`，过期会话返回 `410 Gone`（惰性 GC 抽样清理可能尚未执行，防止在密钥过期窗口内被领取）；
   - [ ] 支持同设备刷新重载容错；
   - [ ] 下发 `MasterKey`，响应头携带标准 CORS (`Access-Control-Allow-Origin: *`)。
 - [ ] **Task 2.4: 主动关闭与零日志隐私合规** (`POST /api/v1/e2ee/session/:id/close`)
   - [ ] PC 退出或关闭会话时触发 `close`，校验 `close_token` 后物理删除会话记录；
   - [ ] 审计 DRM Worker 日志，确保不记录客户端 IP、文件名或传输载荷（应用层 Zero-Telemetry）。
+- [ ] **Task 2.5: 健康探活端点** (`HEAD /health`)
+  - [ ] 返回 `200` 与版本号（不含敏感信息），供桌面端 Phase 5.1 后台 30s 探活使用（架构文档 §5.2 之外被 §9 意见假定存在，此处补入实施契约）；
+  - [ ] 遵循统一 CORS 与零日志策略。
 
 > **Phase 2 验收标准 (DoD)**：
 > 1. `wrangler deploy` 成功部署并通过单元测试；
@@ -85,7 +89,7 @@
   - [ ] Svelte 前端在 Web Worker 中对输入文本/剪贴板透明加密后发送；
   - [ ] 接收端 Svelte 前端解密后渲染进 UI，错误时显示“⚠️ 解密失败”。
 - [ ] **Task 3.3: 附件分级传输管道**
-  - [ ] 小附件 ($\le 20$MB)：前端单块加密，直接 POST 至 `/upload`；
+  - [ ] 小附件 ($\le 20$MB)：前端单块加密，直接 POST 至 `/upload`（单块封包复用 `[Nonce(24B) | Ciphertext | Tag(16B)]` 信封，无 4MB 分块头 `ChunkIndex`，与分块格式严格区分）；
   - [ ] 大附件 ($> 20$MB)：复用 4MB 分块流式加密管道，支持断点恢复。
 
 > **Phase 3 验收标准 (DoD)**：
@@ -97,6 +101,8 @@
 ### Phase 4: Receive / Share 4MB 分块流式加解密与设备管理控制
 
 * **阶段目标**：打通 Share（下载）与 Receive（上传）的 4MB 分块加解密管道，落实静默屏蔽与从头重置红线。
+
+> **Phase 4 前置依赖**：为在无公网 / 无真实 License 下离线验证 Receive / Share 分块链路，将 Phase 5.4 的 `MockDRMServer` 最小化桩提前到本阶段起始实现（仅提供 `claim` 下发 MasterKey 与 `health` 探活，即可支撑 4MB 分块与 Ban 门禁的端到端验证）；完整自动化回归套件仍归 Phase 5.4。
 
 - [ ] **Task 4.1: Receive REST 分块上传端点** (`pkg/server/`)
   - [ ] 新增 `POST /receive/:path/chunk` 端点，解析 `X-File-ID`、`X-Chunk-Index` 二进制切片；

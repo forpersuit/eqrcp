@@ -6,6 +6,9 @@
 
 ## 📑 设计提案索引
 
+0. **[E2EE 工程落地与进度监控看板 (2026-08-31)](20260901-e2ee-implementation-progress.md)**
+   - E2EE 特性开发实施主控看板：Phase 1~5 任务清单、验收标准与提交时间线
+
 1. **[零配置端到端加密 (E2EE) 架构设计与 Wi-Fi 嗅探防御规范 (2026-09-01)](20260901-e2ee-end-to-end-encryption-architecture.md)**
    - 局域网 Wi-Fi 嗅探与抓包拦截风险第一性原理剖析
    - Secure Context 陷阱分析：`crypto.subtle` 在局域网 HTTP 不可用，前端改用 libsodium WASM 引擎
