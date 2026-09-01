@@ -90,10 +90,8 @@ func (agent *desktopAgent) snapshotLocked() AgentStatus {
 	}
 
 	enableE2EE := agent.cachedSettings.EnableE2EE
-	if raw := os.Getenv("EQT_ENABLE_E2EE"); raw != "" {
-		enableE2EE = strings.EqualFold(raw, "true") || raw == "1"
-	} else if raw := os.Getenv("EQT_E2EE"); raw != "" {
-		enableE2EE = strings.EqualFold(raw, "true") || raw == "1"
+	if envVal, overridden := config.E2EEEnvOverride(); overridden {
+		enableE2EE = envVal
 	}
 
 	drmOnline := e2ee.IsDRMOnline()
@@ -202,7 +200,9 @@ func cloneTaskRecord(record TaskRecord) TaskRecord {
 func (agent *desktopAgent) touchLocked() {
 	if agent.ctx != nil {
 		defer func() {
-			_ = recover()
+			if r := recover(); r != nil {
+				agent.log.Errorf("touchLocked panic recovered: %v", r)
+			}
 		}()
 		status := agent.snapshotLocked()
 		wailsruntime.EventsEmit(agent.ctx, "agent-status", status)
@@ -1027,10 +1027,8 @@ func (agent *desktopAgent) runTask(task AgentTask) error {
 		return err
 	}
 	enableE2EE := desktopSettings.EnableE2EE
-	if raw := os.Getenv("EQT_ENABLE_E2EE"); raw != "" {
-		enableE2EE = strings.EqualFold(raw, "true") || raw == "1"
-	} else if raw := os.Getenv("EQT_E2EE"); raw != "" {
-		enableE2EE = strings.EqualFold(raw, "true") || raw == "1"
+	if envVal, overridden := config.E2EEEnvOverride(); overridden {
+		enableE2EE = envVal
 	}
 
 	if enableE2EE && e2ee.IsDRMOnline() {

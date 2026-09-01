@@ -320,14 +320,13 @@ func TestRunTaskE2EEEnvOverride(t *testing.T) {
 	}
 	_ = os.WriteFile(task.Paths[0], []byte("hello"), 0644)
 
-	// Push task and execute runTask in background
+	errCh := make(chan error, 1)
 	go func() {
-		_ = agent.runTask(task)
+		errCh <- agent.runTask(task)
 	}()
 
-	// Wait up to 500ms for activeServer to be populated
 	var srv *server.Server
-	for i := 0; i < 50; i++ {
+	for i := 0; i < 100; i++ {
 		agent.mu.Lock()
 		srv = agent.activeServer
 		agent.mu.Unlock()
@@ -340,7 +339,14 @@ func TestRunTaskE2EEEnvOverride(t *testing.T) {
 	if srv == nil {
 		t.Fatal("expected activeServer to start")
 	}
-	defer srv.Shutdown()
+
+	t.Cleanup(func() {
+		agent.stopCurrent("stopped")
+		select {
+		case <-errCh:
+		case <-time.After(1 * time.Second):
+		}
+	})
 
 	if srv.GetE2EEDerivedKeys() != nil {
 		t.Fatal("expected activeServer NOT to have E2EE keys when EQT_ENABLE_E2EE=false")

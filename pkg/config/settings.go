@@ -227,13 +227,21 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 	}, nil
 }
 
-// IsE2EEEnabledForApp checks if E2EE encryption is enabled for a specific application configuration context.
-func IsE2EEEnabledForApp(app application.App) bool {
+// E2EEEnvOverride checks whether E2EE status is explicitly overridden by environment variables (EQT_ENABLE_E2EE or EQT_E2EE).
+func E2EEEnvOverride() (enabled bool, overridden bool) {
 	if raw := os.Getenv("EQT_ENABLE_E2EE"); raw != "" {
-		return strings.EqualFold(raw, "true") || raw == "1"
+		return strings.EqualFold(raw, "true") || raw == "1", true
 	}
 	if raw := os.Getenv("EQT_E2EE"); raw != "" {
-		return strings.EqualFold(raw, "true") || raw == "1"
+		return strings.EqualFold(raw, "true") || raw == "1", true
+	}
+	return false, false
+}
+
+// IsE2EEEnabledForApp checks if E2EE encryption is enabled for a specific application configuration context.
+func IsE2EEEnabledForApp(app application.App) bool {
+	if enabled, overridden := E2EEEnvOverride(); overridden {
+		return enabled
 	}
 	v := GetViperInstance(app)
 	if err := v.ReadInConfig(); err == nil {
@@ -248,11 +256,8 @@ func IsE2EEEnabledForApp(app application.App) bool {
 
 // IsE2EEEnabled checks if E2EE encryption is enabled using in-memory cache without disk I/O.
 func IsE2EEEnabled() bool {
-	if raw := os.Getenv("EQT_ENABLE_E2EE"); raw != "" {
-		return strings.EqualFold(raw, "true") || raw == "1"
-	}
-	if raw := os.Getenv("EQT_E2EE"); raw != "" {
-		return strings.EqualFold(raw, "true") || raw == "1"
+	if enabled, overridden := E2EEEnvOverride(); overridden {
+		return enabled
 	}
 	return cachedEnableE2EE.Load()
 }
