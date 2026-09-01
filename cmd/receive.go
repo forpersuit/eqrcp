@@ -2,10 +2,8 @@ package cmd
 
 import (
 	"fmt"
-	"time"
 
 	"eqt/pkg/config"
-	"eqt/pkg/crypto/e2ee"
 	"eqt/pkg/logger"
 	"eqt/pkg/qr"
 	"eqt/pkg/server"
@@ -25,19 +23,7 @@ func receiveCmdFunc(command *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if cfg.EnableE2EE {
-		if e2ee.CheckDRMHealth("") {
-			if masterKey, err := e2ee.GenerateMasterKey(); err == nil {
-				sessionID := fmt.Sprintf("cli-receive-%d", time.Now().Unix())
-				_ = srv.EnableE2EE(masterKey, sessionID)
-				log.Print("🔒 [E2EE] 端到端加密已启用 (XChaCha20-Poly1305 分块流式传输)")
-			}
-		} else {
-			log.Print("⚠️  [E2EE 降级] 无法连接 DRM 密钥分发服务，已自动降级为局域网明文传输模式")
-		}
-	} else {
-		log.Print("🔓 [明文模式] 端到端加密已禁用")
-	}
+	_ = SetupCLIEncryption(srv, &cfg, log, "receive")
 	// Sets the output directory
 	if err := srv.ReceiveTo(cfg.Output); err != nil {
 		return err

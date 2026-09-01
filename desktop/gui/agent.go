@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -29,42 +30,45 @@ const desktopAgentMaxHistory = 20
 const desktopAgentHistoryFilename = "desktop-agent-history.json"
 
 type desktopAgent struct {
-	mu            sync.Mutex
-	baseFlags     application.Flags
-	log           logger.Logger
-	fileLogger    *FileLogger
-	startedAt     time.Time
-	busy          bool
-	current       *TaskRecord
-	chat          *TaskRecord
-	queue         []AgentTask
-	history       []TaskRecord
-	nextID        int
-	activeStop    func(string)
-	chatStop      func(string)
-	lastError     string
-	historyPath   string
-	notified      map[int]map[string]bool
-	activeServer  *server.Server
-	ctx           context.Context
-	notifyEnabled bool
-	notifier      func(title string, message string) error
+	mu             sync.Mutex
+	baseFlags      application.Flags
+	log            logger.Logger
+	fileLogger     *FileLogger
+	startedAt      time.Time
+	busy           bool
+	current        *TaskRecord
+	chat           *TaskRecord
+	queue          []AgentTask
+	history        []TaskRecord
+	nextID         int
+	activeStop     func(string)
+	chatStop       func(string)
+	lastError      string
+	historyPath    string
+	notified       map[int]map[string]bool
+	activeServer   *server.Server
+	ctx            context.Context
+	notifyEnabled  bool
+	cachedSettings DesktopSettings
+	notifier       func(title string, message string) error
 }
 
 func newDesktopAgent(ctx context.Context) *desktopAgent {
 	flags := application.Flags{}
 	agent := &desktopAgent{
-		baseFlags:     flags,
-		log:           logger.New(flags.Quiet),
-		startedAt:     time.Now(),
-		historyPath:   defaultDesktopAgentHistoryPath(),
-		notified:      map[int]map[string]bool{},
-		ctx:           ctx,
-		notifyEnabled: false,
-		notifier:      notifyDesktop,
+		baseFlags:      flags,
+		log:            logger.New(flags.Quiet),
+		startedAt:      time.Now(),
+		historyPath:    defaultDesktopAgentHistoryPath(),
+		notified:       map[int]map[string]bool{},
+		ctx:            ctx,
+		notifyEnabled:  false,
+		cachedSettings: DesktopSettings{EnableE2EE: true},
+		notifier:       notifyDesktop,
 	}
 	if s, err := agent.readSettings(); err == nil {
 		agent.notifyEnabled = s.EnableNotification
+		agent.cachedSettings = s
 	}
 	return agent
 }
@@ -85,7 +89,13 @@ func (agent *desktopAgent) snapshotLocked() AgentStatus {
 		buyerEmail = cert.BuyerEmail
 	}
 
-	enableE2EE := config.IsE2EEEnabled()
+	enableE2EE := agent.cachedSettings.EnableE2EE
+	if raw := os.Getenv("EQT_ENABLE_E2EE"); raw != "" {
+		enableE2EE = strings.EqualFold(raw, "true") || raw == "1"
+	} else if raw := os.Getenv("EQT_E2EE"); raw != "" {
+		enableE2EE = strings.EqualFold(raw, "true") || raw == "1"
+	}
+
 	drmOnline := e2ee.IsDRMOnline()
 	e2eeState := "e2ee_disabled"
 	var degradedReason string
@@ -442,6 +452,7 @@ func convertConfigSettings(s config.DesktopSettings) DesktopSettings {
 		EnableChatV2:             s.EnableChatV2,
 		EnableTelemetry:          s.EnableTelemetry,
 		EnableNotification:       s.EnableNotification,
+		EnableE2EE:               s.EnableE2EE,
 		ChatDownloadDir:          s.ChatDownloadDir,
 		LogDir:                   s.LogDir,
 	}
@@ -481,6 +492,7 @@ func convertAppSettings(s DesktopSettings) config.DesktopSettings {
 		EnableChatV2:             s.EnableChatV2,
 		EnableTelemetry:          s.EnableTelemetry,
 		EnableNotification:       s.EnableNotification,
+		EnableE2EE:               s.EnableE2EE,
 		ChatDownloadDir:          s.ChatDownloadDir,
 		LogDir:                   s.LogDir,
 	}
@@ -492,8 +504,10 @@ func (agent *desktopAgent) writeSettings(settings DesktopSettings) (DesktopSetti
 	if err != nil {
 		return DesktopSettings{}, err
 	}
+	converted := convertConfigSettings(saved)
 	agent.mu.Lock()
 	agent.notifyEnabled = saved.EnableNotification
+	agent.cachedSettings = converted
 	srv := agent.activeServer
 	chatTaskRunning := agent.chat != nil && agent.chat.State == "running"
 	agent.mu.Unlock()
@@ -507,7 +521,7 @@ func (agent *desktopAgent) writeSettings(settings DesktopSettings) (DesktopSetti
 		srv.ViewportDebug = settings.ViewportDebug
 		srv.ChatLogDir = settings.LogDir
 	}
-	return convertConfigSettings(saved), nil
+	return converted, nil
 }
 
 func (agent *desktopAgent) UpdateLogDir(logDir string) {
@@ -1011,10 +1025,17 @@ func (agent *desktopAgent) runTask(task AgentTask) error {
 	}
 	if desktopSettings.EnableE2EE && e2ee.IsDRMOnline() {
 		masterKey, err := e2ee.GenerateMasterKey()
-		if err == nil {
-			sessionID := fmt.Sprintf("desktop-%s-%d", task.Action, taskID)
-			_ = srv.EnableE2EE(masterKey, sessionID)
-			agent.log.Infof("runTask: E2EE enabled for session %s", sessionID)
+		if err != nil {
+			agent.log.Errorf("runTask: failed to generate master key: %v, falling back to plaintext", err)
+		} else {
+			randSuffix := make([]byte, 4)
+			_, _ = rand.Read(randSuffix)
+			sessionID := fmt.Sprintf("desktop-%s-%d-%x", task.Action, taskID, randSuffix)
+			if err := srv.EnableE2EE(masterKey, sessionID); err != nil {
+				agent.log.Errorf("runTask: failed to enable E2EE on server: %v, falling back to plaintext", err)
+			} else {
+				agent.log.Infof("runTask: E2EE enabled for session %s", sessionID)
+			}
 		}
 	} else if desktopSettings.EnableE2EE && !e2ee.IsDRMOnline() {
 		agent.log.Warnf("runTask: DRM server offline, degraded to plaintext mode for task #%d", taskID)

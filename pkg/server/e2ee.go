@@ -116,6 +116,13 @@ func (s *Server) BanClient(clientID string) {
 		}
 		rf.mu.Unlock()
 	}
+
+	s.updateClientStatus(clientID, nil, func(cs *ClientTransferStateInfo) {
+		cs.IsBanned = true
+		cs.State = "banned"
+		cs.Message = "Device transfer has been blocked by host."
+	})
+	s.triggerStatusHookThrottled()
 }
 
 // UnbanClient removes the ban on a client instance.
@@ -124,10 +131,19 @@ func (s *Server) UnbanClient(clientID string) {
 		return
 	}
 	s.sessionBannedMu.Lock()
-	defer s.sessionBannedMu.Unlock()
 	if s.sessionBannedClients != nil {
 		delete(s.sessionBannedClients, clientID)
 	}
+	s.sessionBannedMu.Unlock()
+
+	s.updateClientStatus(clientID, nil, func(cs *ClientTransferStateInfo) {
+		cs.IsBanned = false
+		if cs.State == "banned" {
+			cs.State = "waiting"
+			cs.Message = ""
+		}
+	})
+	s.triggerStatusHookThrottled()
 }
 
 // IsClientBanned checks if a client instance is banned.

@@ -624,3 +624,59 @@ func TestE2EEReceiveStaleCleanup(t *testing.T) {
 		t.Fatalf("expected stale .tmp file to be physically removed from disk, stat err: %v", err)
 	}
 }
+
+func TestE2EEPlainAndTusRouteBan(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "eqt-e2ee-ban-routes-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	cfg := &config.Config{
+		Interface: "lo",
+		Port:      0,
+		Bind:      "127.0.0.1",
+		KeepAlive: true,
+	}
+	srv, err := New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.ReceiveTo(tempDir); err != nil {
+		t.Fatal(err)
+	}
+
+	clientID := "banned-client-007"
+	srv.BanClient(clientID)
+
+	// 1. Check plain receive route blocks banned client with 403
+	reqRecv := httptest.NewRequest("GET", srv.ReceiveURL, nil)
+	reqRecv.Header.Set("X-Client-ID", clientID)
+	wRecv := httptest.NewRecorder()
+	srv.mux.ServeHTTP(wRecv, reqRecv)
+	if wRecv.Code != http.StatusForbidden {
+		t.Fatalf("expected receive route to return 403 Forbidden for banned client, got %d", wRecv.Code)
+	}
+
+	// 2. Check tus route blocks banned client with 403
+	reqTus := httptest.NewRequest("POST", srv.tusPath, nil)
+	reqTus.Header.Set("X-Client-ID", clientID)
+	wTus := httptest.NewRecorder()
+	srv.mux.ServeHTTP(wTus, reqTus)
+	if wTus.Code != http.StatusForbidden {
+		t.Fatalf("expected tus route to return 403 Forbidden for banned client, got %d", wTus.Code)
+	}
+
+	// 3. Check client status reflection
+	cs := srv.getClientStatus(clientID)
+	if !cs.IsBanned || cs.State != "banned" {
+		t.Fatalf("expected getClientStatus to report isBanned=true and state=banned, got %#v", cs)
+	}
+
+	// 4. Unban client and verify status restored
+	srv.UnbanClient(clientID)
+	csUnbanned := srv.getClientStatus(clientID)
+	if csUnbanned.IsBanned || csUnbanned.State == "banned" {
+		t.Fatalf("expected unbanned client to have isBanned=false, got %#v", csUnbanned)
+	}
+}

@@ -57,6 +57,7 @@ type ClientFileTransferState struct {
 type ClientTransferStateInfo struct {
 	ClientID          string                    `json:"clientID,omitempty"`
 	State             string                    `json:"state"`
+	IsBanned          bool                      `json:"isBanned,omitempty"`
 	BytesDone         int64                     `json:"bytesDone"`
 	BytesTotal        int64                     `json:"bytesTotal"`
 	Percent           int                       `json:"percent"`
@@ -1363,16 +1364,19 @@ func cloneTransferStatus(status transferStatus) transferStatus {
 					copy(files, v.Files)
 				}
 				m[k] = &ClientTransferStateInfo{
-					ClientID:   v.ClientID,
-					State:      v.State,
-					BytesDone:  v.BytesDone,
-					BytesTotal: v.BytesTotal,
-					Percent:    v.Percent,
-					Current:    v.Current,
-					Message:    v.Message,
-					DeviceName: v.DeviceName,
-					SavedFiles: savedFiles,
-					Files:      files,
+					ClientID:       v.ClientID,
+					State:          v.State,
+					IsBanned:       v.IsBanned,
+					BytesDone:      v.BytesDone,
+					BytesTotal:     v.BytesTotal,
+					Percent:        v.Percent,
+					Current:        v.Current,
+					Message:        v.Message,
+					DeviceName:     v.DeviceName,
+					SavedFiles:     savedFiles,
+					Files:          files,
+					Speed:          v.Speed,
+					SpeedFormatted: v.SpeedFormatted,
 				}
 			}
 		}
@@ -1397,16 +1401,19 @@ func snapshotTransferStatus(status transferStatus) TransferStatusSnapshot {
 					copy(files, v.Files)
 				}
 				clientStates[k] = &ClientTransferStateInfo{
-					ClientID:   v.ClientID,
-					State:      v.State,
-					BytesDone:  v.BytesDone,
-					BytesTotal: v.BytesTotal,
-					Percent:    v.Percent,
-					Current:    v.Current,
-					Message:    v.Message,
-					DeviceName: v.DeviceName,
-					SavedFiles: savedFiles,
-					Files:      files,
+					ClientID:       v.ClientID,
+					State:          v.State,
+					IsBanned:       v.IsBanned,
+					BytesDone:      v.BytesDone,
+					BytesTotal:     v.BytesTotal,
+					Percent:        v.Percent,
+					Current:        v.Current,
+					Message:        v.Message,
+					DeviceName:     v.DeviceName,
+					SavedFiles:     savedFiles,
+					Files:          files,
+					Speed:          v.Speed,
+					SpeedFormatted: v.SpeedFormatted,
 				}
 			}
 		}
@@ -1820,15 +1827,30 @@ func (s *Server) getClientStatus(clientID string) ClientTransferStateInfo {
 	s.clientStatesMu.Lock()
 	defer s.clientStatesMu.Unlock()
 
+	isBanned := s.IsClientBanned(clientID)
 	state, ok := s.clientStates[clientID]
 	if !ok {
+		st := "waiting"
+		msg := "Waiting for transfer to start."
+		if isBanned {
+			st = "banned"
+			msg = "Device transfer has been blocked by host."
+		}
 		return ClientTransferStateInfo{
 			ClientID: clientID,
-			State:    "waiting",
-			Message:  "Waiting for transfer to start.",
+			State:    st,
+			IsBanned: isBanned,
+			Message:  msg,
 		}
 	}
-	return *state
+	st := state.State
+	if isBanned {
+		st = "banned"
+	}
+	res := *state
+	res.State = st
+	res.IsBanned = isBanned
+	return res
 }
 
 func (s *Server) copyClientStates() map[string]*ClientTransferStateInfo {
@@ -1849,9 +1871,15 @@ func (s *Server) copyClientStates() map[string]*ClientTransferStateInfo {
 			if v.Files != nil {
 				files = append([]ClientFileTransferState(nil), v.Files...)
 			}
+			isBanned := s.IsClientBanned(v.ClientID) || v.IsBanned
+			state := v.State
+			if isBanned {
+				state = "banned"
+			}
 			m[k] = &ClientTransferStateInfo{
 				ClientID:       v.ClientID,
-				State:          v.State,
+				State:          state,
+				IsBanned:       isBanned,
 				BytesDone:      v.BytesDone,
 				BytesTotal:     v.BytesTotal,
 				Percent:        v.Percent,
@@ -2503,6 +2531,10 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 
 		clientID := app.getClientID(r, w)
+		if app.IsClientBanned(clientID) {
+			http.Error(w, "Device transfer has been blocked by host.", http.StatusForbidden)
+			return
+		}
 		if app.isClientLimitExceeded(clientID) {
 			http.Error(w, "Device limit exceeded. Upgrade to Plus/Pro at https://eqt.net.im to unlock.", http.StatusForbidden)
 			return
@@ -2977,6 +3009,10 @@ func New(cfg *config.Config) (*Server, error) {
 			}
 		}
 		clientID := app.getClientID(r, w)
+		if app.IsClientBanned(clientID) {
+			http.Error(w, "Device transfer has been blocked by host.", http.StatusForbidden)
+			return
+		}
 		isPing := r.URL.Query().Get("ping") != ""
 		if !isPing && app.isReceiveClientLimitExceeded(clientID) {
 			http.Error(w, "Device limit exceeded. Only 1 device is allowed for transfers under free quota exceeded state. Upgrade to Plus/Pro to unlock.", http.StatusForbidden)
@@ -3457,6 +3493,10 @@ func (s *Server) handleTusUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	clientID := s.getClientID(r, w)
+	if s.IsClientBanned(clientID) {
+		http.Error(w, "Device transfer has been blocked by host.", http.StatusForbidden)
+		return
+	}
 	isStopped := false
 	s.clientStatesMu.Lock()
 	if cs, ok := s.clientStates[clientID]; ok && cs != nil {

@@ -223,4 +223,13 @@ func TestDesktopSettingsEnableE2EE(t *testing.T) {
 	if reloaded.EnableE2EE {
 		t.Fatalf("reloaded.EnableE2EE = true, want false")
 	}
+	if IsE2EEEnabled() {
+		t.Fatalf("expected IsE2EEEnabled() to return cached false")
+	}
+
+	// Override cache manually
+	SetCachedEnableE2EE(true)
+	if !IsE2EEEnabled() {
+		t.Fatalf("expected IsE2EEEnabled() to return true after SetCachedEnableE2EE(true)")
+	}
 }

@@ -7,12 +7,26 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync/atomic"
 
 	"eqt/pkg/application"
 	"eqt/pkg/util"
 
 	"github.com/spf13/viper"
 )
+
+var (
+	cachedEnableE2EE atomic.Bool
+)
+
+func init() {
+	cachedEnableE2EE.Store(true)
+}
+
+// SetCachedEnableE2EE manually overrides the in-memory cached E2EE status (useful in tests).
+func SetCachedEnableE2EE(enabled bool) {
+	cachedEnableE2EE.Store(enabled)
+}
 
 type DesktopSettings struct {
 	ConfigPath               string                   `json:"configPath"`
@@ -179,6 +193,7 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 	if v.IsSet("enableE2EE") {
 		enableE2EE = v.GetBool("enableE2EE")
 	}
+	cachedEnableE2EE.Store(enableE2EE)
 	chatDownloadDir := v.GetString("chatDownloadDir")
 	logDir := v.GetString("logDir")
 	return DesktopSettings{
@@ -212,7 +227,26 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 	}, nil
 }
 
-// IsE2EEEnabled checks if E2EE encryption is enabled in user configuration (defaults to true).
+// IsE2EEEnabledForApp checks if E2EE encryption is enabled for a specific application configuration context.
+func IsE2EEEnabledForApp(app application.App) bool {
+	if raw := os.Getenv("EQT_ENABLE_E2EE"); raw != "" {
+		return strings.EqualFold(raw, "true") || raw == "1"
+	}
+	if raw := os.Getenv("EQT_E2EE"); raw != "" {
+		return strings.EqualFold(raw, "true") || raw == "1"
+	}
+	v := GetViperInstance(app)
+	if err := v.ReadInConfig(); err == nil {
+		if v.IsSet("enableE2EE") {
+			enabled := v.GetBool("enableE2EE")
+			cachedEnableE2EE.Store(enabled)
+			return enabled
+		}
+	}
+	return cachedEnableE2EE.Load()
+}
+
+// IsE2EEEnabled checks if E2EE encryption is enabled using in-memory cache without disk I/O.
 func IsE2EEEnabled() bool {
 	if raw := os.Getenv("EQT_ENABLE_E2EE"); raw != "" {
 		return strings.EqualFold(raw, "true") || raw == "1"
@@ -220,13 +254,7 @@ func IsE2EEEnabled() bool {
 	if raw := os.Getenv("EQT_E2EE"); raw != "" {
 		return strings.EqualFold(raw, "true") || raw == "1"
 	}
-	v := GetViperInstance(application.App{})
-	if err := v.ReadInConfig(); err == nil {
-		if v.IsSet("enableE2EE") {
-			return v.GetBool("enableE2EE")
-		}
-	}
-	return true
+	return cachedEnableE2EE.Load()
 }
 
 // IsTelemetryEnabled checks if telemetry / anonymous device registration is enabled in user configuration (defaults to true).

@@ -926,7 +926,7 @@ function renderDeviceProgressHtml(task) {
             `;
 
             let stateBadgeHtml = '';
-            const isBanned = client.state === 'banned' || client.isBanned;
+            const isBanned = client.state === 'banned' || Boolean(client.isBanned) || Boolean(client.is_banned);
             if (isBanned) {
                 stateBadgeHtml = `<span style="display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3); color: #dc2626; font-size: 9px; font-weight: 900;" title="${escapeAttr(t('ban_device') || 'Banned')}">🚫</span>`;
             } else if (client.state === 'completed') {
@@ -3946,7 +3946,7 @@ function bindEvents() {
                 state.devLicenseCode = String(e.target.value || '');
                 return;
             }
-            if (e.target.matches('#settings-interface, #settings-port, #settings-browser, #settings-chat-autosave, #settings-chat-download-dir, #settings-chat-v2, #settings-close-behavior, #settings-auto-update-mode, #settings-update-interval, #settings-lang, #settings-show-history, #settings-telemetry, #settings-notification')) {
+            if (e.target.matches('#settings-interface, #settings-port, #settings-browser, #settings-chat-autosave, #settings-chat-download-dir, #settings-chat-v2, #settings-close-behavior, #settings-auto-update-mode, #settings-update-interval, #settings-lang, #settings-show-history, #settings-telemetry, #settings-notification, #settings-e2ee')) {
                 syncSettingsFromDOM();
                 return;
             }
@@ -4041,7 +4041,7 @@ function bindEvents() {
                 }
                 return;
             }
-            if (e.target.matches('#settings-interface, #settings-port, #settings-browser, #settings-chat-autosave, #settings-chat-download-dir, #settings-chat-v2, #settings-close-behavior, #settings-auto-update-mode, #settings-update-interval, #settings-lang, #settings-show-history, #settings-telemetry, #settings-notification')) {
+            if (e.target.matches('#settings-interface, #settings-port, #settings-browser, #settings-chat-autosave, #settings-chat-download-dir, #settings-chat-v2, #settings-close-behavior, #settings-auto-update-mode, #settings-update-interval, #settings-lang, #settings-show-history, #settings-telemetry, #settings-notification, #settings-e2ee')) {
                 if (e.target.id === 'settings-auto-update-mode') {
                     handleAutoUpdateModeChange(e.target.value);
                     return;

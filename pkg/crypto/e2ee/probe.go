@@ -45,10 +45,16 @@ func SetDRMOnline(online bool) {
 	drmOnline.Store(online)
 }
 
-// CheckDRMHealth performs a single synchronous health probe against the DRM server.
-func CheckDRMHealth(baseURL string) bool {
+// CheckDRMHealthWithTimeout performs a health probe against DRM server with custom timeout.
+func CheckDRMHealthWithTimeout(baseURL string, timeout time.Duration) bool {
+	if timeout <= 0 {
+		timeout = ProbeTimeout
+	}
 	if baseURL == "" {
 		baseURL = GetDRMBaseURL()
+	}
+	fastClient := &http.Client{
+		Timeout: timeout,
 	}
 	url := strings.TrimRight(baseURL, "/") + "/health"
 	req, err := http.NewRequest("HEAD", url, nil)
@@ -57,20 +63,17 @@ func CheckDRMHealth(baseURL string) bool {
 	}
 	req.Header.Set("User-Agent", "EQT-DRM-Probe/1.0")
 
-	resp, err := client.Do(req)
+	resp, err := fastClient.Do(req)
 	if err != nil {
-		// Fallback to GET in case server blocks HEAD
-		reqGET, errGET := http.NewRequest("GET", url, nil)
-		if errGET != nil {
-			return false
-		}
-		resp, err = client.Do(reqGET)
-		if err != nil {
-			return false
-		}
+		return false
 	}
 	defer resp.Body.Close()
 	return resp.StatusCode >= 200 && resp.StatusCode < 300
+}
+
+// CheckDRMHealth performs a single synchronous health probe against the DRM server.
+func CheckDRMHealth(baseURL string) bool {
+	return CheckDRMHealthWithTimeout(baseURL, ProbeTimeout)
 }
 
 // StartDRMProber starts a background goroutine to probe DRM health every 30s.
