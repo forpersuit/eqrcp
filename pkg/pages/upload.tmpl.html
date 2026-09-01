@@ -1769,6 +1769,8 @@
                                         if (cb) {
                                             delete this.pendingTasks[data.reqId];
                                             cb.reject(new Error(data.message || 'Worker encryption failed'));
+                                        } else {
+                                            reject(new Error(data.message || 'Worker initialization failed'));
                                         }
                                     }
                                 };

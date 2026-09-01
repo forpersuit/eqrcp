@@ -11,7 +11,7 @@ import (
 	"eqt/pkg/server"
 )
 
-const cliDRMProbeTimeout = 800 * time.Millisecond
+const cliDRMProbeTimeout = 2500 * time.Millisecond
 
 // SetupCLIEncryption configures E2EE on srv for CLI commands (send/receive).
 func SetupCLIEncryption(srv *server.Server, cfg *config.Config, log logger.Logger, mode string) {

@@ -1048,6 +1048,8 @@
                                     if (cb) {
                                         delete this.pendingTasks[data.reqId];
                                         cb.reject(new Error(data.message || 'Worker decryption failed'));
+                                    } else {
+                                        reject(new Error(data.message || 'Worker initialization failed'));
                                     }
                                 }
                             };
@@ -1163,10 +1165,13 @@
             };
         })();
 
+        var isE2EEDownloadActive = false;
+
         async function startE2EEDownload(targetIndex) {
             var masterKey = EqtE2EEDownloader.getMasterKey();
             if (!masterKey) return false;
 
+            isE2EEDownloadActive = true;
             var progressContainer = document.getElementById('download-progress-container');
             if (progressContainer) progressContainer.style.display = 'block';
 
@@ -1176,27 +1181,27 @@
                 throw new Error("Failed to fetch E2EE metadata (HTTP " + metaRes.status + ")");
             }
             var metaData = await metaRes.json();
-            if (!metaData.ok || !metaData.is_e2ee) {
-                throw new Error("Server is not operating in E2EE mode");
+            if (!metaData.ok || !metaData.files || metaData.files.length === 0) {
+                throw new Error("Invalid or empty E2EE share metadata");
             }
-            if (!metaData.files || metaData.files.length === 0) {
-                throw new Error("No files available in shared session");
-            }
-
-            var pipeline = new EqtE2EEDownloader.Pipeline(masterKey);
-            await pipeline.init();
 
             var filesToFetch = metaData.files;
             if (targetIndex !== undefined && targetIndex >= 0 && targetIndex < metaData.files.length) {
                 filesToFetch = [metaData.files[targetIndex]];
             }
 
-            var totalBytesAll = filesToFetch.reduce((acc, f) => acc + (f.file_size || 0), 0);
-            var completedBytesAll = 0;
+            var totalBytesAll = 0;
+            for (var i = 0; i < filesToFetch.length; i++) {
+                totalBytesAll += (filesToFetch[i].file_size || 0);
+            }
 
+            var pipeline = new EqtE2EEDownloader.Pipeline(masterKey);
+            await pipeline.init();
+
+            var completedBytesAll = 0;
             for (var fIdx = 0; fIdx < filesToFetch.length; fIdx++) {
                 var fileInfo = filesToFetch[fIdx];
-                await pipeline.downloadFile(fileInfo, function(doneBytes, total) {
+                await pipeline.downloadFile(fileInfo, function(doneBytes, totalBytes) {
                     var currentTotal = completedBytesAll + doneBytes;
                     var percent = totalBytesAll > 0 ? Math.round((currentTotal / totalBytesAll) * 100) : 100;
                     var fillEl = document.getElementById('download-progress-fill');
@@ -1213,7 +1218,14 @@
 
             pipeline.destroy();
             isCompleted = true;
-            renderCompletedCard();
+            var fillEl = document.getElementById('download-progress-fill');
+            var percentEl = document.getElementById('download-progress-percent');
+            var statusEl = document.getElementById('download-progress-status');
+            var actionBtnRow = document.getElementById('action-btn-row');
+            if (fillEl) fillEl.style.width = '100%';
+            if (percentEl) percentEl.innerText = '100%';
+            if (statusEl) statusEl.innerText = '🔒 传输完成 (已端到端解密)';
+            if (actionBtnRow) actionBtnRow.style.display = 'flex';
             return true;
         }
 
@@ -1242,6 +1254,7 @@
         }
 
         function showE2EEDownloadError(msg) {
+            isE2EEDownloadActive = true;
             var progressContainer = document.getElementById('download-progress-container');
             if (progressContainer) progressContainer.style.display = 'block';
             var statusEl = document.getElementById('download-progress-status');
@@ -1368,7 +1381,7 @@
                                             statusText = dict.failed_status || 'Transfer stopped. You can click button to restart.';
                                         }
                                         document.getElementById('download-progress-status').innerText = statusText;
-                                    } else {
+                                    } else if (!isE2EEDownloadActive) {
                                         progressContainer.style.display = 'none';
                                     }
                                 }

@@ -124,8 +124,20 @@
         } else {
           try {
             rawKey = this.sodium.from_base64(masterKey, this.sodium.base64_variants.ORIGINAL_NO_PADDING);
-          } catch (e) {
-            throw new CryptoError(CryptoErrorCode.INVALID_KEY_SIZE, "Failed to parse MasterKey Base64: " + e.message, { op });
+          } catch (e1) {
+            try {
+              rawKey = this.sodium.from_base64(masterKey, this.sodium.base64_variants.ORIGINAL);
+            } catch (e2) {
+              try {
+                rawKey = this.sodium.from_base64(masterKey, this.sodium.base64_variants.URLSAFE_NO_PADDING);
+              } catch (e3) {
+                try {
+                  rawKey = this.sodium.from_base64(masterKey, this.sodium.base64_variants.URLSAFE);
+                } catch (e4) {
+                  throw new CryptoError(CryptoErrorCode.INVALID_KEY_SIZE, "Failed to parse MasterKey Base64: " + e4.message, { op });
+                }
+              }
+            }
           }
         }
       } else if (masterKey instanceof Uint8Array) {

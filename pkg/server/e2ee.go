@@ -66,6 +66,17 @@ func (s *Server) EnableE2EE(masterKey []byte, sessionID string) error {
 	s.e2eeMasterKey = append([]byte(nil), masterKey...)
 	s.e2eeKeys = keys
 	s.e2eeSessionID = sessionID
+
+	keyB64 := base64.RawURLEncoding.EncodeToString(masterKey)
+	if s.SendURL != "" && !strings.Contains(s.SendURL, "#master_key=") {
+		s.SendURL = fmt.Sprintf("%s#master_key=%s", s.SendURL, keyB64)
+	}
+	if s.ReceiveURL != "" && !strings.Contains(s.ReceiveURL, "#master_key=") {
+		s.ReceiveURL = fmt.Sprintf("%s#master_key=%s", s.ReceiveURL, keyB64)
+	}
+	if s.ChatURL != "" && !strings.Contains(s.ChatURL, "#master_key=") {
+		s.ChatURL = fmt.Sprintf("%s#master_key=%s", s.ChatURL, keyB64)
+	}
 	return nil
 }
 
