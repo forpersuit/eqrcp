@@ -760,7 +760,7 @@ func (s *Server) handleE2EEShareMeta(w http.ResponseWriter, r *http.Request) {
 	if s.expectedBytes == nil {
 		s.expectedBytes = make(map[int]int64)
 	}
-	if s.body.Archive {
+	if s.body.Archive || (s.body.Path != "" && len(s.body.Paths) == 0) {
 		s.expectedBytes[-1] = totalExpectedBytes
 	} else {
 		for idx, f := range files {

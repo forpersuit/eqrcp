@@ -1726,7 +1726,6 @@
             var EqtE2EEUploader = (function() {
                 var CHUNK_SIZE = 4 * 1024 * 1024; // 4MB
                 var DEFAULT_CONCURRENCY = 3;
-                var MIN_CONCURRENCY = 1;
 
                 function getMasterKeyFromLocation() {
                     var hash = window.location.hash || '';
@@ -1745,7 +1744,6 @@
                         this.worker = null;
                         this.workerReady = false;
                         this.concurrency = DEFAULT_CONCURRENCY;
-                        this.consecutiveFailures = 0;
                         this.pendingTasks = {};
                         this.reqIdCounter = 1;
                     }
@@ -1847,7 +1845,6 @@
                                         .then((bytesSent) => {
                                             activeWorkers--;
                                             uploadedBytes += bytesSent;
-                                            this.consecutiveFailures = 0;
                                             if (this.concurrency < DEFAULT_CONCURRENCY) {
                                                 this.concurrency = Math.min(DEFAULT_CONCURRENCY, this.concurrency + 1);
                                             }
@@ -1856,7 +1853,6 @@
                                         })
                                         .catch((err) => {
                                             activeWorkers--;
-                                            this.consecutiveFailures++;
                                             if (this.concurrency > 1) {
                                                 this.concurrency = 1;
                                             }
