@@ -519,7 +519,19 @@ func TestE2EEManualStopClientTransfer(t *testing.T) {
 		t.Fatalf("expected CLIENT_STOPPED error code, got: %s", w1.Body.String())
 	}
 
-	// 4. Test receive chunk endpoint when stopped
+	// 4. Meta refresh request must also be rejected with 403 / CLIENT_STOPPED
+	metaReq := httptest.NewRequest("GET", srv.SendURL+"/meta?client_id="+clientID, nil)
+	wMeta := httptest.NewRecorder()
+	srv.HandleE2EEShareMeta(wMeta, metaReq)
+	if wMeta.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 Forbidden for meta after stop, got %d: %s", wMeta.Code, wMeta.Body.String())
+	}
+	var respMeta map[string]any
+	if err := json.Unmarshal(wMeta.Body.Bytes(), &respMeta); err != nil || respMeta["error_code"] != "CLIENT_STOPPED" {
+		t.Fatalf("expected CLIENT_STOPPED error code on meta refresh, got: %s", wMeta.Body.String())
+	}
+
+	// 5. Test receive chunk endpoint when stopped with physical temp file cleanup
 	recOutDir := filepath.Join(tempDir, "rec_out")
 	if err := os.MkdirAll(recOutDir, 0755); err != nil {
 		t.Fatalf("MkdirAll failed: %v", err)
@@ -535,24 +547,66 @@ func TestE2EEManualStopClientTransfer(t *testing.T) {
 	_ = recSrv.EnableE2EE(masterKey, sessionID)
 
 	recClientID := "rec-client-stop-456"
-	recEncChunk0, _ := e2ee.EncryptChunk(testData[:1024], 0, keys.RecvKey[:], "rec_stop.dat")
+	recFileID := "f-test-temp-1"
+	recEncChunk0, _ := e2ee.EncryptChunk(testData[:1024], 0, keys.RecvKey[:], recFileID)
+
+	// Send chunk 0 of 2 (incomplete transfer)
+	recReq0 := httptest.NewRequest("POST", recSrv.ReceiveURL+"/chunk", bytes.NewReader(recEncChunk0))
+	recReq0.Header.Set("X-Client-ID", recClientID)
+	recReq0.Header.Set("X-File-ID", recFileID)
+	recReq0.Header.Set("X-File-Name", "rec_stop.dat")
+	recReq0.Header.Set("X-Chunk-Index", "0")
+	recReq0.Header.Set("X-Total-Chunks", "2")
+	recReq0.Header.Set("X-Total-Bytes", fmt.Sprintf("%d", len(testData)))
+	wRec0 := httptest.NewRecorder()
+	recSrv.HandleE2EEReceiveChunk(wRec0, recReq0)
+	if wRec0.Code != http.StatusOK {
+		t.Fatalf("expected 200 for initial receive chunk, got %d: %s", wRec0.Code, wRec0.Body.String())
+	}
+
+	// Verify temp file exists in output directory
+	devDir, err := recSrv.GetDeviceOutputDir(recClientID)
+	if err != nil {
+		t.Fatalf("GetDeviceOutputDir failed: %v", err)
+	}
+	matches, _ := filepath.Glob(filepath.Join(devDir, "*.tmp"))
+	if len(matches) == 0 {
+		t.Fatal("expected temporary .tmp file to exist while transfer is in progress")
+	}
+	tempFilePath := matches[0]
 
 	// Host stops receive client
 	recSrv.StopClientTransfer(recClientID)
 
-	recReq := httptest.NewRequest("POST", recSrv.ReceiveURL+"/chunk", bytes.NewReader(recEncChunk0))
-	recReq.Header.Set("X-Client-ID", recClientID)
-	recReq.Header.Set("X-File-ID", "rec_stop.dat")
-	recReq.Header.Set("X-Chunk-Index", "0")
-	recReq.Header.Set("X-Total-Chunks", "1")
-	recReq.Header.Set("X-Total-Bytes", "1024")
-	wRec := httptest.NewRecorder()
-	recSrv.HandleE2EEReceiveChunk(wRec, recReq)
-	if wRec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 Forbidden for stopped receive client, got %d: %s", wRec.Code, wRec.Body.String())
+	// Assert physical temp file was removed on StopClientTransfer
+	if _, err := os.Stat(tempFilePath); !os.IsNotExist(err) {
+		t.Fatalf("expected temp file %s to be deleted after StopClientTransfer", tempFilePath)
+	}
+
+	// Subsequent chunk upload attempt must be rejected with 403 / CLIENT_STOPPED
+	recEncChunk1, _ := e2ee.EncryptChunk(testData[1024:2048], 1, keys.RecvKey[:], recFileID)
+	recReq1 := httptest.NewRequest("POST", recSrv.ReceiveURL+"/chunk", bytes.NewReader(recEncChunk1))
+	recReq1.Header.Set("X-Client-ID", recClientID)
+	recReq1.Header.Set("X-File-ID", recFileID)
+	recReq1.Header.Set("X-File-Name", "rec_stop.dat")
+	recReq1.Header.Set("X-Chunk-Index", "1")
+	recReq1.Header.Set("X-Total-Chunks", "2")
+	recReq1.Header.Set("X-Total-Bytes", fmt.Sprintf("%d", len(testData)))
+	wRec1 := httptest.NewRecorder()
+	recSrv.HandleE2EEReceiveChunk(wRec1, recReq1)
+	if wRec1.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 Forbidden for stopped receive client, got %d: %s", wRec1.Code, wRec1.Body.String())
 	}
 	var recResp map[string]any
-	if err := json.Unmarshal(wRec.Body.Bytes(), &recResp); err != nil || recResp["error_code"] != "CLIENT_STOPPED" {
-		t.Fatalf("expected CLIENT_STOPPED error code on receive, got: %s", wRec.Body.String())
+	if err := json.Unmarshal(wRec1.Body.Bytes(), &recResp); err != nil || recResp["error_code"] != "CLIENT_STOPPED" {
+		t.Fatalf("expected CLIENT_STOPPED error code on receive, got: %s", wRec1.Body.String())
+	}
+
+	// Chunk status request must also return 403 / CLIENT_STOPPED
+	statusReq := httptest.NewRequest("GET", recSrv.ReceiveURL+"/chunk_status?file_id="+recFileID+"&client_id="+recClientID, nil)
+	wStatus := httptest.NewRecorder()
+	recSrv.HandleE2EEReceiveChunkStatus(wStatus, statusReq)
+	if wStatus.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 Forbidden for chunk_status after stop, got %d: %s", wStatus.Code, wStatus.Body.String())
 	}
 }

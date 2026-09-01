@@ -1283,6 +1283,7 @@
             var masterKey = EqtE2EEDownloader.getMasterKey();
             if (masterKey) {
                 startE2EEDownload().catch(function(err) {
+                    if (isDownloadStopped) return;
                     console.error("E2EE download error (Fail-Closed, zero plaintext fallback): ", err);
                     showE2EEDownloadError(err.message || 'Decryption failed or connection broken');
                 });
@@ -1295,6 +1296,7 @@
             var masterKey = EqtE2EEDownloader.getMasterKey();
             if (masterKey) {
                 startE2EEDownload(index).catch(function(err) {
+                    if (isDownloadStopped) return;
                     console.error("E2EE download item error (Fail-Closed, zero plaintext fallback): ", err);
                     showE2EEDownloadError(err.message || 'Decryption failed or connection broken');
                 });
@@ -1304,6 +1306,7 @@
         }
 
         function showE2EEDownloadError(msg) {
+            if (isDownloadStopped) return;
             isE2EEDownloadActive = true;
             var progressContainer = document.getElementById('download-progress-container');
             if (progressContainer) progressContainer.style.display = 'block';
@@ -1409,7 +1412,7 @@
                                 var progressContainer = document.getElementById('download-progress-container');
                                 if (progressContainer) {
                                      var showProgress = ((status.state === 'transferring' || status.state === 'waiting' || status.state === 'failed') && (status.bytesDone || 0) > 0) || status.state === 'completed';
-                                     if (showProgress && status.bytesTotal > 0) {
+                                     if (showProgress && status.bytesTotal > 0 && !isE2EEDownloadActive) {
                                         progressContainer.style.display = 'block';
                                          
                                         var percent = status.percent || 0;

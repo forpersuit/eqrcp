@@ -2083,6 +2083,27 @@ func (s *Server) getClientDownloadedAndTotal(clientID string) (int64, int64) {
 
 	totalItems := len(s.body.Paths)
 	if totalItems == 0 {
+		if s.body.Path != "" {
+			var size int64
+			s.expectedBytesMu.Lock()
+			if s.expectedBytes != nil {
+				size = s.expectedBytes[0]
+			}
+			s.expectedBytesMu.Unlock()
+			if size <= 0 {
+				if fi, err := os.Stat(s.body.Path); err == nil {
+					size = fi.Size()
+				}
+			}
+			var downloaded int64
+			if ok && progress != nil {
+				downloaded = progress[0]
+				if size > 0 && downloaded > size {
+					downloaded = size
+				}
+			}
+			return downloaded, size
+		}
 		return 0, 0
 	}
 
@@ -2337,9 +2358,8 @@ func (s *Server) StopClientTransfer(clientID string) bool {
 
 	s.e2eeReceiveFilesMu.Lock()
 	if s.e2eeReceiveFiles != nil {
-		prefix := clientID + ":"
 		for k, rf := range s.e2eeReceiveFiles {
-			if strings.HasPrefix(k, prefix) {
+			if rf != nil && rf.ClientID == clientID {
 				rf.mu.Lock()
 				if rf.File != nil {
 					_ = rf.File.Close()
@@ -2521,7 +2541,7 @@ func New(cfg *config.Config) (*Server, error) {
 		if r.URL.Query().Get("stop") != "" {
 			clientID := app.getClientID(r, w)
 			app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
-				cs.State = "failed"
+				cs.State = "stopped"
 				cs.Message = "Transfer manually stopped by user."
 			})
 			app.triggerStatusHookThrottled()
@@ -2806,9 +2826,6 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 		if isZipDownload {
 			app.expectedBytes[-1] = expectedBytes
-			for idx := 0; idx < len(app.body.Paths); idx++ {
-				app.expectedBytes[idx] = expectedBytes
-			}
 		} else {
 			app.expectedBytes[currentIndex] = expectedBytes
 		}
@@ -3246,7 +3263,7 @@ func New(cfg *config.Config) (*Server, error) {
 			}
 			if r.URL.Query().Get("stop") != "" {
 				app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
-					cs.State = "failed"
+					cs.State = "stopped"
 					cs.Message = "Transfer manually stopped by user."
 				})
 				app.triggerStatusHookThrottled()
