@@ -1181,7 +1181,10 @@
                 throw new Error("Failed to fetch E2EE metadata (HTTP " + metaRes.status + ")");
             }
             var metaData = await metaRes.json();
-            if (!metaData.ok || !metaData.files || metaData.files.length === 0) {
+            if (!metaData.ok || !metaData.is_e2ee) {
+                throw new Error("Server is not operating in E2EE mode");
+            }
+            if (!metaData.files || metaData.files.length === 0) {
                 throw new Error("Invalid or empty E2EE share metadata");
             }
 

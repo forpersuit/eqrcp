@@ -61,10 +61,13 @@ func CheckDRMHealthWithTimeout(baseURL string, timeout time.Duration) bool {
 
 	resp, err := fastClient.Do(req)
 	if err != nil {
+		drmOnline.Store(false)
 		return false
 	}
 	defer resp.Body.Close()
-	return resp.StatusCode >= 200 && resp.StatusCode < 300
+	ok := resp.StatusCode >= 200 && resp.StatusCode < 300
+	drmOnline.Store(ok)
+	return ok
 }
 
 // CheckDRMHealth performs a single synchronous health probe against the DRM server.
