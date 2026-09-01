@@ -385,7 +385,21 @@ func (s *Server) handleE2EEReceiveChunk(w http.ResponseWriter, r *http.Request) 
 	rf.ReceivedChunks[chunkIndex] = true
 	isComplete := len(rf.ReceivedChunks) >= int(rf.TotalChunks)
 
-	if isComplete && !rf.Completed {
+	if !isComplete {
+		receivedBytes := int64(len(rf.ReceivedChunks)) * int64(E2EEChunkPlaintextSize)
+		if rf.TotalBytes > 0 && receivedBytes > rf.TotalBytes {
+			receivedBytes = rf.TotalBytes
+		}
+		s.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
+			state.State = "transferring"
+			state.Current = filepath.Base(rf.FinalPath)
+			state.BytesDone = receivedBytes
+			state.BytesTotal = rf.TotalBytes
+			state.Percent = transferPercent(state.BytesDone, state.BytesTotal)
+			state.Message = "Receiving encrypted file from connected device."
+		})
+		s.triggerStatusHookThrottled()
+	} else if !rf.Completed {
 		if rf.TotalBytes > 0 {
 			_ = rf.File.Truncate(rf.TotalBytes)
 		}
@@ -548,11 +562,18 @@ func (s *Server) recordCompletedE2EEFile(rf *e2eeReceiveFile) {
 		s.clientStates[rf.ClientID] = cs
 	}
 	cs.SavedFiles = append(cs.SavedFiles, rf.FinalPath)
+	cs.State = "completed"
 	cs.Percent = 100
 	cs.Current = "Transfer Complete"
+	cs.Message = "Transfer completed."
+	if rf.TotalBytes > 0 {
+		cs.BytesDone = rf.TotalBytes
+		cs.BytesTotal = rf.TotalBytes
+	}
 	s.clientStatesMu.Unlock()
 
 	s.recordStatus()
+	s.triggerStatusHookThrottled()
 }
 
 // handleDeviceBan handles POST /api/device/ban
@@ -679,6 +700,19 @@ func (s *Server) handleE2EEShareMeta(w http.ResponseWriter, r *http.Request) {
 		"is_e2ee":    s.IsE2EEActive(),
 		"files":      files,
 	})
+
+	var totalExpectedBytes int64
+	for _, f := range files {
+		totalExpectedBytes += f.FileSize
+	}
+	s.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
+		if state.State == "" || state.State == "waiting" || state.State == "connected" {
+			state.State = "connected"
+			state.BytesTotal = totalExpectedBytes
+			state.Message = "Connected. Starting encrypted transfer..."
+		}
+	})
+	s.triggerStatusHookThrottled()
 }
 
 // handleE2EEShareChunk serves an encrypted 4MB chunk of a shared file.
@@ -773,6 +807,63 @@ func (s *Server) handleE2EEShareChunk(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-File-ID", fileID)
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(ciphertext)
+
+	// Update transfer progress for client & trigger real-time GUI hook
+	var fileIndex int
+	fmt.Sscanf(fileID, "f-%d", &fileIndex)
+	downloadName := filepath.Base(filePath)
+	if s.body.Archive {
+		fileIndex = -1
+		if s.body.Path != "" {
+			downloadName = filepath.Base(s.body.Path)
+		}
+	}
+
+	s.addClientDownloadedBytes(clientID, fileIndex, int64(n))
+	clientDone, clientTotal := s.getClientDownloadedAndTotal(clientID)
+
+	s.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
+		if clientTotal > 0 && clientDone >= clientTotal {
+			state.State = "completed"
+			state.Percent = 100
+			state.BytesDone = clientTotal
+			state.BytesTotal = clientTotal
+			state.Message = "Transfer completed."
+		} else {
+			state.State = "transferring"
+			state.Current = downloadName
+			state.BytesDone = clientDone
+			state.BytesTotal = clientTotal
+			state.Percent = transferPercent(state.BytesDone, state.BytesTotal)
+			state.Message = "Sending encrypted file to connected device."
+		}
+	})
+	s.triggerStatusHookThrottled()
+
+	if clientTotal > 0 && clientDone >= clientTotal {
+		allDownloaded := false
+		if s.body.Archive {
+			allDownloaded = s.markItemDownloaded(-1)
+		} else if len(s.body.Paths) > 1 {
+			allDownloaded = s.markItemDownloaded(fileIndex)
+		} else {
+			allDownloaded = s.markItemDownloaded(0)
+		}
+
+		if allDownloaded {
+			s.statusMu.Lock()
+			autoStop := s.autoStop
+			s.statusMu.Unlock()
+			if autoStop || !s.KeepAlive {
+				s.setStatus("completed", "Transfer completed.")
+				s.recordStatus()
+				go s.signalStopAfterStatusGrace()
+			} else {
+				s.setStatus("waiting", fmt.Sprintf("Item %s downloaded. Waiting for more connections.", downloadName))
+				s.recordStatus()
+			}
+		}
+	}
 }
 
 // HandleE2EEReceiveChunk exports handleE2EEReceiveChunk for integration tests.

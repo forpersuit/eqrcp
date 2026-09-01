@@ -680,3 +680,103 @@ func TestE2EEPlainAndTusRouteBan(t *testing.T) {
 		t.Fatalf("expected unbanned client to have isBanned=false, got %#v", csUnbanned)
 	}
 }
+
+func TestE2EEShareProgressTracking(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "eqt-e2ee-share-progress-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create an 8.5MB test file
+	testFilePath := filepath.Join(tempDir, "test_document.bin")
+	totalBytes := int64(8*1024*1024 + 512*1024)
+	f, err := os.Create(testFilePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = f.Truncate(totalBytes)
+	_ = f.Close()
+
+	cfg := &config.Config{
+		Interface: "lo",
+		Port:      0,
+		Bind:      "127.0.0.1",
+		KeepAlive: true,
+	}
+	srv, err := New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := body.FromArgs([]string{testFilePath}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.Send(b)
+
+	masterKey, err := e2ee.GenerateMasterKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.EnableE2EE(masterKey, "sess-share-progress"); err != nil {
+		t.Fatal(err)
+	}
+
+	clientID := "client-share-progress-tester"
+
+	// 1. Fetch metadata
+	metaReq := httptest.NewRequest("GET", srv.SendURL+"/meta?client_id="+clientID, nil)
+	metaReq.Header.Set("X-Client-ID", clientID)
+	wMeta := httptest.NewRecorder()
+	srv.handleE2EEShareMeta(wMeta, metaReq)
+	if wMeta.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK from meta, got %d", wMeta.Code)
+	}
+
+	cs := srv.getClientStatus(clientID)
+	if cs.State != "connected" || cs.BytesTotal != totalBytes {
+		t.Fatalf("expected client to be connected with totalBytes %d, got state=%q total=%d", totalBytes, cs.State, cs.BytesTotal)
+	}
+
+	// 2. Fetch Chunk 0 (4MB)
+	chunk0Req := httptest.NewRequest("GET", srv.SendURL+"/chunk?file_id=f-0&chunk_index=0&client_id="+clientID, nil)
+	chunk0Req.Header.Set("X-Client-ID", clientID)
+	wChunk0 := httptest.NewRecorder()
+	srv.handleE2EEShareChunk(wChunk0, chunk0Req)
+	if wChunk0.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK from chunk 0, got %d", wChunk0.Code)
+	}
+
+	cs0 := srv.getClientStatus(clientID)
+	if cs0.State != "transferring" || cs0.BytesDone != 4*1024*1024 || cs0.Percent <= 0 || cs0.Percent >= 100 {
+		t.Fatalf("expected chunk 0 progress: state=transferring, BytesDone=4MB, got state=%q BytesDone=%d Percent=%d", cs0.State, cs0.BytesDone, cs0.Percent)
+	}
+
+	// 3. Fetch Chunk 1 (4MB)
+	chunk1Req := httptest.NewRequest("GET", srv.SendURL+"/chunk?file_id=f-0&chunk_index=1&client_id="+clientID, nil)
+	chunk1Req.Header.Set("X-Client-ID", clientID)
+	wChunk1 := httptest.NewRecorder()
+	srv.handleE2EEShareChunk(wChunk1, chunk1Req)
+	if wChunk1.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK from chunk 1, got %d", wChunk1.Code)
+	}
+
+	cs1 := srv.getClientStatus(clientID)
+	if cs1.State != "transferring" || cs1.BytesDone != 8*1024*1024 || cs1.Percent <= cs0.Percent {
+		t.Fatalf("expected chunk 1 progress > chunk 0, got BytesDone=%d Percent=%d", cs1.BytesDone, cs1.Percent)
+	}
+
+	// 4. Fetch Chunk 2 (0.5MB, final chunk)
+	chunk2Req := httptest.NewRequest("GET", srv.SendURL+"/chunk?file_id=f-0&chunk_index=2&client_id="+clientID, nil)
+	chunk2Req.Header.Set("X-Client-ID", clientID)
+	wChunk2 := httptest.NewRecorder()
+	srv.handleE2EEShareChunk(wChunk2, chunk2Req)
+	if wChunk2.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK from chunk 2, got %d", wChunk2.Code)
+	}
+
+	cs2 := srv.getClientStatus(clientID)
+	if cs2.State != "completed" || cs2.BytesDone != totalBytes || cs2.Percent != 100 {
+		t.Fatalf("expected completed transfer: state=completed BytesDone=%d Percent=100, got state=%q BytesDone=%d Percent=%d", totalBytes, cs2.State, cs2.BytesDone, cs2.Percent)
+	}
+}
