@@ -2191,8 +2191,10 @@ func (s *Server) registerRoute(pattern string, handler http.HandlerFunc) {
 // Wait for transfer to be completed, it waits forever if kept awlive
 func (s *Server) Wait() error {
 	<-s.stopChannel
-	if err := s.instance.Shutdown(context.Background()); err != nil {
-		log.Println(err)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := s.instance.Shutdown(ctx); err != nil {
+		_ = s.instance.Close()
 	}
 	if s.body.DeleteAfterTransfer {
 		if err := s.body.Delete(); err != nil {
@@ -2215,6 +2217,34 @@ func (s *Server) Shutdown() {
 		tusTmpDir := filepath.Join(s.outputDir, ".tus-tmp")
 		_ = os.RemoveAll(tusTmpDir)
 	}
+	s.clientStatesMu.Lock()
+	for _, cs := range s.clientStates {
+		if cs != nil && (cs.State == "transferring" || cs.State == "waiting") {
+			cs.State = "stopped"
+			cs.Message = "Transfer stopped."
+			cs.Speed = 0
+			cs.SpeedFormatted = ""
+		}
+	}
+	s.clientStatesMu.Unlock()
+	s.e2eeReceiveFilesMu.Lock()
+	if s.e2eeReceiveFiles != nil {
+		for k, rf := range s.e2eeReceiveFiles {
+			rf.mu.Lock()
+			if rf.File != nil {
+				_ = rf.File.Close()
+				rf.File = nil
+			}
+			if rf.TempPath != "" && !rf.Completed {
+				_ = os.Remove(rf.TempPath)
+			}
+			rf.Cancelled = true
+			rf.mu.Unlock()
+			delete(s.e2eeReceiveFiles, k)
+		}
+	}
+	s.e2eeReceiveFilesMu.Unlock()
+	s.triggerStatusHookThrottled()
 	s.signalStop()
 }
 
@@ -2279,12 +2309,23 @@ func (s *Server) StopClientTransfer(clientID string) bool {
 		return false
 	}
 	s.clientStatesMu.Lock()
+	if s.clientStates == nil {
+		s.clientStates = make(map[string]*ClientTransferStateInfo)
+	}
 	cs, ok := s.clientStates[clientID]
 	if ok && cs != nil {
 		cs.State = "stopped"
 		cs.Message = "Transfer stopped by host."
 		cs.Speed = 0
 		cs.SpeedFormatted = ""
+	} else {
+		s.clientStates[clientID] = &ClientTransferStateInfo{
+			ClientID:       clientID,
+			State:          "stopped",
+			Message:        "Transfer stopped by host.",
+			Speed:          0,
+			SpeedFormatted: "",
+		}
 	}
 	s.clientStatesMu.Unlock()
 
@@ -2293,6 +2334,27 @@ func (s *Server) StopClientTransfer(clientID string) bool {
 		delete(s.clientSpeedTrackers, clientID)
 	}
 	s.clientSpeedTrackersMu.Unlock()
+
+	s.e2eeReceiveFilesMu.Lock()
+	if s.e2eeReceiveFiles != nil {
+		prefix := clientID + ":"
+		for k, rf := range s.e2eeReceiveFiles {
+			if strings.HasPrefix(k, prefix) {
+				rf.mu.Lock()
+				if rf.File != nil {
+					_ = rf.File.Close()
+					rf.File = nil
+				}
+				if rf.TempPath != "" && !rf.Completed {
+					_ = os.Remove(rf.TempPath)
+				}
+				rf.Cancelled = true
+				rf.mu.Unlock()
+				delete(s.e2eeReceiveFiles, k)
+			}
+		}
+	}
+	s.e2eeReceiveFilesMu.Unlock()
 
 	s.triggerStatusHookThrottled()
 	return ok

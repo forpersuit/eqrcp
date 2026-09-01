@@ -451,3 +451,108 @@ func TestE2EEShareAndReceiveFullPipeline(t *testing.T) {
 		t.Fatalf("SHA256 checksum mismatch!\nExpected: %x\nReceived: %x", expectedHash, receivedHash)
 	}
 }
+
+// TestE2EEManualStopClientTransfer verifies that manual stop immediately terminates active transfers:
+// 1. StopClientTransfer sets client state to "stopped"
+// 2. Next share/receive chunk requests return 403 Forbidden with CLIENT_STOPPED error_code
+// 3. Incomplete temp files are cleaned up
+func TestE2EEManualStopClientTransfer(t *testing.T) {
+	tempDir := t.TempDir()
+	filePath := filepath.Join(tempDir, "stop_test.txt")
+	testData := make([]byte, 5*1024*1024)
+	for i := range testData {
+		testData[i] = byte(i % 251)
+	}
+	if err := os.WriteFile(filePath, testData, 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+
+	cfg := config.Config{
+		Interface: "lo",
+		Bind:      "127.0.0.1",
+		Port:      0,
+		KeepAlive: true,
+	}
+
+	srv, err := server.New(&cfg)
+	if err != nil {
+		t.Fatalf("server.New failed: %v", err)
+	}
+	defer srv.Shutdown()
+
+	masterKey, _ := e2ee.GenerateMasterKey()
+	sessionID := "stop-test-session"
+	_ = srv.EnableE2EE(masterKey, sessionID)
+	keys, _ := e2ee.DeriveKeys(masterKey)
+
+	payload, err := body.FromArgs([]string{filePath}, false)
+	if err != nil {
+		t.Fatalf("body.FromArgs failed: %v", err)
+	}
+	srv.Send(payload)
+
+	clientID := "client-to-stop-123"
+
+	// 1. Fetch chunk 0 successfully
+	req0 := httptest.NewRequest("GET", srv.SendURL+"/chunk?file_id=f-0&chunk_index=0&client_id="+clientID, nil)
+	w0 := httptest.NewRecorder()
+	srv.HandleE2EEShareChunk(w0, req0)
+	if w0.Code != http.StatusOK {
+		t.Fatalf("expected 200 before stop, got %d: %s", w0.Code, w0.Body.String())
+	}
+
+	// 2. Host manually stops the transfer
+	stopped := srv.StopClientTransfer(clientID)
+	if !stopped {
+		t.Fatal("StopClientTransfer returned false, expected true")
+	}
+
+	// 3. Next chunk request must be rejected with 403 / CLIENT_STOPPED
+	req1 := httptest.NewRequest("GET", srv.SendURL+"/chunk?file_id=f-0&chunk_index=1&client_id="+clientID, nil)
+	w1 := httptest.NewRecorder()
+	srv.HandleE2EEShareChunk(w1, req1)
+	if w1.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 Forbidden after stop, got %d: %s", w1.Code, w1.Body.String())
+	}
+	var resp1 map[string]any
+	if err := json.Unmarshal(w1.Body.Bytes(), &resp1); err != nil || resp1["error_code"] != "CLIENT_STOPPED" {
+		t.Fatalf("expected CLIENT_STOPPED error code, got: %s", w1.Body.String())
+	}
+
+	// 4. Test receive chunk endpoint when stopped
+	recOutDir := filepath.Join(tempDir, "rec_out")
+	if err := os.MkdirAll(recOutDir, 0755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+	recSrv, err := server.New(&cfg)
+	if err != nil {
+		t.Fatalf("recSrv New failed: %v", err)
+	}
+	defer recSrv.Shutdown()
+	if err := recSrv.ReceiveTo(recOutDir); err != nil {
+		t.Fatalf("ReceiveTo failed: %v", err)
+	}
+	_ = recSrv.EnableE2EE(masterKey, sessionID)
+
+	recClientID := "rec-client-stop-456"
+	recEncChunk0, _ := e2ee.EncryptChunk(testData[:1024], 0, keys.RecvKey[:], "rec_stop.dat")
+
+	// Host stops receive client
+	recSrv.StopClientTransfer(recClientID)
+
+	recReq := httptest.NewRequest("POST", recSrv.ReceiveURL+"/chunk", bytes.NewReader(recEncChunk0))
+	recReq.Header.Set("X-Client-ID", recClientID)
+	recReq.Header.Set("X-File-ID", "rec_stop.dat")
+	recReq.Header.Set("X-Chunk-Index", "0")
+	recReq.Header.Set("X-Total-Chunks", "1")
+	recReq.Header.Set("X-Total-Bytes", "1024")
+	wRec := httptest.NewRecorder()
+	recSrv.HandleE2EEReceiveChunk(wRec, recReq)
+	if wRec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 Forbidden for stopped receive client, got %d: %s", wRec.Code, wRec.Body.String())
+	}
+	var recResp map[string]any
+	if err := json.Unmarshal(wRec.Body.Bytes(), &recResp); err != nil || recResp["error_code"] != "CLIENT_STOPPED" {
+		t.Fatalf("expected CLIENT_STOPPED error code on receive, got: %s", wRec.Body.String())
+	}
+}

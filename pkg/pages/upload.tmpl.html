@@ -1051,6 +1051,7 @@
         }
 
         var currentTusUpload = null;
+        var activeE2EEPipeline = null;
         var isUploadStopped = false;
         var isUploading = false;
 
@@ -1746,6 +1747,7 @@
                         this.concurrency = DEFAULT_CONCURRENCY;
                         this.pendingTasks = {};
                         this.reqIdCounter = 1;
+                        this.activeControllers = new Set();
                     }
 
                     async init() {
@@ -1883,6 +1885,7 @@
                         var encRes = await this.encryptChunk(arrayBuf, chunkIdx, fileId);
 
                         var controller = new AbortController();
+                        this.activeControllers.add(controller);
                         var timeoutId = setTimeout(() => controller.abort(), 15000);
                         try {
                             var postRes = await fetch('{{.Route}}/chunk', {
@@ -1915,7 +1918,17 @@
                         } catch (err) {
                             clearTimeout(timeoutId);
                             throw err;
+                        } finally {
+                            this.activeControllers.delete(controller);
                         }
+                    }
+
+                    abort() {
+                        for (var c of this.activeControllers) {
+                            try { c.abort(); } catch (e) {}
+                        }
+                        this.activeControllers.clear();
+                        this.destroy();
                     }
 
                     destroy() {
@@ -1936,6 +1949,7 @@
             if (masterKey) {
                 // E2EE 3-Stage Pipeline Mode
                 var pipeline = new EqtE2EEUploader.Pipeline(masterKey);
+                activeE2EEPipeline = pipeline;
                 pipeline.init().then(async function() {
                     for (var fIdx = 0; fIdx < filesToUpload.length; fIdx++) {
                         if (isUploadStopped) break;
@@ -1961,8 +1975,7 @@
                                 var circle = document.getElementById('progress-circle-' + item.index);
                                 var text = document.getElementById('progress-text-' + item.index);
                                 if (circle) {
-                                    circle.style.strokeDashoffset = 0;
-                                    circle.classList.add('completed');
+                                    circle.style.strokeDashoffset = '0';
                                     circle.style.stroke = 'var(--success)';
                                 }
                                 if (text) {
@@ -1972,16 +1985,19 @@
                             }
                         } catch (err) {
                             pipeline.destroy();
+                            activeE2EEPipeline = null;
                             handleError(err.status || 500, err.message);
                             return;
                         }
                     }
                     pipeline.destroy();
+                    activeE2EEPipeline = null;
                     if (!isUploadStopped) {
                         uploadIndex = filesToUpload.length;
                         startNextTusUpload(); // triggers ?done=true completion
                     }
                 }).catch(function(err) {
+                    activeE2EEPipeline = null;
                     console.error("E2EE worker init failed, fallback to TUS: ", err);
                     startTusInit();
                 });
@@ -2012,6 +2028,14 @@
         if (stopButton) {
             stopButton.addEventListener('click', function() {
                 isUploadStopped = true;
+                if (activeE2EEPipeline) {
+                    try {
+                        activeE2EEPipeline.abort();
+                    } catch (e) {
+                        console.error("Failed to abort E2EE pipeline: ", e);
+                    }
+                    activeE2EEPipeline = null;
+                }
                 if (currentTusUpload) {
                     try {
                         currentTusUpload.abort();

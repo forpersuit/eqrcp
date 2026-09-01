@@ -188,6 +188,25 @@ func (s *Server) handleE2EEReceiveChunk(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	isStopped := false
+	s.clientStatesMu.Lock()
+	if cs, ok := s.clientStates[clientID]; ok && cs != nil {
+		if cs.State == "stopped" || cs.State == "failed" {
+			isStopped = true
+		}
+	}
+	s.clientStatesMu.Unlock()
+	if isStopped {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok":         false,
+			"error_code": "CLIENT_STOPPED",
+			"error":      "Transfer manually stopped.",
+		})
+		return
+	}
+
 	// Extract headers / query parameters
 	fileID := r.Header.Get("X-File-ID")
 	if fileID == "" {
@@ -808,6 +827,21 @@ func (s *Server) handleE2EEShareChunk(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "error_code": "CLIENT_BANNED"})
+		return
+	}
+
+	isStopped := false
+	s.clientStatesMu.Lock()
+	if cs, ok := s.clientStates[clientID]; ok && cs != nil {
+		if cs.State == "stopped" || cs.State == "failed" {
+			isStopped = true
+		}
+	}
+	s.clientStatesMu.Unlock()
+	if isStopped {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "error_code": "CLIENT_STOPPED", "error": "Transfer manually stopped."})
 		return
 	}
 

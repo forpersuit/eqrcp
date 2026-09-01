@@ -67,7 +67,8 @@ try {
 }
 `, b64, fmt.Sprintf("%s_script_%d.js", name, idx+1))
 
-			cmd := exec.Command(nodePath, "-e", jsRunner)
+			cmd := exec.Command(nodePath)
+			cmd.Stdin = bytes.NewReader([]byte(jsRunner))
 			var out bytes.Buffer
 			cmd.Stdout = &out
 			cmd.Stderr = &out

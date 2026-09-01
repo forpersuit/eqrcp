@@ -1025,6 +1025,7 @@
                     this.workerReady = false;
                     this.pendingTasks = {};
                     this.reqIdCounter = 1;
+                    this.activeControllers = new Set();
                 }
 
                 async init() {
@@ -1102,8 +1103,21 @@
                     var downloadedBytes = 0;
 
                     for (var idx = 0; idx < totalChunks; idx++) {
+                        if (isDownloadStopped) {
+                            throw new Error("Transfer manually stopped");
+                        }
                         var chunkUrl = window.location.pathname + '/chunk?file_id=' + encodeURIComponent(fileId) + '&chunk_index=' + idx + '&client_id=' + encodeURIComponent(getOrGenerateClientId());
-                        var res = await fetch(chunkUrl);
+                        var controller = new AbortController();
+                        this.activeControllers.add(controller);
+                        var res;
+                        try {
+                            res = await fetch(chunkUrl, { signal: controller.signal });
+                        } finally {
+                            this.activeControllers.delete(controller);
+                        }
+                        if (isDownloadStopped) {
+                            throw new Error("Transfer manually stopped");
+                        }
                         if (!res.ok) {
                             var errBody = await res.json().catch(() => ({}));
                             var err = new Error(errBody.error || ('HTTP ' + res.status));
@@ -1111,6 +1125,9 @@
                             throw err;
                         }
                         var arrayBuf = await res.arrayBuffer();
+                        if (isDownloadStopped) {
+                            throw new Error("Transfer manually stopped");
+                        }
                         var decRes = await this.decryptChunk(arrayBuf, idx, fileId);
                         var chunkData = new Uint8Array(decRes.buffer);
                         downloadedBytes += chunkData.byteLength;
@@ -1123,6 +1140,10 @@
                         }
 
                         if (onProgress) onProgress(downloadedBytes, totalBytes);
+                    }
+
+                    if (isDownloadStopped) {
+                        throw new Error("Transfer manually stopped");
                     }
 
                     var finalBlob = null;
@@ -1151,6 +1172,14 @@
                     return true;
                 }
 
+                abort() {
+                    for (var c of this.activeControllers) {
+                        try { c.abort(); } catch (e) {}
+                    }
+                    this.activeControllers.clear();
+                    this.destroy();
+                }
+
                 destroy() {
                     if (this.worker) {
                         this.worker.terminate();
@@ -1166,11 +1195,14 @@
         })();
 
         var isE2EEDownloadActive = false;
+        var isDownloadStopped = false;
+        var activeDownloadPipeline = null;
 
         async function startE2EEDownload(targetIndex) {
             var masterKey = EqtE2EEDownloader.getMasterKey();
             if (!masterKey) return false;
 
+            isDownloadStopped = false;
             isE2EEDownloadActive = true;
             var progressContainer = document.getElementById('download-progress-container');
             if (progressContainer) progressContainer.style.display = 'block';
@@ -1188,6 +1220,8 @@
                 throw new Error("Invalid or empty E2EE share metadata");
             }
 
+            if (isDownloadStopped) return false;
+
             var filesToFetch = metaData.files;
             if (targetIndex !== undefined && targetIndex >= 0 && targetIndex < metaData.files.length) {
                 filesToFetch = [metaData.files[targetIndex]];
@@ -1199,12 +1233,21 @@
             }
 
             var pipeline = new EqtE2EEDownloader.Pipeline(masterKey);
+            activeDownloadPipeline = pipeline;
             await pipeline.init();
+
+            if (isDownloadStopped) {
+                pipeline.destroy();
+                activeDownloadPipeline = null;
+                return false;
+            }
 
             var completedBytesAll = 0;
             for (var fIdx = 0; fIdx < filesToFetch.length; fIdx++) {
+                if (isDownloadStopped) break;
                 var fileInfo = filesToFetch[fIdx];
                 await pipeline.downloadFile(fileInfo, function(doneBytes, totalBytes) {
+                    if (isDownloadStopped) return;
                     var currentTotal = completedBytesAll + doneBytes;
                     var percent = totalBytesAll > 0 ? Math.round((currentTotal / totalBytesAll) * 100) : 100;
                     var fillEl = document.getElementById('download-progress-fill');
@@ -1220,6 +1263,10 @@
             }
 
             pipeline.destroy();
+            activeDownloadPipeline = null;
+            if (isDownloadStopped) {
+                return false;
+            }
             isCompleted = true;
             var fillEl = document.getElementById('download-progress-fill');
             var percentEl = document.getElementById('download-progress-percent');
@@ -1390,14 +1437,26 @@
                                 }
 
                                 var actionBtnRow = document.getElementById('action-btn-row');
+                                var btnDownload = document.getElementById('btn-action-download');
+                                var btnDownloadZip = document.getElementById('btn-action-download-zip');
+                                var btnStop = document.getElementById('btn-action-stop');
                                 var notifTips = document.getElementById('download-notification-tips');
                                 if (status.state === 'transferring') {
-                                     if (actionBtnRow) actionBtnRow.style.display = 'none';
+                                     if (btnDownload) btnDownload.style.display = 'none';
+                                     if (btnDownloadZip) btnDownloadZip.style.display = 'none';
+                                     if (btnStop) btnStop.style.display = 'block';
+                                     if (actionBtnRow) actionBtnRow.style.display = 'flex';
                                      if (notifTips) notifTips.style.display = 'block';
                                 } else if (status.state === 'waiting' || status.state === 'failed') {
+                                     if (btnDownload) btnDownload.style.display = 'block';
+                                     if (btnDownloadZip) btnDownloadZip.style.display = 'block';
+                                     if (btnStop) btnStop.style.display = 'block';
                                      if (actionBtnRow) actionBtnRow.style.display = 'flex';
                                      if (notifTips) notifTips.style.display = 'none';
                                      applyLanguage(); // update button text for redownload
+                                } else if (status.state === 'stopped') {
+                                     if (actionBtnRow) actionBtnRow.style.display = 'none';
+                                     if (notifTips) notifTips.style.display = 'none';
                                 }
 
                                 if (status.state === 'limit_exceeded') {
@@ -1533,6 +1592,13 @@
         }
 
         function stopSharing() {
+            isDownloadStopped = true;
+            isE2EEDownloadActive = false;
+            if (activeDownloadPipeline) {
+                try { activeDownloadPipeline.abort(); } catch (e) {}
+                activeDownloadPipeline = null;
+            }
+
             // 1. Stop status polling to release backend active device count
             if (intervalId) {
                 clearInterval(intervalId);
@@ -1543,9 +1609,15 @@
             stopXhr.open('POST', '{{.Route}}?stop=true&client_id=' + encodeURIComponent(getOrGenerateClientId()));
             stopXhr.send();
 
-            // 2. Change the interface to stopped final view, hiding action buttons
-            document.getElementById('status-icon-pending').style.display = 'none';
-            document.getElementById('status-icon-success').style.display = 'none';
+            // 2. Hide progress container
+            var progressContainer = document.getElementById('download-progress-container');
+            if (progressContainer) progressContainer.style.display = 'none';
+
+            // 3. Change the interface to stopped final view, hiding action buttons
+            var pendingIcon = document.getElementById('status-icon-pending');
+            if (pendingIcon) pendingIcon.style.display = 'none';
+            var successIcon = document.getElementById('status-icon-success');
+            if (successIcon) successIcon.style.display = 'none';
             
             var badge = document.getElementById('status-icon-stopped');
             if (!badge) {
@@ -1555,14 +1627,20 @@
                 badge.style.borderColor = 'var(--danger-border)';
                 badge.style.color = 'var(--danger)';
                 badge.textContent = '✕';
-                var parent = document.getElementById('status-icon-pending').parentNode;
-                parent.insertBefore(badge, document.getElementById('status-icon-pending'));
+                var parent = (pendingIcon && pendingIcon.parentNode) || document.querySelector('.card') || document.querySelector('main');
+                if (parent && pendingIcon) {
+                    parent.insertBefore(badge, pendingIcon);
+                } else if (parent) {
+                    parent.appendChild(badge);
+                }
             } else {
                 badge.style.display = 'inline-flex';
             }
 
-            document.getElementById('header-text').setAttribute('data-i18n', 'stopped_header');
-            document.getElementById('summary-text').setAttribute('data-i18n', 'stopped_tips');
+            var headerEl = document.getElementById('header-text');
+            if (headerEl) headerEl.setAttribute('data-i18n', 'stopped_header');
+            var summaryEl = document.getElementById('summary-text');
+            if (summaryEl) summaryEl.setAttribute('data-i18n', 'stopped_tips');
             
             var btnRow = document.getElementById('action-btn-row');
             if (btnRow) btnRow.style.display = 'none';
