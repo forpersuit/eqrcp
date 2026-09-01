@@ -14,6 +14,10 @@ export function AppInfo() {
   return window['go']['main']['App']['AppInfo']();
 }
 
+export function BanDevice(arg1) {
+  return window['go']['main']['App']['BanDevice'](arg1);
+}
+
 export function CancelChatDownload(arg1) {
   return window['go']['main']['App']['CancelChatDownload'](arg1);
 }
@@ -208,6 +212,10 @@ export function SubmitCrashReport() {
 
 export function SubmitFeedback(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['App']['SubmitFeedback'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function UnbanDevice(arg1) {
+  return window['go']['main']['App']['UnbanDevice'](arg1);
 }
 
 export function ValidateFreeTier(arg1) {

@@ -10,7 +10,6 @@ import (
 )
 
 const (
-	DefaultDRMURL     = "https://drm.eqt.net.im"
 	DefaultProbeDelay = 30 * time.Second
 	ProbeTimeout      = 5 * time.Second
 )

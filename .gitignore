@@ -1,5 +1,6 @@
 # Binaries for programs and plugins
 /eqt
+/eqt-dev*
 *.exe
 *.exe~
 *.dll

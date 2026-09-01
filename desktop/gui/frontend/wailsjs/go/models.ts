@@ -106,6 +106,10 @@ export namespace main {
 	    buyerEmail?: string;
 	    deviceID?: string;
 	    isServerDev: boolean;
+	    enableE2EE: boolean;
+	    drmOnline: boolean;
+	    e2eeSecurityState: string;
+	    e2eeDegradedReason?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new AgentStatus(source);
@@ -135,6 +139,10 @@ export namespace main {
 	        this.buyerEmail = source["buyerEmail"];
 	        this.deviceID = source["deviceID"];
 	        this.isServerDev = source["isServerDev"];
+	        this.enableE2EE = source["enableE2EE"];
+	        this.drmOnline = source["drmOnline"];
+	        this.e2eeSecurityState = source["e2eeSecurityState"];
+	        this.e2eeDegradedReason = source["e2eeDegradedReason"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -307,6 +315,7 @@ export namespace main {
 	    enableChatV2: boolean;
 	    enableTelemetry: boolean;
 	    enableNotification: boolean;
+	    enableE2EE: boolean;
 	    chatDownloadDir: string;
 	    logDir: string;
 	
@@ -339,6 +348,7 @@ export namespace main {
 	        this.enableChatV2 = source["enableChatV2"];
 	        this.enableTelemetry = source["enableTelemetry"];
 	        this.enableNotification = source["enableNotification"];
+	        this.enableE2EE = source["enableE2EE"];
 	        this.chatDownloadDir = source["chatDownloadDir"];
 	        this.logDir = source["logDir"];
 	    }
@@ -456,6 +466,7 @@ export namespace server {
 	export class ClientTransferStateInfo {
 	    clientID?: string;
 	    state: string;
+	    isBanned?: boolean;
 	    bytesDone: number;
 	    bytesTotal: number;
 	    percent: number;
@@ -475,6 +486,7 @@ export namespace server {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.clientID = source["clientID"];
 	        this.state = source["state"];
+	        this.isBanned = source["isBanned"];
 	        this.bytesDone = source["bytesDone"];
 	        this.bytesTotal = source["bytesTotal"];
 	        this.percent = source["percent"];

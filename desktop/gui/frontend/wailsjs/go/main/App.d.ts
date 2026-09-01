@@ -9,6 +9,8 @@ export function AgentStatus():Promise<main.AgentStatus>;
 
 export function AppInfo():Promise<main.AppInfo>;
 
+export function BanDevice(arg1:string):Promise<main.AgentStatus>;
+
 export function CancelChatDownload(arg1:string):Promise<void>;
 
 export function Chat():Promise<main.AgentStatus>;
@@ -106,5 +108,7 @@ export function StopCurrent():Promise<void>;
 export function SubmitCrashReport():Promise<string>;
 
 export function SubmitFeedback(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<string>;
+
+export function UnbanDevice(arg1:string):Promise<main.AgentStatus>;
 
 export function ValidateFreeTier(arg1:Array<string>):Promise<string>;
