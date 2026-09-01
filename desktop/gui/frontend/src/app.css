@@ -3198,6 +3198,27 @@ dd {
     box-shadow: 0 1px 4px rgba(180, 83, 9, 0.35), inset 0 0.5px 0px rgba(255,255,255,0.3);
 }
 
+.topbar-tier-badge.e2ee-badge-active {
+    background: rgba(16, 185, 129, 0.12);
+    color: #059669;
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    cursor: default;
+}
+
+.topbar-tier-badge.e2ee-badge-degraded {
+    background: rgba(245, 158, 11, 0.12);
+    color: #d97706;
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    cursor: help;
+}
+
+.topbar-tier-badge.e2ee-badge-disabled {
+    background: var(--bg2, #f3f4f6);
+    color: var(--ink-light, #9ca3af);
+    border: 1px solid var(--border, #e5e7eb);
+    cursor: default;
+}
+
 /* ── Clear History Popover (Secondary Confirmation) ── */
 .clear-history-container {
     position: relative;

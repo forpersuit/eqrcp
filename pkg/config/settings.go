@@ -39,6 +39,7 @@ type DesktopSettings struct {
 	EnableChatV2             bool                     `json:"enableChatV2"`
 	EnableTelemetry          bool                     `json:"enableTelemetry"`
 	EnableNotification       bool                     `json:"enableNotification"`
+	EnableE2EE               bool                     `json:"enableE2EE"`
 	ChatDownloadDir          string                   `json:"chatDownloadDir"`
 	LogDir                   string                   `json:"logDir"`
 }
@@ -174,6 +175,10 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 	} else if v.IsSet("enableNotifications") {
 		enableNotification = v.GetBool("enableNotifications")
 	}
+	enableE2EE := true
+	if v.IsSet("enableE2EE") {
+		enableE2EE = v.GetBool("enableE2EE")
+	}
 	chatDownloadDir := v.GetString("chatDownloadDir")
 	logDir := v.GetString("logDir")
 	return DesktopSettings{
@@ -201,9 +206,27 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 		EnableChatV2:             enableChatV2,
 		EnableTelemetry:          enableTelemetry,
 		EnableNotification:       enableNotification,
+		EnableE2EE:               enableE2EE,
 		ChatDownloadDir:          chatDownloadDir,
 		LogDir:                   logDir,
 	}, nil
+}
+
+// IsE2EEEnabled checks if E2EE encryption is enabled in user configuration (defaults to true).
+func IsE2EEEnabled() bool {
+	if raw := os.Getenv("EQT_ENABLE_E2EE"); raw != "" {
+		return strings.EqualFold(raw, "true") || raw == "1"
+	}
+	if raw := os.Getenv("EQT_E2EE"); raw != "" {
+		return strings.EqualFold(raw, "true") || raw == "1"
+	}
+	v := GetViperInstance(application.App{})
+	if err := v.ReadInConfig(); err == nil {
+		if v.IsSet("enableE2EE") {
+			return v.GetBool("enableE2EE")
+		}
+	}
+	return true
 }
 
 // IsTelemetryEnabled checks if telemetry / anonymous device registration is enabled in user configuration (defaults to true).
@@ -288,6 +311,7 @@ func WriteDesktopSettings(app application.App, settings DesktopSettings) (Deskto
 	cleanV.Set("enableChatV2", settings.EnableChatV2)
 	cleanV.Set("enableTelemetry", settings.EnableTelemetry)
 	cleanV.Set("enableNotification", settings.EnableNotification)
+	cleanV.Set("enableE2EE", settings.EnableE2EE)
 	cleanV.Set("chatDownloadDir", strings.TrimSpace(settings.ChatDownloadDir))
 	cleanV.Set("logDir", strings.TrimSpace(settings.LogDir))
 	if err := cleanV.WriteConfig(); err != nil {

@@ -83,3 +83,23 @@ func TestAppQuitApp(t *testing.T) {
 	}
 }
 
+func TestAppBanAndUnbanDevice(t *testing.T) {
+	app := NewApp()
+	app.agent = newDesktopAgent(t.Context())
+
+	status, err := app.BanDevice("test-client-123")
+	if err != nil {
+		t.Fatalf("BanDevice failed: %v", err)
+	}
+	if status.State != "idle" {
+		t.Fatalf("expected status state idle, got %s", status.State)
+	}
+
+	status2, err := app.UnbanDevice("test-client-123")
+	if err != nil {
+		t.Fatalf("UnbanDevice failed: %v", err)
+	}
+	if status2.State != "idle" {
+		t.Fatalf("expected status state idle, got %s", status2.State)
+	}
+}

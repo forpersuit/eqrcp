@@ -575,6 +575,17 @@ function render() {
                         const tierText = isLifetime ? (t('plus_lifetime_plan') || 'PLUS Lifetime') : (tier === 'FREE' ? t('free_quota') : tier);
                         return `<span class="topbar-tier-badge ${tierClass}">${escapeHTML(tierText)}</span>`;
                     })() : ''}
+                    ${(() => {
+                        const e2eeState = state.status?.e2eeSecurityState || (state.settings?.enableE2EE === false ? 'e2ee_disabled' : 'e2ee_active');
+                        if (e2eeState === 'e2ee_active') {
+                            return `<span class="topbar-tier-badge e2ee-badge-active" title="${escapeAttr(t('e2ee_active_tooltip'))}">${escapeHTML(t('e2ee_badge_active'))}</span>`;
+                        } else if (e2eeState === 'e2ee_degraded') {
+                            const reason = state.status?.e2eeDegradedReason || t('e2ee_degraded_tooltip');
+                            return `<span class="topbar-tier-badge e2ee-badge-degraded" title="${escapeAttr(reason)}">${escapeHTML(t('e2ee_badge_degraded'))}</span>`;
+                        } else {
+                            return `<span class="topbar-tier-badge e2ee-badge-disabled" title="${escapeAttr(t('e2ee_disabled_tooltip'))}">${escapeHTML(t('e2ee_badge_disabled'))}</span>`;
+                        }
+                    })()}
                     <div class="topbar-menu">
                         <button class="menu-button" id="open-top-menu" title="${t('menu_label')}" aria-label="${t('menu_label')}" aria-haspopup="true" aria-expanded="${state.topMenuOpen ? 'true' : 'false'}" style="position: relative;">
                             <span class="menu-icon">${ellipsisIcon()}</span>
@@ -915,7 +926,10 @@ function renderDeviceProgressHtml(task) {
             `;
 
             let stateBadgeHtml = '';
-            if (client.state === 'completed') {
+            const isBanned = client.state === 'banned' || client.isBanned;
+            if (isBanned) {
+                stateBadgeHtml = `<span style="display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3); color: #dc2626; font-size: 9px; font-weight: 900;" title="${escapeAttr(t('ban_device') || 'Banned')}">🚫</span>`;
+            } else if (client.state === 'completed') {
                 stateBadgeHtml = `<span style="display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; background: var(--accent-light); border: 1px solid var(--accent-border); color: var(--accent); font-size: 9px; font-weight: 900;" title="${escapeAttr(t('completed') || 'Completed')}">✓</span>`;
             } else if (client.state === 'failed') {
                 stateBadgeHtml = `<span style="display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; background: rgba(180,35,24,0.08); border: 1px solid rgba(180,35,24,0.2); color: var(--danger); font-size: 9px; font-weight: 900;" title="${escapeAttr(client.message || t('failed') || 'Failed')}">✕</span>`;
@@ -929,6 +943,11 @@ function renderDeviceProgressHtml(task) {
             const stopClientBtnHtml = (client.state === 'transferring' || client.state === 'waiting') ? `
                 <button class="btn-stop-client" data-action="stop-client" data-client-id="${escapeAttr(clientID)}" style="background: rgba(180,35,24,0.08); border: 1px solid rgba(180,35,24,0.2); color: var(--danger); font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 4px; cursor: pointer; margin-left: 4px;" title="${escapeAttr(t('stop_client') || 'Stop Device')}">${escapeHTML(t('stop') || 'Stop')}</button>
             ` : '';
+            const banDeviceBtnHtml = isBanned ? `
+                <button class="btn-unban-device" data-action="unban-device" data-client-id="${escapeAttr(clientID)}" style="background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); color: #059669; font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 4px; cursor: pointer; margin-left: 4px;" title="${escapeAttr(t('unban_device'))}">✓ ${escapeHTML(t('unban_device'))}</button>
+            ` : (clientID ? `
+                <button class="btn-ban-device" data-action="ban-device" data-client-id="${escapeAttr(clientID)}" style="background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); color: #dc2626; font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 4px; cursor: pointer; margin-left: 4px;" title="${escapeAttr(t('ban_device'))}">🚫 ${escapeHTML(t('ban_device'))}</button>
+            ` : '');
 
             return `
                 <li style="display: flex; flex-direction: column; padding: 8px 10px; background: var(--bg-hover); border-radius: 6px; margin-bottom: 4px; box-sizing: border-box; width: 100%; overflow: hidden; border: 1.2px solid var(--line); list-style: none; gap: 6px;">
@@ -946,6 +965,7 @@ function renderDeviceProgressHtml(task) {
                             ${showProgress ? `<span style="font-size: 9px; color: var(--text-secondary); font-weight: 500;">${escapeHTML(sizeProgressText)}</span>` : ''}
                             ${stateBadgeHtml}
                             ${stopClientBtnHtml}
+                            ${banDeviceBtnHtml}
                         </div>
                     </div>
                 </li>
@@ -2196,6 +2216,15 @@ function renderSettingsPanel() {
                     </div>
                     <div class="setting-control-stack">
                         ${renderSwitch('settings-show-history', state.settings?.showHistory !== false)}
+                    </div>
+                </div>
+                <div class="setting-row">
+                    <div class="setting-copy">
+                        <strong>${t('settings_e2ee')}</strong>
+                        <span>${t('settings_e2ee_desc')}</span>
+                    </div>
+                    <div class="setting-control-stack">
+                        ${renderSwitch('settings-e2ee', state.settings?.enableE2EE !== false)}
                     </div>
                 </div>
                 <div class="setting-row">
@@ -4762,7 +4791,7 @@ function syncSettingsFromDOM() {
     const showHistory = document.querySelector('#settings-show-history');
     const notifSwitch = document.querySelector('#settings-notification');
     const telemetrySwitch = document.querySelector('#settings-telemetry');
-
+    const e2eeSwitch = document.querySelector('#settings-e2ee');
 
     if (receiveInput) state.settings.output = receiveInput.value;
     if (receiveBrowser) state.settings.browser = receiveBrowser.checked;
@@ -4790,6 +4819,7 @@ function syncSettingsFromDOM() {
     if (showHistory) state.settings.showHistory = showHistory.checked;
     if (notifSwitch) state.settings.enableNotification = notifSwitch.checked;
     if (telemetrySwitch) state.settings.enableTelemetry = telemetrySwitch.checked;
+    if (e2eeSwitch) state.settings.enableE2EE = e2eeSwitch.checked;
 
 
     state.receiveDir = state.settings.output || '';
@@ -6760,6 +6790,52 @@ document.addEventListener('click', (event) => {
         if (file) {
             run(async () => {
                 await OpenFile(file);
+            }, {busy: false});
+        }
+        return;
+    }
+
+    const banBtn = event.target.closest('[data-action="ban-device"]');
+    if (banBtn) {
+        const clientID = banBtn.dataset.clientId;
+        if (clientID) {
+            run(async () => {
+                if (window['go']?.['main']?.['App']?.['BanDevice']) {
+                    state.status = await window['go']['main']['App']['BanDevice'](clientID);
+                }
+                const shortId = clientID.length > 4 ? clientID.substring(clientID.length - 4) : clientID;
+                state.notice = t('device_banned_toast', { id: shortId });
+                syncPanelSurface();
+            }, {busy: false});
+        }
+        return;
+    }
+
+    const unbanBtn = event.target.closest('[data-action="unban-device"]');
+    if (unbanBtn) {
+        const clientID = unbanBtn.dataset.clientId;
+        if (clientID) {
+            run(async () => {
+                if (window['go']?.['main']?.['App']?.['UnbanDevice']) {
+                    state.status = await window['go']['main']['App']['UnbanDevice'](clientID);
+                }
+                const shortId = clientID.length > 4 ? clientID.substring(clientID.length - 4) : clientID;
+                state.notice = t('device_unbanned_toast', { id: shortId });
+                syncPanelSurface();
+            }, {busy: false});
+        }
+        return;
+    }
+
+    const stopClientBtn = event.target.closest('[data-action="stop-client"]');
+    if (stopClientBtn) {
+        const clientID = stopClientBtn.dataset.clientId;
+        if (clientID) {
+            run(async () => {
+                if (window['go']?.['main']?.['App']?.['StopClientTransfer']) {
+                    await window['go']['main']['App']['StopClientTransfer'](clientID);
+                }
+                syncPanelSurface();
             }, {busy: false});
         }
         return;

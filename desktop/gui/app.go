@@ -10,6 +10,7 @@ import (
 	"eqt/pkg/application"
 	chatv2session "eqt/pkg/chat/v2/session"
 	"eqt/pkg/config"
+	"eqt/pkg/crypto/e2ee"
 	"eqt/pkg/logger"
 	"eqt/pkg/server"
 	"eqt/pkg/util"
@@ -27,9 +28,9 @@ import (
 	"sync"
 	"time"
 
+	"fyne.io/systray"
 	"github.com/skip2/go-qrcode"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
-	"fyne.io/systray"
 )
 
 const chatSaveRetentionDays = 7
@@ -110,6 +111,10 @@ type AgentStatus struct {
 	BuyerEmail           string       `json:"buyerEmail,omitempty"`
 	DeviceID             string       `json:"deviceID,omitempty"`
 	IsServerDev          bool         `json:"isServerDev"`
+	EnableE2EE           bool         `json:"enableE2EE"`
+	DRMOnline            bool         `json:"drmOnline"`
+	E2EESecurityState    string       `json:"e2eeSecurityState"`
+	E2EEDegradedReason   string       `json:"e2eeDegradedReason,omitempty"`
 }
 
 type DesktopSettings struct {
@@ -136,6 +141,7 @@ type DesktopSettings struct {
 	EnableChatV2             bool              `json:"enableChatV2"`
 	EnableTelemetry          bool              `json:"enableTelemetry"`
 	EnableNotification       bool              `json:"enableNotification"`
+	EnableE2EE               bool              `json:"enableE2EE"`
 	ChatDownloadDir          string            `json:"chatDownloadDir"`
 	LogDir                   string            `json:"logDir"`
 }
@@ -221,6 +227,15 @@ func (a *App) startup(ctx context.Context) {
 		}
 		if a.ctx != nil {
 			wailsruntime.EventsEmit(a.ctx, "eqt:dev-mode-changed", isDev)
+		}
+	})
+
+	// 启动后台 30 秒周期探活 DRM 服务与内存状态缓存防抖
+	e2ee.StartDRMProber(ctx, "", 30*time.Second, func(online bool) {
+		if a.agent != nil {
+			a.agent.mu.Lock()
+			a.agent.touchLocked()
+			a.agent.mu.Unlock()
 		}
 	})
 
@@ -831,6 +846,22 @@ func (a *App) StopClientTransfer(clientID string) (bool, error) {
 		return false, fmt.Errorf("agent not initialized")
 	}
 	return a.agent.StopClientTransfer(clientID), nil
+}
+
+func (a *App) BanDevice(clientID string) (AgentStatus, error) {
+	if a.agent == nil {
+		return AgentStatus{}, fmt.Errorf("agent not initialized")
+	}
+	a.agent.BanClient(clientID)
+	return a.AgentStatus()
+}
+
+func (a *App) UnbanDevice(clientID string) (AgentStatus, error) {
+	if a.agent == nil {
+		return AgentStatus{}, fmt.Errorf("agent not initialized")
+	}
+	a.agent.UnbanClient(clientID)
+	return a.AgentStatus()
 }
 
 func (a *App) StopChat() error {

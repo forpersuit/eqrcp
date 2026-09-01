@@ -758,3 +758,23 @@ func (s *Server) handleE2EEShareChunk(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(ciphertext)
 }
+
+// HandleE2EEReceiveChunk exports handleE2EEReceiveChunk for integration tests.
+func (s *Server) HandleE2EEReceiveChunk(w http.ResponseWriter, r *http.Request) {
+	s.handleE2EEReceiveChunk(w, r)
+}
+
+// HandleE2EEReceiveChunkStatus exports handleE2EEReceiveChunkStatus for integration tests.
+func (s *Server) HandleE2EEReceiveChunkStatus(w http.ResponseWriter, r *http.Request) {
+	s.handleE2EEReceiveChunkStatus(w, r)
+}
+
+// HandleE2EEShareMeta exports handleE2EEShareMeta for integration tests.
+func (s *Server) HandleE2EEShareMeta(w http.ResponseWriter, r *http.Request) {
+	s.handleE2EEShareMeta(w, r)
+}
+
+// HandleE2EEShareChunk exports handleE2EEShareChunk for integration tests.
+func (s *Server) HandleE2EEShareChunk(w http.ResponseWriter, r *http.Request) {
+	s.handleE2EEShareChunk(w, r)
+}

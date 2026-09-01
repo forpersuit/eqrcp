@@ -33,6 +33,7 @@ type Config struct {
 	Lang            string `yaml:",omitempty"`
 	EnableChatV2    bool   `yaml:"enableChatV2,omitempty"`
 	EnableTelemetry bool   `yaml:"enableTelemetry,omitempty"`
+	EnableE2EE      bool   `yaml:"enableE2EE,omitempty"`
 }
 
 var interactive bool = false
@@ -71,6 +72,7 @@ func New(app application.App) (Config, error) {
 	cfg.Output = v.GetString("output")
 	cfg.Reversed = v.GetBool("reversed")
 	cfg.EnableChatV2 = v.GetBool("enableChatV2")
+	cfg.EnableE2EE = v.GetBool("enableE2EE")
 
 	// Override
 	if app.Flags.Interface != "" {

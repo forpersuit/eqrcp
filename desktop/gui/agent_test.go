@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"eqt/pkg/crypto/e2ee"
 	"eqt/pkg/server"
 )
 
@@ -271,3 +272,31 @@ func TestDesktopChatPageURLDefaultSender(t *testing.T) {
 	}
 }
 
+func TestAgentSnapshotE2EESecurityState(t *testing.T) {
+	agent := newDesktopAgent(t.Context())
+
+	// 1. When DRM is online and E2EE enabled -> e2ee_active
+	e2ee.SetDRMOnline(true)
+	t.Setenv("EQT_ENABLE_E2EE", "true")
+	snap1 := agent.snapshotLocked()
+	if snap1.E2EESecurityState != "e2ee_active" {
+		t.Fatalf("expected e2ee_active, got %s", snap1.E2EESecurityState)
+	}
+
+	// 2. When DRM is offline and E2EE enabled -> e2ee_degraded
+	e2ee.SetDRMOnline(false)
+	snap2 := agent.snapshotLocked()
+	if snap2.E2EESecurityState != "e2ee_degraded" {
+		t.Fatalf("expected e2ee_degraded, got %s", snap2.E2EESecurityState)
+	}
+	if snap2.E2EEDegradedReason == "" {
+		t.Fatal("expected non-empty degraded reason")
+	}
+
+	// 3. When E2EE is disabled -> e2ee_disabled
+	t.Setenv("EQT_ENABLE_E2EE", "false")
+	snap3 := agent.snapshotLocked()
+	if snap3.E2EESecurityState != "e2ee_disabled" {
+		t.Fatalf("expected e2ee_disabled, got %s", snap3.E2EESecurityState)
+	}
+}

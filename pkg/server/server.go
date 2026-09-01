@@ -1751,6 +1751,11 @@ func (s *Server) getDeviceOutputDir(clientID string) (string, error) {
 	return dirPath, nil
 }
 
+// GetDeviceOutputDir returns the device-specific output subdirectory path for a client.
+func (s *Server) GetDeviceOutputDir(clientID string) (string, error) {
+	return s.getDeviceOutputDir(clientID)
+}
+
 func parseDeviceName(ua string) string {
 	if strings.Contains(ua, "iPhone") {
 		return "iPhone"

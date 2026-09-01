@@ -187,3 +187,40 @@ func TestDesktopSettingsEnableNotification(t *testing.T) {
 		t.Fatalf("reloaded.EnableNotification = false, want true")
 	}
 }
+
+func TestDesktopSettingsEnableE2EE(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.yml")
+	app := application.New()
+	app.Flags.Config = configPath
+
+	// Default should be true
+	settings, err := ReadDesktopSettings(app)
+	if err != nil {
+		t.Fatalf("ReadDesktopSettings failed: %v", err)
+	}
+	if !settings.EnableE2EE {
+		t.Fatalf("expected EnableE2EE default to be true, got false")
+	}
+	if !IsE2EEEnabled() {
+		t.Fatalf("expected IsE2EEEnabled() default to be true")
+	}
+
+	// Write false
+	settings.EnableE2EE = false
+	saved, err := WriteDesktopSettings(app, settings)
+	if err != nil {
+		t.Fatalf("WriteDesktopSettings failed: %v", err)
+	}
+	if saved.EnableE2EE {
+		t.Fatalf("saved.EnableE2EE = true, want false")
+	}
+
+	// Read again to verify persistence
+	reloaded, err := ReadDesktopSettings(app)
+	if err != nil {
+		t.Fatalf("reloaded ReadDesktopSettings failed: %v", err)
+	}
+	if reloaded.EnableE2EE {
+		t.Fatalf("reloaded.EnableE2EE = true, want false")
+	}
+}

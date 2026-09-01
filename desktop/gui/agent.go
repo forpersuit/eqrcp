@@ -16,6 +16,7 @@ import (
 	"eqt/pkg/body"
 	"eqt/pkg/chat/v2/diag"
 	"eqt/pkg/config"
+	"eqt/pkg/crypto/e2ee"
 	"eqt/pkg/logger"
 	"eqt/pkg/server"
 	"eqt/pkg/version"
@@ -84,6 +85,19 @@ func (agent *desktopAgent) snapshotLocked() AgentStatus {
 		buyerEmail = cert.BuyerEmail
 	}
 
+	enableE2EE := config.IsE2EEEnabled()
+	drmOnline := e2ee.IsDRMOnline()
+	e2eeState := "e2ee_disabled"
+	var degradedReason string
+	if enableE2EE {
+		if drmOnline {
+			e2eeState = "e2ee_active"
+		} else {
+			e2eeState = "e2ee_degraded"
+			degradedReason = "DRM 服务暂时不可达或网络中断，已自动降级为明文传输"
+		}
+	}
+
 	response := AgentStatus{
 		State:                "idle",
 		Queued:               len(agent.queue),
@@ -105,6 +119,10 @@ func (agent *desktopAgent) snapshotLocked() AgentStatus {
 		BuyerEmail:           buyerEmail,
 		DeviceID:             server.GetDeviceStableID(),
 		IsServerDev:          server.IsServerDevAuthorized(),
+		EnableE2EE:           enableE2EE,
+		DRMOnline:            drmOnline,
+		E2EESecurityState:    e2eeState,
+		E2EEDegradedReason:   degradedReason,
 	}
 	if agent.busy {
 		response.State = "busy"
@@ -869,6 +887,24 @@ func (agent *desktopAgent) StopClientTransfer(clientID string) bool {
 	return false
 }
 
+func (agent *desktopAgent) BanClient(clientID string) {
+	agent.mu.Lock()
+	srv := agent.activeServer
+	agent.mu.Unlock()
+	if srv != nil {
+		srv.BanClient(clientID)
+	}
+}
+
+func (agent *desktopAgent) UnbanClient(clientID string) {
+	agent.mu.Lock()
+	srv := agent.activeServer
+	agent.mu.Unlock()
+	if srv != nil {
+		srv.UnbanClient(clientID)
+	}
+}
+
 func (agent *desktopAgent) observeChatStatus(taskID int, status server.ChatStatusSnapshot) {
 	agent.mu.Lock()
 	defer agent.mu.Unlock()
@@ -972,6 +1008,16 @@ func (agent *desktopAgent) runTask(task AgentTask) error {
 	if err != nil {
 		agent.log.Errorf("runTask: failed to instantiate server: %v", err)
 		return err
+	}
+	if desktopSettings.EnableE2EE && e2ee.IsDRMOnline() {
+		masterKey, err := e2ee.GenerateMasterKey()
+		if err == nil {
+			sessionID := fmt.Sprintf("desktop-%s-%d", task.Action, taskID)
+			_ = srv.EnableE2EE(masterKey, sessionID)
+			agent.log.Infof("runTask: E2EE enabled for session %s", sessionID)
+		}
+	} else if desktopSettings.EnableE2EE && !e2ee.IsDRMOnline() {
+		agent.log.Warnf("runTask: DRM server offline, degraded to plaintext mode for task #%d", taskID)
 	}
 	agent.mu.Lock()
 	agent.activeServer = srv
