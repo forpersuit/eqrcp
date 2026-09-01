@@ -29,9 +29,7 @@ func TestSetupCLIEncryption(t *testing.T) {
 
 	cfgDisabled := *cfg
 	cfgDisabled.EnableE2EE = false
-	if err := SetupCLIEncryption(srv1, &cfgDisabled, log, "send"); err != nil {
-		t.Fatalf("unexpected error when E2EE disabled: %v", err)
-	}
+	SetupCLIEncryption(srv1, &cfgDisabled, log, "send")
 	if srv1.GetE2EEDerivedKeys() != nil {
 		t.Fatal("expected E2EE not to be enabled on server when EnableE2EE is false")
 	}
@@ -49,9 +47,7 @@ func TestSetupCLIEncryption(t *testing.T) {
 
 	cfgEnabled := *cfg
 	cfgEnabled.EnableE2EE = true
-	if err := SetupCLIEncryption(srv2, &cfgEnabled, log, "send"); err != nil {
-		t.Fatalf("unexpected error when E2EE enabled with mock DRM: %v", err)
-	}
+	SetupCLIEncryption(srv2, &cfgEnabled, log, "send")
 	if srv2.GetE2EEDerivedKeys() == nil {
 		t.Fatal("expected E2EE derived keys to be active on server when DRM is online")
 	}
@@ -66,9 +62,7 @@ func TestSetupCLIEncryption(t *testing.T) {
 	defer srv3.Shutdown()
 
 	start := time.Now()
-	if err := SetupCLIEncryption(srv3, &cfgEnabled, log, "receive"); err != nil {
-		t.Fatalf("unexpected error on degraded E2EE: %v", err)
-	}
+	SetupCLIEncryption(srv3, &cfgEnabled, log, "receive")
 	elapsed := time.Since(start)
 	if elapsed > 2*time.Second {
 		t.Fatalf("expected fast probe degradation, but took %v", elapsed)

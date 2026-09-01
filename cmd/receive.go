@@ -23,7 +23,7 @@ func receiveCmdFunc(command *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	_ = SetupCLIEncryption(srv, &cfg, log, "receive")
+	SetupCLIEncryption(srv, &cfg, log, "receive")
 	// Sets the output directory
 	if err := srv.ReceiveTo(cfg.Output); err != nil {
 		return err

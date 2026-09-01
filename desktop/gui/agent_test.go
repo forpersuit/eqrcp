@@ -300,3 +300,49 @@ func TestAgentSnapshotE2EESecurityState(t *testing.T) {
 		t.Fatalf("expected e2ee_disabled, got %s", snap3.E2EESecurityState)
 	}
 }
+
+func TestRunTaskE2EEEnvOverride(t *testing.T) {
+	agent := newDesktopAgent(nil)
+	e2ee.SetDRMOnline(true)
+
+	// Set env override to false
+	t.Setenv("EQT_ENABLE_E2EE", "false")
+
+	snap := agent.snapshotLocked()
+	if snap.E2EESecurityState != "e2ee_disabled" {
+		t.Fatalf("expected snapshot to report e2ee_disabled when EQT_ENABLE_E2EE=false, got %s", snap.E2EESecurityState)
+	}
+
+	// Verify runTask also respects the env override and starts in plaintext
+	task := AgentTask{
+		Action: "share",
+		Paths:  []string{filepath.Join(t.TempDir(), "dummy.txt")},
+	}
+	_ = os.WriteFile(task.Paths[0], []byte("hello"), 0644)
+
+	// Push task and execute runTask in background
+	go func() {
+		_ = agent.runTask(task)
+	}()
+
+	// Wait up to 500ms for activeServer to be populated
+	var srv *server.Server
+	for i := 0; i < 50; i++ {
+		agent.mu.Lock()
+		srv = agent.activeServer
+		agent.mu.Unlock()
+		if srv != nil {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	if srv == nil {
+		t.Fatal("expected activeServer to start")
+	}
+	defer srv.Shutdown()
+
+	if srv.GetE2EEDerivedKeys() != nil {
+		t.Fatal("expected activeServer NOT to have E2EE keys when EQT_ENABLE_E2EE=false")
+	}
+}

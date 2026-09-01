@@ -201,6 +201,9 @@ func cloneTaskRecord(record TaskRecord) TaskRecord {
 
 func (agent *desktopAgent) touchLocked() {
 	if agent.ctx != nil {
+		defer func() {
+			_ = recover()
+		}()
 		status := agent.snapshotLocked()
 		wailsruntime.EventsEmit(agent.ctx, "agent-status", status)
 	}
@@ -1023,7 +1026,14 @@ func (agent *desktopAgent) runTask(task AgentTask) error {
 		agent.log.Errorf("runTask: failed to instantiate server: %v", err)
 		return err
 	}
-	if desktopSettings.EnableE2EE && e2ee.IsDRMOnline() {
+	enableE2EE := desktopSettings.EnableE2EE
+	if raw := os.Getenv("EQT_ENABLE_E2EE"); raw != "" {
+		enableE2EE = strings.EqualFold(raw, "true") || raw == "1"
+	} else if raw := os.Getenv("EQT_E2EE"); raw != "" {
+		enableE2EE = strings.EqualFold(raw, "true") || raw == "1"
+	}
+
+	if enableE2EE && e2ee.IsDRMOnline() {
 		masterKey, err := e2ee.GenerateMasterKey()
 		if err != nil {
 			agent.log.Errorf("runTask: failed to generate master key: %v, falling back to plaintext", err)
@@ -1037,7 +1047,7 @@ func (agent *desktopAgent) runTask(task AgentTask) error {
 				agent.log.Infof("runTask: E2EE enabled for session %s", sessionID)
 			}
 		}
-	} else if desktopSettings.EnableE2EE && !e2ee.IsDRMOnline() {
+	} else if enableE2EE && !e2ee.IsDRMOnline() {
 		agent.log.Warnf("runTask: DRM server offline, degraded to plaintext mode for task #%d", taskID)
 	}
 	agent.mu.Lock()

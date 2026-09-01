@@ -17,9 +17,6 @@ const (
 
 var (
 	drmOnline atomic.Bool
-	client    = &http.Client{
-		Timeout: ProbeTimeout,
-	}
 )
 
 func init() {

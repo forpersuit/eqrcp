@@ -73,6 +73,11 @@ func New(app application.App) (Config, error) {
 	cfg.Reversed = v.GetBool("reversed")
 	cfg.EnableChatV2 = v.GetBool("enableChatV2")
 	cfg.EnableE2EE = v.GetBool("enableE2EE")
+	if raw := os.Getenv("EQT_ENABLE_E2EE"); raw != "" {
+		cfg.EnableE2EE = strings.EqualFold(raw, "true") || raw == "1"
+	} else if raw := os.Getenv("EQT_E2EE"); raw != "" {
+		cfg.EnableE2EE = strings.EqualFold(raw, "true") || raw == "1"
+	}
 
 	// Override
 	if app.Flags.Interface != "" {

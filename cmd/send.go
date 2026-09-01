@@ -27,7 +27,7 @@ func sendCmdFunc(command *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	_ = SetupCLIEncryption(srv, &cfg, log, "send")
+	SetupCLIEncryption(srv, &cfg, log, "send")
 	// Sets the body
 	srv.Send(body)
 	log.Print(`Scan the following URL with a QR reader to start the file transfer, press CTRL+C or "q" to exit:`)
