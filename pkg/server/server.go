@@ -146,6 +146,8 @@ type Server struct {
 	e2eeSessionID        string
 	e2eeReceiveFiles     map[string]*e2eeReceiveFile
 	e2eeReceiveFilesMu   sync.RWMutex
+	e2eeShareDelivered   map[string]map[int]map[uint32]bool
+	e2eeShareDeliveredMu sync.Mutex
 	sessionBannedClients map[string]bool
 	sessionBannedMu      sync.RWMutex
 }
@@ -2314,6 +2316,7 @@ func New(cfg *config.Config) (*Server, error) {
 	app.clientReceiveCounted = make(map[string]bool)
 	app.expectedBytes = make(map[int]int64)
 	app.e2eeReceiveFiles = make(map[string]*e2eeReceiveFile)
+	app.e2eeShareDelivered = make(map[string]map[int]map[uint32]bool)
 	app.sessionBannedClients = make(map[string]bool)
 	// Get the address of the configured interface to bind the server to.
 	// If `bind` configuration parameter has been configured, it takes precedence

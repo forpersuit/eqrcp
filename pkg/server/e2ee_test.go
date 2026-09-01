@@ -780,3 +780,179 @@ func TestE2EEShareProgressTracking(t *testing.T) {
 		t.Fatalf("expected completed transfer: state=completed BytesDone=%d Percent=100, got state=%q BytesDone=%d Percent=%d", totalBytes, cs2.State, cs2.BytesDone, cs2.Percent)
 	}
 }
+
+func TestE2EEShareProgressRetryDeduplicationAndReset(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "eqt-e2ee-share-dedup-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create an 8.5MB test file
+	testFilePath := filepath.Join(tempDir, "test_document.bin")
+	totalBytes := int64(8*1024*1024 + 512*1024)
+	f, err := os.Create(testFilePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = f.Truncate(totalBytes)
+	_ = f.Close()
+
+	cfg := &config.Config{
+		Interface: "lo",
+		Port:      0,
+		Bind:      "127.0.0.1",
+		KeepAlive: true,
+	}
+	srv, err := New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := body.FromArgs([]string{testFilePath}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.Send(b)
+
+	masterKey, err := e2ee.GenerateMasterKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.EnableE2EE(masterKey, "sess-share-dedup"); err != nil {
+		t.Fatal(err)
+	}
+
+	clientID := "client-share-dedup-tester"
+
+	// 1. Initial /meta
+	metaReq := httptest.NewRequest("GET", srv.SendURL+"/meta?client_id="+clientID, nil)
+	metaReq.Header.Set("X-Client-ID", clientID)
+	wMeta := httptest.NewRecorder()
+	srv.handleE2EEShareMeta(wMeta, metaReq)
+	if wMeta.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", wMeta.Code)
+	}
+
+	// 2. Fetch Chunk 0
+	chunk0Req := httptest.NewRequest("GET", srv.SendURL+"/chunk?file_id=f-0&chunk_index=0&client_id="+clientID, nil)
+	chunk0Req.Header.Set("X-Client-ID", clientID)
+	wChunk0 := httptest.NewRecorder()
+	srv.handleE2EEShareChunk(wChunk0, chunk0Req)
+	if wChunk0.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", wChunk0.Code)
+	}
+
+	cs0 := srv.getClientStatus(clientID)
+	if cs0.BytesDone != 4*1024*1024 {
+		t.Fatalf("expected BytesDone=4MB, got %d", cs0.BytesDone)
+	}
+
+	// 3. Retry Chunk 0 (simulate network glitch retry without /meta) -> should NOT double-count!
+	chunk0RetryReq := httptest.NewRequest("GET", srv.SendURL+"/chunk?file_id=f-0&chunk_index=0&client_id="+clientID, nil)
+	chunk0RetryReq.Header.Set("X-Client-ID", clientID)
+	wChunk0Retry := httptest.NewRecorder()
+	srv.handleE2EEShareChunk(wChunk0Retry, chunk0RetryReq)
+	if wChunk0Retry.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK on retry, got %d", wChunk0Retry.Code)
+	}
+
+	cs0Retry := srv.getClientStatus(clientID)
+	if cs0Retry.BytesDone != 4*1024*1024 {
+		t.Fatalf("expected BytesDone to stay 4MB after retry deduplication, got %d", cs0Retry.BytesDone)
+	}
+
+	// 4. Simulate page refresh -> calls /meta again -> should reset progress cleanly
+	metaRefreshReq := httptest.NewRequest("GET", srv.SendURL+"/meta?client_id="+clientID, nil)
+	metaRefreshReq.Header.Set("X-Client-ID", clientID)
+	wMetaRefresh := httptest.NewRecorder()
+	srv.handleE2EEShareMeta(wMetaRefresh, metaRefreshReq)
+
+	csRefresh := srv.getClientStatus(clientID)
+	if csRefresh.BytesDone != 0 || csRefresh.Percent != 0 {
+		t.Fatalf("expected BytesDone=0 and Percent=0 after refresh /meta, got done=%d pct=%d", csRefresh.BytesDone, csRefresh.Percent)
+	}
+
+	// 5. Fresh attempt downloads chunk 0 and 1 -> BytesDone reaches 8MB without premature completed
+	chunk0Req2 := httptest.NewRequest("GET", srv.SendURL+"/chunk?file_id=f-0&chunk_index=0&client_id="+clientID, nil)
+	chunk0Req2.Header.Set("X-Client-ID", clientID)
+	wChunk0_2 := httptest.NewRecorder()
+	srv.handleE2EEShareChunk(wChunk0_2, chunk0Req2)
+
+	chunk1Req := httptest.NewRequest("GET", srv.SendURL+"/chunk?file_id=f-0&chunk_index=1&client_id="+clientID, nil)
+	chunk1Req.Header.Set("X-Client-ID", clientID)
+	wChunk1 := httptest.NewRecorder()
+	srv.handleE2EEShareChunk(wChunk1, chunk1Req)
+
+	cs1 := srv.getClientStatus(clientID)
+	if cs1.State == "completed" || cs1.BytesDone != 8*1024*1024 {
+		t.Fatalf("expected state=transferring with 8MB, got state=%q done=%d", cs1.State, cs1.BytesDone)
+	}
+}
+
+func TestE2EEShareInvalidFileID(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "eqt-e2ee-share-invalid-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	testFilePath := filepath.Join(tempDir, "test.txt")
+	_ = os.WriteFile(testFilePath, []byte("hello"), 0644)
+
+	cfg := &config.Config{Interface: "lo", Port: 0, Bind: "127.0.0.1", KeepAlive: true}
+	srv, _ := New(cfg)
+	b, _ := body.FromArgs([]string{testFilePath}, false)
+	srv.Send(b)
+
+	masterKey, _ := e2ee.GenerateMasterKey()
+	_ = srv.EnableE2EE(masterKey, "sess-share-invalid")
+
+	invalidIDs := []string{"foo", "f-abc", "f-99", "invalid"}
+	for _, id := range invalidIDs {
+		req := httptest.NewRequest("GET", srv.SendURL+"/chunk?file_id="+id+"&chunk_index=0", nil)
+		w := httptest.NewRecorder()
+		srv.handleE2EEShareChunk(w, req)
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("expected 404 NotFound for invalid file_id=%q, got %d", id, w.Code)
+		}
+	}
+}
+
+func TestE2EEReceiveMultiFileNoFlicker(t *testing.T) {
+	cfg := &config.Config{Interface: "lo", Port: 0, Bind: "127.0.0.1", KeepAlive: true}
+	srv, _ := New(cfg)
+	clientID := "client-multi-file-flicker"
+
+	// Simulate client expecting 2 files
+	srv.updateClientStatus(clientID, nil, func(state *ClientTransferStateInfo) {
+		state.Files = []ClientFileTransferState{
+			{Name: "file1.bin", State: "transferring"},
+			{Name: "file2.bin", State: "waiting"},
+		}
+	})
+
+	rf1 := &e2eeReceiveFile{
+		ClientID:   clientID,
+		FinalPath:  "/tmp/file1.bin",
+		TotalBytes: 1024,
+	}
+	srv.recordCompletedE2EEFile(rf1)
+
+	cs := srv.getClientStatus(clientID)
+	// Should stay "transferring" since only 1 of 2 files is saved
+	if cs.State != "transferring" {
+		t.Fatalf("expected state=transferring when 1 of 2 files is received, got state=%q", cs.State)
+	}
+
+	rf2 := &e2eeReceiveFile{
+		ClientID:   clientID,
+		FinalPath:  "/tmp/file2.bin",
+		TotalBytes: 1024,
+	}
+	srv.recordCompletedE2EEFile(rf2)
+
+	csCompleted := srv.getClientStatus(clientID)
+	if csCompleted.State != "completed" {
+		t.Fatalf("expected state=completed when all 2 files are received, got state=%q", csCompleted.State)
+	}
+}

@@ -562,13 +562,19 @@ func (s *Server) recordCompletedE2EEFile(rf *e2eeReceiveFile) {
 		s.clientStates[rf.ClientID] = cs
 	}
 	cs.SavedFiles = append(cs.SavedFiles, rf.FinalPath)
-	cs.State = "completed"
-	cs.Percent = 100
-	cs.Current = "Transfer Complete"
-	cs.Message = "Transfer completed."
-	if rf.TotalBytes > 0 {
-		cs.BytesDone = rf.TotalBytes
-		cs.BytesTotal = rf.TotalBytes
+	if len(cs.Files) > 1 && len(cs.SavedFiles) < len(cs.Files) {
+		cs.State = "transferring"
+		cs.Current = fmt.Sprintf("Received %s (%d/%d)", filepath.Base(rf.FinalPath), len(cs.SavedFiles), len(cs.Files))
+		cs.Message = fmt.Sprintf("Received %d of %d files.", len(cs.SavedFiles), len(cs.Files))
+	} else {
+		cs.State = "completed"
+		cs.Percent = 100
+		cs.Current = "Transfer Complete"
+		cs.Message = "Transfer completed."
+		if rf.TotalBytes > 0 {
+			cs.BytesDone = rf.TotalBytes
+			cs.BytesTotal = rf.TotalBytes
+		}
 	}
 	s.clientStatesMu.Unlock()
 
@@ -705,12 +711,25 @@ func (s *Server) handleE2EEShareMeta(w http.ResponseWriter, r *http.Request) {
 	for _, f := range files {
 		totalExpectedBytes += f.FileSize
 	}
+
+	s.e2eeShareDeliveredMu.Lock()
+	if s.e2eeShareDelivered != nil {
+		delete(s.e2eeShareDelivered, clientID)
+	}
+	s.e2eeShareDeliveredMu.Unlock()
+
+	s.clientMutex.Lock()
+	if s.clientProgress != nil {
+		delete(s.clientProgress, clientID)
+	}
+	s.clientMutex.Unlock()
+
 	s.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
-		if state.State == "" || state.State == "waiting" || state.State == "connected" {
-			state.State = "connected"
-			state.BytesTotal = totalExpectedBytes
-			state.Message = "Connected. Starting encrypted transfer..."
-		}
+		state.State = "connected"
+		state.BytesDone = 0
+		state.BytesTotal = totalExpectedBytes
+		state.Percent = 0
+		state.Message = "Connected. Starting encrypted transfer..."
 	})
 	s.triggerStatusHookThrottled()
 }
@@ -738,13 +757,21 @@ func (s *Server) handleE2EEShareChunk(w http.ResponseWriter, r *http.Request) {
 		fileID = "f-0"
 	}
 
+	var fileIndex int
 	var filePath string
+	var downloadName string
+
 	if s.body.Archive || (s.body.Path != "" && len(s.body.Paths) == 0) {
+		fileIndex = -1
 		filePath = s.body.Path
+		if s.body.Filename != "" {
+			downloadName = s.body.Filename
+		} else {
+			downloadName = filepath.Base(s.body.Path)
+		}
 	} else {
-		var fileIndex int
-		fmt.Sscanf(fileID, "f-%d", &fileIndex)
-		if fileIndex < 0 || fileIndex >= len(s.body.Paths) {
+		n, err := fmt.Sscanf(fileID, "f-%d", &fileIndex)
+		if err != nil || n != 1 || fileIndex < 0 || fileIndex >= len(s.body.Paths) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusNotFound)
 			_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "error_code": "FILE_NOT_FOUND"})
@@ -756,6 +783,7 @@ func (s *Server) handleE2EEShareChunk(w http.ResponseWriter, r *http.Request) {
 		} else {
 			filePath = p
 		}
+		downloadName = filepath.Base(filePath)
 	}
 
 	chunkIndexStr := r.URL.Query().Get("chunk_index")
@@ -806,20 +834,32 @@ func (s *Server) handleE2EEShareChunk(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Chunk-Index", fmt.Sprintf("%d", chunkIndex))
 	w.Header().Set("X-File-ID", fileID)
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(ciphertext)
-
-	// Update transfer progress for client & trigger real-time GUI hook
-	var fileIndex int
-	fmt.Sscanf(fileID, "f-%d", &fileIndex)
-	downloadName := filepath.Base(filePath)
-	if s.body.Archive {
-		fileIndex = -1
-		if s.body.Path != "" {
-			downloadName = filepath.Base(s.body.Path)
-		}
+	writtenBytes, writeErr := w.Write(ciphertext)
+	if writeErr != nil || writtenBytes < len(ciphertext) {
+		// Client disconnected or write failed; do not credit progress
+		return
 	}
 
-	s.addClientDownloadedBytes(clientID, fileIndex, int64(n))
+	// Chunk-level delivery deduplication to prevent double-counting on retry/refresh
+	s.e2eeShareDeliveredMu.Lock()
+	if s.e2eeShareDelivered == nil {
+		s.e2eeShareDelivered = make(map[string]map[int]map[uint32]bool)
+	}
+	if s.e2eeShareDelivered[clientID] == nil {
+		s.e2eeShareDelivered[clientID] = make(map[int]map[uint32]bool)
+	}
+	if s.e2eeShareDelivered[clientID][fileIndex] == nil {
+		s.e2eeShareDelivered[clientID][fileIndex] = make(map[uint32]bool)
+	}
+	alreadyDelivered := s.e2eeShareDelivered[clientID][fileIndex][chunkIndex]
+	if !alreadyDelivered {
+		s.e2eeShareDelivered[clientID][fileIndex][chunkIndex] = true
+	}
+	s.e2eeShareDeliveredMu.Unlock()
+
+	if !alreadyDelivered {
+		s.addClientDownloadedBytes(clientID, fileIndex, int64(n))
+	}
 	clientDone, clientTotal := s.getClientDownloadedAndTotal(clientID)
 
 	s.updateClientStatus(clientID, r, func(state *ClientTransferStateInfo) {
