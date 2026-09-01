@@ -238,7 +238,7 @@ func E2EEEnvOverride() (enabled bool, overridden bool) {
 	return false, false
 }
 
-// IsE2EEEnabledForApp checks if E2EE encryption is enabled for a specific application configuration context.
+// IsE2EEEnabledForApp checks if E2EE encryption is enabled for a specific application configuration context (useful for tests and external inspection).
 func IsE2EEEnabledForApp(app application.App) bool {
 	if enabled, overridden := E2EEEnvOverride(); overridden {
 		return enabled
@@ -254,7 +254,7 @@ func IsE2EEEnabledForApp(app application.App) bool {
 	return cachedEnableE2EE.Load()
 }
 
-// IsE2EEEnabled checks if E2EE encryption is enabled using in-memory cache without disk I/O.
+// IsE2EEEnabled returns the in-memory cached E2EE status or env override (useful for tests and external inspection).
 func IsE2EEEnabled() bool {
 	if enabled, overridden := E2EEEnvOverride(); overridden {
 		return enabled
