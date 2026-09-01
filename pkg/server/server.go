@@ -1938,16 +1938,33 @@ func (s *Server) isClientFinished(clientID string) bool {
 	s.clientMutex.Lock()
 	defer s.clientMutex.Unlock()
 
+	progress, ok := s.clientProgress[clientID]
+	if !ok {
+		return false
+	}
+
+	if s.body.Archive {
+		if zipProgress, hasZip := progress[-1]; hasZip {
+			var zipTotal int64
+			s.expectedBytesMu.Lock()
+			if s.expectedBytes != nil {
+				zipTotal = s.expectedBytes[-1]
+			}
+			s.expectedBytesMu.Unlock()
+			if zipTotal <= 0 && s.body.Path != "" {
+				if fi, err := os.Stat(s.body.Path); err == nil {
+					zipTotal = fi.Size()
+				}
+			}
+			return zipTotal > 0 && zipProgress >= zipTotal
+		}
+	}
+
 	if s.body.Paths == nil {
 		return false
 	}
 	totalItems := len(s.body.Paths)
 	if totalItems == 0 {
-		return false
-	}
-
-	progress, ok := s.clientProgress[clientID]
-	if !ok {
 		return false
 	}
 
@@ -2052,7 +2069,12 @@ func (s *Server) getClientDownloadedAndTotal(clientID string) (int64, int64) {
 				zipTotal = s.expectedBytes[-1]
 			}
 			s.expectedBytesMu.Unlock()
-			if zipProgress > zipTotal {
+			if zipTotal <= 0 && s.body.Path != "" {
+				if fi, err := os.Stat(s.body.Path); err == nil {
+					zipTotal = fi.Size()
+				}
+			}
+			if zipTotal > 0 && zipProgress > zipTotal {
 				zipProgress = zipTotal
 			}
 			return zipProgress, zipTotal

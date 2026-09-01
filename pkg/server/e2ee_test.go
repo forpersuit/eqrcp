@@ -505,8 +505,11 @@ func TestE2EEShareArchiveDirectory(t *testing.T) {
 	_ = srv.EnableE2EE(masterKey, "sess-share-dir")
 	keys, _ := e2ee.DeriveKeys(masterKey)
 
+	clientID := "client-share-archive-test"
+
 	// Meta
 	metaReq := httptest.NewRequest("GET", srv.SendURL+"/meta", nil)
+	metaReq.Header.Set("X-Client-ID", clientID)
 	wMeta := httptest.NewRecorder()
 	srv.handleE2EEShareMeta(wMeta, metaReq)
 
@@ -521,6 +524,7 @@ func TestE2EEShareArchiveDirectory(t *testing.T) {
 
 	// Fetch chunk 0
 	chunkReq := httptest.NewRequest("GET", srv.SendURL+"/chunk?file_id=f-0&chunk_index=0", nil)
+	chunkReq.Header.Set("X-Client-ID", clientID)
 	wChunk := httptest.NewRecorder()
 	srv.handleE2EEShareChunk(wChunk, chunkReq)
 	if wChunk.Code != http.StatusOK {
@@ -533,6 +537,15 @@ func TestE2EEShareArchiveDirectory(t *testing.T) {
 	}
 	if len(plain) == 0 {
 		t.Fatal("empty decrypted archive chunk")
+	}
+
+	// Verify that archive progress is accurately reported and client is finished
+	cs := srv.getClientStatus(clientID)
+	if cs.BytesTotal <= 0 || cs.BytesDone != cs.BytesTotal || cs.Percent != 100 || cs.State != "completed" {
+		t.Fatalf("expected completed archive progress, got BytesDone=%d BytesTotal=%d Percent=%d State=%q", cs.BytesDone, cs.BytesTotal, cs.Percent, cs.State)
+	}
+	if !srv.isClientFinished(clientID) {
+		t.Fatalf("expected srv.isClientFinished(%q) to be true for archive", clientID)
 	}
 }
 
@@ -919,40 +932,75 @@ func TestE2EEShareInvalidFileID(t *testing.T) {
 }
 
 func TestE2EEReceiveMultiFileNoFlicker(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "eqt-multi-file-noflicker-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
 	cfg := &config.Config{Interface: "lo", Port: 0, Bind: "127.0.0.1", KeepAlive: true}
 	srv, _ := New(cfg)
-	clientID := "client-multi-file-flicker"
+	_ = srv.ReceiveTo(tempDir)
 
-	// Simulate client expecting 2 files
-	srv.updateClientStatus(clientID, nil, func(state *ClientTransferStateInfo) {
-		state.Files = []ClientFileTransferState{
-			{Name: "file1.bin", State: "transferring"},
-			{Name: "file2.bin", State: "waiting"},
-		}
-	})
+	masterKey, _ := e2ee.GenerateMasterKey()
+	_ = srv.EnableE2EE(masterKey, "sess-multi-noflicker")
+	keys, _ := e2ee.DeriveKeys(masterKey)
 
-	rf1 := &e2eeReceiveFile{
-		ClientID:   clientID,
-		FinalPath:  "/tmp/file1.bin",
-		TotalBytes: 1024,
+	clientID := "client-multi-file-noflicker"
+
+	// 1. Upload File 1 of 2 (X-File-Index: 0, X-File-Count: 2)
+	data1 := []byte("content of file 1")
+	enc1, _ := e2ee.EncryptChunk(data1, 0, keys.RecvKey[:], "f-101")
+	req1 := httptest.NewRequest("POST", srv.ReceiveURL+"/chunk", bytes.NewReader(enc1))
+	req1.Header.Set("X-File-ID", "f-101")
+	req1.Header.Set("X-Chunk-Index", "0")
+	req1.Header.Set("X-Total-Chunks", "1")
+	req1.Header.Set("X-Total-Bytes", fmt.Sprintf("%d", len(data1)))
+	req1.Header.Set("X-File-Name", "file1.txt")
+	req1.Header.Set("X-File-Index", "0")
+	req1.Header.Set("X-File-Count", "2")
+	req1.Header.Set("X-Client-ID", clientID)
+
+	w1 := httptest.NewRecorder()
+	srv.handleE2EEReceiveChunk(w1, req1)
+	if w1.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for file 1, got %d", w1.Code)
 	}
-	srv.recordCompletedE2EEFile(rf1)
 
-	cs := srv.getClientStatus(clientID)
-	// Should stay "transferring" since only 1 of 2 files is saved
-	if cs.State != "transferring" {
-		t.Fatalf("expected state=transferring when 1 of 2 files is received, got state=%q", cs.State)
+	cs1 := srv.getClientStatus(clientID)
+	// Must stay "transferring" since 1 of 2 files is completed
+	if cs1.State != "transferring" {
+		t.Fatalf("expected state=transferring after file 1 completes in 2-file transfer, got state=%q", cs1.State)
+	}
+	if len(cs1.Files) != 2 || cs1.Files[0].State != "completed" || cs1.Files[1].State != "waiting" {
+		t.Fatalf("unexpected cs1.Files state: %+v", cs1.Files)
 	}
 
-	rf2 := &e2eeReceiveFile{
-		ClientID:   clientID,
-		FinalPath:  "/tmp/file2.bin",
-		TotalBytes: 1024,
-	}
-	srv.recordCompletedE2EEFile(rf2)
+	// 2. Upload File 2 of 2 (X-File-Index: 1, X-File-Count: 2)
+	data2 := []byte("content of file 2")
+	enc2, _ := e2ee.EncryptChunk(data2, 0, keys.RecvKey[:], "f-102")
+	req2 := httptest.NewRequest("POST", srv.ReceiveURL+"/chunk", bytes.NewReader(enc2))
+	req2.Header.Set("X-File-ID", "f-102")
+	req2.Header.Set("X-Chunk-Index", "0")
+	req2.Header.Set("X-Total-Chunks", "1")
+	req2.Header.Set("X-Total-Bytes", fmt.Sprintf("%d", len(data2)))
+	req2.Header.Set("X-File-Name", "file2.txt")
+	req2.Header.Set("X-File-Index", "1")
+	req2.Header.Set("X-File-Count", "2")
+	req2.Header.Set("X-Client-ID", clientID)
 
-	csCompleted := srv.getClientStatus(clientID)
-	if csCompleted.State != "completed" {
-		t.Fatalf("expected state=completed when all 2 files are received, got state=%q", csCompleted.State)
+	w2 := httptest.NewRecorder()
+	srv.handleE2EEReceiveChunk(w2, req2)
+	if w2.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for file 2, got %d", w2.Code)
+	}
+
+	cs2 := srv.getClientStatus(clientID)
+	// Must now be "completed"
+	if cs2.State != "completed" || cs2.Percent != 100 {
+		t.Fatalf("expected state=completed after both files complete, got state=%q percent=%d", cs2.State, cs2.Percent)
+	}
+	if len(cs2.Files) != 2 || cs2.Files[0].State != "completed" || cs2.Files[1].State != "completed" {
+		t.Fatalf("unexpected cs2.Files state: %+v", cs2.Files)
 	}
 }

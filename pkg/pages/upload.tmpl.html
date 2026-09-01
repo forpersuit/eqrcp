@@ -1801,7 +1801,7 @@
                         });
                     }
 
-                    async uploadFile(item, fileId, onProgress) {
+                    async uploadFile(item, fileId, onProgress, fileIdx, fileCount) {
                         var blob = item.type === 'text' ? item.blob : item.file;
                         var fileName = item.name || (item.file && item.file.name) || 'file.dat';
                         var totalBytes = blob.size;
@@ -1843,7 +1843,7 @@
                                 while (chunkQueue.length > 0 && activeWorkers < this.concurrency && !hasError && !isUploadStopped) {
                                     var chunkIdx = chunkQueue.shift();
                                     activeWorkers++;
-                                    this._processChunk(blob, chunkIdx, totalChunks, totalBytes, fileId, fileName)
+                                    this._processChunk(blob, chunkIdx, totalChunks, totalBytes, fileId, fileName, fileIdx, fileCount)
                                         .then((bytesSent) => {
                                             activeWorkers--;
                                             uploadedBytes += bytesSent;
@@ -1857,13 +1857,13 @@
                                         .catch((err) => {
                                             activeWorkers--;
                                             this.consecutiveFailures++;
-                                            if (this.consecutiveFailures >= 2) {
-                                                this.concurrency = MIN_CONCURRENCY; // Weak Wi-Fi fallback
+                                            if (this.concurrency > 1) {
+                                                this.concurrency = 1;
                                             }
                                             chunkRetries[chunkIdx] = (chunkRetries[chunkIdx] || 0) + 1;
                                             if (err && err.retryable !== false && chunkRetries[chunkIdx] <= 3 && !isUploadStopped) {
                                                 chunkQueue.unshift(chunkIdx);
-                                                setTimeout(processNext, 1000);
+                                                setTimeout(processNext, 500);
                                             } else {
                                                 hasError = err;
                                                 reject(err);
@@ -1875,7 +1875,7 @@
                         });
                     }
 
-                    async _processChunk(blob, chunkIdx, totalChunks, totalBytes, fileId, fileName) {
+                    async _processChunk(blob, chunkIdx, totalChunks, totalBytes, fileId, fileName, fileIdx, fileCount) {
                         var start = chunkIdx * CHUNK_SIZE;
                         var end = Math.min(totalBytes, start + CHUNK_SIZE);
                         var slice = blob.slice(start, end);
@@ -1895,6 +1895,8 @@
                                     'X-Total-Chunks': String(totalChunks),
                                     'X-Total-Bytes': String(totalBytes),
                                     'X-File-Name': encodeURIComponent(fileName),
+                                    'X-File-Index': String(fileIdx !== undefined ? fileIdx : 0),
+                                    'X-File-Count': String(fileCount !== undefined ? fileCount : 1),
                                     'X-Client-ID': clientID
                                 },
                                 body: encRes.buffer,
@@ -1956,7 +1958,7 @@
                                         text.textContent = Math.round(percent * 100) + '%';
                                     }
                                 }
-                            });
+                            }, fIdx, filesToUpload.length);
                             if (item.index !== undefined) {
                                 var circle = document.getElementById('progress-circle-' + item.index);
                                 var text = document.getElementById('progress-text-' + item.index);
