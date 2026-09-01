@@ -83,9 +83,9 @@ func StartDRMProber(ctx context.Context, customURL string, interval time.Duratio
 
 	go func() {
 		// Immediate initial probe
+		prev := drmOnline.Load()
 		initialStatus := CheckDRMHealth(customURL)
-		old := drmOnline.Swap(initialStatus)
-		if old != initialStatus && onChange != nil {
+		if prev != initialStatus && onChange != nil {
 			onChange(initialStatus)
 		}
 
@@ -97,8 +97,8 @@ func StartDRMProber(ctx context.Context, customURL string, interval time.Duratio
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
+				prev := drmOnline.Load()
 				current := CheckDRMHealth(customURL)
-				prev := drmOnline.Swap(current)
 				if prev != current && onChange != nil {
 					onChange(current)
 				}
