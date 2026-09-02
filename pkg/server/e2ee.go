@@ -33,23 +33,24 @@ var chunkPool4MB = sync.Pool{
 
 // e2eeReceiveFile tracks the assembly and concurrent write of an incoming encrypted file.
 type e2eeReceiveFile struct {
-	mu             sync.Mutex
-	FileID         string
-	FileName       string
-	TargetDir      string
-	TempPath       string
-	FinalPath      string
-	TotalBytes     int64
-	TotalChunks    uint32
-	ReceivedChunks map[uint32]bool
-	File           *os.File
-	ClientID       string
-	FileIndex      int
-	FileCount      int
-	Completed      bool
-	Cancelled      bool
-	CreatedAt      time.Time
-	ActiveWriters  int
+	mu                sync.Mutex
+	FileID            string
+	FileName          string
+	TargetDir         string
+	TempPath          string
+	FinalPath         string
+	TotalBytes        int64
+	TotalChunks       uint32
+	ReceivedChunks    map[uint32]bool
+	File              *os.File
+	ClientID          string
+	FileIndex         int
+	FileCount         int
+	SessionTotalBytes int64
+	Completed         bool
+	Cancelled         bool
+	CreatedAt         time.Time
+	ActiveWriters     int
 }
 
 // EnableE2EE enables E2EE on the server with the given 32-byte MasterKey and sessionID.
@@ -258,6 +259,11 @@ func (s *Server) handleE2EEReceiveChunk(w http.ResponseWriter, r *http.Request) 
 	}
 
 	totalBytes, _ := strconv.ParseInt(totalBytesStr, 10, 64)
+	totalAllBytesStr := r.Header.Get("X-Total-All-Bytes")
+	if totalAllBytesStr == "" {
+		totalAllBytesStr = r.Header.Get("X-Session-Total-Bytes")
+	}
+	totalAllBytes, _ := strconv.ParseInt(totalAllBytesStr, 10, 64)
 	fileCountStr := r.Header.Get("X-File-Count")
 	fileCount, _ := strconv.Atoi(fileCountStr)
 	fileIdxStr := r.Header.Get("X-File-Index")
@@ -381,19 +387,20 @@ func (s *Server) handleE2EEReceiveChunk(w http.ResponseWriter, r *http.Request) 
 		}
 
 		rf = &e2eeReceiveFile{
-			FileID:         fileID,
-			FileName:       cleanName,
-			TargetDir:      fullTargetDir,
-			TempPath:       tempPath,
-			FinalPath:      finalPath,
-			TotalBytes:     totalBytes,
-			TotalChunks:    totalChunks,
-			ReceivedChunks: make(map[uint32]bool),
-			File:           file,
-			ClientID:       clientID,
-			FileIndex:      fileIdx,
-			FileCount:      fileCount,
-			CreatedAt:      time.Now(),
+			FileID:            fileID,
+			FileName:          cleanName,
+			TargetDir:         fullTargetDir,
+			TempPath:          tempPath,
+			FinalPath:         finalPath,
+			TotalBytes:        totalBytes,
+			TotalChunks:       totalChunks,
+			ReceivedChunks:    make(map[uint32]bool),
+			File:              file,
+			ClientID:          clientID,
+			FileIndex:         fileIdx,
+			FileCount:         fileCount,
+			SessionTotalBytes: totalAllBytes,
+			CreatedAt:         time.Now(),
 		}
 		s.e2eeReceiveFiles[fileID] = rf
 	}
@@ -451,7 +458,9 @@ func (s *Server) handleE2EEReceiveChunk(w http.ResponseWriter, r *http.Request) 
 				totalDone += f.BytesDone
 				totalTotal += f.BytesTotal
 			}
-			if totalTotal == 0 {
+			if rf.SessionTotalBytes > 0 {
+				totalTotal = rf.SessionTotalBytes
+			} else if totalTotal == 0 {
 				totalDone = receivedBytes
 				totalTotal = rf.TotalBytes
 			}
@@ -461,6 +470,12 @@ func (s *Server) handleE2EEReceiveChunk(w http.ResponseWriter, r *http.Request) 
 			state.BytesDone = totalDone
 			state.BytesTotal = totalTotal
 			state.Percent = transferPercent(state.BytesDone, state.BytesTotal)
+			if state.Percent >= 100 && rf.FileCount > 1 && (rf.FileIndex+1) < rf.FileCount {
+				state.Percent = (rf.FileIndex * 100) / rf.FileCount
+				if state.Percent == 0 && receivedBytes > 0 {
+					state.Percent = transferPercent(receivedBytes, rf.TotalBytes) / rf.FileCount
+				}
+			}
 			state.Message = "Receiving encrypted file from connected device."
 		})
 		s.triggerStatusHookThrottled()
@@ -669,7 +684,9 @@ func (s *Server) recordCompletedE2EEFile(rf *e2eeReceiveFile) {
 		totalDone += f.BytesDone
 		totalTotal += f.BytesTotal
 	}
-	if totalTotal == 0 {
+	if rf.SessionTotalBytes > 0 {
+		totalTotal = rf.SessionTotalBytes
+	} else if totalTotal == 0 {
 		totalDone = rf.TotalBytes
 		totalTotal = rf.TotalBytes
 	}
@@ -685,6 +702,13 @@ func (s *Server) recordCompletedE2EEFile(rf *e2eeReceiveFile) {
 		}
 		cs.Current = fmt.Sprintf("Received %s (%d/%d)", filepath.Base(rf.FinalPath), len(cs.SavedFiles), totalExpected)
 		cs.Message = fmt.Sprintf("Received %d of %d files.", len(cs.SavedFiles), totalExpected)
+		// Guard against prematurely reporting 100% when more files are pending
+		if cs.Percent >= 100 && len(cs.SavedFiles) < totalExpected {
+			cs.Percent = (len(cs.SavedFiles) * 100) / totalExpected
+			if cs.Percent >= 100 {
+				cs.Percent = 99
+			}
+		}
 	} else {
 		cs.State = "completed"
 		cs.Percent = 100

@@ -1803,7 +1803,7 @@
                         });
                     }
 
-                    async uploadFile(item, fileId, onProgress, fileIdx, fileCount) {
+                    async uploadFile(item, fileId, onProgress, fileIdx, fileCount, sessionTotalBytes) {
                         var blob = item.type === 'text' ? item.blob : item.file;
                         var fileName = item.name || (item.file && item.file.name) || 'file.dat';
                         var totalBytes = blob.size;
@@ -1845,7 +1845,7 @@
                                 while (chunkQueue.length > 0 && activeWorkers < this.concurrency && !hasError && !isUploadStopped) {
                                     var chunkIdx = chunkQueue.shift();
                                     activeWorkers++;
-                                    this._processChunk(blob, chunkIdx, totalChunks, totalBytes, fileId, fileName, fileIdx, fileCount)
+                                    this._processChunk(blob, chunkIdx, totalChunks, totalBytes, fileId, fileName, fileIdx, fileCount, sessionTotalBytes)
                                         .then((bytesSent) => {
                                             activeWorkers--;
                                             uploadedBytes += bytesSent;
@@ -1875,7 +1875,7 @@
                         });
                     }
 
-                    async _processChunk(blob, chunkIdx, totalChunks, totalBytes, fileId, fileName, fileIdx, fileCount) {
+                    async _processChunk(blob, chunkIdx, totalChunks, totalBytes, fileId, fileName, fileIdx, fileCount, sessionTotalBytes) {
                         var start = chunkIdx * CHUNK_SIZE;
                         var end = Math.min(totalBytes, start + CHUNK_SIZE);
                         var slice = blob.slice(start, end);
@@ -1895,6 +1895,7 @@
                                     'X-Chunk-Index': String(chunkIdx),
                                     'X-Total-Chunks': String(totalChunks),
                                     'X-Total-Bytes': String(totalBytes),
+                                    'X-Total-All-Bytes': String(sessionTotalBytes || totalBytes),
                                     'X-File-Name': encodeURIComponent(fileName),
                                     'X-File-Index': String(fileIdx !== undefined ? fileIdx : 0),
                                     'X-File-Count': String(fileCount !== undefined ? fileCount : 1),
@@ -1977,7 +1978,7 @@
                                         text.textContent = percent + '%';
                                     }
                                 }
-                            }, fIdx, filesToUpload.length);
+                            }, fIdx, filesToUpload.length, totalFilesSize);
                             if (item.index !== undefined) {
                                 var circle = document.getElementById('progress-circle-' + item.index);
                                 var text = document.getElementById('progress-text-' + item.index);
