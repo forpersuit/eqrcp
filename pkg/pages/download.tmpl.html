@@ -407,6 +407,7 @@
                                 <span style="font-size: 14px; color: var(--text-primary); font-weight: 500; overflow: hidden; text-overflow: ellipsis;">{{$element}}</span>
                             </div>
                             <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+                                <button type="button" class="btn-item-save" style="display: none; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 4px; border: 1px solid var(--line); background: var(--surface); color: var(--accent); cursor: pointer;" data-file-index="{{$index}}" data-i18n="btn_save_item">Save</button>
                                 <span class="status-marker" style="font-size: 14px; color: var(--accent); font-weight: 700;"></span>
                                 <span style="font-size: 12px; color: var(--text-secondary); min-width: 60px; text-align: right;">{{index $.Sizes $index}}</span>
                             </div>
@@ -417,6 +418,8 @@
             {{end}}
 
             <div id="action-btn-row" style="display: flex; flex-direction: column; gap: 8px;">
+                <button type="button" class="btn" id="btn-action-save-mobile" style="display: none; background: var(--accent); color: #fff;" data-i18n="btn_save_to_phone">Save to Phone</button>
+                <p id="save-mobile-guidance" style="display: none; font-size: 12px; color: var(--text-secondary); margin: 2px 0 6px 0; text-align: center; line-height: 1.4;"></p>
                 {{if gt .Count 1}}
                     <button type="button" class="btn" id="btn-action-download-zip" onclick="triggerDownload()">Download All (ZIP)</button>
                 {{else}}
@@ -481,7 +484,9 @@
                 'stats_meta_multiple', 'close_hint', 'success_summary_single', 'success_summary_multiple',
                 'success_tips_all', 'limit_header', 'limit_tips', 'btn_upgrade', 'notification_tips',
                 'waiting_status', 'failed_status', 'downloaded_files_title', 'can_open', 'cannot_open',
-                'btn_save_zip', 'zip_contents'
+                'btn_save_zip', 'zip_contents', 'btn_save_to_phone', 'btn_save_all_to_phone',
+                'btn_save_item', 'saving_preparing', 'save_done_tips', 'save_failed_tips',
+                'save_multi_large_tips', 'save_large_desktop_tips', 'save_http_ios_tips'
             ];
 
             var translations = {
@@ -520,7 +525,16 @@
                     confirm_stop_title: '停止传输？',
                     confirm_stop_desc: '停止后当前传输将立即中断并结束本次会话。',
                     btn_cancel: '取消',
-                    btn_confirm_stop: '确认停止'
+                    btn_confirm_stop: '确认停止',
+                    btn_save_to_phone: '保存到手机',
+                    btn_save_all_to_phone: '全部保存到手机',
+                    btn_save_item: '保存',
+                    saving_preparing: '正在准备文件...',
+                    save_done_tips: '已存入系统',
+                    save_failed_tips: '保存失败，点击重试',
+                    save_multi_large_tips: '文件集较大，建议在下方列表逐个保存',
+                    save_large_desktop_tips: '文件较大（≥256MB），建议在电脑端接收保存',
+                    save_http_ios_tips: '（提示：当前为局域网 HTTP 访问，iOS 下无法分享到“文件”；请改用 HTTPS 地址或电脑端下载）'
                 },
                 en: {
                     title: 'Receive File - EQT',
@@ -557,7 +571,16 @@
                     confirm_stop_title: 'Stop Transfer?',
                     confirm_stop_desc: 'Stopping will immediately abort the transfer and end this session.',
                     btn_cancel: 'Cancel',
-                    btn_confirm_stop: 'Confirm Stop'
+                    btn_confirm_stop: 'Confirm Stop',
+                    btn_save_to_phone: 'Save to Phone',
+                    btn_save_all_to_phone: 'Save All to Phone',
+                    btn_save_item: 'Save',
+                    saving_preparing: 'Preparing file...',
+                    save_done_tips: 'Saved to device',
+                    save_failed_tips: 'Save failed, click to retry',
+                    save_multi_large_tips: 'File set is large, please save items individually below',
+                    save_large_desktop_tips: 'File is large (≥256MB), saving on desktop is recommended',
+                    save_http_ios_tips: '(Notice: LAN HTTP access cannot share to Files on iOS; please use HTTPS or desktop)'
                 },
                 ja: {
                     title: 'ファイル受信 - EQT',
@@ -589,7 +612,16 @@
                     confirm_stop_title: '転送を停止しますか？',
                     confirm_stop_desc: '停止すると現在の転送は直ちに中断され、セッションが終了します。',
                     btn_cancel: 'キャンセル',
-                    btn_confirm_stop: '停止を確認'
+                    btn_confirm_stop: '停止を確認',
+                    btn_save_to_phone: '端末に保存',
+                    btn_save_all_to_phone: 'すべて端末に保存',
+                    btn_save_item: '保存',
+                    saving_preparing: 'ファイルを準備中...',
+                    save_done_tips: '端末に保存しました',
+                    save_failed_tips: '保存に失敗しました。再試行してください',
+                    save_multi_large_tips: 'ファイルサイズが大きいため、下のリストから個別に保存してください',
+                    save_large_desktop_tips: 'ファイルが大きいため（≥256MB）、パソコンでの受信を推奨します',
+                    save_http_ios_tips: '（注意: LAN HTTP 経由では iOS の「ファイル」に保存できません。HTTPS または PC をご利用ください）'
                 },
                 ko: {
                     title: '파일 받기 - EQT',
@@ -621,7 +653,16 @@
                     confirm_stop_title: '전송을 중지하시겠습니까?',
                     confirm_stop_desc: '중지하면 현재 전송이 즉시 중단되고 세션이 종료됩니다.',
                     btn_cancel: '취소',
-                    btn_confirm_stop: '중지 확인'
+                    btn_confirm_stop: '중지 확인',
+                    btn_save_to_phone: '기기에 저장',
+                    btn_save_all_to_phone: '모두 기기에 저장',
+                    btn_save_item: '저장',
+                    saving_preparing: '파일 준비 중...',
+                    save_done_tips: '기기에 저장되었습니다',
+                    save_failed_tips: '저장 실패. 다시 시도하려면 클릭하세요',
+                    save_multi_large_tips: '파일 세트가 큽니다. 아래 목록에서 개별적으로 저장하세요',
+                    save_large_desktop_tips: '파일이 큽니다(≥256MB). PC에서 수신하는 것을 권장합니다',
+                    save_http_ios_tips: '(참고: LAN HTTP 환경의 iOS에서는 파일 저장이 제한됩니다. HTTPS 또는 PC를 사용하세요)'
                 },
                 es: {
                     title: 'Recibir Archivo - EQT',
@@ -653,7 +694,16 @@
                     confirm_stop_title: '¿Detener transferencia?',
                     confirm_stop_desc: 'Detener cancelará inmediatamente la transferencia y finalizará la sesión.',
                     btn_cancel: 'Cancelar',
-                    btn_confirm_stop: 'Confirmar detención'
+                    btn_confirm_stop: 'Confirmar detención',
+                    btn_save_to_phone: 'Guardar en el teléfono',
+                    btn_save_all_to_phone: 'Guardar todo en el teléfono',
+                    btn_save_item: 'Guardar',
+                    saving_preparing: 'Preparando archivo...',
+                    save_done_tips: 'Guardado en el dispositivo',
+                    save_failed_tips: 'Error al guardar, haga clic para reintentar',
+                    save_multi_large_tips: 'El conjunto de archivos es grande, guárdelos individualmente abajo',
+                    save_large_desktop_tips: 'El archivo es grande (≥256MB), se recomienda guardar en PC',
+                    save_http_ios_tips: '(Aviso: El acceso LAN HTTP no permite compartir en Archivos en iOS; use HTTPS o PC)'
                 },
                 de: {
                     title: 'Datei bereit zum Herunterladen - EQT',
@@ -685,7 +735,16 @@
                     confirm_stop_title: 'Übertragung stoppen?',
                     confirm_stop_desc: 'Das Stoppen bricht die Übertragung sofort ab und beendet die Sitzung.',
                     btn_cancel: 'Abbrechen',
-                    btn_confirm_stop: 'Stoppen bestätigen'
+                    btn_confirm_stop: 'Stoppen bestätigen',
+                    btn_save_to_phone: 'Auf Smartphone speichern',
+                    btn_save_all_to_phone: 'Alle auf Smartphone speichern',
+                    btn_save_item: 'Speichern',
+                    saving_preparing: 'Datei wird vorbereitet...',
+                    save_done_tips: 'Auf dem Gerät gespeichert',
+                    save_failed_tips: 'Speichern fehlgeschlagen, zum Wiederholen klicken',
+                    save_multi_large_tips: 'Dateigruppe ist groß, bitte unten einzeln speichern',
+                    save_large_desktop_tips: 'Datei ist groß (≥256MB), Empfang am PC empfohlen',
+                    save_http_ios_tips: '(Hinweis: LAN-HTTP-Zugriff kann unter iOS nicht in Dateien speichern; bitte HTTPS oder PC nutzen)'
                 },
                 fr: {
                     title: 'Recevoir le Fichier - EQT',
@@ -717,7 +776,16 @@
                     confirm_stop_title: 'Arrêter le transfert ?',
                     confirm_stop_desc: 'L\'arrêt interrompra immédiatement le transfert et mettra fin à la session.',
                     btn_cancel: 'Annuler',
-                    btn_confirm_stop: 'Confirmer l\'arrêt'
+                    btn_confirm_stop: 'Confirmer l\'arrêt',
+                    btn_save_to_phone: 'Enregistrer sur le téléphone',
+                    btn_save_all_to_phone: 'Tout enregistrer sur le téléphone',
+                    btn_save_item: 'Enregistrer',
+                    saving_preparing: 'Préparation du fichier...',
+                    save_done_tips: 'Enregistré sur l\'appareil',
+                    save_failed_tips: 'Échec de l\'enregistrement, cliquez pour réessayer',
+                    save_multi_large_tips: 'Fichiers volumineux, veuillez les enregistrer individuellement ci-dessous',
+                    save_large_desktop_tips: 'Fichier volumineux (≥256MB), réception sur PC recommandée',
+                    save_http_ios_tips: '(Note : L\'accès LAN HTTP ne permet pas d\'enregistrer dans Fichiers sur iOS ; utilisez HTTPS ou PC)'
                 }
             };
 
@@ -987,14 +1055,21 @@
                 return dbPromise;
             }
 
-            async function putChunk(fileId, chunkIndex, dataUint8) {
+            async function putChunk(fileId, chunkIndex, dataUint8, sessionId) {
                 var db = await openDB();
                 if (!db) return false;
                 return new Promise(function(resolve) {
                     try {
                         var tx = db.transaction(STORE_NAME, 'readwrite');
                         var store = tx.objectStore(STORE_NAME);
-                        store.put({ id: fileId + '_' + chunkIndex, fileId: fileId, chunkIndex: chunkIndex, data: dataUint8 });
+                        store.put({
+                            id: fileId + '_' + chunkIndex,
+                            fileId: fileId,
+                            chunkIndex: chunkIndex,
+                            data: dataUint8,
+                            sessionId: sessionId || '',
+                            createdAt: Date.now()
+                        });
                         tx.oncomplete = function() { resolve(true); };
                         tx.onerror = function() { resolve(false); };
                     } catch (e) { resolve(false); }
@@ -1031,22 +1106,281 @@
                 try {
                     var tx = db.transaction(STORE_NAME, 'readwrite');
                     var store = tx.objectStore(STORE_NAME);
-                    for (var idx = 0; idx < totalChunks; idx++) {
-                        store.delete(fileId + '_' + idx);
+                    if (typeof totalChunks === 'number' && totalChunks > 0) {
+                        for (var idx = 0; idx < totalChunks; idx++) {
+                            store.delete(fileId + '_' + idx);
+                        }
+                    } else {
+                        var req = store.openCursor();
+                        req.onsuccess = function(e) {
+                            var cursor = e.target.result;
+                            if (cursor) {
+                                if (cursor.value && cursor.value.fileId === fileId) {
+                                    cursor.delete();
+                                }
+                                cursor.continue();
+                            }
+                        };
                     }
+                } catch (e) {}
+            }
+
+            async function pruneExpired(maxAgeMs, exemptSessionId) {
+                var db = await openDB();
+                if (!db) return;
+                var now = Date.now();
+                var limit = now - (maxAgeMs || (24 * 3600 * 1000));
+                try {
+                    var tx = db.transaction(STORE_NAME, 'readwrite');
+                    var store = tx.objectStore(STORE_NAME);
+                    var req = store.openCursor();
+                    req.onsuccess = function(e) {
+                        var cursor = e.target.result;
+                        if (cursor) {
+                            var val = cursor.value;
+                            if (val) {
+                                var isOld = val.createdAt && val.createdAt < limit;
+                                var isDifferentSession = exemptSessionId && val.sessionId && val.sessionId !== exemptSessionId && isOld;
+                                if (isOld || isDifferentSession) {
+                                    cursor.delete();
+                                }
+                            }
+                            cursor.continue();
+                        }
+                    };
                 } catch (e) {}
             }
 
             return {
                 putChunk: putChunk,
                 assembleBlob: assembleBlob,
-                clearFile: clearFile
+                clearFile: clearFile,
+                pruneExpired: pruneExpired
             };
         })();
 
+        var LARGE_FILE_THRESHOLD = 256 * 1024 * 1024; // 256MB threshold for IndexedDB streaming
+        var MULTI_FILE_SHARE_THRESHOLD = 150 * 1024 * 1024; // 150MB aggregated budget for multi-file share
+        var currentSessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
+        var sessionPendingFiles = new Map();
+        var activeSavedBlobUrl = null;
+        var isSaving = false;
+
+        function getMimeType(fileName) {
+            if (!fileName) return 'application/octet-stream';
+            var ext = fileName.split('.').pop().toLowerCase();
+            var mimeMap = {
+                'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png', 'gif': 'image/gif',
+                'webp': 'image/webp', 'svg': 'image/svg+xml', 'pdf': 'application/pdf',
+                'txt': 'text/plain', 'html': 'text/html', 'htm': 'text/html', 'json': 'application/json',
+                'zip': 'application/zip', 'tar': 'application/x-tar', 'gz': 'application/gzip',
+                'mp4': 'video/mp4', 'webm': 'video/webm', 'mp3': 'audio/mpeg', 'wav': 'audio/wav',
+                'doc': 'application/msword', 'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'xls': 'application/vnd.ms-excel', 'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            };
+            return mimeMap[ext] || 'application/octet-stream';
+        }
+
+        function determineStoreType(fileSize) {
+            return (fileSize >= LARGE_FILE_THRESHOLD && !!window.indexedDB) ? 'idb' : 'memory';
+        }
+
+        function canUseWebShare(fileList) {
+            if (!window.isSecureContext) return false;
+            if (!navigator.share || !navigator.canShare) return false;
+            try {
+                return navigator.canShare({ files: fileList });
+            } catch (e) {
+                return false;
+            }
+        }
+
+        function finalizeDescriptor(descriptor) {
+            if (!descriptor) return;
+            descriptor.status = 'delivered';
+            if (descriptor.storeType === 'idb') {
+                EqtChunkStorage.clearFile(descriptor.fileId, descriptor.totalChunks);
+            } else if (descriptor.storeType === 'memory') {
+                descriptor.chunks = null;
+            }
+            sessionPendingFiles.delete(descriptor.fileId);
+        }
+
+        function triggerBlobDownload(blobOrFile, fileName) {
+            if (activeSavedBlobUrl) {
+                try { URL.revokeObjectURL(activeSavedBlobUrl); } catch (e) {}
+                activeSavedBlobUrl = null;
+            }
+            var blobUrl = URL.createObjectURL(blobOrFile);
+            activeSavedBlobUrl = blobUrl;
+            var a = document.createElement('a');
+            a.href = blobUrl;
+            a.download = fileName || (blobOrFile.name || 'download.dat');
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(function() {
+                if (a.parentNode) a.parentNode.removeChild(a);
+            }, 1000);
+        }
+
+        async function assembleDescriptorFile(descriptor) {
+            if (!descriptor) return null;
+            var blob = null;
+            if (descriptor.storeType === 'idb') {
+                blob = await EqtChunkStorage.assembleBlob(descriptor.fileId, descriptor.totalChunks, descriptor.mimeType);
+            } else if (descriptor.chunks && descriptor.chunks.length > 0) {
+                blob = new Blob(descriptor.chunks, { type: descriptor.mimeType });
+            }
+            if (!blob) return null;
+            return new File([blob], descriptor.fileName, { type: descriptor.mimeType });
+        }
+
+        async function deliverDesktopAll() {
+            var descriptors = Array.from(sessionPendingFiles.values());
+            for (var i = 0; i < descriptors.length; i++) {
+                var d = descriptors[i];
+                var file = await assembleDescriptorFile(d);
+                if (file) {
+                    triggerBlobDownload(file, d.fileName);
+                    finalizeDescriptor(d);
+                }
+            }
+        }
+
+        async function saveToDevice(targetFileIndex) {
+            if (isSaving) return;
+            var dict = EqtI18n.getDict();
+            var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+            var targetDescriptors = [];
+            if (typeof targetFileIndex === 'number' && targetFileIndex >= 0) {
+                var targetFileMeta = filesList[targetFileIndex];
+                if (targetFileMeta) {
+                    for (var d of sessionPendingFiles.values()) {
+                        if (d.fileName === targetFileMeta.name || d.fileId === ('f-' + targetFileIndex)) {
+                            targetDescriptors.push(d);
+                            break;
+                        }
+                    }
+                }
+            } else {
+                for (var desc of sessionPendingFiles.values()) {
+                    targetDescriptors.push(desc);
+                }
+            }
+
+            if (targetDescriptors.length === 0) {
+                console.warn("[SaveToDevice] No pending files found for delivery.");
+                return;
+            }
+
+            // 交付前置校验 (R14 / R17)
+            var hasIDB = targetDescriptors.some(function(d) { return d.storeType === 'idb'; });
+            var totalBytes = targetDescriptors.reduce(function(sum, d) { return sum + (d.fileSize || 0); }, 0);
+
+            var guidanceEl = document.getElementById('save-mobile-guidance');
+            if (hasIDB) {
+                if (guidanceEl) {
+                    guidanceEl.style.display = 'block';
+                    guidanceEl.textContent = dict.save_large_desktop_tips || 'File is large (≥256MB), saving on desktop is recommended';
+                }
+                if (targetDescriptors.length > 1) {
+                    return;
+                }
+            } else if (targetDescriptors.length > 1 && totalBytes > MULTI_FILE_SHARE_THRESHOLD) {
+                if (guidanceEl) {
+                    guidanceEl.style.display = 'block';
+                    guidanceEl.textContent = dict.save_multi_large_tips || 'File set is large, please save items individually below';
+                }
+                return;
+            }
+
+            isSaving = true;
+            var saveBtn = document.getElementById('btn-action-save-mobile');
+            var originalBtnText = saveBtn ? saveBtn.textContent : '';
+            if (saveBtn) {
+                saveBtn.disabled = true;
+                saveBtn.textContent = dict.saving_preparing || 'Preparing file...';
+            }
+
+            try {
+                var assembledFiles = [];
+                for (var i = 0; i < targetDescriptors.length; i++) {
+                    var curDesc = targetDescriptors[i];
+                    curDesc.status = 'delivering';
+                    var file = await assembleDescriptorFile(curDesc);
+                    if (file) {
+                        assembledFiles.push({ descriptor: curDesc, file: file });
+                    }
+                }
+
+                if (assembledFiles.length === 0) {
+                    throw new Error("Failed to assemble files for delivery");
+                }
+
+                var filesToShare = assembledFiles.map(function(item) { return item.file; });
+
+                if (canUseWebShare(filesToShare)) {
+                    try {
+                        await navigator.share({ files: filesToShare });
+                        assembledFiles.forEach(function(item) {
+                            finalizeDescriptor(item.descriptor);
+                        });
+                        if (guidanceEl) {
+                            guidanceEl.style.display = 'block';
+                            guidanceEl.textContent = dict.save_done_tips || 'Saved to device';
+                        }
+                    } catch (shareErr) {
+                        if (shareErr && (shareErr.name === 'AbortError' || (shareErr.message && shareErr.message.indexOf('canceled') !== -1))) {
+                            assembledFiles.forEach(function(item) {
+                                item.descriptor.status = 'pending_save';
+                            });
+                        } else {
+                            console.error("[WebShare] share error: ", shareErr);
+                            assembledFiles.forEach(function(item) {
+                                item.descriptor.status = 'pending_save';
+                            });
+                            if (guidanceEl) {
+                                guidanceEl.style.display = 'block';
+                                guidanceEl.textContent = dict.save_failed_tips || 'Save failed, click to retry';
+                            }
+                        }
+                    }
+                } else {
+                    assembledFiles.forEach(function(item) {
+                        triggerBlobDownload(item.file, item.descriptor.fileName);
+                        if (item.descriptor.storeType === 'memory') {
+                            item.descriptor.chunks = null;
+                        }
+                        finalizeDescriptor(item.descriptor);
+                    });
+                    if (guidanceEl) {
+                        guidanceEl.style.display = 'block';
+                        if (!window.isSecureContext && isIOS) {
+                            guidanceEl.textContent = dict.save_http_ios_tips || '(Notice: LAN HTTP access cannot share to Files on iOS; please use HTTPS or desktop)';
+                        } else {
+                            guidanceEl.textContent = dict.save_done_tips || 'Download triggered';
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error("[DeliveryController] save error: ", err);
+                targetDescriptors.forEach(function(d) { d.status = 'pending_save'; });
+                if (guidanceEl) {
+                    guidanceEl.style.display = 'block';
+                    guidanceEl.textContent = dict.save_failed_tips || 'Save failed, click to retry';
+                }
+            } finally {
+                isSaving = false;
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.textContent = originalBtnText;
+                }
+            }
+        }
+
         var EqtE2EEDownloader = (function() {
             var CHUNK_SIZE = 4 * 1024 * 1024; // 4MB
-            var LARGE_FILE_THRESHOLD = 256 * 1024 * 1024; // 256MB threshold for IndexedDB streaming
 
             function getMasterKeyFromLocation() {
                 var hash = window.location.hash || '';
@@ -1067,6 +1401,7 @@
                     this.pendingTasks = {};
                     this.reqIdCounter = 1;
                     this.activeControllers = new Set();
+                    this.activeFileId = null;
                 }
 
                 async init() {
@@ -1127,7 +1462,9 @@
                     var fileName = fileInfo.file_name || 'download.dat';
                     var totalChunks = fileInfo.total_chunks || 1;
                     var totalBytes = fileInfo.file_size || 0;
-                    var useIndexedDB = totalBytes >= LARGE_FILE_THRESHOLD && window.indexedDB;
+                    var storeType = determineStoreType(totalBytes);
+                    var useIndexedDB = storeType === 'idb';
+                    this.activeFileId = fileId;
 
                     // iOS Safari notice for large files >= 1GB in non-secure HTTP
                     var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
@@ -1174,8 +1511,7 @@
                         downloadedBytes += chunkData.byteLength;
 
                         if (useIndexedDB) {
-                            // Stream chunk directly into IndexedDB to protect mobile RAM
-                            await EqtChunkStorage.putChunk(fileId, idx, chunkData);
+                            await EqtChunkStorage.putChunk(fileId, idx, chunkData, currentSessionId);
                         } else {
                             decryptedChunks.push(chunkData);
                         }
@@ -1187,30 +1523,20 @@
                         throw new Error("Transfer manually stopped");
                     }
 
-                    var finalBlob = null;
-                    if (useIndexedDB) {
-                        finalBlob = await EqtChunkStorage.assembleBlob(fileId, totalChunks);
-                        // Clean up disk store immediately after assembly
-                        await EqtChunkStorage.clearFile(fileId, totalChunks);
-                    } else {
-                        finalBlob = new Blob(decryptedChunks, { type: 'application/octet-stream' });
-                    }
-
-                    if (!finalBlob) {
-                        throw new Error('Failed to assemble downloaded file');
-                    }
-
-                    var blobUrl = URL.createObjectURL(finalBlob);
-                    var a = document.createElement('a');
-                    a.href = blobUrl;
-                    a.download = fileName;
-                    document.body.appendChild(a);
-                    a.click();
-                    setTimeout(() => {
-                        document.body.removeChild(a);
-                        URL.revokeObjectURL(blobUrl);
-                    }, 10000);
-                    return true;
+                    // 注册待交付描述符（原子注册完整落位文件，R7 / R16）
+                    var descriptor = {
+                        fileId: fileId,
+                        fileName: fileName,
+                        fileSize: totalBytes,
+                        mimeType: getMimeType(fileName),
+                        totalChunks: totalChunks,
+                        storeType: storeType,
+                        chunks: useIndexedDB ? null : decryptedChunks,
+                        status: 'pending_save'
+                    };
+                    sessionPendingFiles.set(fileId, descriptor);
+                    this.activeFileId = null;
+                    return descriptor;
                 }
 
                 abort() {
@@ -1218,6 +1544,10 @@
                         try { c.abort(); } catch (e) {}
                     }
                     this.activeControllers.clear();
+                    if (this.activeFileId) {
+                        try { EqtChunkStorage.clearFile(this.activeFileId); } catch (e) {}
+                        this.activeFileId = null;
+                    }
                     this.destroy();
                 }
 
@@ -1323,14 +1653,57 @@
                 return false;
             }
             isCompleted = true;
+            var isMobileUA = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
             var fillEl = document.getElementById('download-progress-fill');
             var percentEl = document.getElementById('download-progress-percent');
             var statusEl = document.getElementById('download-progress-status');
             var actionBtnRow = document.getElementById('action-btn-row');
+            var saveMobileBtn = document.getElementById('btn-action-save-mobile');
+            var downloadZipBtn = document.getElementById('btn-action-download-zip');
+            var downloadSingleBtn = document.getElementById('btn-action-download');
+            var guidanceEl = document.getElementById('save-mobile-guidance');
+            var dict = EqtI18n.getDict();
+
             if (fillEl) fillEl.style.width = '100%';
             if (percentEl) percentEl.innerText = '100%';
             if (statusEl) statusEl.innerText = '🔒 传输完成 (已端到端解密)';
             if (actionBtnRow) actionBtnRow.style.display = 'flex';
+
+            if (!isMobileUA) {
+                // 桌面端：直接自动下载全部
+                deliverDesktopAll();
+                if (downloadZipBtn) downloadZipBtn.style.display = 'none';
+                if (downloadSingleBtn) downloadSingleBtn.style.display = 'none';
+                if (saveMobileBtn) saveMobileBtn.style.display = 'none';
+            } else {
+                // 移动端：进入 decrypted-pending-save 态
+                if (downloadZipBtn) downloadZipBtn.style.display = 'none';
+                if (downloadSingleBtn) downloadSingleBtn.style.display = 'none';
+                if (saveMobileBtn) {
+                    saveMobileBtn.style.display = 'block';
+                    if (filesToFetch.length > 1) {
+                        saveMobileBtn.setAttribute('data-i18n', 'btn_save_all_to_phone');
+                        saveMobileBtn.textContent = dict.btn_save_all_to_phone || 'Save All to Phone';
+                    } else {
+                        saveMobileBtn.setAttribute('data-i18n', 'btn_save_to_phone');
+                        saveMobileBtn.textContent = dict.btn_save_to_phone || 'Save to Phone';
+                    }
+                }
+                var itemSaveBtns = document.querySelectorAll('.btn-item-save');
+                itemSaveBtns.forEach(function(btn) { btn.style.display = 'inline-block'; });
+
+                if (guidanceEl) {
+                    var hasIDB = Array.from(sessionPendingFiles.values()).some(function(d) { return d.storeType === 'idb'; });
+                    var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+                    if (hasIDB) {
+                        guidanceEl.style.display = 'block';
+                        guidanceEl.textContent = dict.save_large_desktop_tips || 'File is large (≥256MB), saving on desktop is recommended';
+                    } else if (!window.isSecureContext && isIOS) {
+                        guidanceEl.style.display = 'block';
+                        guidanceEl.textContent = dict.save_http_ios_tips || '(Notice: LAN HTTP access cannot share to Files on iOS; please use HTTPS or desktop)';
+                    }
+                }
+            }
             return true;
         }
 
@@ -1686,6 +2059,19 @@
                 activeDownloadPipeline = null;
             }
 
+            // 清理已注册待交付文件与对应 IDB 分块 (R8)
+            sessionPendingFiles.forEach(function(d) {
+                if (d.storeType === 'idb') {
+                    try { EqtChunkStorage.clearFile(d.fileId, d.totalChunks); } catch (e) {}
+                }
+            });
+            sessionPendingFiles.clear();
+
+            if (activeSavedBlobUrl) {
+                try { URL.revokeObjectURL(activeSavedBlobUrl); } catch (e) {}
+                activeSavedBlobUrl = null;
+            }
+
             // 1. Stop status polling to release backend active device count
             if (intervalId) {
                 clearInterval(intervalId);
@@ -1870,6 +2256,40 @@
                 if (modal && modal.style.display !== 'none') {
                     closeStopConfirmModal();
                 }
+            }
+        });
+
+        // 绑定移动端保存按钮与列表项事件 (R13: 使用 addEventListener 声明式绑定)
+        document.addEventListener('DOMContentLoaded', function() {
+            var saveMobileBtn = document.getElementById('btn-action-save-mobile');
+            if (saveMobileBtn) {
+                saveMobileBtn.addEventListener('click', function() {
+                    saveToDevice();
+                });
+            }
+
+            var itemSaveBtns = document.querySelectorAll('.btn-item-save');
+            itemSaveBtns.forEach(function(btn) {
+                btn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    var idx = parseInt(btn.getAttribute('data-file-index'), 10);
+                    saveToDevice(idx);
+                });
+            });
+
+            // 页面加载启动时清扫过期孤儿 chunk (24小时以上)
+            EqtChunkStorage.pruneExpired(24 * 3600 * 1000, currentSessionId);
+        });
+
+        // 页面切换后台清理逻辑 (严格豁免 pending_save 活跃数据，R12)
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'hidden') {
+                if (activeSavedBlobUrl) {
+                    try { URL.revokeObjectURL(activeSavedBlobUrl); } catch (e) {}
+                    activeSavedBlobUrl = null;
+                }
+                // 仅清除非当前活跃 session 的过期孤儿 chunk (1小时以上)
+                EqtChunkStorage.pruneExpired(60 * 60 * 1000, currentSessionId);
             }
         });
 

@@ -1,6 +1,6 @@
 # EQT 移动端 E2EE 下载：保存触发与内存受控实现方案
 
-> 本文整合了「开发排查意见」、「审查复核（R1-R5）」以及基于第一性原理与 Web 运行机制的深度分析，形成最终指导落地的完整架构与实现规范。
+> **文档定位**：本文档兼作本特性的完整架构设计规范与**开发实施进度跟踪看板（Progress Tracker / Single Source of Truth）**，全面整合了「开发排查意见」、「审查复核（R1-R18）」以及基于第一性原理与 Web 运行机制的深度分析。
 >
 > **第二轮补充审查决议（R6-R13）已并入**：基准提交 `4ccc9195`（2026-09-02）。第二轮审查以「实测代码现状 + Web 平台机制第一性原理」双基线复核，重点补足 Secure Context 前提、share 回退时序、停止路径孤儿、双阈值关系等正文缺口；决议对照与现状复核勘误见 §四 末。
 >
@@ -273,43 +273,42 @@ graph TD
 
 ---
 
-## 六、分阶段落地实施计划
+## 六、实施进度看板与任务清单 (Implementation Progress Tracker)
 
 ### Phase 1：完成态 UI 与保存按钮（移动端适配）
-- 在 `pkg/pages/download.tmpl.html` 完成态区域新增主操作按钮【📥 保存到手机】（多文件时为【📥 全部保存到手机】）与说明文案，绑定 `data-i18n`；
-- 文件列表条目行内新增【📥 保存】按钮（带 `stopPropagation` 隔离）；
-- 本方案**新增**的保存按钮统一使用 `addEventListener` 进行声明式绑定（存量内联 `onclick` 触发逻辑保持不动，范围界定见 R13）；
-- 移动端与桌面端 UA 判定分流：移动端完成时展示按钮，桌面端保持现状自动触发并隐藏按钮。
+- [x] **Task 1.1**: 在 `pkg/pages/download.tmpl.html` 完成态区域新增主操作按钮【📥 保存到手机】（多文件时为【📥 全部保存到手机】）与说明文案容器，设置 `data-i18n`；
+- [x] **Task 1.2**: 在多文件列表条目行内新增【📥 保存】按钮（带 `stopPropagation` 隔离）；
+- [x] **Task 1.3**: 本方案**新增**的保存按钮统一使用 `addEventListener` 进行声明式绑定（存量内联 `onclick` 触发逻辑保持不动，范围界定见 R13）；
+- [x] **Task 1.4**: 移动端与桌面端 UA 判定分流：移动端完成时展示保存主按钮与单项按钮，桌面端保持现状自动触发并隐藏保存按钮。
 
 ### Phase 2：Web Share API 集成、延迟组装与防抖
-- `EqtChunkStorage` 改造：
+- [x] **Task 2.1**: `EqtChunkStorage` 改造：
+  - 增加 `sessionId` 与 `createdAt` 存储维度；
   - 100% 解密完成时不自动调用 `assembleBlob`；
   - 在用户点击事件触发时执行 `assembleBlob` → `new File(...)`；
   - 增加 `pruneExpired(maxAgeMs)` 清扫函数；
-- 实现 `saveToDevice(fileIndex?)` 核心控制逻辑：
-  - 支持小集合批量 share（≤150MB）与单文件独立 share；
-  - 封装 `navigator.canShare` / `navigator.share`，适配 MIME 类型；
-  - 静默捕获 `AbortError`；
-  - **预判分流直走 `a.download`**（Secure Context + `canShare` 不满足时同步直下，share 流程内不异常改道，见 R10）并管理 `activeSavedBlobUrl` 单例；
+- [x] **Task 2.2**: 建立 `PendingFileDescriptor` 与 `sessionPendingFiles` 会话级待交付注册表（R7 / R15 / R16）；
+- [x] **Task 2.3**: 实现 `saveToDevice(fileIndex?)` 核心控制逻辑：
+  - 交付前置校验（R14 / R17）：含 IDB 大文件提示建议桌面端保存、超 150MB 多文件提示列表单存、全部 memory 且 ≤150MB 走批量/单文件交付；
+  - 同步预判分流（R6 / R10）：封装 `canUseWebShare`，满足走 `share`，不满足同步走 `a.download` 并管理 `activeSavedBlobUrl` 单例；
+  - `navigator.share` 静默捕获 `AbortError` 并回退 `pending_save` 态；
+  - 成功交付时统一调用 `finalizeDescriptor` 进行收尾释放（R15 / R18）；
   - `isSaving` 状态锁与按钮加载态（“⏳ 正在准备文件...”）。
 
 ### Phase 3：多语言（i18n）与清理闭环
-- 新增国际化词条（7 种语言）：`btn_save_to_phone`, `btn_save_all_to_phone`, `btn_save_item`, `saving_preparing`, `save_success_tips`, `save_multi_large_tips` 等；
-- 在会话启动、显式停止及 `visibilitychange` 时接入存储清理与 URL 释放。
+- [x] **Task 3.1**: 新增国际化词条（7 种语言完整对齐）：`btn_save_to_phone`, `btn_save_all_to_phone`, `btn_save_item`, `saving_preparing`, `save_done_tips`, `save_failed_tips`, `save_multi_large_tips`, `save_large_desktop_tips`, `save_http_ios_tips`；
+- [x] **Task 3.2**: 闭环清理逻辑：
+  - 会话启动前执行 `pruneExpired(24 * 3600 * 1000)`；
+  - 停止/失败路径对已写入 chunk 即时调用 `clearFile`（R8）；
+  - `visibilitychange` 触发时轻量清理，严格豁免 `pending_save` 活跃数据（R12）。
 
 ### Phase 4：多维度测试与验证
-1. **Chrome DevTools MCP E2E 仿真测试**：
-   - 模拟 iOS Safari / Android 移动设备 UA 与视口；
-   - 验证 100% 解密后 UI 切换至 `decrypted-pending-save` 态、主按钮与单项按钮正常渲染；
-   - 验证点击后预判分流：Secure Context + `canShare` 下走 `share`、否则同步 `a.download`（无 share→download 异常改道），及防抖状态切换；
-2. **模板语法与代码质量门禁**：
-   - 运行 `TestTemplateJavaScriptSyntax` 与 `go test ./...`，确保无语法与回归错误；
-3. **真机兼容性验证清单**：
-   - iOS Safari：测试存入“文件”App（Files）、用户取消操作、单文件与多文件小集；
-   - **iOS http/https 双变体（R6）**：https 下验证 share 通路；http（局域网 IP）下验证按钮预判降级直走 `a.download`、提示文案出现，“无法保存”记录为预期平台限制而非缺陷；
-   - Android Chrome：测试分享至系统/下载管理器、大文件内存占用；**记录多文件批量 share 到下载管理器/文件 App 的实际目标行为（R11）**；
-   - **大文件（≥256MB，R9）**：移动端点击保存瞬间的内存峰值与 GC 停顿，UI“建议桌面端”标注是否如期出现；
-   - **停止/失败残留（R8）**：下载中途点停止或制造 chunk 失败，验证 IndexedDB 分块被即时清理；
-   - **后台切换（R12）**：解密完成未保存时切后台再回，验证 pending 数据未被误清；
-   - 桌面浏览器：验证自动下载体验零改动回归。
+- [x] **Task 4.1**: **模板语法与代码质量门禁**：
+  - 运行 `TestTemplateJavaScriptSyntax` 与 `go test ./...`，确保无语法与回归错误；
+- [ ] **Task 4.2**: **Chrome DevTools MCP E2E 仿真测试**：
+  - 模拟 iOS Safari / Android 移动设备 UA 与视口；
+  - 验证 100% 解密后 UI 切换至 `decrypted-pending-save` 态、主按钮与单项按钮正常渲染；
+  - 验证点击后预判分流：Secure Context + `canShare` 下走 `share`、否则同步 `a.download`，及防抖状态切换；
+- [ ] **Task 4.3**: **真机与多模式验证**：
+  - 桌面浏览器验证自动下载体验零改动回归；明文下载模式零改动回归。
 
