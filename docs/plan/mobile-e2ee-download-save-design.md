@@ -286,7 +286,7 @@ graph TD
 
 | 审查意见项 | 核心关切与技术风险 | 最终技术决议与落地方案 |
 | :--- | :--- | :--- |
-| **R25: R24 完成态按钮收尾未按成功门控（`835ef142` 遗留）** | 交付按钮收尾块（`:1371-1395`）位于 share 成功/失败 if-else **之后无条件执行**：share 被用户取消（AbortError）或抛「其他 Error」时，`catch (shareErr)` 已将 status 复位 `pending_save`、失败分支提示「保存失败，请点击重试」，但随后仍落入收尾块把**条目按钮 `disabled` + 标 ✓**（`:1372-1380`）——文件实际未交付却呈现「已保存」，且提示语的「重试」目标按钮已被禁用，与 Mermaid N/S 分支「保持页面与按钮就绪、可再点」及 R15/R18「失败保留数据供再次点击重试」直接冲突 | 引入 `deliveredOk` 标志，仅在两处成功点置位：share `resolve`（`:1330-1332`）与 `a.download` 全量交付循环（`:1354-1360`）；按钮收尾块整体以 `deliveredOk` 门控。AbortError / 其他 Error 分支保持主按钮与条目按钮可用（沿用 `finally` 现有还原逻辑），成功收尾（`finalizeDescriptor` + R24 禁用/✓）仅在真正交付后执行 |
+| **R25: R24 完成态按钮收尾未按成功门控（`835ef142` 遗留）** | 交付按钮收尾块（`:1371-1395`）位于 share 成功/失败 if-else **之后无条件执行**：share 被用户取消（AbortError）或抛「其他 Error」时，`catch (shareErr)` 已将 status 复位 `pending_save`、失败分支提示「保存失败，请点击重试」，但随后仍落入收尾块把**条目按钮 `disabled` + 标 ✓**（`:1372-1380`）——文件实际未交付却呈现「已保存」，且提示语的「重试」目标按钮已被禁用，与 Mermaid N/S 分支「保持页面与按钮就绪、可再点」及 R15/R18「失败保留数据供再次点击重试」直接冲突 | **已落实**：引入 `deliveredOk` 标志，仅在两处成功点置位：share `resolve` 与 `a.download` 全量交付完成；按钮收尾块整体以 `deliveredOk` 门控。AbortError / 其他 Error 分支保持主按钮与条目按钮可用，成功收尾（`finalizeDescriptor` + R24 禁用/✓）仅在真正交付后执行 |
 
 ---
 

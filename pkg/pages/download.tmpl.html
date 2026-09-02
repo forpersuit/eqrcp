@@ -1323,6 +1323,7 @@
                 }
 
                 var filesToShare = assembledFiles.map(function(item) { return item.file; });
+                var deliveredOk = false;
 
                 if (canUseWebShare(filesToShare)) {
                     try {
@@ -1330,6 +1331,7 @@
                         assembledFiles.forEach(function(item) {
                             finalizeDescriptor(item.descriptor);
                         });
+                        deliveredOk = true;
                         if (guidanceEl) {
                             guidanceEl.style.display = 'block';
                             guidanceEl.textContent = dict.save_done_tips || 'Saved to device';
@@ -1358,6 +1360,7 @@
                         }
                         finalizeDescriptor(item.descriptor);
                     });
+                    deliveredOk = true;
                     if (guidanceEl) {
                         guidanceEl.style.display = 'block';
                         if (!window.isSecureContext && isIOS) {
@@ -1368,30 +1371,32 @@
                     }
                 }
 
-                // 更新交付完成后的按钮状态 (R24)
-                if (typeof targetFileIndex === 'number') {
-                    var singleBtn = document.querySelector('.btn-item-save[data-file-index="' + targetFileIndex + '"]');
-                    if (singleBtn) {
-                        singleBtn.disabled = true;
-                        singleBtn.textContent = '✓';
-                        singleBtn.style.opacity = '0.6';
-                        singleBtn.style.cursor = 'default';
+                // 仅在真实成功交付后更新按钮状态 (R24 / R25)
+                if (deliveredOk) {
+                    if (typeof targetFileIndex === 'number') {
+                        var singleBtn = document.querySelector('.btn-item-save[data-file-index="' + targetFileIndex + '"]');
+                        if (singleBtn) {
+                            singleBtn.disabled = true;
+                            singleBtn.textContent = '✓';
+                            singleBtn.style.opacity = '0.6';
+                            singleBtn.style.cursor = 'default';
+                        }
                     }
-                }
-                if (sessionPendingFiles.size === 0) {
-                    if (saveBtn) {
-                        saveBtn.disabled = true;
-                        saveBtn.textContent = dict.save_done_tips || 'Saved to device';
-                        saveBtn.style.opacity = '0.6';
-                        saveBtn.style.cursor = 'default';
+                    if (sessionPendingFiles.size === 0) {
+                        if (saveBtn) {
+                            saveBtn.disabled = true;
+                            saveBtn.textContent = dict.save_done_tips || 'Saved to device';
+                            saveBtn.style.opacity = '0.6';
+                            saveBtn.style.cursor = 'default';
+                        }
+                        var allItemBtns = document.querySelectorAll('.btn-item-save');
+                        allItemBtns.forEach(function(btn) {
+                            btn.disabled = true;
+                            btn.textContent = '✓';
+                            btn.style.opacity = '0.6';
+                            btn.style.cursor = 'default';
+                        });
                     }
-                    var allItemBtns = document.querySelectorAll('.btn-item-save');
-                    allItemBtns.forEach(function(btn) {
-                        btn.disabled = true;
-                        btn.textContent = '✓';
-                        btn.style.opacity = '0.6';
-                        btn.style.cursor = 'default';
-                    });
                 }
             } catch (err) {
                 console.error("[DeliveryController] save error: ", err);
