@@ -407,7 +407,6 @@
                                 <span style="font-size: 14px; color: var(--text-primary); font-weight: 500; overflow: hidden; text-overflow: ellipsis;">{{$element}}</span>
                             </div>
                             <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
-                                <button type="button" class="btn-item-save" style="display: none; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 4px; border: 1px solid var(--line); background: var(--surface); color: var(--accent); cursor: pointer;" data-file-index="{{$index}}" data-i18n="btn_save_item">Save</button>
                                 <span class="status-marker" style="font-size: 14px; color: var(--accent); font-weight: 700;"></span>
                                 <span style="font-size: 12px; color: var(--text-secondary); min-width: 60px; text-align: right;">{{index $.Sizes $index}}</span>
                             </div>
@@ -1424,14 +1423,6 @@
 
                 // 仅在真实成功交付后更新按钮状态 (R24 / R25 / R33)
                 if (deliveredOk) {
-                    if (typeof targetFileIndex === 'number') {
-                        var singleBtn = document.querySelector('.btn-item-save[data-file-index="' + targetFileIndex + '"]');
-                        if (singleBtn) {
-                            singleBtn.disabled = false; // 局域网模式下允许再次点击重新打开
-                            singleBtn.textContent = '✓';
-                            singleBtn.style.opacity = '0.85';
-                        }
-                    }
                     if (isCompleted && sessionPendingFiles.size === 0) {
                         if (saveBtn) {
                             saveBtn.disabled = true;
@@ -1439,13 +1430,6 @@
                             saveBtn.style.opacity = '0.6';
                             saveBtn.style.cursor = 'default';
                         }
-                        var allItemBtns = document.querySelectorAll('.btn-item-save');
-                        allItemBtns.forEach(function(btn) {
-                            btn.disabled = true;
-                            btn.textContent = '✓';
-                            btn.style.opacity = '0.6';
-                            btn.style.cursor = 'default';
-                        });
                     }
                 }
             } catch (err) {
@@ -1740,13 +1724,6 @@
                             triggerBlobDownload(file, desc.fileName);
                         }
                         finalizeDescriptor(desc);
-                    } else if (isMobileUA && desc) {
-                        // 移动端：单文件解密完成即时激活该条目保存按钮，支持边解边存以提前释放堆内存 (R26 渐进就绪)
-                        var actualFileIdx = (targetIndex !== undefined && targetIndex >= 0) ? targetIndex : fIdx;
-                        var itemBtn = document.querySelector('.btn-item-save[data-file-index="' + actualFileIdx + '"]');
-                        if (itemBtn) {
-                            itemBtn.style.display = 'inline-block';
-                        }
                     }
 
                     completedBytesAll += (fileInfo.file_size || 0);
@@ -1810,39 +1787,31 @@
                 if (downloadSingleBtn) downloadSingleBtn.style.display = 'none';
                 if (saveMobileBtn) saveMobileBtn.style.display = 'none';
             } else {
-                // 移动端：进入 decrypted-pending-save 态
+                // 移动端：进入 decrypted-pending-save 态并立即自动触发保存弹窗 (R35)
                 if (downloadZipBtn) downloadZipBtn.style.display = 'none';
                 if (downloadSingleBtn) downloadSingleBtn.style.display = 'none';
                 if (saveMobileBtn) {
                     saveMobileBtn.style.display = 'block';
-                    if (sessionPendingFiles.size === 0) {
-                        saveMobileBtn.disabled = true;
-                        saveMobileBtn.textContent = dict.save_done_tips || 'Saved to device';
-                        saveMobileBtn.style.opacity = '0.6';
-                        saveMobileBtn.style.cursor = 'default';
-                    } else if (filesToFetch.length > 1) {
-                        saveMobileBtn.setAttribute('data-i18n', 'btn_save_all_to_phone');
-                        saveMobileBtn.textContent = dict.btn_save_all_to_phone || 'Save All to Phone';
-                    } else {
-                        saveMobileBtn.setAttribute('data-i18n', 'btn_save_to_phone');
-                        saveMobileBtn.textContent = dict.btn_save_to_phone || 'Save to Phone';
-                    }
+                    saveMobileBtn.setAttribute('data-i18n', 'btn_save_zip');
+                    saveMobileBtn.textContent = dict.btn_save_zip || 'Save ZIP Archive';
                 }
-                filesToFetch.forEach(function(fInfo, fIdx) {
-                    var actualIdx = (targetIndex !== undefined && targetIndex >= 0) ? targetIndex : fIdx;
-                    var itemBtn = document.querySelector('.btn-item-save[data-file-index="' + actualIdx + '"]');
-                    if (itemBtn) itemBtn.style.display = 'inline-block';
-                });
 
                 if (guidanceEl) {
                     var hasIDB = Array.from(sessionPendingFiles.values()).some(function(d) { return d.storeType === 'idb'; });
                     if (hasIDB) {
                         guidanceEl.style.display = 'block';
                         guidanceEl.textContent = dict.save_large_desktop_tips || 'File is large (≥256MB), saving on desktop is recommended';
-                    } else if (!window.isSecureContext && filesToFetch.length > 1) {
+                    } else {
                         guidanceEl.style.display = 'block';
-                        guidanceEl.textContent = dict.save_multi_large_tips || 'File set is large, please save items individually below';
+                        guidanceEl.textContent = dict.save_zip_http_tips || 'Download triggered. If no prompt appears, tap the button to save.';
                     }
+                }
+
+                // R35: 全部传输解密完成后，立即自动触发对应浏览器的下载保存弹窗！
+                try {
+                    await saveToDevice();
+                } catch (autoErr) {
+                    console.log("[AutoSave] Auto save prompt suppressed by browser policy, user can click button manually: ", autoErr);
                 }
             }
             return true;
