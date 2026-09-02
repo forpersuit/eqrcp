@@ -271,7 +271,22 @@ graph TD
 | **R23: 组装数 < 目标数时静默部分交付** | 组装循环（`:1307-1319`）跳过 assemble 返回 null 的项，仅在**全部**为空时才抛错；目标 3 项中 1 项 idb 分块缺失 → 只交付 2 项并提示「成功」，缺失项 status 停在 `:1310` 置入的 `delivering` 永不复位 | assemble 完成后校验 `assembledFiles.length === targetDescriptors.length`：不等则整体按失败处理（全部回退 `pending_save`，含未组装项；in-app `save_failed_tips`；不交付子集），与 R16「交付永不组装不完整文件」一致 |
 | **R24: 交付成功后按钮残留与空点击静默** | share / `a.download` 成功后 `finalizeDescriptor` 清空 pending，但主按钮与条目保存按钮仍可点；再点命中 `:1272` 的 `targetDescriptors.length === 0` 仅 `console.warn`，用户无任何反馈（死按钮） | 交付完成后若 `sessionPendingFiles.size === 0`，禁用主按钮并隐藏/禁用条目按钮（或主按钮文案改「已保存」）；成功/失败提示统一走 `#save-mobile-guidance` in-app 文案，不做 alert |
 
-**第五轮附带说明（低危，记录不作整改）**：状态轮询 `status.state === 'completed'` 分支（`:1931-1936`）与 E2EE 内联完成（`:1655`）在极窄窗口可能先后进入 `showCompletedUI`，随后 E2EE 内联 UI 覆盖之——两者均以 `isCompleted` 防重入、无状态冲突，仅可能产生短暂视觉抖动，本轮不动。
+**第五轮附带说明（低危，记录不作整改）**：状态轮询 `status.state === 'completed'` 分支（`:1981-1986`）与 E2EE 内联完成（`:1707`）在极窄窗口可能先后进入 `showCompletedUI`，随后 E2EE 内联 UI 覆盖之——两者均以 `isCompleted` 防重入、无状态冲突，仅可能产生短暂视觉抖动，本轮不动。
+
+### 第五轮二次复核（实施提交 `835ef142` 落地核对）
+
+> 第五轮决议的整改提交 `835ef142`（2026-09-02，`download.tmpl.html` +158/-47，仅改模板与本文档，未动版本号——属未发布特性收尾修复）已核对：R19/R20/R21/R22/R23 全部按决议落地，`TestTemplateJavaScriptSyntax` 实测通过；R24 落地留有 R25 缺陷待整改。行号为提交后基线。
+
+- **R19 ✓**：桌面 UA 在解密循环内逐文件 `assembleDescriptorFile → triggerBlobDownload → finalizeDescriptor`（`:1682-1688`），`deliverDesktopAll` 已删除——恢复逐文件即时交付与原内存峰值，进度语义不变；
+- **R20 ✓**：`hasIDB` 恒 `return`（`:1286-1291`），删除单文件放行分支；同集合 memory 成员条目保存时 hasIDB=false 正常走预判分流；
+- **R21 ✓**：解密循环整体 try/catch，任一处失败先 `pipeline.abort()`（按 `activeFileId` 即清 IDB 半截分块并 `destroy` worker）再上抛（`:1698-1705`）；manual-stop 二次 abort 幂等无害；
+- **R22 ✓**：`pruneExpired` 谓词改为「有 `exemptSessionId` → 仅删 `isOld` 且非豁免 session；无 → 删 `isOld`」，并显式豁免 `sessionPendingFiles` 内 fileId 与 `activeDownloadPipeline.activeFileId`（`:1143-1157`）；
+- **R23 ✓**：组装文件数 ≠ 目标数时整体回退 `pending_save` 并抛错（`:1319-1322`），杜绝静默部分交付；
+- **R24 ✗ 遗留**：见 R25。
+
+| 审查意见项 | 核心关切与技术风险 | 最终技术决议与落地方案 |
+| :--- | :--- | :--- |
+| **R25: R24 完成态按钮收尾未按成功门控（`835ef142` 遗留）** | 交付按钮收尾块（`:1371-1395`）位于 share 成功/失败 if-else **之后无条件执行**：share 被用户取消（AbortError）或抛「其他 Error」时，`catch (shareErr)` 已将 status 复位 `pending_save`、失败分支提示「保存失败，请点击重试」，但随后仍落入收尾块把**条目按钮 `disabled` + 标 ✓**（`:1372-1380`）——文件实际未交付却呈现「已保存」，且提示语的「重试」目标按钮已被禁用，与 Mermaid N/S 分支「保持页面与按钮就绪、可再点」及 R15/R18「失败保留数据供再次点击重试」直接冲突 | 引入 `deliveredOk` 标志，仅在两处成功点置位：share `resolve`（`:1330-1332`）与 `a.download` 全量交付循环（`:1354-1360`）；按钮收尾块整体以 `deliveredOk` 门控。AbortError / 其他 Error 分支保持主按钮与条目按钮可用（沿用 `finally` 现有还原逻辑），成功收尾（`finalizeDescriptor` + R24 禁用/✓）仅在真正交付后执行 |
 
 ---
 
