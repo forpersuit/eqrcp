@@ -97,6 +97,8 @@ export function SetRightClickIntegrationEnabled(arg1:boolean):Promise<main.Deskt
 
 export function Share(arg1:Array<string>):Promise<main.AgentStatus>;
 
+export function ShowInFolder(arg1:string):Promise<void>;
+
 export function ShutdownAgent():Promise<void>;
 
 export function StopChat():Promise<void>;

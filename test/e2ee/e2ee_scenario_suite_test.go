@@ -313,6 +313,130 @@ func TestScenario2_E2EEReceiveMultiFileCumulativeProgress(t *testing.T) {
 }
 
 // =========================================================================
+// 场景 2b：E2EE 模式 Receive（单文件上传）带 X-Total-All-Bytes 中间进度严格递增验证
+// =========================================================================
+func TestScenario2b_E2EEReceiveSingleFileIntermediateProgress(t *testing.T) {
+	filePath, fileData := getTestFile(t, "eqt-multiple-files-20260627-205709.zip", 10*1024*1024)
+	expectedHash := dataSHA256(fileData)
+	totalBytes := int64(len(fileData))
+
+	t.Logf("[Scenario 2b] Single-file receive test: %s (%d bytes, SHA256: %s)",
+		filepath.Base(filePath), totalBytes, expectedHash)
+
+	tempDir := t.TempDir()
+	recOutDir := filepath.Join(tempDir, "rec_out_s2b")
+	if err := os.MkdirAll(recOutDir, 0755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+
+	cfg := config.Config{
+		Interface: "lo",
+		Bind:      "127.0.0.1",
+		Port:      0,
+		KeepAlive: true,
+	}
+	srv, err := server.New(&cfg)
+	if err != nil {
+		t.Fatalf("server.New failed: %v", err)
+	}
+	defer srv.Shutdown()
+	if err := srv.ReceiveTo(recOutDir); err != nil {
+		t.Fatalf("ReceiveTo failed: %v", err)
+	}
+
+	masterKey, _ := e2ee.GenerateMasterKey()
+	sessionID := "sc2b-session-single"
+	_ = srv.EnableE2EE(masterKey, sessionID)
+	keys, _ := e2ee.DeriveKeys(masterKey)
+
+	clientID := "client-scenario-2b-uploader"
+	fileID := "f-sc2b-single"
+
+	chunkSize := server.E2EEChunkPlaintextSize // 4MB
+	totalChunks := (len(fileData) + chunkSize - 1) / chunkSize
+	if totalChunks < 3 {
+		t.Fatalf("expected at least 3 chunks for intermediate progress assertion, got %d", totalChunks)
+	}
+
+	lastPercent := -1
+	var lastBytesDone int64 = -1
+
+	for chunkIdx := 0; chunkIdx < totalChunks; chunkIdx++ {
+		start := chunkIdx * chunkSize
+		end := start + chunkSize
+		if end > len(fileData) {
+			end = len(fileData)
+		}
+		rawSlice := fileData[start:end]
+		encChunk, err := e2ee.EncryptChunk(rawSlice, uint32(chunkIdx), keys.RecvKey[:], fileID)
+		if err != nil {
+			t.Fatalf("EncryptChunk failed: %v", err)
+		}
+
+		req := httptest.NewRequest("POST", srv.ReceiveURL+"/chunk", bytes.NewReader(encChunk))
+		req.Header.Set("X-Client-ID", clientID)
+		req.Header.Set("X-File-ID", fileID)
+		req.Header.Set("X-File-Name", filepath.Base(filePath))
+		req.Header.Set("X-Chunk-Index", fmt.Sprintf("%d", chunkIdx))
+		req.Header.Set("X-Total-Chunks", fmt.Sprintf("%d", totalChunks))
+		req.Header.Set("X-Total-Bytes", fmt.Sprintf("%d", totalBytes))
+		req.Header.Set("X-Total-All-Bytes", fmt.Sprintf("%d", totalBytes))
+		req.Header.Set("X-File-Index", "0")
+		req.Header.Set("X-File-Count", "1")
+
+		w := httptest.NewRecorder()
+		srv.HandleE2EEReceiveChunk(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("upload chunk %d failed: %d %s", chunkIdx, w.Code, w.Body.String())
+		}
+
+		cState := srv.GetClientStatus(clientID)
+		t.Logf("[Scenario 2b] Uploaded chunk %d/%d -> BytesDone: %d / %d (%d%%), State: %s",
+			chunkIdx+1, totalChunks, cState.BytesDone, cState.BytesTotal, cState.Percent, cState.State)
+
+		// Critical assertions:
+		// 1. BytesDone must be > 0 on every chunk and strictly increasing
+		if cState.BytesDone <= lastBytesDone {
+			t.Fatalf("CRITICAL BUG: Single-file receive BytesDone (%d) did not increase from last (%d) on chunk %d!",
+				cState.BytesDone, lastBytesDone, chunkIdx)
+		}
+		// 2. Percent must be strictly non-decreasing and > 0 on first chunk
+		if chunkIdx == 0 && cState.Percent <= 0 {
+			t.Fatalf("CRITICAL BUG: Single-file receive Percent is %d after chunk 0! Expected > 0.", cState.Percent)
+		}
+		if cState.Percent < lastPercent {
+			t.Fatalf("CRITICAL BUG: Single-file receive Percent rolled back from %d%% to %d%% on chunk %d!",
+				lastPercent, cState.Percent, chunkIdx)
+		}
+		// 3. Intermediate chunks must be transferring state
+		if chunkIdx < totalChunks-1 {
+			if cState.State != "transferring" {
+				t.Fatalf("expected state=transferring on chunk %d, got %s", chunkIdx, cState.State)
+			}
+		} else {
+			if cState.State != "completed" || cState.Percent != 100 {
+				t.Fatalf("expected state=completed and percent=100 on last chunk, got state=%s percent=%d",
+					cState.State, cState.Percent)
+			}
+		}
+
+		lastBytesDone = cState.BytesDone
+		lastPercent = cState.Percent
+	}
+
+	// Verify decrypted disk hash
+	savedFiles := srv.GetClientStatus(clientID).SavedFiles
+	if len(savedFiles) != 1 {
+		t.Fatalf("expected 1 saved file, got %d: %+v", len(savedFiles), savedFiles)
+	}
+	diskHash, err := fileSHA256(savedFiles[0])
+	if err != nil || diskHash != expectedHash {
+		t.Fatalf("saved single file hash mismatch: err=%v, expected=%s, got=%s", err, expectedHash, diskHash)
+	}
+	t.Logf("[Scenario 2b] PASS: Single-file receive intermediate progress and SHA256 integrity 100%% verified.")
+}
+
+// =========================================================================
 // 场景 3：E2EE 传输中途主动 Stop、防绕过与物理临时文件即时清理验证
 // =========================================================================
 func TestScenario3_E2EEManualStopAndAntiBypassLifecycle(t *testing.T) {

@@ -460,6 +460,9 @@ func (s *Server) handleE2EEReceiveChunk(w http.ResponseWriter, r *http.Request) 
 			}
 			if rf.SessionTotalBytes > 0 {
 				totalTotal = rf.SessionTotalBytes
+				if totalDone == 0 {
+					totalDone = receivedBytes
+				}
 			} else if totalTotal == 0 {
 				totalDone = receivedBytes
 				totalTotal = rf.TotalBytes
@@ -686,6 +689,9 @@ func (s *Server) recordCompletedE2EEFile(rf *e2eeReceiveFile) {
 	}
 	if rf.SessionTotalBytes > 0 {
 		totalTotal = rf.SessionTotalBytes
+		if totalDone == 0 {
+			totalDone = rf.TotalBytes
+		}
 	} else if totalTotal == 0 {
 		totalDone = rf.TotalBytes
 		totalTotal = rf.TotalBytes

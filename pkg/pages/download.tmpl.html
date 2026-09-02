@@ -447,8 +447,8 @@
                 <h3 style="margin: 0 0 8px 0; font-size: 17px; font-weight: 700; color: var(--text-primary, #1a202c);" data-i18n="confirm_stop_title">Stop Transfer?</h3>
                 <p style="margin: 0 0 20px 0; font-size: 13px; color: var(--text-secondary, #718096); line-height: 1.4;" data-i18n="confirm_stop_desc">Stopping will immediately abort the transfer and end this session.</p>
                 <div style="display: flex; gap: 10px; justify-content: center;">
-                    <button type="button" class="btn" id="btn-stop-cancel" onclick="closeStopConfirmModal()" style="flex: 1; background: var(--bg-hover, #edf2f7); color: var(--text-primary, #2d3748); border: 1px solid var(--line, #cbd5e0); min-height: 40px; margin: 0;" data-i18n="btn_cancel">Cancel</button>
-                    <button type="button" class="btn btn-danger" id="btn-stop-confirm" onclick="executeStopSharing()" style="flex: 1; background: #e53e3e; color: #fff; border: none; min-height: 40px; margin: 0;" data-i18n="btn_confirm_stop">Stop</button>
+                    <button type="button" class="btn" id="btn-stop-cancel" style="flex: 1; background: var(--bg-hover, #edf2f7); color: var(--text-primary, #2d3748); border: 1px solid var(--line, #cbd5e0); min-height: 40px; margin: 0;" data-i18n="btn_cancel">Cancel</button>
+                    <button type="button" class="btn btn-danger" id="btn-stop-confirm" style="flex: 1; background: #e53e3e; color: #fff; border: none; min-height: 40px; margin: 0;" data-i18n="btn_confirm_stop">Stop</button>
                 </div>
             </div>
         </div>
@@ -1659,6 +1659,8 @@
             if (modal) {
                 modal.style.display = 'flex';
                 applyLanguage();
+                var cancelBtn = document.getElementById('btn-stop-cancel');
+                if (cancelBtn) cancelBtn.focus();
             } else {
                 executeStopSharing();
             }
@@ -1668,6 +1670,10 @@
             var modal = document.getElementById('stop-confirm-modal');
             if (modal) {
                 modal.style.display = 'none';
+            }
+            var stopBtn = document.getElementById('btn-action-stop');
+            if (stopBtn && stopBtn.style.display !== 'none') {
+                stopBtn.focus();
             }
         }
 
@@ -1848,6 +1854,24 @@
 
             applyLanguage();
         }
+
+        var btnStopCancel = document.getElementById('btn-stop-cancel');
+        if (btnStopCancel) {
+            btnStopCancel.addEventListener('click', closeStopConfirmModal);
+        }
+        var btnStopConfirm = document.getElementById('btn-stop-confirm');
+        if (btnStopConfirm) {
+            btnStopConfirm.addEventListener('click', executeStopSharing);
+        }
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                var modal = document.getElementById('stop-confirm-modal');
+                if (modal && modal.style.display !== 'none') {
+                    closeStopConfirmModal();
+                }
+            }
+        });
 
         // Auto start status polling on page load to register client activity immediately
         startStatusPolling();
