@@ -7,6 +7,8 @@
 > **第三轮细化审查决议（R14-R16）已并入**：基准提交 `20fb37e2`（2026-09-02）。聚焦 PendingFileDescriptor 契约收尾（失败回态/交付后回收/边界一致性）、含 IDB 文件的交付前置校验、局域网 HTTP 提示文案修订；决议对照见 §四 末。
 >
 > **第四轮复核审查决议（R17-R18）已并入**：基准提交 `3751e315`（2026-09-02）。对象为该提交重写的 Mermaid「交付前置校验」三分支与 §三.2 `finalizeDescriptor` 伪代码，复核「分支互斥/穷尽性 + 单文件豁免」与「chunks 释放时机 vs 回退重试」两组一致性；决议对照见 §四 末。
+>
+> **第五轮实施复核审查决议（R19-R24）已并入**：基准提交 `ba77f451`（2026-09-02，实施提交：`download.tmpl.html` +489/-70，版本 v1.36.47，Task 1.1-4.1 勾选完成）。对象为**实施代码与设计正文/既有决议的逐条一致性复核**（R14/R17/R18 落地核对）；确认 5 项实质偏差（桌面端内存与交付时序回归、含 IDB 单文件仍尝试交付、失败路径资源未闭合、hidden prune 豁免失效、静默部分交付）与 1 项低危体验附注，决议对照见 §四 末。
 
 ---
 
@@ -255,6 +257,21 @@ graph TD
 | :--- | :--- | :--- |
 | **R17: 交付前置校验三分支互斥/穷尽缺陷** | ①memory 单文件在 150MB<size<256MB（或 ≥256MB 但环境无 IndexedDB）时三条出边均不命中（非 idb / 非多文件 / 超 150MB）→ 流程死路，R9 决议「单文件 share 不受 150MB 聚合预算限制」的豁免在改写中丢失（旧版「单文件 或 总量≤150MB」实为正确表达）；②混合集（含任一 IDB 大文件 + memory 小文件且总量可能 >150MB）会同时命中 H1/H2，无优先级则行为不定 | F 分支改为按优先级互斥的三类：`含任一 IDB（≥256MB）→ H1`、`全部 memory 且 多文件总量 > 150MB → H2`、`全部 memory 且（单文件 或 总量 ≤ 150MB）→ G`；单文件（storeType memory）无论大小一律走 G，恢复 R9 豁免；混合集整体不进 share，其中 memory 成员保留列表逐条保存（已落实 §三 整体架构 Mermaid 与判定说明） |
 | **R18: 组装即置 null 与 share 取消回退重试冲突** | §三.2「GC 保护：组装后立即将 chunks 置 null」与 N/S「AbortError/失败回退 pending_save、保留 chunks 供重试」自相矛盾——memory 文件若组装即置 null，share 被取消回退 pending_save 后再次点击已无 chunks 可组装，重试落空；且多数引擎 `new Blob(parts)` 持分片引用而非拷贝，组装后置 null 并不即时释放底层字节，原措辞属过度承诺 | chunks 释放时机随交付分支：`a.download` 分支在 `a.click()` 后即可置 null（OS 已接管）；`navigator.share` 分支保留至结果 settle，成功才由 `finalizeDescriptor` 置 null，AbortError/失败保留数据供重试；GC 措辞降级为「尽力而为解引用」，真实释放依赖 Blob/URL 回收（已落实 §三.2 GC 保护） |
+
+### 第五轮实施复核审查决议（R19-R24）
+
+> 第五轮审查基准提交 `ba77f451`（2026-09-02，实施提交）。对象为实施代码（`download.tmpl.html`）与设计正文/既有决议的逐条一致性复核：确认 R15/R16/R18 契约按文档落地（storeType 单一真源、原子注册、share 保留至 settle、`a.download` 分支点击后置 null、manual-stop R8 清理均正确），另发现 5 项实质偏差与 1 项低危体验附注。模板语法门禁 `TestTemplateJavaScriptSyntax` 实测通过。
+
+| 审查意见项 | 核心关切与技术风险 | 最终技术决议与落地方案 |
+| :--- | :--- | :--- |
+| **R19: 桌面端多文件交付时序与内存回归** | 新 `downloadFile` 逐文件把明文 chunk 注册进 `sessionPendingFiles`（memory 型整持明文）；桌面端不再「各文件 100% 即下载」，而是整批解密完才由 `deliverDesktopAll()`（`:1674`，**未 await**）一次性交付。对比父提交 `ba77f451^`:1191-1213（`downloadFile` 内每文件 assemble→`a.click`→`clearFile`），桌面端内存峰值由「单文件」退化为「全部 memory 文件之和」（多文件大集合可 GB 级驻留），且首个原生下载对话框延迟到整批解密完成后——违背 §一.4「桌面端零回退 / 保持现状体验」 | 桌面 UA（循环前一次性判定）在 `downloadFile` 返回 descriptor 后**立即**组装交付并 `finalizeDescriptor`（恢复旧逐文件释放与时序，descriptor 即用即销）；仅移动 UA 在整批解密完成后累积 `sessionPendingFiles`。`deliverDesktopAll` 需 `await` 且对 assemble 返回 null 的项走 in-app 失败反馈而非静默跳过 |
+| **R20: 含 IDB 单文件移动端仍尝试交付（R14 落地缺口）** | `saveToDevice` 的 hasIDB 分支（`:1282-1289`）仅在 `targetDescriptors.length > 1` 时 return；单 ≥256MB 纯 idb 集（移动端最常见「一键保存大文件」，主按钮 Save 与条目 Save 均命中）仍落入「组装 → share/`a.download`」路径，重新走进 R14 判定的「点击→整读 IDB 超激活窗→NotAllowedError→提示重试」死循环并冒 OOM | 与 Mermaid H1 / §三.4 R14 对齐：`hasIDB` **恒** return（展示「建议桌面端保存」引导后不再尝试组装交付），删除 `length === 1` 的放行分支；同集合 memory 成员不受影响（条目保存时该项集合 hasIDB=false，正常走预判分流） |
+| **R21: E2EE 中途失败资源未闭合（R8 落地缺口）** | chunk HTTP / 解密错误在 `triggerDownload/triggerDownloadItem` 的 `.catch` 仅调 `showE2EEDownloadError`（`:1716`/`:1729`）；`pipeline.destroy()` 只达于成功路径（`:1650`）或手动停止（abort `:2058`）。失败后 worker 未 terminate、`activeDownloadPipeline` 悬留（再次下载新建 Pipeline 覆盖引用 → 每次失败泄漏一个 worker 直至页面卸载），`activeFileId` 未清使该文件 IDB 半截分块孤儿化（仅依赖 prune 兜底） | `startE2EEDownload` 用 try/catch 包住解密循环：任一处抛错先 `pipeline.abort()`（内建按 `activeFileId` 即时 `clearFile` + destroy worker）再上抛；`.catch` 只负责 UI 呈现。注：R16 原子注册已保证失败文件不注册半成品 descriptor，本项仅闭合存储与线程资源 |
+| **R22: hidden-prune 的 session 豁免失效** | `pruneExpired` 删除谓词 `if (isOld || isDifferentSession)`（`:1142-1146`），而 `isDifferentSession` 已含 `isOld` ⇒ 整体等价于 `isOld`：session 豁免是死代码，任何超阈值记录（含当前 session）均被删。`:2292` 的 1h hidden prune 会把解密中慢网大文件（单文件耗时 >1h）的早段分块、以及已完成未交付的 pending idb 文件一并清除，与 R12「活跃 pending 在 hidden 触发下不得删除」及 `:2291` 注释声称的行为相悖；被清后 `assembleBlob` 返回 null → 保存静默失败 | 谓词修为「有 `exemptSessionId` → 仅删 `sessionId !== exemptSessionId && isOld`；无 → 删 `isOld`」，并把 `sessionPendingFiles` 内 fileId 与正在下载的 activeFileId 显式纳入豁免集合。交付成功的当前 session 记录均已由 `finalizeDescriptor` 即清，豁免当前 session 不造成泄漏 |
+| **R23: 组装数 < 目标数时静默部分交付** | 组装循环（`:1307-1319`）跳过 assemble 返回 null 的项，仅在**全部**为空时才抛错；目标 3 项中 1 项 idb 分块缺失 → 只交付 2 项并提示「成功」，缺失项 status 停在 `:1310` 置入的 `delivering` 永不复位 | assemble 完成后校验 `assembledFiles.length === targetDescriptors.length`：不等则整体按失败处理（全部回退 `pending_save`，含未组装项；in-app `save_failed_tips`；不交付子集），与 R16「交付永不组装不完整文件」一致 |
+| **R24: 交付成功后按钮残留与空点击静默** | share / `a.download` 成功后 `finalizeDescriptor` 清空 pending，但主按钮与条目保存按钮仍可点；再点命中 `:1272` 的 `targetDescriptors.length === 0` 仅 `console.warn`，用户无任何反馈（死按钮） | 交付完成后若 `sessionPendingFiles.size === 0`，禁用主按钮并隐藏/禁用条目按钮（或主按钮文案改「已保存」）；成功/失败提示统一走 `#save-mobile-guidance` in-app 文案，不做 alert |
+
+**第五轮附带说明（低危，记录不作整改）**：状态轮询 `status.state === 'completed'` 分支（`:1931-1936`）与 E2EE 内联完成（`:1655`）在极窄窗口可能先后进入 `showCompletedUI`，随后 E2EE 内联 UI 覆盖之——两者均以 `isCompleted` 防重入、无状态冲突，仅可能产生短暂视觉抖动，本轮不动。
 
 ---
 
