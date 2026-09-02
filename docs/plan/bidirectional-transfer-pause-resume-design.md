@@ -170,3 +170,31 @@ sequenceDiagram
    - Auto-stop 不提前触发；
    - 恢复传输 -> 校验从 50% 断点单调递增至 100%，无 rollback，最终文件 SHA256 完整无损。
 3. **Chrome E2E 仿真测试**：通过 `chrome-devtools-mcp` 验证移动端与桌面端交互按钮与 UI 响应。
+
+---
+
+## 六、第二轮审查复核：现状代码对齐与待修订缺口 (Review Round-2)
+
+> 本节为 v2.0（`b185ed64`）修订版的独立复核意见，均已对照实际代码核实。开发下一轮修订正文时逐条裁决：采纳并入正文 / 驳回并说明理由。**行号为撰写时核对起点，落地以函数名定位为准。**
+
+### R1. GUI → 移动端下行通道：下载页已具备、上传页缺失（涉及 §2.1 / §2.2 / 场景 B）
+- **核实**：`download.tmpl.html` 页载即 `startStatusPolling()`（:1877），1200ms 周期轮询 `/status?client_id=`（:1426-1586）；E2EE 下载期间轮询**仍持续**（仅进度容器渲染被 `isE2EEDownloadActive` 跳过，:1470）。但响应解析目前**不消费 command 字段**（:1454-1563 仅读 `state` / `downloadedItems` / `percent`）。
+- **结论**：E2EE Share（拉）的 GUI 远程暂停可**复用现成 /status 轮询作为下行通道**，无需新建 SSE/长轮询——§2.2 的"长轮询/SSE 推送"表述应改写为"复用现有 /status 轮询注入 command + 下载端解析后挂起拉取循环"。
+- **反例**：`upload.tmpl.html`（E2EE receive / tus 上传）全文**无 /status 轮询**（仅 `chunk_status` 断点查询，:1857）→ GUI 远程暂停 Receive **非即时**，只能靠"下一个 chunk POST 命中 423"挂起（最终一致，生效延迟 ≤ 一个 chunk 周期间隙）。若产品要求 upload 即时暂停，Phase 2 需给 upload 页补轻量轮询，或把"延迟至下一 chunk 边界生效"写进产品语义——二选一并显式记录，避免实现期歧义。
+
+### R2. 明文 Share 暂停的实现前提缺口（架构级，涉及 §2.4）
+- **核实**：明文下载由 `window.location.href` / iframe `?download=1` 触发**浏览器原生下载接管**（`download.tmpl.html`:1382/:1389/:1404），前端**没有**可中断的 ReadableStream；服务端 Range（`server.go:2781-2798`）服务于原生下载，前端无字节级控制权。
+- **缺口**：§2.4 "暂停 = 前端中断 ReadableStream、恢复 = `Range: bytes=${bytesDone}-`" **与明文现状下载形态不符**。落地前必须先行决策明文下载的消费形态：
+  - **方案 A（真断点续传）**：明文下载改为**前端可控流式拉取**（fetch + 既有 Range + 本地落盘）。代价：放弃原生下载管理整合，需为大文件本地落盘（可复用 E2EE 的 IndexedDB/分块落盘经验）。
+  - **方案 B（浏览器原生续传）**：明文 pause/resume 交由浏览器原生下载任务自行处理（无标准 API 可前端暂停；仅部分浏览器对服务端 Range 响应可续）。
+- **建议**：若不做方案 A，明文 Share 的"暂停"实际只能表达为"服务端停投 + 前端下次重下"，并非真正断点续传，§2.4 应如实降级表述。该形态决策应**先于 Phase 2**，以设计决策形式在文档留痕。
+
+### R3. paused 与 30 分钟无活动回收的语义冲突必须显式化（涉及 §2.1 / 四.1 / 四.3）
+- **矛盾点**：§四.1 "Auto-Stop 跳过 paused，服务不得自动退出" 与 §2.1 / §四.3 "30 分钟无活动 `StopClientTransfer` 回收 .tmp 并关句柄" 并存，但**未声明 30 分钟计时对 paused 客户端是否同样走动**。若不暂停计时，paused 超 30 分钟 → 资源被回收 → 用户之后点【继续】落空（会话与断点一并消失）。
+- **补强**：状态机显式加入 `paused --(30min 无活动)--> expired` 转移；移动端【继续】遇 404/410 时提示"会话已超时回收，需重新传输"，禁止静默转圈（对齐既有 410 → `showCompletedUI` 语义，`download.tmpl.html`:1565-1567）。
+
+### R4. State 与 ControlCommand 双字段职责边界（一句话固化，涉及 Phase 1）
+- `ControlCommand` 是**一次性瞬时指令**：被下一个 chunk 请求 / 轮询**消费后即清空**（场景 C resume 已置 `""`）；GUI 渲染**只读 `State`**。防止残留指令被 GUI 当状态渲染出假"暂停中"。Phase 1 状态机文档应写明"指令消费即清、渲染以 State 为唯一源"。
+
+### R5. 测试补强：多文件 pause/resume 不得重传已完成文件（涉及 Phase 4）
+- Scenario 6 现仅覆盖**单文件** 50%→100%。E2EE receive 已有 per-file `ReceivedChunks` 去重 + 已完成文件由 `recordCompletedE2EEFile` 封口（`BytesTotal == BytesDone`）。建议 Scenario 6 扩展为**多文件**：file0 已完成 + file1 50% 处暂停 → resume 后断言 file0 不重传（块去重命中、状态不回滚）、file1 从 50% 单调递增至 100%，把第 14/15 轮"`cs.Files` 必须真实灌入、完成文件不重置"教训固化为回归断言。
