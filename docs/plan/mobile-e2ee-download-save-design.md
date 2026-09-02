@@ -109,13 +109,28 @@ graph TD
 - **移动端**：解密达到 100% 后**不自动调用 `a.click()`**，页面进入 `decrypted-pending-save` 状态：
   - 进度条置为 100%（绿色完成态）；
   - 顶部/操作区展示大号高亮主按钮【📥 保存到手机】（多文件时为【📥 全部保存到手机】）；
-  - 提示文案更新：“已在本机解密完成，请点击下方按钮保存到系统”。
+  - 提示文案更新：“已在本机解密完成，请点击下方按钮保存到系统”；
+  - **局域网 HTTP 模式动态提示（R6）**：若检测到 `!window.isSecureContext` 且为 iOS 设备，在按钮下方附带辅助提示：“（提示：当前为局域网 HTTP 访问，受 iOS 限制若无法直接保存，可点击单项或长按预览保存）”。
 
-#### 2. 组装延迟（Deferred Assembly）与 GC 保护
-- **解密阶段**：大文件（`totalBytes >= LARGE_FILE_THRESHOLD`）逐块写入 IndexedDB，不占用活跃 JS Heap；小文件暂存内存数组；
-- **100% 解密完成时**：**不调用 `assembleBlob`**，保持数据在 IndexedDB 或数组中；
-- **用户点击瞬间**：在直接手势的微任务中触发 `assembleBlob`，生成 `File` 对象（`new File([blob], filename, { type: detectedMime })`）；
-- **GC 及时回收**：`assembleBlob` 完成后立即将临时分块引用设为 `null`，确保内存只保留单一 `File` 实例交付系统。
+#### 2. 解密与交付解耦（R7）：Pending 数据结构与组装延迟
+- **职责拆分**：将现状 `downloadFile`（解密+组装+下载合一）拆解为两阶段：
+  1. **后台解密阶段（Pipeline 负责）**：网络拉取与 Worker 解密，完成后向会话注册 `PendingFileDescriptor`，**不组装 Blob，不触发保存，不清理存储**；
+  2. **手势交付阶段（UI Controller 负责）**：用户点击保存按钮，在活跃用户手势上下文中消费 pending 记录，执行组装并调起保存。
+- **待交付元数据契约（PendingFileDescriptor）**：
+  ```javascript
+  // 会话级待交付表: sessionPendingFiles = new Map<string, PendingFileDescriptor>()
+  {
+      fileId: 'f-0',
+      fileName: 'document.pdf',
+      fileSize: 1048576,
+      mimeType: 'application/pdf',
+      totalChunks: 1,
+      storeType: 'memory' | 'idb', // ≤256MB 为 memory, >256MB 为 idb
+      chunks: [Uint8Array],        // 仅 storeType === 'memory' 时有效
+      status: 'pending_save'       // 'pending_save' | 'delivering' | 'delivered'
+  }
+  ```
+- **GC 保护**：在点击手势中完成 `assembleBlob` 后，立即将 `descriptor.chunks` 设为 `null`，确保内存中仅保留最终传递给系统的单一 `File` 实例。
 
 > **阈值与时机边界诚实声明（R9）**：本方案两套数值正交——现状 IndexedDB 流式阈值 `LARGE_FILE_THRESHOLD = 256MB`（`download.tmpl.html`:1049）；150MB 是**新增的 share 聚合预算**，非 IDB 阈值。未达 256MB 的文件解密期整驻内存数组（150~256MB 之间单文件仍可能吃紧），达阈值才逐块落 IDB。
 > 且**延迟组装只能把峰值推迟到点击手势内，并不能消除**：现状 `assembleBlob`（`download.tmpl.html`:1004-1014）在用户点击时仍需一次性从 IDB 读出全部 chunk 构成 Blob，峰值内存≈文件大小，可能造成 GC 长停顿或被系统杀。因此对已入 IDB 的大文件（≥256MB）移动端应在 UI 如实标注“建议桌面端保存”，点击时组装建议分帧/分批进行；真正的峰值消除路径仍是 ServiceWorker 流式（远期，见风险矩阵）。
@@ -127,10 +142,24 @@ graph TD
   - **规则 B（大集合/大文件降级）**：若总大小 > 150MB 或包含 IndexedDB 大文件，主按钮提示“文件集较大，建议在下方逐个保存”，同时在文件列表各行展示【📥 保存】按钮。
 - **单文件条目独立保存**：文件列表中的各条目拥有独立的【📥 保存】按钮，用户点击单项时直接针对该文件执行“延迟组装 → 单文件 Share / Download”。
 
-#### 4. 异常处理与用户取消（AbortError）静默吞吐
-- 当用户在 iOS/Android 系统分享面板中点击“取消/关闭”时，`navigator.share()` 会抛出 `DOMException: Share canceled`（`err.name === 'AbortError'`）；
-- **处理准则**：`AbortError` 属于用户正常取消交互，**严禁向用户提示“保存失败”**。只需静默捕获，释放 `isSaving` 防抖锁，保持按钮可再次点击；
-- **不做 share 失败后的异常改道**：若抛出不属用户取消的 `NotAllowedError` / `TypeError`，多为“手势已耗尽 / 安全上下文缺失 / 文件不可分享”所致——此刻再改道 `a.download`，`a.click()` 已在同一次手势被 await 消耗后失效，会被移动浏览器按自动脚本弹窗同样拦截。正确做法是**进入 share 前同步预判分流**（Secure Context + `canShare` 判定，见 R10）；share 一旦执行即不异常改道，仅按失败反馈并保持按钮可重试。
+#### 4. 预判分流（Pre-check Branching）与异常分类处理（R6 / R10）
+- **同步预判分流（严禁异步失败改道）**：
+  ```javascript
+  function canUseWebShare(fileList) {
+      if (!window.isSecureContext) return false;
+      if (!navigator.share || !navigator.canShare) return false;
+      try {
+          return navigator.canShare({ files: fileList });
+      } catch (e) {
+          return false;
+      }
+  }
+  ```
+- **分支执行流**：
+  1. **Web Share 分支**（`canUseWebShare` 成立）：在当前手势内直接调用 `await navigator.share({ files })`；
+     - `AbortError`（用户点击取消/关闭分享面板）：属于正常交互，**静默忽略**，释放 `isSaving` 状态锁，保持页面与按钮就绪，**绝不报错也绝不自动切道**；
+     - 其他致命异常：提示“保存失败，请点击重试”，保持按钮可再次点击；
+  2. **同步 a.download 分支**（非安全上下文或 `canShare` 不满足）：在当前有效手势内**直接同步**生成 Object URL 并调用 `a.click()`（维护 `activeSavedBlobUrl` 单例）。
 
 #### 5. `activeSavedBlobUrl` 生命周期精准闭环
 - `navigator.share` 直接传递 `File` 内存对象，**不产生任何 Object URL**；
@@ -141,7 +170,7 @@ graph TD
 - **数据结构**：在 IndexedDB `chunks` 记录中附带 `createdAt`（时间戳）与 `sessionId`，且 **`putChunk` 写入时即落两个字段**，以便按会话归属区分活跃与孤儿（现状记录仅 `{id, fileId, chunkIndex, data}`，无时间/会话维度，`download.tmpl.html`:997）；
 - **主动清扫（Session Prune）**：
   - 在页面加载 `startE2EEDownload` 启动前，自动扫描并清理所有创建时间超过 24 小时或属于已结束会话的历史残留 chunk；
-- **即时清理**：单文件保存成功确认后，调用 `EqtChunkStorage.clearFile(fileId, totalChunks)`；
+- **即时清理**：单文件保存成功确认后，调用 `EqtChunkStorage.clearFile(fileId, totalChunks)` 并更新 pending 状态为 `delivered`；
 - **停止/失败即时清理（R8）**：执行停止（`executeStopSharing`）、`Pipeline.abort` 或下载失败中断时，对**已写入**的分块立即尽力 `clearFile(fileId)`；现状 abort 只中止网络与 worker（`download.tmpl.html`:1216-1222、1690-1710），不清理已落盘 chunk，中断/停止同样是孤儿主源，不能只依赖 24h prune 兜底；
 - **卸载辅助与豁免（R12）**：在 `visibilitychange`（`state === 'hidden'`）时触发尽力而为的轻量清理——但该清理**必须豁免当前 pending（已解密未交付）的活跃 fileId**，仅清“非本会话 / 已超保留期 / 已确认交付”的记录；否则用户点保存、切后台选系统目录的瞬间，未交付数据会被误删。
 
