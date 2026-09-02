@@ -167,4 +167,16 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
   - 任何依赖外部共享模块的组件或页面逻辑，严禁使用虚假的 `: Object` 表达式隐式伪装降级。
   - 必须显式检测 `window.EmailOtp && window.EmailOtp.Controller`；若未加载（网络拦截或加载异常），记录明确 console 告警，并在用户触发交互时通过多语言字典（`module_load_err`）向用户展示友好的重试提示，杜绝抛出裸 `TypeError`。
 
+---
+
+## 10. 文件管理器定位与选中规范 (Show in Folder / Reveal Items)
+
+- **跨平台原生文件定位机制**：
+  - **Windows**: 使用 `explorer.exe /select,"<winPath>"` 打开上级文件夹并自动高亮选中目标项。
+  - **macOS (Darwin)**: 使用 `open -R "<path>"` 在 Finder 中直接 Reveal 选中目标。
+  - **Linux / WSL**: 在 WSL 环境中通过 `wslpath -w <path>` 转换并拉起 Windows 宿主资源管理器 `explorer.exe /select,<winPath>`；Native Linux 降级打开所在上级目录。
+- **GUI 交互与多设备接收联动**：
+  - **“设备传输进度”总标题行文件夹按钮**：从当前活跃会话中智能检测所有已完成的接收文件/目录，若存在则自动调用 `ShowInFolder` 定位并高亮最新落盘的子目录或文件；若刚启动尚未产生数据，则回退为 `OpenPath` 打开接收根目录。
+  - **单个文件行定位**：每个已完成文件条目均配备 `show-folder-action`，支持一键定位具体文件。
+
 
