@@ -1382,7 +1382,7 @@
                             singleBtn.style.cursor = 'default';
                         }
                     }
-                    if (sessionPendingFiles.size === 0) {
+                    if (isCompleted && sessionPendingFiles.size === 0) {
                         if (saveBtn) {
                             saveBtn.disabled = true;
                             saveBtn.textContent = dict.save_done_tips || 'Saved to device';
@@ -1743,7 +1743,12 @@
                 if (downloadSingleBtn) downloadSingleBtn.style.display = 'none';
                 if (saveMobileBtn) {
                     saveMobileBtn.style.display = 'block';
-                    if (filesToFetch.length > 1) {
+                    if (sessionPendingFiles.size === 0) {
+                        saveMobileBtn.disabled = true;
+                        saveMobileBtn.textContent = dict.save_done_tips || 'Saved to device';
+                        saveMobileBtn.style.opacity = '0.6';
+                        saveMobileBtn.style.cursor = 'default';
+                    } else if (filesToFetch.length > 1) {
                         saveMobileBtn.setAttribute('data-i18n', 'btn_save_all_to_phone');
                         saveMobileBtn.textContent = dict.btn_save_all_to_phone || 'Save All to Phone';
                     } else {
@@ -1751,8 +1756,11 @@
                         saveMobileBtn.textContent = dict.btn_save_to_phone || 'Save to Phone';
                     }
                 }
-                var itemSaveBtns = document.querySelectorAll('.btn-item-save');
-                itemSaveBtns.forEach(function(btn) { btn.style.display = 'inline-block'; });
+                filesToFetch.forEach(function(fInfo, fIdx) {
+                    var actualIdx = (targetIndex !== undefined && targetIndex >= 0) ? targetIndex : fIdx;
+                    var itemBtn = document.querySelector('.btn-item-save[data-file-index="' + actualIdx + '"]');
+                    if (itemBtn) itemBtn.style.display = 'inline-block';
+                });
 
                 if (guidanceEl) {
                     var hasIDB = Array.from(sessionPendingFiles.values()).some(function(d) { return d.storeType === 'idb'; });
