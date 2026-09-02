@@ -1205,7 +1205,17 @@
             isDownloadStopped = false;
             isE2EEDownloadActive = true;
             var progressContainer = document.getElementById('download-progress-container');
-            if (progressContainer) progressContainer.style.display = 'block';
+            if (progressContainer) {
+                progressContainer.style.display = 'block';
+                var fillEl = document.getElementById('download-progress-fill');
+                var percentEl = document.getElementById('download-progress-percent');
+                var bytesEl = document.getElementById('download-progress-bytes');
+                var statusEl = document.getElementById('download-progress-status');
+                if (fillEl) fillEl.style.width = '0%';
+                if (percentEl) percentEl.innerText = '0%';
+                if (bytesEl) bytesEl.innerText = '0 B';
+                if (statusEl) statusEl.innerText = '🔒 Connecting...';
+            }
 
             var metaUrl = window.location.pathname + '/meta?client_id=' + encodeURIComponent(getOrGenerateClientId());
             var metaRes = await fetch(metaUrl);
@@ -1231,6 +1241,10 @@
             for (var i = 0; i < filesToFetch.length; i++) {
                 totalBytesAll += (filesToFetch[i].file_size || 0);
             }
+            var initBytesEl = document.getElementById('download-progress-bytes');
+            if (initBytesEl) initBytesEl.innerText = '0 B / ' + formatBytes(totalBytesAll);
+            var initStatusEl = document.getElementById('download-progress-status');
+            if (initStatusEl) initStatusEl.innerText = '🔒 Decrypting (1/' + filesToFetch.length + ')...';
 
             var pipeline = new EqtE2EEDownloader.Pipeline(masterKey);
             activeDownloadPipeline = pipeline;
@@ -1411,16 +1425,21 @@
                                 
                                 var progressContainer = document.getElementById('download-progress-container');
                                 if (progressContainer) {
-                                     var showProgress = ((status.state === 'transferring' || status.state === 'waiting' || status.state === 'failed') && (status.bytesDone || 0) > 0) || status.state === 'completed';
-                                     if (showProgress && status.bytesTotal > 0 && !isE2EEDownloadActive) {
+                                     var showProgress = status.state === 'transferring' || (status.state === 'waiting' && ((status.bytesDone || 0) > 0 || downloadTriggered)) || status.state === 'completed' || status.state === 'failed';
+                                     if (showProgress && !isE2EEDownloadActive) {
                                         progressContainer.style.display = 'block';
                                          
                                         var percent = status.percent || 0;
-                                        document.getElementById('download-progress-fill').style.width = percent + '%';
-                                        document.getElementById('download-progress-percent').innerText = percent + '%';
+                                        var fillEl = document.getElementById('download-progress-fill');
+                                        var percentEl = document.getElementById('download-progress-percent');
+                                        var bytesEl = document.getElementById('download-progress-bytes');
+                                        var statusEl = document.getElementById('download-progress-status');
+                                        if (fillEl) fillEl.style.width = percent + '%';
+                                        if (percentEl) percentEl.innerText = percent + '%';
                                          
-                                        var bytesText = formatBytes(status.bytesDone || 0) + ' / ' + formatBytes(status.bytesTotal);
-                                        document.getElementById('download-progress-bytes').innerText = bytesText;
+                                        var totalBytes = status.bytesTotal || 0;
+                                        var bytesText = formatBytes(status.bytesDone || 0) + (totalBytes > 0 ? (' / ' + formatBytes(totalBytes)) : '');
+                                        if (bytesEl) bytesEl.innerText = bytesText;
                                          
                                         var statusText = 'Downloading...';
                                         if (status.state === 'completed') {
@@ -1433,8 +1452,8 @@
                                             var dict = EqtI18n.getDict();
                                             statusText = dict.failed_status || 'Transfer stopped. You can click button to restart.';
                                         }
-                                        document.getElementById('download-progress-status').innerText = statusText;
-                                    } else if (!isE2EEDownloadActive) {
+                                        if (statusEl) statusEl.innerText = statusText;
+                                    } else if (!isE2EEDownloadActive && !downloadTriggered) {
                                         progressContainer.style.display = 'none';
                                     }
                                 }

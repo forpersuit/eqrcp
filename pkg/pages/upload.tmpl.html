@@ -1958,16 +1958,23 @@
                         try {
                             await pipeline.uploadFile(item, fileId, function(bytes, total) {
                                 bytesUploadedMap[fIdx] = bytes;
+                                var totalUploaded = 0;
+                                for (var k = 0; k < filesToUpload.length; k++) {
+                                    totalUploaded += (bytesUploadedMap[k] || 0);
+                                }
+                                var globalPercent = totalFilesSize > 0 ? Math.min(100, Math.round((totalUploaded / totalFilesSize) * 100)) : 100;
+                                submitButton.value = t('btn_transferring') + ' (' + globalPercent + '%)';
+
                                 if (item.index !== undefined) {
-                                    var percent = total > 0 ? (bytes / total) : 0;
+                                    var percent = total > 0 ? Math.min(100, Math.round((bytes / total) * 100)) : 0;
                                     var circle = document.getElementById('progress-circle-' + item.index);
                                     var text = document.getElementById('progress-text-' + item.index);
                                     if (circle) {
-                                        var offset = 100 - (percent * 100);
+                                        var offset = 88 - (88 * percent) / 100;
                                         circle.style.strokeDashoffset = offset;
                                     }
                                     if (text) {
-                                        text.textContent = Math.round(percent * 100) + '%';
+                                        text.textContent = percent + '%';
                                     }
                                 }
                             }, fIdx, filesToUpload.length);
@@ -1975,7 +1982,8 @@
                                 var circle = document.getElementById('progress-circle-' + item.index);
                                 var text = document.getElementById('progress-text-' + item.index);
                                 if (circle) {
-                                    circle.style.strokeDashoffset = '0';
+                                    circle.style.strokeDashoffset = 0;
+                                    circle.classList.add('completed');
                                     circle.style.stroke = 'var(--success)';
                                 }
                                 if (text) {

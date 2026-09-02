@@ -1267,24 +1267,30 @@ func (s *Server) updateStatus(update func(*transferStatus)) {
 			s.status.BytesDone = maxDone
 		}
 
-		if s.status.BytesTotal <= 0 && s.body.Paths != nil {
-			var totalBytesTotal int64
-			for i := 0; i < len(s.body.Paths); i++ {
-				var size int64
-				s.expectedBytesMu.Lock()
-				if s.expectedBytes != nil {
-					size = s.expectedBytes[i]
-				}
-				s.expectedBytesMu.Unlock()
-				if size <= 0 {
-					targetPath := s.body.Paths[i]
-					if info, err := os.Stat(targetPath); err == nil {
-						size = info.Size()
+		if s.status.BytesTotal <= 0 {
+			if len(s.body.Paths) > 0 {
+				var totalBytesTotal int64
+				for i := 0; i < len(s.body.Paths); i++ {
+					var size int64
+					s.expectedBytesMu.Lock()
+					if s.expectedBytes != nil {
+						size = s.expectedBytes[i]
 					}
+					s.expectedBytesMu.Unlock()
+					if size <= 0 {
+						targetPath := s.body.Paths[i]
+						if info, err := os.Stat(targetPath); err == nil {
+							size = info.Size()
+						}
+					}
+					totalBytesTotal += size
 				}
-				totalBytesTotal += size
+				s.status.BytesTotal = totalBytesTotal
+			} else if s.body.Path != "" {
+				if info, err := os.Stat(s.body.Path); err == nil {
+					s.status.BytesTotal = info.Size()
+				}
 			}
-			s.status.BytesTotal = totalBytesTotal
 		}
 	} else {
 		activeClients := s.getActiveClients()
