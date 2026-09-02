@@ -13,7 +13,8 @@ E2EE 网页下载在浏览器内完成"拉取密文 → 逐块解密 → 重组�
 1. 移动端建立"解密完成 → 用户亲手点击一键保存/分享"的**可靠手势通路**（主方案，立即落地）；
 2. 大文件下载内存受控（依托既有 IndexedDB 落块，把 Blob 组装延迟到用户点击时）；
 3. 桌面端保持现状自动下载不回退；
-4. 超大文件（GB 级）的 ServiceWorker 流式代理：**列为远期研究，明确平台限制后不做本轮主路径**。
+4. 多文件场景兼顾：支持【全部保存到手机】与单文件列表条目【单独保存】；
+5. 超大文件（GB 级）的 ServiceWorker 流式代理：**列为远期研究，明确平台限制后不做本轮主路径**。
 
 ---
 
@@ -45,7 +46,7 @@ E2EE 网页下载在浏览器内完成"拉取密文 → 逐块解密 → 重组�
 ### 3. Blob/内存限制与过早 revoke——次要诱因
 
 - **内存已有缓解**：`download.tmpl.html` :1130 大文件自动走 `useIndexedDB`（`totalBytes >= LARGE_FILE_THRESHOLD && window.indexedDB`），逐块 `putChunk` 落盘；但 :1192 `assembleBlob` 仍一次性读回内存生成 Blob，大文件峰值依旧。
-- **revoke 过早属实但影响有限**：:1209-1212 `setTimeout(..., 10000)` 后 `revokeObjectURL`。iOS 系统接管保存后 Blob 引用已建立，revoke 对已发起保存影响不大；它不是"致命诱因"（主因是无手势），但配合组装延迟应一并后移。
+- **revoke 过早隐患**：原代码在 `a.click()` 后通过 `setTimeout(..., 10000)` 固定 10 秒后执行 `revokeObjectURL`。若用户在移动端文件保存选择目录对话框中停留超过 10 秒，底层 Blob 引用失效将导致下载保存静默失败。必须将生命周期管理改为单例维持与卸载清理。
 
 ### 4. 现状 UI 缺口（开发意见遗漏的关键事实）
 
@@ -64,12 +65,12 @@ graph TD
     A[解密完成 100%] --> B{自动 a.click 尝试}
     B -->|桌面 UA| C[直接系统下载, 隐藏按钮]
     B -->|移动 UA| D[展示主按钮 📥 保存到手机]
-    D --> E[用户点击 = 真实手势]
+    D --> E[用户点击 = 真实手势<br/>按钮进入 '⏳ 准备文件中...' 锁定防抖]
     E --> F[延迟组装 Blob/File<br/>useIndexedDB 落块在此刻读回]
     F --> G{navigator.share 可用}
     G -->|是| H[share Files<br/>iOS 存文件 / Android 分享]
     G -->|否| I[a.download 回退]
-    H --> J[保存完成后清理 chunk 存储与 URL]
+    H --> J[保存完成后恢复按钮状态, 离开页面时清理缓存]
     I --> J
 ```
 
@@ -77,8 +78,15 @@ graph TD
 1. **平台分流**：桌面 UA 保留现有自动 `a.click()`（可靠且零改动）；移动 UA 完成态**常显主按钮**，自动触发仅作辅助。
 2. **组装延迟到用户点击**：`useIndexedDB` 路径下 100% 时**不**调用 `assembleBlob`；点击保存时（真实手势上下文内）再 `assembleBlob` → `new File([blob], name)`，避免峰值内存白占且避开无手势阻塞。
 3. **移动端首选 `navigator.share`**：`navigator.share({ files: [file] })`——iOS 直达"存储到文件/Files"，Android 可分享至系统下载；**纯 `a.download` 在 iOS 依旧不可靠**，share 不可用时才回退。
-4. **revoke 时机后移**：`URL.revokeObjectURL` 从固定 10s 改为"保存/分享动作完成后"；`useIndexedDB` 的 chunk 存储同样在保存完成后 `clearFile`。
-5. **新增 UI 状态 `decrypted-pending-save`**（已完成待保存）：completed 文案下追加大号高亮按钮与提示（"已在本机解密完成，点击存入系统"），否则用户不知道要手动点。
+4. **多文件支持策略**：
+   - **全局主操作**：【📥 全部保存到手机】（调用 `navigator.share({ files: [f1, f2, ...] })` 一次性打包分享/存入 Files）；
+   - **单文件独立操作**：文件列表内各条目保留【📥 保存】按钮，方便用户针对性单独提取某一项。
+5. **保存中状态与并发防抖**：
+   - 用户点击后进入 `isSaving = true` 过渡态（按钮置灰并提示“⏳ 正在准备文件...”），防止连击导致瞬时并发组装多个大 Blob 引发 OOM。
+6. **revoke 与缓存生命周期全闭环**：
+   - 废弃 10 秒固定定时器，由全局 `activeSavedBlobUrl` 追踪；
+   - 在生成新文件保存或页面卸载（`pagehide`）时释放，确保用户在系统文件对话框中无论挑选多久路径均有效。
+7. **新增 UI 状态 `decrypted-pending-save`**（已完成待保存）：completed 文案下追加大号高亮按钮与提示（"已在本机解密完成，点击存入系统"），给用户明确的心理模型。
 
 #### 边界与回退
 - `navigator.canShare({ files })` 探测失败 / 文件超平台分享上限 → 回退 `a.download`，保留按钮重试。
@@ -101,8 +109,10 @@ Mega / ProtonDrive 式"点击即原生下载，SW 边拉密文边解密边吐明
 | 风险 | 防御 |
 | :--- | :--- |
 | 100% 组装峰值内存（大文件移动端 OOM） | 组装延迟到用户点击 + IndexedDB 落块保持到保存后清理 |
+| 连续连击保存导致内存暴击 | `isSaving` 状态锁（300ms+ 过渡态），组装完毕前禁用重复触发 |
 | 自动触发与保存按钮双触发 | UA 分流：桌面自动、移动按钮；各自独立状态位 |
 | `navigator.share` 兼容性 | `canShare` 探测 + 失败回退 `a.download`；超平台大小上限给提示 |
+| 保存对话框挑路径超时致下载失效 | 废除 10s 固定 revoke，生命周期移至新保存/页面卸载钩子 |
 | 保存被取消/失败后文件丢失 | 按钮保持可重试，chunk 存储未确认前不清除 |
 | 页面中断后 chunk 存储残留 | 关闭/停止路径统一清理 IndexedDB 与 URL，不泄漏磁盘 |
 | 状态回归（明文/E2EE/多文件差异） | 改动只收敛在 E2EE 下载保存段，明文与桌面路径保持现状；测试覆盖两模式 |
@@ -116,13 +126,14 @@ Mega / ProtonDrive 式"点击即原生下载，SW 边拉密文边解密边吐明
 - 按钮统一走 `addEventListener`（遵守项目前端规范，不用内联 onclick）；
 - 移动 UA 检测：移动端常显按钮；桌面端完成时隐藏（自动下载）。
 
-### Phase 2：`navigator.share` 集成 + 组装延迟
+### Phase 2：`navigator.share` 集成 + 组装延迟 + 防抖
 - `useIndexedDB` 路径：100% 时保留 chunk 落盘，取消自动 `assembleBlob`；点击时 `assembleBlob` → `File`；
 - `navigator.canShare` / `navigator.share({ files })`，失败回退 `a.download`；
-- `revokeObjectURL` 与 `clearFile` 移至保存动作完成后。
+- `isSaving` 按钮防抖与加载态切换；
+- `activeSavedBlobUrl` 单例管理与 `pagehide` 卸载清理。
 
 ### Phase 3：i18n 与回归
-- 新增词条：`btn_save_to_phone`、`save_done_tips`、`save_failed_tips` 等（7 语言）；
+- 新增词条：`btn_save_to_phone`、`btn_save_all_to_phone`、`saving_preparing`、`save_done_tips`、`save_failed_tips` 等（7 语言）；
 - 桌面自动下载路径零改动回归；明文下载路径不受影响。
 
 ### Phase 4：测试
