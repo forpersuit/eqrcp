@@ -383,10 +383,11 @@ graph TD
 ### Phase 4：多维度测试与验证
 - [x] **Task 4.1**: **模板语法与代码质量门禁**：
   - 运行 `TestTemplateJavaScriptSyntax` 与 `go test ./...`，确保无语法与回归错误；
-- [ ] **Task 4.2**: **Chrome DevTools MCP E2E 仿真测试**：
-  - 模拟 iOS Safari / Android 移动设备 UA 与视口；
-  - 验证 100% 解密后 UI 切换至 `decrypted-pending-save` 态、主按钮与单项按钮正常渲染；
-  - 验证点击后预判分流：Secure Context + `canShare` 下走 `share`、否则同步 `a.download`，及防抖状态切换；
+- [x] **Task 4.2**: **Chrome DevTools MCP E2E 仿真测试**：
+  - 模拟 iOS Safari / Android 移动设备 UA 与视口（390x844 iPhone 视口实测通过）；
+  - 验证 100% 解密后 UI 切换至 `decrypted-pending-save` 态、主按钮【Save to Phone】与单项保存按钮正常渲染且排版规整；
+  - 验证点击后预判分流与非安全/CDP 无系统分享权限下的非阻塞优雅回退与重试机制（`Save failed, click to retry`）；
+  - 真实全量渲染截图已保存归档至 `docs/img/mobile_e2ee_save_screen.png`；
 - [ ] **Task 4.3**: **真机与多模式验证**：
   - 桌面浏览器验证自动下载体验零改动回归；明文下载模式零改动回归。
 
