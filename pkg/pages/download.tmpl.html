@@ -459,6 +459,98 @@
     <script src="/assets/libsodium.js"></script>
     <script src="/assets/crypto-engine.js"></script>
     <script>
+        /**
+         * 移动端真机诊断遥测模块 (EqtTelemetry)
+         * 捕获移动端页面生命周期、环境指纹、用户操作轨迹、解密事件、保存尝试及异常
+         * 并自动回传至服务端的 /client-log 端点实时在控制台打印分析
+         */
+        var EqtTelemetry = (function() {
+            var logQueue = [];
+            var flushTimer = null;
+            var endpoint = window.location.pathname.replace(/\/$/, '') + '/client-log';
+
+            function send(category, level, message, details) {
+                var entry = {
+                    client_id: (typeof getOrGenerateClientId === 'function') ? getOrGenerateClientId() : 'unknown',
+                    session_id: (typeof currentSessionId !== 'undefined') ? currentSessionId : '',
+                    timestamp: Date.now(),
+                    category: category || 'LOG',
+                    level: level || 'INFO',
+                    message: message || '',
+                    details: details || {},
+                    user_agent: navigator.userAgent
+                };
+                logQueue.push(entry);
+
+                if (!flushTimer) {
+                    flushTimer = setTimeout(flush, 50);
+                }
+            }
+
+            function flush() {
+                flushTimer = null;
+                if (logQueue.length === 0) return;
+                var batch = logQueue.splice(0, logQueue.length);
+                var payload = JSON.stringify(batch);
+
+                try {
+                    if (navigator.sendBeacon) {
+                        var blob = new Blob([payload], { type: 'application/json' });
+                        if (navigator.sendBeacon(endpoint, blob)) {
+                            return;
+                        }
+                    }
+                } catch (e) {}
+
+                try {
+                    fetch(endpoint, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: payload,
+                        keepalive: true
+                    }).catch(function() {});
+                } catch (e) {}
+            }
+
+            return {
+                info: function(cat, msg, det) { send(cat, 'INFO', msg, det); },
+                warn: function(cat, msg, det) { send(cat, 'WARN', msg, det); },
+                error: function(cat, msg, det) { send(cat, 'ERROR', msg, det); },
+                flushImmediately: flush
+            };
+        })();
+
+        window.addEventListener('error', function(e) {
+            EqtTelemetry.error('GLOBAL_ERROR', 'Uncaught JS error: ' + (e.message || 'unknown'), {
+                filename: e.filename,
+                lineno: e.lineno,
+                colno: e.colno,
+                name: e.error ? e.error.name : null,
+                stack: e.error ? e.error.stack : null
+            });
+        });
+        window.addEventListener('unhandledrejection', function(e) {
+            var reason = e.reason;
+            EqtTelemetry.error('GLOBAL_ERROR', 'Unhandled rejection: ' + (reason ? (reason.message || reason) : 'unknown'), {
+                name: reason ? reason.name : null,
+                stack: reason ? reason.stack : null
+            });
+        });
+
+        EqtTelemetry.info('PAGE_LOAD', 'Page loaded and script initialized', {
+            url: window.location.href,
+            protocol: window.location.protocol,
+            host: window.location.host,
+            isSecureContext: !!window.isSecureContext,
+            hasShare: typeof navigator.share === 'function',
+            hasCanShare: typeof navigator.canShare === 'function',
+            hasSendBeacon: typeof navigator.sendBeacon === 'function',
+            screenWidth: window.screen ? window.screen.width : null,
+            screenHeight: window.screen ? window.screen.height : null,
+            dpr: window.devicePixelRatio || 1,
+            standalone: !!(window.navigator && window.navigator.standalone)
+        });
+
         var filesList = [
             {{range $index, $element := .Files}}
             { name: "{{$element}}", index: {{$index}} },
@@ -1248,6 +1340,11 @@
         }
 
         function triggerBlobDownload(blobOrFile, fileName) {
+            EqtTelemetry.info('SAVE', 'triggerBlobDownload called', {
+                fileName: fileName,
+                type: blobOrFile ? blobOrFile.type : null,
+                size: blobOrFile ? blobOrFile.size : null
+            });
             if (activeSavedBlobUrl) {
                 try { URL.revokeObjectURL(activeSavedBlobUrl); } catch (e) {}
                 activeSavedBlobUrl = null;
@@ -1258,7 +1355,12 @@
             a.href = blobUrl;
             a.download = fileName || (blobOrFile.name || 'download.dat');
             document.body.appendChild(a);
-            a.click();
+            try {
+                a.click();
+                EqtTelemetry.info('SAVE', 'a.click() executed for blob download', { downloadAttr: a.download });
+            } catch (clickErr) {
+                EqtTelemetry.error('SAVE', 'a.click() threw error: ' + clickErr.message, { stack: clickErr.stack });
+            }
             setTimeout(function() {
                 if (a.parentNode) a.parentNode.removeChild(a);
             }, 1000);
@@ -1281,6 +1383,15 @@
             var dict = EqtI18n.getDict();
             var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
             var guidanceEl = document.getElementById('save-mobile-guidance');
+
+            EqtTelemetry.info('SAVE', 'saveToDevice called', {
+                targetIndex: targetFileIndex,
+                pendingCount: sessionPendingFiles.size,
+                isIOS: isIOS,
+                isSecureContext: !!window.isSecureContext,
+                hasShare: typeof navigator.share === 'function',
+                hasCanShare: typeof navigator.canShare === 'function'
+            });
 
             var targetDescriptors = [];
             if (typeof targetFileIndex === 'number' && targetFileIndex >= 0) {
@@ -1354,8 +1465,13 @@
                 var deliveredOk = false;
 
                 if (canUseWebShare(filesToShare)) {
+                    EqtTelemetry.info('SAVE', 'Invoking navigator.share()', {
+                        filesCount: filesToShare.length,
+                        names: filesToShare.map(function(f) { return f.name; })
+                    });
                     try {
                         await navigator.share({ files: filesToShare });
+                        EqtTelemetry.info('SAVE', 'navigator.share() resolved successfully');
                         assembledFiles.forEach(function(item) {
                             finalizeDescriptor(item.descriptor);
                         });
@@ -1365,6 +1481,10 @@
                             guidanceEl.textContent = dict.save_done_tips || 'Saved to device';
                         }
                     } catch (shareErr) {
+                        EqtTelemetry.warn('SAVE', 'navigator.share() rejected', {
+                            errorName: shareErr ? shareErr.name : 'unknown',
+                            errorMessage: shareErr ? shareErr.message : ''
+                        });
                         if (shareErr && (shareErr.name === 'AbortError' || (shareErr.message && shareErr.message.indexOf('canceled') !== -1))) {
                             assembledFiles.forEach(function(item) {
                                 item.descriptor.status = 'pending_save';
@@ -1381,6 +1501,10 @@
                         }
                     }
                 } else {
+                    EqtTelemetry.info('SAVE', 'Entering fallback save branch (WebShare not applicable)', {
+                        isSecureContext: !!window.isSecureContext,
+                        filesCount: assembledFiles.length
+                    });
                     // 局域网 HTTP 或不支持 Web Share 环境下的确定性保存策略 (R32 / R33)
                     var openedPreviewCount = 0;
                     var hasZipOrBinary = false;
@@ -1818,11 +1942,16 @@
         }
 
         function triggerDownload() {
+            EqtTelemetry.info('ACTION', 'User clicked triggerDownload', {
+                hasMasterKey: !!EqtE2EEDownloader.getMasterKey(),
+                filesCount: filesList.length
+            });
             var masterKey = EqtE2EEDownloader.getMasterKey();
             if (masterKey) {
                 startE2EEDownload().catch(function(err) {
                     if (isDownloadStopped) return;
                     console.error("E2EE download error (Fail-Closed, zero plaintext fallback): ", err);
+                    EqtTelemetry.error('E2EE', 'startE2EEDownload rejected: ' + err.message, { stack: err.stack });
                     showE2EEDownloadError(err.message || 'Decryption failed or connection broken');
                 });
                 return;
@@ -2374,6 +2503,7 @@
             var saveMobileBtn = document.getElementById('btn-action-save-mobile');
             if (saveMobileBtn) {
                 saveMobileBtn.addEventListener('click', function() {
+                    EqtTelemetry.info('ACTION', 'User manually tapped btn-action-save-mobile');
                     saveToDevice();
                 });
             }

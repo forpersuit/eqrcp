@@ -814,6 +814,9 @@ func (s *Server) ServeQR(url string) error {
 			log.Println(err)
 		}
 	})
+	s.mux.HandleFunc("/client-log", func(w http.ResponseWriter, r *http.Request) {
+		s.handleClientLog(w, r)
+	})
 	s.mux.HandleFunc(stopPath, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -2542,6 +2545,9 @@ func New(cfg *config.Config) (*Server, error) {
 	mux.HandleFunc("/send/"+path+"/meta", func(w http.ResponseWriter, r *http.Request) {
 		app.handleE2EEShareMeta(w, r)
 	})
+	mux.HandleFunc("/send/"+path+"/client-log", func(w http.ResponseWriter, r *http.Request) {
+		app.handleClientLog(w, r)
+	})
 
 	mux.HandleFunc("/send/"+path, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("stop") != "" {
@@ -3100,6 +3106,9 @@ func New(cfg *config.Config) (*Server, error) {
 	})
 	mux.HandleFunc("/receive/"+path+"/chunk_status", func(w http.ResponseWriter, r *http.Request) {
 		app.handleE2EEReceiveChunkStatus(w, r)
+	})
+	mux.HandleFunc("/receive/"+path+"/client-log", func(w http.ResponseWriter, r *http.Request) {
+		app.handleClientLog(w, r)
 	})
 
 	// Device ban management
