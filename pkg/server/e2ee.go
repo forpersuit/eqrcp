@@ -444,10 +444,22 @@ func (s *Server) handleE2EEReceiveChunk(w http.ResponseWriter, r *http.Request) 
 				state.Files[rf.FileIndex].BytesDone = receivedBytes
 				state.Files[rf.FileIndex].Percent = transferPercent(receivedBytes, rf.TotalBytes)
 			}
+
+			var totalDone int64
+			var totalTotal int64
+			for _, f := range state.Files {
+				totalDone += f.BytesDone
+				totalTotal += f.BytesTotal
+			}
+			if totalTotal == 0 {
+				totalDone = receivedBytes
+				totalTotal = rf.TotalBytes
+			}
+
 			state.State = "transferring"
 			state.Current = filepath.Base(rf.FinalPath)
-			state.BytesDone = receivedBytes
-			state.BytesTotal = rf.TotalBytes
+			state.BytesDone = totalDone
+			state.BytesTotal = totalTotal
 			state.Percent = transferPercent(state.BytesDone, state.BytesTotal)
 			state.Message = "Receiving encrypted file from connected device."
 		})
@@ -651,6 +663,20 @@ func (s *Server) recordCompletedE2EEFile(rf *e2eeReceiveFile) {
 		cs.Files[rf.FileIndex].Path = rf.FinalPath
 	}
 
+	var totalDone int64
+	var totalTotal int64
+	for _, f := range cs.Files {
+		totalDone += f.BytesDone
+		totalTotal += f.BytesTotal
+	}
+	if totalTotal == 0 {
+		totalDone = rf.TotalBytes
+		totalTotal = rf.TotalBytes
+	}
+	cs.BytesDone = totalDone
+	cs.BytesTotal = totalTotal
+	cs.Percent = transferPercent(cs.BytesDone, cs.BytesTotal)
+
 	if (len(cs.Files) > 1 && len(cs.SavedFiles) < len(cs.Files)) || (rf.FileCount > 1 && len(cs.SavedFiles) < rf.FileCount) {
 		cs.State = "transferring"
 		totalExpected := len(cs.Files)
@@ -664,9 +690,8 @@ func (s *Server) recordCompletedE2EEFile(rf *e2eeReceiveFile) {
 		cs.Percent = 100
 		cs.Current = "Transfer Complete"
 		cs.Message = "Transfer completed."
-		if rf.TotalBytes > 0 {
-			cs.BytesDone = rf.TotalBytes
-			cs.BytesTotal = rf.TotalBytes
+		if cs.BytesTotal > 0 {
+			cs.BytesDone = cs.BytesTotal
 		}
 	}
 	s.clientStatesMu.Unlock()
@@ -1069,4 +1094,9 @@ func (s *Server) HandleE2EEShareMeta(w http.ResponseWriter, r *http.Request) {
 // HandleE2EEShareChunk exports handleE2EEShareChunk for integration tests.
 func (s *Server) HandleE2EEShareChunk(w http.ResponseWriter, r *http.Request) {
 	s.handleE2EEShareChunk(w, r)
+}
+
+// GetClientStatus exports getClientStatus for integration tests.
+func (s *Server) GetClientStatus(clientID string) ClientTransferStateInfo {
+	return s.getClientStatus(clientID)
 }

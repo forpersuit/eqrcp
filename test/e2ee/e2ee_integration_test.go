@@ -610,3 +610,110 @@ func TestE2EEManualStopClientTransfer(t *testing.T) {
 		t.Fatalf("expected 403 Forbidden for chunk_status after stop, got %d: %s", wStatus.Code, wStatus.Body.String())
 	}
 }
+
+func TestE2EEMultiFileReceiveCumulativeProgress(t *testing.T) {
+	tempDir := t.TempDir()
+	recOutDir := filepath.Join(tempDir, "multi_rec_out")
+	if err := os.MkdirAll(recOutDir, 0755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+
+	cfg := config.Config{
+		Interface: "lo",
+		Bind:      "127.0.0.1",
+		Port:      0,
+		KeepAlive: true,
+	}
+	srv, err := server.New(&cfg)
+	if err != nil {
+		t.Fatalf("server.New failed: %v", err)
+	}
+	defer srv.Shutdown()
+	if err := srv.ReceiveTo(recOutDir); err != nil {
+		t.Fatalf("ReceiveTo failed: %v", err)
+	}
+
+	masterKey, _ := e2ee.GenerateMasterKey()
+	sessionID := "multi-file-session"
+	_ = srv.EnableE2EE(masterKey, sessionID)
+	keys, _ := e2ee.DeriveKeys(masterKey)
+
+	clientID := "client-multi-file-test"
+	file1Data := bytes.Repeat([]byte("A"), 4*1024*1024)
+	file2Data := bytes.Repeat([]byte("B"), 8*1024*1024)
+
+	// 1. Upload File 1 (1 chunk of 4MB, complete)
+	encChunk1, _ := e2ee.EncryptChunk(file1Data, 0, keys.RecvKey[:], "f-1")
+	req1 := httptest.NewRequest("POST", srv.ReceiveURL+"/chunk", bytes.NewReader(encChunk1))
+	req1.Header.Set("X-Client-ID", clientID)
+	req1.Header.Set("X-File-ID", "f-1")
+	req1.Header.Set("X-File-Name", "file1.txt")
+	req1.Header.Set("X-Chunk-Index", "0")
+	req1.Header.Set("X-Total-Chunks", "1")
+	req1.Header.Set("X-Total-Bytes", fmt.Sprintf("%d", len(file1Data)))
+	req1.Header.Set("X-File-Index", "0")
+	req1.Header.Set("X-File-Count", "2")
+	w1 := httptest.NewRecorder()
+	srv.HandleE2EEReceiveChunk(w1, req1)
+	if w1.Code != http.StatusOK {
+		t.Fatalf("file1 upload failed: %d %s", w1.Code, w1.Body.String())
+	}
+
+	cState1 := srv.GetClientStatus(clientID)
+	if cState1.BytesDone != 4*1024*1024 {
+		t.Fatalf("expected BytesDone=4MB after file 1, got %d", cState1.BytesDone)
+	}
+
+	// 2. Upload File 2 chunk 0 (4MB out of 8MB)
+	encChunk2_0, _ := e2ee.EncryptChunk(file2Data[:4*1024*1024], 0, keys.RecvKey[:], "f-2")
+	req2_0 := httptest.NewRequest("POST", srv.ReceiveURL+"/chunk", bytes.NewReader(encChunk2_0))
+	req2_0.Header.Set("X-Client-ID", clientID)
+	req2_0.Header.Set("X-File-ID", "f-2")
+	req2_0.Header.Set("X-File-Name", "file2.txt")
+	req2_0.Header.Set("X-Chunk-Index", "0")
+	req2_0.Header.Set("X-Total-Chunks", "2")
+	req2_0.Header.Set("X-Total-Bytes", fmt.Sprintf("%d", len(file2Data)))
+	req2_0.Header.Set("X-File-Index", "1")
+	req2_0.Header.Set("X-File-Count", "2")
+	w2_0 := httptest.NewRecorder()
+	srv.HandleE2EEReceiveChunk(w2_0, req2_0)
+	if w2_0.Code != http.StatusOK {
+		t.Fatalf("file2 chunk 0 failed: %d %s", w2_0.Code, w2_0.Body.String())
+	}
+
+	cState2 := srv.GetClientStatus(clientID)
+	// Must NOT rollback! Total should be file1 done (4MB) + file2 chunk 0 done (4MB) = 8MB out of 12MB
+	expectedDone := int64(8 * 1024 * 1024)
+	expectedTotal := int64(12 * 1024 * 1024)
+	if cState2.BytesDone != expectedDone {
+		t.Fatalf("expected cumulative BytesDone=%d, got %d (rollback detected!)", expectedDone, cState2.BytesDone)
+	}
+	if cState2.BytesTotal != expectedTotal {
+		t.Fatalf("expected cumulative BytesTotal=%d, got %d", expectedTotal, cState2.BytesTotal)
+	}
+	if cState2.Percent != 66 {
+		t.Fatalf("expected Percent=66, got %d", cState2.Percent)
+	}
+
+	// 3. Complete File 2
+	encChunk2_1, _ := e2ee.EncryptChunk(file2Data[4*1024*1024:], 1, keys.RecvKey[:], "f-2")
+	req2_1 := httptest.NewRequest("POST", srv.ReceiveURL+"/chunk", bytes.NewReader(encChunk2_1))
+	req2_1.Header.Set("X-Client-ID", clientID)
+	req2_1.Header.Set("X-File-ID", "f-2")
+	req2_1.Header.Set("X-File-Name", "file2.txt")
+	req2_1.Header.Set("X-Chunk-Index", "1")
+	req2_1.Header.Set("X-Total-Chunks", "2")
+	req2_1.Header.Set("X-Total-Bytes", fmt.Sprintf("%d", len(file2Data)))
+	req2_1.Header.Set("X-File-Index", "1")
+	req2_1.Header.Set("X-File-Count", "2")
+	w2_1 := httptest.NewRecorder()
+	srv.HandleE2EEReceiveChunk(w2_1, req2_1)
+	if w2_1.Code != http.StatusOK {
+		t.Fatalf("file2 chunk 1 failed: %d %s", w2_1.Code, w2_1.Body.String())
+	}
+
+	cStateFinal := srv.GetClientStatus(clientID)
+	if cStateFinal.State != "completed" || cStateFinal.Percent != 100 || cStateFinal.BytesDone != expectedTotal {
+		t.Fatalf("expected final state=completed, percent=100, bytesDone=%d; got %+v", expectedTotal, cStateFinal)
+	}
+}

@@ -916,7 +916,7 @@ function renderDeviceProgressHtml(task) {
             const bytesTotal = formatSize(client.bytesTotal);
             const sizeProgressText = client.bytesTotal > 0 ? `(${bytesDone}/${bytesTotal})` : '';
 
-            const showProgress = (((client.state === 'transferring' || client.state === 'waiting') && (client.bytesDone || 0) > 0) || client.state === 'completed') && client.bytesTotal > 0;
+            const showProgress = (client.state === 'transferring' || client.state === 'connected' || (client.state === 'waiting' && (client.bytesDone || 0) > 0) || client.state === 'completed') && (client.bytesTotal > 0 || (client.bytesDone || 0) > 0);
             const progressSectionHtml = showProgress ? `
                 <div style="flex: 1; height: 6px; background: rgba(0,0,0,0.06); border-radius: 3px; overflow: hidden; position: relative; margin: 0 12px 0 0; min-width: 60px;">
                     <div style="width: ${percent}%; height: 100%; background: var(--accent); border-radius: 3px;"></div>
@@ -940,7 +940,7 @@ function renderDeviceProgressHtml(task) {
             }
 
             const speedBadgeHtml = client.speedFormatted ? `<span style="color: var(--accent-strong); font-size: 10px; font-weight: 700; margin-left: 6px;">⚡ ${escapeHTML(client.speedFormatted)}</span>` : '';
-            const stopClientBtnHtml = (client.state === 'transferring' || client.state === 'waiting') ? `
+            const stopClientBtnHtml = (client.state === 'transferring' || client.state === 'connected' || client.state === 'waiting') ? `
                 <button class="btn-stop-client" data-action="stop-client" data-client-id="${escapeAttr(clientID)}" style="background: rgba(180,35,24,0.08); border: 1px solid rgba(180,35,24,0.2); color: var(--danger); font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 4px; cursor: pointer; margin-left: 4px;" title="${escapeAttr(t('stop_client') || 'Stop Device')}">${escapeHTML(t('stop') || 'Stop')}</button>
             ` : '';
             const banDeviceBtnHtml = isBanned ? `
@@ -1238,7 +1238,7 @@ function renderReceiveDeviceProgressHtml(task) {
                     return file;
                 });
                 const sortedFiles = [...mappedFiles].sort((a, b) => {
-                    const statePriority = { 'transferring': 1, 'waiting': 2, 'completed': 3, 'failed': 4 };
+                    const statePriority = { 'transferring': 1, 'connected': 1, 'waiting': 2, 'completed': 3, 'failed': 4 };
                     const pA = statePriority[a.state] || 5;
                     const pB = statePriority[b.state] || 5;
                     if (pA !== pB) return pA - pB;
@@ -1255,33 +1255,39 @@ function renderReceiveDeviceProgressHtml(task) {
 
                     let progressRightStr = sizeProgressText;
                     let bgStyle = 'background: rgba(0,0,0,0.02); border: 1px solid var(--line);';
-                    let namePrefix = '📄';
+                    let statusBadge = `<span style="font-size: 10px; color: var(--text-secondary); font-weight: 600;">${percent}%</span>`;
+                    let progressBarHtml = '';
 
                     if (stateText === 'completed') {
-                        namePrefix = '✓';
-                        progressRightStr = sizeProgressText || t('completed') || 'Completed';
-                        bgStyle = 'background: rgba(15, 118, 110, 0.02); border: 1px solid rgba(15, 118, 110, 0.1);';
-                    } else if (stateText === 'transferring') {
-                        namePrefix = '⟳';
-                        progressRightStr = sizeProgressText || `${percent}%`;
-                        bgStyle = 'background: rgba(15, 118, 110, 0.06); border: 1px solid rgba(15, 118, 110, 0.2);';
+                        statusBadge = `<span style="display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; background: var(--accent-light); border: 1px solid var(--accent-border); color: var(--accent); font-size: 9px; font-weight: 900;" title="${escapeAttr(t('completed') || 'Completed')}">✓</span>`;
+                        bgStyle = 'background: var(--surface); border: 1px solid var(--line);';
+                        progressRightStr = bytesTotal;
+                    } else if (stateText === 'transferring' || stateText === 'connected') {
+                        statusBadge = `<span style="color: var(--accent-strong); font-size: 10px; font-weight: 800;">${percent}%</span>`;
+                        bgStyle = 'background: var(--surface); border: 1px solid var(--accent-border); box-shadow: 0 1px 3px rgba(0,0,0,0.02);';
+                        progressBarHtml = `
+                            <div style="width: 100%; height: 3px; background: rgba(0,0,0,0.06); border-radius: 1.5px; overflow: hidden; margin-top: 4px;">
+                                <div style="width: ${percent}%; height: 100%; background: var(--accent); border-radius: 1.5px; transition: width 0.2s ease;"></div>
+                            </div>
+                        `;
                     } else if (stateText === 'failed') {
-                        namePrefix = '✕';
-                        progressRightStr = t('failed') || 'Failed';
-                        bgStyle = 'background: rgba(180,35,24,0.03); border: 1px solid rgba(180,35,24,0.15);';
-                    } else {
-                        namePrefix = '⌛';
+                        statusBadge = `<span style="display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; background: rgba(180,35,24,0.08); border: 1px solid rgba(180,35,24,0.2); color: var(--danger); font-size: 9px; font-weight: 900;" title="${escapeAttr(t('failed') || 'Failed')}">✕</span>`;
+                    } else if (stateText === 'waiting') {
+                        statusBadge = `<span style="display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; background: rgba(0,0,0,0.04); border: 1px solid var(--line); color: var(--text-secondary); font-size: 8px; font-weight: 900;" title="${escapeAttr(t('waiting') || 'Waiting')}">⌛</span>`;
                         progressRightStr = sizeProgressText || t('waiting') || 'Waiting';
-                        bgStyle = 'background: rgba(0,0,0,0.01); border: 1px solid var(--line); opacity: 0.7;';
                     }
 
-                    const openFileTooltip = t('open_file_title', { file: name });
-
+                    const openFileTooltip = t('open') || 'Open';
                     return `
-                        <div id="receive-file-row-${escapeAttr(clientID)}-${idx}" style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-radius: 6px; margin-top: 4px; width: 100%; min-width: 0; box-sizing: border-box; gap: 8px; ${bgStyle}">
-                            <span id="receive-file-name-${escapeAttr(clientID)}-${idx}" style="font-size: 11px; font-weight: 700; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; text-align: left; min-width: 0;" title="${escapeAttr(path || name)}">${namePrefix} ${escapeHTML(name)}</span>
-                            <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0; white-space: nowrap;">
-                                <span id="receive-file-progress-${escapeAttr(clientID)}-${idx}" style="font-size: 10px; color: var(--text-secondary); font-weight: 600;">${escapeHTML(progressRightStr)}</span>
+                        <div id="receive-file-row-${escapeAttr(clientID)}-${idx}" style="display: flex; flex-direction: column; padding: 4px 6px; border-radius: 4px; margin-bottom: 2px; box-sizing: border-box; width: 100%; min-width: 0; ${bgStyle}">
+                            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; min-width: 0;">
+                                <span id="receive-file-name-${escapeAttr(clientID)}-${idx}" style="font-size: 11px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; text-align: left; min-width: 0; margin-right: 6px;" title="${escapeHTML(name)}">
+                                    ${escapeHTML(name)}
+                                </span>
+                                <div style="display: flex; gap: 6px; align-items: center; flex-shrink: 0; white-space: nowrap;">
+                                    ${progressRightStr ? `<span style="font-size: 9px; color: var(--text-secondary);">${escapeHTML(progressRightStr)}</span>` : ''}
+                                    ${statusBadge}
+                                </div>
                                 <div id="receive-file-action-container-${escapeAttr(clientID)}-${idx}" style="display: flex; gap: 4px; align-items: center; margin-left: 2px;">
                                     ${stateText === 'completed' && path ? `
                                         <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(path)}" title="${escapeAttr(openFileTooltip)}" style="padding: 2px; min-height: unset; height: 18px; width: 18px;">
@@ -1290,16 +1296,17 @@ function renderReceiveDeviceProgressHtml(task) {
                                     ` : ''}
                                 </div>
                             </div>
+                            ${progressBarHtml}
                         </div>
                     `;
                 }).join('');
             } else {
                 const fallbackList = [];
-                if (client.state === 'transferring' && currentFile) {
+                if ((client.state === 'transferring' || client.state === 'connected') && currentFile) {
                     fallbackList.push({
                         name: shortName(currentFile),
                         path: currentFile,
-                        state: 'transferring',
+                        state: client.state,
                         percent: percent,
                         bytesDone: client.bytesDone,
                         bytesTotal: client.bytesTotal
@@ -1321,7 +1328,7 @@ function renderReceiveDeviceProgressHtml(task) {
                     return item;
                 });
                 const sortedFallback = [...mappedFallback].sort((a, b) => {
-                    const statePriority = { 'transferring': 1, 'waiting': 2, 'completed': 3, 'failed': 4 };
+                    const statePriority = { 'transferring': 1, 'connected': 1, 'waiting': 2, 'completed': 3, 'failed': 4 };
                     const pA = statePriority[a.state] || 5;
                     const pB = statePriority[b.state] || 5;
                     if (pA !== pB) return pA - pB;
@@ -2966,6 +2973,7 @@ function getTranslatedState(s) {
     const low = s.toLowerCase();
     if (low === 'waiting') return t('waiting');
     if (low === 'running') return t('running');
+    if (low === 'connected') return t('connected');
     if (low === 'completed' || low === 'done') return t('completed');
     if (low === 'failed' || low === 'error') return t('failed');
     if (low === 'stopped' || low === 'cancelled') return t('stopped');
