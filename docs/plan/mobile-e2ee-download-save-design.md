@@ -82,26 +82,29 @@ graph TD
     B -->|移动 UA| D[切换至 decrypted-pending-save 态<br/>显式展示 📥 保存到手机 按钮]
     
     D --> E[用户点击保存 = 获得全新有效手势<br/>isSaving 锁定防抖]
-    E --> F{多文件判定}
+    E --> F{交付前置校验 R14}
     
-    F -->|单文件 或 总量≤150MB| G[延迟组装 Blob → File 对象<br/>释放中间 TypedArray 内存]
-    F -->|多文件总量>150MB 或 含大文件| H[提示使用列表单独保存<br/>在各自独立手势下逐个保存]
+    F -->|含任一 IDB 大文件 ≥256MB| H1[UI 标注建议桌面端保存<br/>避免组装超窗与 OOM]
+    F -->|多文件总量 > 150MB| H2[提示使用列表单独保存<br/>在各自独立手势下逐个保存]
+    F -->|全部 memory 且 总量 ≤ 150MB| G[延迟组装 Blob → File 对象<br/>释放中间 TypedArray 内存]
     
-    G --> I{Secure Context<br/>且 canShare({files})?}
+    G --> I{Secure Context<br/>且 canShare?}
     I -->|是| J[调用 navigator.share Files<br/>同一手势内一次调用]
     I -->|否| K[同步 a.click 直下载<br/>维护单例 activeSavedBlobUrl]
     
     J --> L{结果分类处理}
-    L -->|Resolve 成功| M[提示已存入系统<br/>异步清理对应 IndexedDB]
-    L -->|AbortError 用户取消| N[静默忽略, 保持页面就绪, 不自动改道]
-    L -->|其他 Error| S[提示保存失败<br/>保持按钮可重试]
+    L -->|Resolve 成功| M[提示已存入系统<br/>finalizeDescriptor 收尾清理]
+    L -->|AbortError 用户取消| N[静默忽略, status 回退 pending_save<br/>保持页面就绪, 不自动改道]
+    L -->|其他 Error| S[提示保存失败, status 回退 pending_save<br/>保持按钮可重试]
     
-    K --> O[触发 a.click 保存]
+    K --> O[触发 a.click 保存<br/>finalizeDescriptor 收尾]
     
     M --> P[释放 isSaving 锁, 恢复按钮可用]
     N --> P
     O --> P
     S --> P
+    H1 --> P
+    H2 --> P
 ```
 
 ### 核心机制详解
@@ -135,7 +138,20 @@ graph TD
 - **storeType 单一真源（R15）**：`storeType` 必须在解密启动时由同一判定函数（封装现状 `totalBytes >= LARGE_FILE_THRESHOLD && window.indexedDB` 语义，`download.tmpl.html`:1130）求值一次并写入 descriptor；交付侧**不得按 size 自行重算**（无 IndexedDB 环境下大文件实际落内存，重算会错判）。
 - **注册时机（R16）**：`PendingFileDescriptor` 仅在单文件**全部 chunk 完整落位**后一次性注册进 `sessionPendingFiles`；解密中途（停止/失败）不注册半成品——交付永不组装不完整文件（半截残留由 R8 停止清理负责）。
 - **状态转移与失败回态（R15）**：`pending_save` → 用户点击交付 `delivering` → 成功 `delivered`；**失败（含 AbortError 与致命异常）一律回退 `pending_save`**，保留 `chunks`/IndexedDB 数据供再次点击重试。
-- **交付后收尾（R15）**：置 `delivered` 后统一 `finalizeDescriptor`：`storeType === 'idb'` 调 `clearFile(fileId, totalChunks)`；`storeType === 'memory'` 置 `descriptor.chunks = null` 释放引用；记录自 `sessionPendingFiles` 移除或标记可回收（配合 §三.6 清理）。
+- **交付后收尾（R15，统一收尾范式）**：
+  ```javascript
+  function finalizeDescriptor(descriptor) {
+      if (!descriptor) return;
+      descriptor.status = 'delivered';
+      if (descriptor.storeType === 'idb') {
+          EqtChunkStorage.clearFile(descriptor.fileId, descriptor.totalChunks);
+      } else if (descriptor.storeType === 'memory') {
+          descriptor.chunks = null;
+      }
+      sessionPendingFiles.delete(descriptor.fileId);
+  }
+  ```
+  置 `delivered` 后统一调用 `finalizeDescriptor` 收尾，确保 IndexedDB 与 JS 堆内存无缝释放，且在 `sessionPendingFiles` 中注销已交付项。
 - **GC 保护**：在点击手势中完成 `assembleBlob` 后，立即将 `descriptor.chunks` 设为 `null`，确保内存中仅保留最终传递给系统的单一 `File` 实例。
 
 > **阈值与时机边界诚实声明（R9）**：本方案两套数值正交——现状 IndexedDB 流式阈值 `LARGE_FILE_THRESHOLD = 256MB`（`download.tmpl.html`:1049）；150MB 是**新增的 share 聚合预算**，非 IDB 阈值。未达 256MB 的文件解密期整驻内存数组（150~256MB 之间单文件仍可能吃紧），达阈值才逐块落 IDB。
