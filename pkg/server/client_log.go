@@ -6,6 +6,9 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
+	"time"
 )
 
 // ClientLogEntry represents a log telemetry payload sent from a browser client.
@@ -76,9 +79,34 @@ func (s *Server) handleClientLog(w http.ResponseWriter, r *http.Request) {
 			entry.Category, entry.Level, shortID, entry.Message, detailsStr, ua)
 		log.Printf("[CLIENT-LOG] [%s] [%s] [%s] %s | details=%s",
 			entry.Category, entry.Level, shortID, entry.Message, detailsStr)
+
+		logLine := fmt.Sprintf("[%s] [CLIENT-LOG] [%s] [%s] [%s] %s | details=%s (UA: %s)",
+			time.Now().Format("2006-01-02 15:04:05.000"), entry.Category, entry.Level, shortID, entry.Message, detailsStr, ua)
+		appendToDesktopLog(logLine)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(`{"ok":true}`))
+}
+
+func appendToDesktopLog(line string) {
+	candidates := []string{}
+	if dir, err := os.UserCacheDir(); err == nil {
+		candidates = append(candidates, filepath.Join(dir, "eqt", "desktop.log"))
+	}
+	candidates = append(candidates,
+		"/mnt/e/developer/results/logs/desktop.log",
+		"E:\\developer\\results\\logs\\desktop.log",
+	)
+
+	for _, p := range candidates {
+		if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
+			if f, err := os.OpenFile(p, os.O_WRONLY|os.O_APPEND, 0644); err == nil {
+				_, _ = f.WriteString(line + "\n")
+				_ = f.Close()
+				return
+			}
+		}
+	}
 }
