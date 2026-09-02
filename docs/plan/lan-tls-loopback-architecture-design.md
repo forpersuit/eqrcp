@@ -4,7 +4,8 @@
 > **根域名资产**：`eqt.net.im`（由 Cloudflare 全面托管）  
 > **目标分支**：`feat/lan-tls-loopback`（基于 `master` 纯净分支演进）  
 > **制定日期**：2026-09-03（2026-09-03 根据第一轮评审意见深度修订）  
-> **设计状态**：**PROPOSED / ARCHITECTURAL BLUEPRINT (评审闭环修订版)**  
+> **设计状态**：**PROPOSED / ARCHITECTURAL BLUEPRINT (二轮评审修订版)**  
+> ⚠️ **二轮评审结论（2026-09-03）**：RFC 8555 CNAME 委派方案**不成立**——`direct` 子域已 NS 委派给 sslip.io，`_acme-challenge.direct.eqt.net.im` 的权威不在 Cloudflare，父域中的 CNAME 记录不会被解析器命中（已 DNS 实测验证）。第 1 项阻塞**未真正闭环**，正确方案见文末「七、二轮评审」。
 > **核心使命**：以标准的传输层安全（TLS 1.3）与本地回环解析（Split-Horizon DNS）取代繁重脆弱的前端应用层解密流水线，在**手机无需安装任何 App**、**文件传输 100% 局域网物理直连**的前提下，彻底实现：**真·安全绿锁 (Secure Context) + 文件数据零外网 + 20GB~100GB+ 任意大文件原生流式写盘（零 OOM 内存崩溃）+ 100% 原生文件名展示**。
 
 ---
@@ -138,6 +139,8 @@
    - Let's Encrypt 检查 `_acme-challenge.direct.eqt.net.im` ➔ 追溯 CNAME ➔ 在 Cloudflare 权威节点成功读到 TXT ➔ **签发通配符证书 `*.direct.eqt.net.im`**！
    - **收益**：**完全无需自建公网权威 DNS 服务器**，既享受了 sslip.io 的零成本动态泛解析，又彻底解决了通配符公信证书的自动化签发！
 
+> ⚠️ **【二轮评审·不成立】** 上述 CNAME 委派方案在 DNS 委派语义上**无法工作**（详见文末「七、二轮评审」）：`direct.eqt.net.im` 已被 NS 委派给 sslip.io，`_acme-challenge.direct.eqt.net.im` 的权威因此落在 sslip.io 而非 Cloudflare，父域中写的这条 CNAME 记录**永远不会被解析器命中**。已通过 DoH 实测验证。
+
 ### 3. 客户端证书安全分发与缓存
 - **分发端点**：`GET https://api.eqt.net.im/v1/tls/bundle`（基于 Cloudflare Worker）；
 - **缓存策略**：电脑端 EQT 启动时异步检查 `%LOCALAPPDATA%/eqt/tls/` 缓存，若剩余有效期 >7 天直接复用，断网也能秒启；
@@ -205,8 +208,60 @@
 
 | 评审意见项 | 评审性质 | 原始评审核心疑虑 | 方案闭环措施与修改结论 | 状态 |
 | :--- | :--- | :--- | :--- | :---: |
-| **1. 无法获取 Let's Encrypt 证书** | **【阻塞项】** | `sslip.io` 无法返回 DNS-01 所需的 `_acme-challenge` TXT 记录，导致通配符公信证书无法签发 | **闭环**：采用标准 **RFC 8555 CNAME 别名委派机制**。在 Cloudflare 配置 `_acme-challenge.direct` CNAME 到父域，由 Worker 动态向父域写 TXT。无需自建 DNS，秒破阻塞！ | ✅ **已闭环** |
+| **1. 无法获取 Let's Encrypt 证书** | **【阻塞项】** | `sslip.io` 无法返回 DNS-01 所需的 `_acme-challenge` TXT 记录，导致通配符公信证书无法签发 | ⚠️ **未闭环**：二轮采用的 RFC 8555 CNAME 委派**不成立**——`direct` 已 NS 委派给 sslip.io，`_acme-challenge.direct.eqt.net.im` 的权威不在 Cloudflare，父域 CNAME 不会被解析器命中（已 DNS 实测）。正确方案见「七、二轮评审」。 | ❌ **未闭环** |
 | **2. sslip.io nameserver 勘误** | **【事实勘误】** | 原文 `ns1/ns2.sslip.io` 错误，实为 `ns-00.nip.io` 等 3 个；且无 SLA 保证 | **闭环**：正文第 3.1 节已如实修正为 3 个官方真实节点，剔除“99.999% SLA”夸大表述，如实注明公共依赖风险并提供纯内网 IP 切换兜底。 | ✅ **已闭环** |
 | **3. 安全定性夸大** | **【定性修正】** | 客户端共享私钥，无法抵御内部主动中间人攻击，不属于严格意义的 E2EE | **闭环**：正文第 1.2 节重构，剥离“军工级 E2EE / 绝对安全”词汇，客观定义为“针对局域网 Wi-Fi 被动抓包嗅探的传输层加密”。 | ✅ **已闭环** |
 | **4. 零外网流量表述不严谨** | **【表述澄清】** | 文件走内网，但初次连接有一次公网 DNS 解析问答，延迟 >50ms | **闭环**：全文修正为“文件数据传输零外网；建立连接前有一次轻量公网 DNS 解析”，纠正延迟预期。 | ✅ **已闭环** |
 | **5. 原生流式零 OOM 判断** | **【方案认可】** | 浏览器原生下载接管流式写盘，彻底解决前端 Blob 内存爆炸 | **闭环**：确立为全案核心底座坚决贯彻，彻底淘汰复杂前端 WASM/Worker/IDB 解密代码。 | ✅ **已闭环** |
+
+---
+
+## 七、二轮评审：RFC 8555 CNAME 委派方案不成立（Review Round 2）
+
+### 1.【阻塞未解决】CNAME 记录写错了 zone，DNS-01 仍无法完成
+
+一轮评审的阻塞项（"委派给 sslip.io 导致 DNS-01 TXT 无法写入"）在二轮中尝试用 RFC 8555 CNAME 委派解决，但**该解法在 DNS 委派语义上不成立**。
+
+**核心矛盾**：CNAME 记录必须写在**被查询名字的权威 zone** 内，而 `_acme-challenge.direct.eqt.net.im` 的权威已被 NS 委派切给了 sslip.io，不在 Cloudflare。
+
+**DNS 委派的确定性语义**：
+
+- `eqt.net.im` zone（Cloudflare 权威）中，`direct.eqt.net.im` 有 NS 记录指向 sslip.io —— 这是委派点；
+- 委派点以下的**整个子树** `*.direct.eqt.net.im`（含 `_acme-challenge.direct.eqt.net.im`）的权威随即移交 sslip.io；
+- 解析器解析 `_acme-challenge.direct.eqt.net.im` 时，走到 Cloudflare 只会得到**委派 referral**（"请转问 sslip.io"），然后直接转向 sslip.io；
+- 因此，Cloudflare 里写的 `_acme-challenge.direct CNAME _acme-challenge.eqt.net.im` **永远不会被解析器查询到**（它位于 `eqt.net.im` zone，但查询早已跳离 Cloudflare）。
+
+**DNS 实测验证（2026-09-03，Cloudflare DoH `1.1.1.1`）**：
+
+```text
+$ dig NS direct.eqt.net.im
+ns-00.nip.io. / ns-01.nip.io. / ns-ovh.sslip.io.   ← 委派已生效
+
+$ dig TXT _acme-challenge.direct.eqt.net.im
+（NOERROR，空答案）                                  ← 权威已在 sslip.io，返回空
+
+$ dig A 192-168-0-201.direct.eqt.net.im
+192.168.0.201                                        ← 泛解析正常（走 sslip.io）
+```
+
+RFC 8555 CNAME 委派的标准用法要求"你能在挑战域名的权威 zone 写 CNAME"。本场景中挑战域名权威在 sslip.io（非递归权威、不提供 TXT/CNAME 写入能力），因此**该机制在此架构下无解**。
+
+### 2. 正确替代方案（二选一）
+
+**方案 A（推荐，纯 Cloudflare 体系）——放弃 sslip.io，改用「动态 A 记录 + Cloudflare 直签通配符」**：
+
+1. **删除** `direct.eqt.net.im` 的 NS 委派，将其保留在 Cloudflare 权威；
+2. 通配符证书 `*.direct.eqt.net.im`：DNS-01 挑战名 `_acme-challenge.direct.eqt.net.im` 的权威回到 Cloudflare → 用 Cloudflare API 直接写 TXT → **签发无任何阻塞**（这正是原方案所缺的能力）；
+3. 泛解析改由 **Worker「传输会话 DNS 注册」接口**替代：电脑端每次传输前 POST 内网 IP → Worker 调 Cloudflare API 写一条 `random-token.direct.eqt.net.im A <内网IP>`（DNS-only 灰色云、短 TTL）→ 返回该域名 → 手机扫码访问；
+4. 传输结束由 Worker 删除该记录。
+
+- 优点：无第三方 sslip.io 依赖、证书签发彻底解耦、完全落在 Cloudflare 体系内；
+- 代价：每次传输约 1 次 Worker 往返 + Cloudflare API 写入（约数百 ms~1s，可接受）；用随机子域名规避 DNS 缓存污染。
+
+**方案 B（保持毫秒级泛解析）——自建权威 DNS**：
+
+- fork sslip.io 开源代码，为其额外实现 `_acme-challenge` TXT 动态响应能力；
+- 将 `direct.eqt.net.im` 委派给自建 DNS（2~3 台公网可达节点）；
+- 收益：保留"零配置、毫秒级泛解析"；代价：新增一套公网 DNS 基础设施与运维。
+
+> **建议**：优先评估**方案 A**——它与文档「基于 Cloudflare 体系」的定位一致，无需自建基础设施，且通配符证书签发在 Cloudflare 权威下零阻塞，是最小改动、最快落地的路径。
