@@ -1690,6 +1690,13 @@
                             triggerBlobDownload(file, desc.fileName);
                         }
                         finalizeDescriptor(desc);
+                    } else if (isMobileUA && desc) {
+                        // 移动端：单文件解密完成即时激活该条目保存按钮，支持边解边存以提前释放堆内存 (R26 渐进就绪)
+                        var actualFileIdx = (targetIndex !== undefined && targetIndex >= 0) ? targetIndex : fIdx;
+                        var itemBtn = document.querySelector('.btn-item-save[data-file-index="' + actualFileIdx + '"]');
+                        if (itemBtn) {
+                            itemBtn.style.display = 'inline-block';
+                        }
                     }
 
                     completedBytesAll += (fileInfo.file_size || 0);
