@@ -5,6 +5,8 @@
 > **第二轮补充审查决议（R6-R13）已并入**：基准提交 `4ccc9195`（2026-09-02）。第二轮审查以「实测代码现状 + Web 平台机制第一性原理」双基线复核，重点补足 Secure Context 前提、share 回退时序、停止路径孤儿、双阈值关系等正文缺口；决议对照与现状复核勘误见 §四 末。
 >
 > **第三轮细化审查决议（R14-R16）已并入**：基准提交 `20fb37e2`（2026-09-02）。聚焦 PendingFileDescriptor 契约收尾（失败回态/交付后回收/边界一致性）、含 IDB 文件的交付前置校验、局域网 HTTP 提示文案修订；决议对照见 §四 末。
+>
+> **第四轮复核审查决议（R17-R18）已并入**：基准提交 `3751e315`（2026-09-02）。对象为该提交重写的 Mermaid「交付前置校验」三分支与 §三.2 `finalizeDescriptor` 伪代码，复核「分支互斥/穷尽性 + 单文件豁免」与「chunks 释放时机 vs 回退重试」两组一致性；决议对照见 §四 末。
 
 ---
 
@@ -84,9 +86,9 @@ graph TD
     D --> E[用户点击保存 = 获得全新有效手势<br/>isSaving 锁定防抖]
     E --> F{交付前置校验 R14}
     
-    F -->|含任一 IDB 大文件 ≥256MB| H1[UI 标注建议桌面端保存<br/>避免组装超窗与 OOM]
-    F -->|多文件总量 > 150MB| H2[提示使用列表单独保存<br/>在各自独立手势下逐个保存]
-    F -->|全部 memory 且 总量 ≤ 150MB| G[延迟组装 Blob → File 对象<br/>释放中间 TypedArray 内存]
+    F -->|含任一 IDB 文件 ≥256MB| H1[整体不进 share, 大文件建议桌面端保存<br/>其余 memory 项可列表逐条保存]
+    F -->|全部 memory 且 多文件总量 > 150MB| H2[提示使用列表单独保存<br/>在各自独立手势下逐个保存]
+    F -->|全部 memory 且（单文件 或 总量 ≤ 150MB）| G[延迟组装 Blob → File 对象<br/>释放中间 TypedArray 引用]
     
     G --> I{Secure Context<br/>且 canShare?}
     I -->|是| J[调用 navigator.share Files<br/>同一手势内一次调用]
@@ -106,6 +108,8 @@ graph TD
     H1 --> P
     H2 --> P
 ```
+
+> **F 交付前置校验判定说明（R17）**：三条出边按「先排除含 IDB（≥256MB）→ 再判多文件内存总量」的优先级**互斥**执行，不会并发命中；单文件只要 `storeType === 'memory'`（<256MB，或 ≥256MB 但环境无 IndexedDB），无论大小一律走 G——150MB 仅是**多文件聚合**预算，单文件 share 不受其限（恢复 R9 单文件豁免）；混合集（含 IDB 大文件 + memory 小文件）整体不进 share，其中 memory 成员仍可在列表逐条保存。
 
 ### 核心机制详解
 
@@ -152,7 +156,7 @@ graph TD
   }
   ```
   置 `delivered` 后统一调用 `finalizeDescriptor` 收尾，确保 IndexedDB 与 JS 堆内存无缝释放，且在 `sessionPendingFiles` 中注销已交付项。
-- **GC 保护**：在点击手势中完成 `assembleBlob` 后，立即将 `descriptor.chunks` 设为 `null`，确保内存中仅保留最终传递给系统的单一 `File` 实例。
+- **GC 保护（R18 修订，释放时机随交付分支）**：`descriptor.chunks` 置 null 的时机取决于分支——`a.download` 分支在 `a.click()` 后即可置 null（OS 已接管下载，无“取消回按钮”语义）；`navigator.share` 分支必须**保留至结果 settle**：成功才由 `finalizeDescriptor` 置 null，AbortError/失败则保留 chunks 供再次点击重试（否则回退 `pending_save` 后无数据可组装，内存文件重试即破）。同时诚实注明：多数引擎 `new Blob(parts)` 持有分片引用而非拷贝，组装后立即置 null 并不能即时回收底层字节，峰值仍≈文件大小（R9 延迟不消峰）；该置 null 属尽力而为的解引用，真实释放依赖 Blob/URL 的回收。
 
 > **阈值与时机边界诚实声明（R9）**：本方案两套数值正交——现状 IndexedDB 流式阈值 `LARGE_FILE_THRESHOLD = 256MB`（`download.tmpl.html`:1049）；150MB 是**新增的 share 聚合预算**，非 IDB 阈值。未达 256MB 的文件解密期整驻内存数组（150~256MB 之间单文件仍可能吃紧），达阈值才逐块落 IDB。
 > 且**延迟组装只能把峰值推迟到点击手势内，并不能消除**：现状 `assembleBlob`（`download.tmpl.html`:1004-1014）在用户点击时仍需一次性从 IDB 读出全部 chunk 构成 Blob，峰值内存≈文件大小，可能造成 GC 长停顿或被系统杀。因此对已入 IDB 的大文件（≥256MB）移动端应在 UI 如实标注“建议桌面端保存”，点击时组装建议分帧/分批进行；真正的峰值消除路径仍是 ServiceWorker 流式（远期，见风险矩阵）。
@@ -243,13 +247,22 @@ graph TD
 | **R15: 契约状态机收尾与边界一致性** | descriptor `status` 缺失败回态与 delivered 后的记录/内存回收；memory 型无 IDB 可清，`chunks` 何时置 `null`、记录何时移除未写；注释“≤256MB 为 memory、>256MB 为 idb”与现状 `useIndexedDB = totalBytes >= LARGE_FILE_THRESHOLD && window.indexedDB`（:1130）边界不一致（恰好 256MB 分叉、且忽略无 IndexedDB 环境）；storeType 判定若由交付侧按 size 重算会与下载侧分叉 | 注释订正为“<256MB 为 memory、≥256MB 为 idb”；storeType 由解密启动时的单一判定函数求值写入 descriptor，交付侧不重算；补状态转移：失败（含 AbortError 与致命异常）一律回退 `pending_save` 保留数据；置 `delivered` 后统一 `finalizeDescriptor` 收尾（idb→`clearFile`，memory→`chunks=null`，记录移除/可回收）（已落实 §三.2） |
 | **R16: 局域网 HTTP 提示文案与注册时机** | §三.1 草案提示“可点击单项或长按预览保存”给用户错误预期：blob 资源在 iOS Safari 长按通常无“保存到文件”菜单（仅图片类可存图）；若 descriptor 在解密中途注册会暴露半成品，交付可能拿到不完整文件 | ①HTTP 提示改为引导“改用 https 地址打开 / 换桌面端下载”，删除长按表述（已落实 §三.1）；②descriptor 仅在单文件全部 chunk 完整落位后一次性注册，解密中不暴露半成品（已落实 §三.2） |
 
+### 第四轮复核审查决议（R17-R18）
+
+> 第四轮审查基准提交 `3751e315`（2026-09-02）。对象为该提交重写的 Mermaid「交付前置校验（R14）」三分支与 §三.2 `finalizeDescriptor` 收尾伪代码，围绕「分支互斥/穷尽性与单文件豁免恢复」及「chunks 释放时机 vs 回退重试的一致性」复核。正文已吸收。
+
+| 审查意见项 | 核心关切与技术风险 | 最终技术决议与落地方案 |
+| :--- | :--- | :--- |
+| **R17: 交付前置校验三分支互斥/穷尽缺陷** | ①memory 单文件在 150MB<size<256MB（或 ≥256MB 但环境无 IndexedDB）时三条出边均不命中（非 idb / 非多文件 / 超 150MB）→ 流程死路，R9 决议「单文件 share 不受 150MB 聚合预算限制」的豁免在改写中丢失（旧版「单文件 或 总量≤150MB」实为正确表达）；②混合集（含任一 IDB 大文件 + memory 小文件且总量可能 >150MB）会同时命中 H1/H2，无优先级则行为不定 | F 分支改为按优先级互斥的三类：`含任一 IDB（≥256MB）→ H1`、`全部 memory 且 多文件总量 > 150MB → H2`、`全部 memory 且（单文件 或 总量 ≤ 150MB）→ G`；单文件（storeType memory）无论大小一律走 G，恢复 R9 豁免；混合集整体不进 share，其中 memory 成员保留列表逐条保存（已落实 §三 整体架构 Mermaid 与判定说明） |
+| **R18: 组装即置 null 与 share 取消回退重试冲突** | §三.2「GC 保护：组装后立即将 chunks 置 null」与 N/S「AbortError/失败回退 pending_save、保留 chunks 供重试」自相矛盾——memory 文件若组装即置 null，share 被取消回退 pending_save 后再次点击已无 chunks 可组装，重试落空；且多数引擎 `new Blob(parts)` 持分片引用而非拷贝，组装后置 null 并不即时释放底层字节，原措辞属过度承诺 | chunks 释放时机随交付分支：`a.download` 分支在 `a.click()` 后即可置 null（OS 已接管）；`navigator.share` 分支保留至结果 settle，成功才由 `finalizeDescriptor` 置 null，AbortError/失败保留数据供重试；GC 措辞降级为「尽力而为解引用」，真实释放依赖 Blob/URL 回收（已落实 §三.2 GC 保护） |
+
 ---
 
 ## 五、风险矩阵与防御策略
 
 | 风险场景 | 根因 | 防御措施 |
 | :--- | :--- | :--- |
-| **移动端大文件 OOM 崩溃** | 100% 时过早组装整个大 Blob | 延迟组装至用户点击时；IndexedDB 保持分块存储直到交付；组装后立即解引用分块数组。**注意：延迟仅推迟峰值不消除**——对 ≥256MB 已入 IDB 的文件，UI 标注“建议桌面端保存”或设移动端单文件交付上限（R9）。 |
+| **移动端大文件 OOM 崩溃** | 100% 时过早组装整个大 Blob | 延迟组装至用户点击时；IndexedDB 保持分块存储直到交付；组装后解引用分块数组（释放时机随交付分支——share 成功才由 finalize 置 null，见 R18）。**注意：延迟仅推迟峰值不消除**——对 ≥256MB 已入 IDB 的文件，UI 标注“建议桌面端保存”或设移动端单文件交付上限（R9）。 |
 | **多文件批量保存内存暴涨** | 多个文件同时放入 `files` 数组 | 严格执行 150MB 阈值判定，超限时降级为列表单文件保存。 |
 | **用户在系统分享面板取消被误报错误** | `navigator.share` 抛出 `AbortError` | 捕获并识别 `err.name === 'AbortError'`，静默恢复按钮状态，不显示错误。 |
 | **手势过期导致二次 share 失败** | Web Share API 单手势单次调用约束 | 不使用循环 await share；大文件多文件集通过单文件按钮由用户每次点击触发。 |
