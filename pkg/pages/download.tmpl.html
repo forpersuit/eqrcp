@@ -1369,13 +1369,27 @@
         async function assembleDescriptorFile(descriptor) {
             if (!descriptor) return null;
             var blob = null;
-            if (descriptor.storeType === 'idb') {
-                blob = await EqtChunkStorage.assembleBlob(descriptor.fileId, descriptor.totalChunks, descriptor.mimeType);
-            } else if (descriptor.chunks && descriptor.chunks.length > 0) {
-                blob = new Blob(descriptor.chunks, { type: descriptor.mimeType });
+            try {
+                if (descriptor.storeType === 'idb') {
+                    blob = await EqtChunkStorage.assembleBlob(descriptor.fileId, descriptor.totalChunks, descriptor.mimeType);
+                } else if (descriptor.chunks && descriptor.chunks.length > 0) {
+                    blob = new Blob(descriptor.chunks, { type: descriptor.mimeType });
+                }
+            } catch (err) {
+                EqtTelemetry.error('SAVE', 'assembleDescriptorFile Blob assembly failed: ' + err.message, { fileId: descriptor.fileId });
+                return null;
             }
-            if (!blob) return null;
-            return new File([blob], descriptor.fileName, { type: descriptor.mimeType });
+            if (!blob) {
+                EqtTelemetry.warn('SAVE', 'assembleDescriptorFile yielded null blob', { fileId: descriptor.fileId });
+                return null;
+            }
+            try {
+                return new File([blob], descriptor.fileName, { type: descriptor.mimeType });
+            } catch (fileErr) {
+                EqtTelemetry.info('SAVE', 'Fallback from File constructor to raw Blob for iOS Safari', { error: fileErr.message });
+                blob.name = descriptor.fileName;
+                return blob;
+            }
         }
 
         async function saveToDevice(targetFileIndex) {
@@ -1411,6 +1425,7 @@
             }
 
             if (targetDescriptors.length === 0) {
+                EqtTelemetry.warn('SAVE', 'targetDescriptors is empty, skipping save');
                 if (guidanceEl) {
                     guidanceEl.style.display = 'block';
                     guidanceEl.textContent = dict.save_done_tips || 'Saved to device';
@@ -1423,12 +1438,14 @@
             var totalBytes = targetDescriptors.reduce(function(sum, d) { return sum + (d.fileSize || 0); }, 0);
 
             if (hasIDB) {
+                EqtTelemetry.warn('SAVE', 'Skipped save due to hasIDB', { totalBytes: totalBytes });
                 if (guidanceEl) {
                     guidanceEl.style.display = 'block';
                     guidanceEl.textContent = dict.save_large_desktop_tips || 'File is large (≥256MB), saving on desktop is recommended';
                 }
                 return; // 含任一 IDB 大文件恒 return，引导电脑端保存 (R20)
             } else if (targetDescriptors.length > 1 && totalBytes > MULTI_FILE_SHARE_THRESHOLD) {
+                EqtTelemetry.warn('SAVE', 'Skipped save due to MULTI_FILE_SHARE_THRESHOLD', { totalBytes: totalBytes, threshold: MULTI_FILE_SHARE_THRESHOLD });
                 if (guidanceEl) {
                     guidanceEl.style.display = 'block';
                     guidanceEl.textContent = dict.save_multi_large_tips || 'File set is large, please save items individually below';
@@ -1455,10 +1472,15 @@
                     }
                 }
 
+                EqtTelemetry.info('SAVE', 'Assembled files ready', {
+                    count: assembledFiles.length,
+                    targetCount: targetDescriptors.length
+                });
+
                 // 完整性校验：若组装数小于目标数，禁止部分交付，整体回退 (R23)
                 if (assembledFiles.length !== targetDescriptors.length) {
                     targetDescriptors.forEach(function(d) { d.status = 'pending_save'; });
-                    throw new Error("Failed to assemble all files for delivery");
+                    throw new Error("Failed to assemble all files for delivery (expected " + targetDescriptors.length + ", got " + assembledFiles.length + ")");
                 }
 
                 var filesToShare = assembledFiles.map(function(item) { return item.file; });
@@ -1525,6 +1547,15 @@
                         } else {
                             hasZipOrBinary = true;
                             triggerBlobDownload(item.file, fileName);
+                            if (isIOS) {
+                                try {
+                                    var iosBlobUrl = activeSavedBlobUrl || URL.createObjectURL(item.file);
+                                    EqtTelemetry.info('SAVE', 'Attempting iOS Safari direct location.href trigger', { fileName: fileName });
+                                    window.location.href = iosBlobUrl;
+                                } catch (iosNavErr) {
+                                    EqtTelemetry.warn('SAVE', 'iOS Safari location.href trigger error: ' + iosNavErr.message);
+                                }
+                            }
                         }
 
                         // R33: 严禁提前销毁 chunks！保留内存明文数据，绝不调用 chunks = null
@@ -1547,6 +1578,10 @@
 
                 // 仅在真实成功交付后更新按钮状态 (R24 / R25 / R33)
                 if (deliveredOk) {
+                    EqtTelemetry.info('SAVE', 'Delivery completed successfully', {
+                        deliveredOk: deliveredOk,
+                        pendingFilesLeft: sessionPendingFiles.size
+                    });
                     if (isCompleted && sessionPendingFiles.size === 0) {
                         if (saveBtn) {
                             saveBtn.disabled = true;
@@ -1558,6 +1593,9 @@
                 }
             } catch (err) {
                 console.error("[DeliveryController] save error: ", err);
+                EqtTelemetry.error('SAVE', 'saveToDevice caught error: ' + (err ? err.message : 'unknown'), {
+                    stack: err ? err.stack : null
+                });
                 targetDescriptors.forEach(function(d) { d.status = 'pending_save'; });
                 if (guidanceEl) {
                     guidanceEl.style.display = 'block';
@@ -1565,6 +1603,7 @@
                 }
             } finally {
                 isSaving = false;
+                EqtTelemetry.flushImmediately();
                 if (saveBtn && sessionPendingFiles.size > 0) {
                     saveBtn.disabled = false;
                     saveBtn.textContent = originalBtnText;
