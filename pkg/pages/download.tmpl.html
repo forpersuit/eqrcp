@@ -486,7 +486,8 @@
                 'waiting_status', 'failed_status', 'downloaded_files_title', 'can_open', 'cannot_open',
                 'btn_save_zip', 'zip_contents', 'btn_save_to_phone', 'btn_save_all_to_phone',
                 'btn_save_item', 'saving_preparing', 'save_done_tips', 'save_failed_tips',
-                'save_multi_large_tips', 'save_large_desktop_tips', 'save_http_ios_tips'
+                'save_multi_large_tips', 'save_large_desktop_tips', 'save_http_ios_tips',
+                'e2ee_completed_header', 'e2ee_completed_tips', 'save_opened_preview_tips', 'save_zip_http_tips'
             ];
 
             var translations = {
@@ -534,7 +535,11 @@
                     save_failed_tips: '保存失败，点击重试',
                     save_multi_large_tips: '文件集较大，建议在下方列表逐个保存',
                     save_large_desktop_tips: '文件较大（≥256MB），建议在电脑端接收保存',
-                    save_http_ios_tips: '（提示：当前为局域网 HTTP 访问，iOS 下无法分享到“文件”；请改用 HTTPS 地址或电脑端下载）'
+                    save_http_ios_tips: '（提示：当前为局域网 HTTP 访问，iOS 下无法分享到“文件”；请改用 HTTPS 地址或电脑端下载）',
+                    e2ee_completed_header: '🎉 传输已完成，文件已就绪！',
+                    e2ee_completed_tips: '文件已在您的设备上安全解密，请点击下方按钮保存到本地。',
+                    save_opened_preview_tips: '已在新窗口打开：请点击浏览器下方【分享】图标 ➔【存储到“文件”】即可存入手机（图片可长按直接存储）',
+                    save_zip_http_tips: '已触发下载。若未自动弹出，请长按下方链接选择【下载链接文件】'
                 },
                 en: {
                     title: 'Receive File - EQT',
@@ -580,7 +585,11 @@
                     save_failed_tips: 'Save failed, click to retry',
                     save_multi_large_tips: 'File set is large, please save items individually below',
                     save_large_desktop_tips: 'File is large (≥256MB), saving on desktop is recommended',
-                    save_http_ios_tips: '(Notice: LAN HTTP access cannot share to Files on iOS; please use HTTPS or desktop)'
+                    save_http_ios_tips: '(Notice: LAN HTTP access cannot share to Files on iOS; please use HTTPS or desktop)',
+                    e2ee_completed_header: '🎉 Transfer Completed, Files Ready!',
+                    e2ee_completed_tips: 'Files have been decrypted on your device. Click below to save.',
+                    save_opened_preview_tips: 'Opened in new tab: tap browser Share icon ➔ "Save to Files" (or press and hold image to save)',
+                    save_zip_http_tips: 'Download triggered. If no prompt appears, press and hold the link to download.'
                 },
                 ja: {
                     title: 'ファイル受信 - EQT',
@@ -621,7 +630,11 @@
                     save_failed_tips: '保存に失敗しました。再試行してください',
                     save_multi_large_tips: 'ファイルサイズが大きいため、下のリストから個別に保存してください',
                     save_large_desktop_tips: 'ファイルが大きいため（≥256MB）、パソコンでの受信を推奨します',
-                    save_http_ios_tips: '（注意: LAN HTTP 経由では iOS の「ファイル」に保存できません。HTTPS または PC をご利用ください）'
+                    save_http_ios_tips: '（注意: LAN HTTP 経由では iOS の「ファイル」に保存できません。HTTPS または PC をご利用ください）',
+                    e2ee_completed_header: '🎉 転送完了、ファイルの準備ができました！',
+                    e2ee_completed_tips: '端末上で復号が完了しました。下部ボタンを押して保存してください。',
+                    save_opened_preview_tips: '新しいタブで開きました：ブラウザの共有アイコン ➔「ファイルに保存」をタップしてください',
+                    save_zip_http_tips: 'ダウンロードを開始しました。反応がない場合はリンクを長押しして保存してください。'
                 },
                 ko: {
                     title: '파일 받기 - EQT',
@@ -662,7 +675,11 @@
                     save_failed_tips: '저장 실패. 다시 시도하려면 클릭하세요',
                     save_multi_large_tips: '파일 세트가 큽니다. 아래 목록에서 개별적으로 저장하세요',
                     save_large_desktop_tips: '파일이 큽니다(≥256MB). PC에서 수신하는 것을 권장합니다',
-                    save_http_ios_tips: '(참고: LAN HTTP 환경의 iOS에서는 파일 저장이 제한됩니다. HTTPS 또는 PC를 사용하세요)'
+                    save_http_ios_tips: '(참고: LAN HTTP 환경의 iOS에서는 파일 저장이 제한됩니다. HTTPS 또는 PC를 사용하세요)',
+                    e2ee_completed_header: '🎉 전송 완료, 파일이 준비되었습니다!',
+                    e2ee_completed_tips: '기기에서 복호화가 완료되었습니다. 아래 버튼을 눌러 저장하세요.',
+                    save_opened_preview_tips: '새 탭에서 열림: 브라우저 공유 아이콘 ➔ "파일에 저장"을 누르세요 (이미지는 길게 눌러 저장)',
+                    save_zip_http_tips: '다운로드가 시작되었습니다. 응답이 없으면 링크를 길게 눌러 다운로드하세요.'
                 },
                 es: {
                     title: 'Recibir Archivo - EQT',
@@ -703,7 +720,11 @@
                     save_failed_tips: 'Error al guardar, haga clic para reintentar',
                     save_multi_large_tips: 'El conjunto de archivos es grande, guárdelos individualmente abajo',
                     save_large_desktop_tips: 'El archivo es grande (≥256MB), se recomienda guardar en PC',
-                    save_http_ios_tips: '(Aviso: El acceso LAN HTTP no permite compartir en Archivos en iOS; use HTTPS o PC)'
+                    save_http_ios_tips: '(Aviso: El acceso LAN HTTP no permite compartir en Archivos en iOS; use HTTPS o PC)',
+                    e2ee_completed_header: '🎉 ¡Transferencia completada, archivos listos!',
+                    e2ee_completed_tips: 'Archivos descifrados en su dispositivo. Toque abajo para guardar.',
+                    save_opened_preview_tips: 'Abierto en nueva pestaña: toque Compartir ➔ "Guardar en Archivos" (o mantenga presionada la imagen)',
+                    save_zip_http_tips: 'Descarga activada. Si no responde, mantenga presionado el enlace para descargar.'
                 },
                 de: {
                     title: 'Datei bereit zum Herunterladen - EQT',
@@ -744,7 +765,11 @@
                     save_failed_tips: 'Speichern fehlgeschlagen, zum Wiederholen klicken',
                     save_multi_large_tips: 'Dateigruppe ist groß, bitte unten einzeln speichern',
                     save_large_desktop_tips: 'Datei ist groß (≥256MB), Empfang am PC empfohlen',
-                    save_http_ios_tips: '(Hinweis: LAN-HTTP-Zugriff kann unter iOS nicht in Dateien speichern; bitte HTTPS oder PC nutzen)'
+                    save_http_ios_tips: '(Hinweis: LAN-HTTP-Zugriff kann unter iOS nicht in Dateien speichern; bitte HTTPS oder PC nutzen)',
+                    e2ee_completed_header: '🎉 Übertragung abgeschlossen, Dateien bereit!',
+                    e2ee_completed_tips: 'Dateien auf Ihrem Gerät entschlüsselt. Unten zum Speichern tippen.',
+                    save_opened_preview_tips: 'Im neuen Tab geöffnet: Teilen ➔ "In Dateien sichern" tippen (oder Bild gedrückt halten)',
+                    save_zip_http_tips: 'Download ausgelöst. Falls keine Reaktion erfolgt, Link gedrückt halten.'
                 },
                 fr: {
                     title: 'Recevoir le Fichier - EQT',
@@ -785,7 +810,11 @@
                     save_failed_tips: 'Échec de l\'enregistrement, cliquez pour réessayer',
                     save_multi_large_tips: 'Fichiers volumineux, veuillez les enregistrer individuellement ci-dessous',
                     save_large_desktop_tips: 'Fichier volumineux (≥256MB), réception sur PC recommandée',
-                    save_http_ios_tips: '(Note : L\'accès LAN HTTP ne permet pas d\'enregistrer dans Fichiers sur iOS ; utilisez HTTPS ou PC)'
+                    save_http_ios_tips: '(Note : L\'accès LAN HTTP ne permet pas d\'enregistrer dans Fichiers sur iOS ; utilisez HTTPS ou PC)',
+                    e2ee_completed_header: '🎉 Transfert terminé, fichiers prêts !',
+                    e2ee_completed_tips: 'Fichiers déchiffrés sur votre appareil. Appuyez ci-dessous pour enregistrer.',
+                    save_opened_preview_tips: 'Ouvert dans un nouvel onglet : appuyez sur Partager ➔ "Enregistrer dans Fichiers" (ou maintenez l\'image)',
+                    save_zip_http_tips: 'Téléchargement lancé. Si rien ne se passe, maintenez le lien pour télécharger.'
                 }
             };
 
@@ -1353,33 +1382,54 @@
                         }
                     }
                 } else {
+                    // 局域网 HTTP 或不支持 Web Share 环境下的确定性保存策略 (R32 / R33)
+                    var openedPreviewCount = 0;
+                    var hasZipOrBinary = false;
+
                     assembledFiles.forEach(function(item) {
-                        triggerBlobDownload(item.file, item.descriptor.fileName);
-                        if (item.descriptor.storeType === 'memory') {
-                            item.descriptor.chunks = null;
+                        var fileName = item.descriptor.fileName || 'file';
+                        var isPreviewable = /\.(jpe?g|png|gif|webp|svg|bmp|pdf|txt|mp4|webm|mov|mp3|wav|ogg)$/i.test(fileName);
+
+                        if (assembledFiles.length === 1 && isPreviewable) {
+                            // 单个可预览文件（图片、PDF、文本、音视频等）：在新标签页打开
+                            // iOS Safari 原生直接渲染，用户点击底部分享图标即可“存储到文件”或“存储图像”
+                            var blobUrl = URL.createObjectURL(item.file);
+                            var win = window.open(blobUrl, '_blank');
+                            if (!win || win.closed || typeof win.closed === 'undefined') {
+                                window.location.href = blobUrl;
+                            }
+                            openedPreviewCount++;
+                        } else {
+                            hasZipOrBinary = true;
+                            triggerBlobDownload(item.file, fileName);
                         }
-                        finalizeDescriptor(item.descriptor);
+
+                        // R33: 严禁提前销毁 chunks！保留内存明文数据，绝不调用 chunks = null
+                        // 仅记录状态为 delivered，但保留随时重新打开和重试的能力
+                        item.descriptor.status = 'delivered';
                     });
+
                     deliveredOk = true;
                     if (guidanceEl) {
                         guidanceEl.style.display = 'block';
-                        if (!window.isSecureContext && isIOS) {
-                            guidanceEl.textContent = dict.save_http_ios_tips || '(Notice: LAN HTTP access cannot share to Files on iOS; please use HTTPS or desktop)';
+                        if (openedPreviewCount > 0) {
+                            guidanceEl.textContent = dict.save_opened_preview_tips || 'Opened in new tab: tap Share ➔ "Save to Files" (or press and hold image to save)';
+                        } else if (hasZipOrBinary && !window.isSecureContext && isIOS) {
+                            guidanceEl.textContent = dict.save_zip_http_tips || 'Download triggered. If no prompt appears, press and hold the link to download.';
                         } else {
                             guidanceEl.textContent = dict.save_done_tips || 'Download triggered';
                         }
                     }
                 }
 
-                // 仅在真实成功交付后更新按钮状态 (R24 / R25)
+                // 仅在真实成功交付后更新按钮状态 (R24 / R25 / R33)
                 if (deliveredOk) {
                     if (typeof targetFileIndex === 'number') {
                         var singleBtn = document.querySelector('.btn-item-save[data-file-index="' + targetFileIndex + '"]');
                         if (singleBtn) {
-                            singleBtn.disabled = true;
+                            singleBtn.disabled = false; // 局域网模式下允许再次点击重新打开
                             singleBtn.textContent = '✓';
-                            singleBtn.style.opacity = '0.6';
-                            singleBtn.style.cursor = 'default';
+                            singleBtn.style.opacity = '0.85';
                         }
                     }
                     if (isCompleted && sessionPendingFiles.size === 0) {
@@ -1732,6 +1782,28 @@
             if (statusEl) statusEl.innerText = '🔒 传输完成 (已端到端解密)';
             if (actionBtnRow) actionBtnRow.style.display = 'flex';
 
+            // R31: 切换卡片主体视觉为高感知完成态（大勾图标、完成大标题、完成副标题）
+            var pendingIcon = document.getElementById('status-icon-pending');
+            if (pendingIcon) pendingIcon.style.display = 'none';
+            var successIcon = document.getElementById('status-icon-success');
+            if (successIcon) {
+                successIcon.className = 'status-badge success';
+                successIcon.style.display = 'inline-flex';
+                successIcon.textContent = '✓';
+            }
+            var headerEl = document.getElementById('header-text');
+            if (headerEl) {
+                headerEl.setAttribute('data-i18n', 'e2ee_completed_header');
+                headerEl.textContent = dict.e2ee_completed_header || 'Transfer Completed, Files Ready!';
+            }
+            var summaryEl = document.getElementById('summary-text');
+            if (summaryEl) {
+                summaryEl.setAttribute('data-i18n', 'e2ee_completed_tips');
+                summaryEl.textContent = dict.e2ee_completed_tips || 'Files have been decrypted on your device. Click below to save.';
+            }
+            var wifiWarning = document.querySelector('.wifi-warning-box');
+            if (wifiWarning) wifiWarning.style.display = 'none';
+
             if (!isMobileUA) {
                 // 桌面端已在循环中逐个交付完毕，隐藏冗余下载按钮
                 if (downloadZipBtn) downloadZipBtn.style.display = 'none';
@@ -1764,13 +1836,12 @@
 
                 if (guidanceEl) {
                     var hasIDB = Array.from(sessionPendingFiles.values()).some(function(d) { return d.storeType === 'idb'; });
-                    var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
                     if (hasIDB) {
                         guidanceEl.style.display = 'block';
                         guidanceEl.textContent = dict.save_large_desktop_tips || 'File is large (≥256MB), saving on desktop is recommended';
-                    } else if (!window.isSecureContext && isIOS) {
+                    } else if (!window.isSecureContext && filesToFetch.length > 1) {
                         guidanceEl.style.display = 'block';
-                        guidanceEl.textContent = dict.save_http_ios_tips || '(Notice: LAN HTTP access cannot share to Files on iOS; please use HTTPS or desktop)';
+                        guidanceEl.textContent = dict.save_multi_large_tips || 'File set is large, please save items individually below';
                     }
                 }
             }
