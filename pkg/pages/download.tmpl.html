@@ -417,7 +417,7 @@
             {{end}}
 
             <div id="action-btn-row" style="display: flex; flex-direction: column; gap: 8px;">
-                <button type="button" class="btn" id="btn-action-save-mobile" style="display: none; background: var(--accent); color: #fff;" data-i18n="btn_save_to_phone">Save to Phone</button>
+                <a role="button" class="btn" id="btn-action-save-mobile" style="display: none; background: var(--accent); color: #fff; text-decoration: none; text-align: center; box-sizing: border-box;" data-i18n="btn_save_to_phone">Save to Phone</a>
                 <p id="save-mobile-guidance" style="display: none; font-size: 12px; color: var(--text-secondary); margin: 2px 0 6px 0; text-align: center; line-height: 1.4;"></p>
                 {{if gt .Count 1}}
                     <button type="button" class="btn" id="btn-action-download-zip" onclick="triggerDownload()">Download All (ZIP)</button>
@@ -1359,9 +1359,19 @@
             }
             var blobUrl = URL.createObjectURL(blobOrFile);
             activeSavedBlobUrl = blobUrl;
+            var targetDownloadName = fileName || (blobOrFile.name || 'download.dat');
+
+            // 无论任何环境，同步把主保存按钮绑定该真实 blobUrl 和 download 属性
+            var saveBtn = document.getElementById('btn-action-save-mobile');
+            if (saveBtn) {
+                saveBtn.setAttribute('href', blobUrl);
+                saveBtn.setAttribute('download', targetDownloadName);
+                saveBtn.removeAttribute('disabled');
+            }
+
             var a = document.createElement('a');
             a.href = blobUrl;
-            a.download = fileName || (blobOrFile.name || 'download.dat');
+            a.download = targetDownloadName;
             document.body.appendChild(a);
             try {
                 a.click();
@@ -1544,15 +1554,6 @@
                         } else {
                             hasZipOrBinary = true;
                             triggerBlobDownload(item.file, fileName);
-                            if (isIOS) {
-                                try {
-                                    var iosBlobUrl = activeSavedBlobUrl || URL.createObjectURL(item.file);
-                                    EqtTelemetry.info('SAVE', 'Attempting iOS Safari direct location.href trigger', { fileName: fileName });
-                                    window.location.href = iosBlobUrl;
-                                } catch (iosNavErr) {
-                                    EqtTelemetry.warn('SAVE', 'iOS Safari location.href trigger error: ' + iosNavErr.message);
-                                }
-                            }
                         }
 
                         // R33: 严禁提前销毁 chunks！保留内存明文数据，绝不调用 chunks = null
@@ -2551,8 +2552,18 @@
         document.addEventListener('DOMContentLoaded', function() {
             var saveMobileBtn = document.getElementById('btn-action-save-mobile');
             if (saveMobileBtn) {
-                saveMobileBtn.addEventListener('click', function() {
-                    EqtTelemetry.info('ACTION', 'User manually tapped btn-action-save-mobile');
+                saveMobileBtn.addEventListener('click', function(e) {
+                    var currentHref = saveMobileBtn.getAttribute('href');
+                    var currentDownload = saveMobileBtn.getAttribute('download');
+                    EqtTelemetry.info('ACTION', 'User manually tapped btn-action-save-mobile', {
+                        hasHref: !!currentHref,
+                        downloadAttr: currentDownload
+                    });
+                    if (currentHref && currentHref.indexOf('blob:') === 0) {
+                        // 已经具备真实的 blobUrl 与 download 属性，放行原生超链接点击，Safari 才能正确识别文件名！
+                        return;
+                    }
+                    e.preventDefault();
                     saveToDevice();
                 });
             }
@@ -2561,6 +2572,11 @@
             itemSaveBtns.forEach(function(btn) {
                 btn.addEventListener('click', function(e) {
                     e.stopPropagation();
+                    var currentHref = btn.getAttribute('href');
+                    if (currentHref && currentHref.indexOf('blob:') === 0) {
+                        return;
+                    }
+                    e.preventDefault();
                     var idx = parseInt(btn.getAttribute('data-file-index'), 10);
                     saveToDevice(idx);
                 });

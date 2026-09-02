@@ -431,5 +431,6 @@ iPhone 18.7 真机在局域网 HTTP 下传输 258MB（`271,363,336` 字节）大
 | :--- | :--- | :--- |
 | **R38: 彻底废除 R20 的 hasIDB 人为拦截，确立大小文件传输体验一致性原则** | 10MB 文件与 10GB 文件在用户心智中应具备完全一致的交互心智。技术层面的分块存储（RAM vs IDB）是实现细节，绝不能作为阻断用户保存文件的借口 | 彻底移除 `saveToDevice` 中针对 `hasIDB` 和 `MULTI_FILE_SHARE_THRESHOLD` 的 `return` 拦截；无论数据在 RAM 还是 IndexedDB，统一通过 `assembleDescriptorFile` 组装完整 Blob，正常进入保存交付链路 |
 | **R39: 传输启动阶段统一前置指引** | 端到端加密大文件在移动设备上需在前端本地解密，解密过程需耗时数秒至十数秒，用户在此期间缺乏确定性预期 | 用户点击【开始下载】触发传输解密时，立即在进度条下方（`download-notification-tips`）及状态摘要区显式展示指引：“🔒 正在进行端到端加密传输与安全解密，请保持页面开启。传输完成后将自动弹出下载保存提示。” 覆盖 7 国语言，消除用户等待顾虑 |
-| **R40: 传输完成后自动唤起与即时手势保存无缝衔接** | 解密完成后自动触发保存弹窗；对于 iOS WebKit 长时间异步后手势失效拦截的环境，主按钮亮起【Save ZIP Archive】，作为即时手势兜底 | 100% 解密后自动调用 `saveToDevice()` 尝试唤起下载；主按钮保持激活，用户点击后在用户即时手势（User Gesture）内通过 `window.location.href = blobUrl` 顺利唤起 Safari 系统的“您要下载此文件吗？”弹窗 |
+| **R40: 传输解密就绪后主保存按钮原生超链接化** | iOS Safari WebKit 对于无手势生成的 `a.click()` 可能会拦截，且使用 `window.location.href = blobUrl` 导航会导致下载文件名退化为默认字符串 `Unknown` | 将主保存按钮改造为具备完整 `role="button"` 的原生 `<a>` 标签；在数据组装完成后，直接将 `href` 绑定为就绪的 `blobUrl`，并将 `download` 属性设置为真实文件名（如 `EQT_SHARE_xxx.zip`） |
+| **R41: 彻底移除 window.location.href 导航，消除 Unknown 文件名** | `window.location.href = blobUrl` 不具备 `download` 属性，WebKit 在处理 blob 协议导航时必然 fallback 到 `Unknown` | 彻底移除该行代码；用户点击已具备 `href` 与 `download` 属性的主按钮时，直接放行浏览器的原生超链接下载通道，0ms 延迟在用户手势内触发，Safari 官方弹窗 100% 精确显示真实文件名 |
 
