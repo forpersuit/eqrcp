@@ -152,3 +152,34 @@ Mega / ProtonDrive 式"点击即原生下载，SW 边拉密文边解密边吐明
 | E2EE 下载启动入口 | `download.tmpl.html` `startE2EEDownload` ~:1242 / `new EqtE2EEDownloader.Pipeline` ~:1290 |
 | 完成态提示文案（成功可关闭） | `download.tmpl.html` `hintEl` ~:848，`success_tips_all` |
 | 无 `navigator.share` 现状 | 全文件检索无引用（撰写时） |
+
+---
+
+## 六、审查复核：对开发多文件/生命周期建议的技术校验 (Review of `c13186b8`)
+
+> 开发在 `c13186b8` 新增了多文件保存、`isSaving` 防抖与 objectURL 生命周期闭环。以下按现状代码逐条校验——方向正确，但多文件"全部保存"与内存受控目标存在结构性冲突，且清理兜底不可依赖 pagehide。**开发下轮修订正文时消化本节 R1-R4 并入对应小节。**
+
+### R1（结构性冲突）"全部保存"隐含全量驻留内存，与单文件受控模型相反（针对 §三.4 全部保存）
+- **现状**：E2EE 多文件下载是**顺序逐文件**执行——`startE2EEDownload` 对 `metaData.files` 循环 `await pipeline.downloadFile(...)`（`download.tmpl.html`:1301-1318），每个文件完成即独立 assemble/保存。即现状峰值内存 ≈ **单个文件**，天然受控。
+- **冲突**：`navigator.share({ files: [...] })` 要求 `files` 数组**全部 File 同时可读驻内存**（share 无逐文件流式语义），不存在"边组装边 share"或"share 中释放前一个"。故【全部保存】的峰值 = Σ(各文件大小)，把单文件受控模型直接破坏——与 §一 目标 2、风险表首行防御相矛盾。
+- **修正**：全部保存只允许用于 **Σ(文件集) < 内存安全阈值 且 每文件均未触发 useIndexedDB 大文件路径** 的文件集；一旦集合含大文件或总合超限，自动降级为两种：
+  - **逐文件排队保存**：循环"组装一个 File → share/a.download → 等 promise settle → 释放该文件资源 → 下一个"，每次只驻留一个文件（复用同一 `isSaving` 锁天然串行）；
+  - 或界面提示改用该文件的【单独保存】按钮。
+- 默认推荐逐文件排队（保持与现状"逐文件即存"模型同构，改动面最小）。
+
+### R2（分支错位）objectURL 只在 `a.download` 回退需要；share 分支传 File 无需 URL（针对 §三.6 单例）
+- `navigator.share({ files })` 直接传 `File` 对象，**不产生 objectURL**；`createObjectURL` 仅 `a.download` 回退分支需要。
+- 故"全局单例 `activeSavedBlobUrl`"只覆盖**单文件 `a.download` 回退**。多文件全部保存走 share 失败回退 `a.download` 时，要么维护 **URL 数组**、要么按 R1 的逐文件串行（每轮仅一个 active URL，触发后即 revoke）。文档宜把单例规则限定为"单文件 / 串行回退场景"，避免实现者误以为多文件 share 也要造 URL。
+
+### R3（兜底不可靠）chunk 清理不能依赖 pagehide（针对 §三.6 "离开页面时清理"）
+- 移动 Safari/Chrome **切后台被杀常不触发 `pagehide`**（切后台触发 `visibilitychange→hidden`，随后进程可能被系统回收），该事件只能可靠覆盖正常关闭。
+- 仅靠 pagehide 清 IndexedDB chunk → 用户保存成功切走被杀 → chunk 永久残留（违背风险表末行"不泄漏磁盘"）。
+- **补兜底**：IndexedDB 的每个文件会话落**时间戳/会话标识**；下次会话启动（或新一次 E2EE 下载开始前）先清扫上一会话遗留超过 N 分钟的 chunk 存储。pagehide/`visibilitychange` 只作尽力而为的即时清理。成功交付分支（iOS share resolve / a.download 反馈）可提前清，取消/失败保留以支持重试。
+
+### R4（语义澄清）share resolve ≠ "文件已存入系统"；防抖锁释放 ≠ 清理时机（针对 §三.5 / 三.6）
+- iOS "存储到 Files" 通常在 resolve 前已落盘；**Android 分享到其它 app 时 resolve 只代表分享动作完成**，目标方未必保存。
+- 因此分层：`isSaving` 防抖锁在 promise **settle（resolve/reject）即释放**，避免系统分享面板被用户晾置时按钮长期灰死；而"是否已成功交付、可清 chunk"的判定，Android 分享非 Files 目标**不作为清理依据**（沿用 R3 的保留到下次会话清扫策略）。
+- 可选项：用户晾置系统面板属正常交互，按钮灰态期间可给次级"取消"出口或超时释放，防误认为卡死。
+
+### R5（Phase 1 实现提醒）单文件行内【保存】按钮与整行下载入口的事件隔离
+- 页面同时存在 `triggerDownload()`（全部）与 `triggerDownloadItem(index)`（单文件，`download.tmpl.html`:1350-1361），文件行 `.file-item-row` 本身承载下载触发。行内新增【单独保存】按钮时须 `stopPropagation` 隔离，防止点击按钮同时触发整行/重复下载；按钮走 `addEventListener`（非内联 onclick），与既有停止/下载按钮的事件注册方式保持一致。
