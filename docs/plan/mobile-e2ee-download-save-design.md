@@ -3,6 +3,8 @@
 > 本文整合了「开发排查意见」、「审查复核（R1-R5）」以及基于第一性原理与 Web 运行机制的深度分析，形成最终指导落地的完整架构与实现规范。
 >
 > **第二轮补充审查决议（R6-R13）已并入**：基准提交 `4ccc9195`（2026-09-02）。第二轮审查以「实测代码现状 + Web 平台机制第一性原理」双基线复核，重点补足 Secure Context 前提、share 回退时序、停止路径孤儿、双阈值关系等正文缺口；决议对照与现状复核勘误见 §四 末。
+>
+> **第三轮细化审查决议（R14-R16）已并入**：基准提交 `20fb37e2`（2026-09-02）。聚焦 PendingFileDescriptor 契约收尾（失败回态/交付后回收/边界一致性）、含 IDB 文件的交付前置校验、局域网 HTTP 提示文案修订；决议对照见 §四 末。
 
 ---
 
@@ -110,7 +112,7 @@ graph TD
   - 进度条置为 100%（绿色完成态）；
   - 顶部/操作区展示大号高亮主按钮【📥 保存到手机】（多文件时为【📥 全部保存到手机】）；
   - 提示文案更新：“已在本机解密完成，请点击下方按钮保存到系统”；
-  - **局域网 HTTP 模式动态提示（R6）**：若检测到 `!window.isSecureContext` 且为 iOS 设备，在按钮下方附带辅助提示：“（提示：当前为局域网 HTTP 访问，受 iOS 限制若无法直接保存，可点击单项或长按预览保存）”。
+  - **局域网 HTTP 模式动态提示（R6，文案经 R16 修订）**：若检测到 `!window.isSecureContext` 且为 iOS 设备，在按钮下方附带辅助提示：“（提示：当前为局域网 HTTP 访问，iOS 下无法分享到“文件”；请改用 https 地址打开本页，或换用桌面端下载）”。原草案“长按预览保存”表述易误导——blob 资源在 iOS Safari 长按通常无“保存到文件”菜单（仅图片类可存图），已删除。
 
 #### 2. 解密与交付解耦（R7）：Pending 数据结构与组装延迟
 - **职责拆分**：将现状 `downloadFile`（解密+组装+下载合一）拆解为两阶段：
@@ -125,11 +127,15 @@ graph TD
       fileSize: 1048576,
       mimeType: 'application/pdf',
       totalChunks: 1,
-      storeType: 'memory' | 'idb', // ≤256MB 为 memory, >256MB 为 idb
+      storeType: 'memory' | 'idb', // <256MB 为 memory, ≥256MB 为 idb(与 LARGE_FILE_THRESHOLD 的 `>=` 判定一致)
       chunks: [Uint8Array],        // 仅 storeType === 'memory' 时有效
       status: 'pending_save'       // 'pending_save' | 'delivering' | 'delivered'
   }
   ```
+- **storeType 单一真源（R15）**：`storeType` 必须在解密启动时由同一判定函数（封装现状 `totalBytes >= LARGE_FILE_THRESHOLD && window.indexedDB` 语义，`download.tmpl.html`:1130）求值一次并写入 descriptor；交付侧**不得按 size 自行重算**（无 IndexedDB 环境下大文件实际落内存，重算会错判）。
+- **注册时机（R16）**：`PendingFileDescriptor` 仅在单文件**全部 chunk 完整落位**后一次性注册进 `sessionPendingFiles`；解密中途（停止/失败）不注册半成品——交付永不组装不完整文件（半截残留由 R8 停止清理负责）。
+- **状态转移与失败回态（R15）**：`pending_save` → 用户点击交付 `delivering` → 成功 `delivered`；**失败（含 AbortError 与致命异常）一律回退 `pending_save`**，保留 `chunks`/IndexedDB 数据供再次点击重试。
+- **交付后收尾（R15）**：置 `delivered` 后统一 `finalizeDescriptor`：`storeType === 'idb'` 调 `clearFile(fileId, totalChunks)`；`storeType === 'memory'` 置 `descriptor.chunks = null` 释放引用；记录自 `sessionPendingFiles` 移除或标记可回收（配合 §三.6 清理）。
 - **GC 保护**：在点击手势中完成 `assembleBlob` 后，立即将 `descriptor.chunks` 设为 `null`，确保内存中仅保留最终传递给系统的单一 `File` 实例。
 
 > **阈值与时机边界诚实声明（R9）**：本方案两套数值正交——现状 IndexedDB 流式阈值 `LARGE_FILE_THRESHOLD = 256MB`（`download.tmpl.html`:1049）；150MB 是**新增的 share 聚合预算**，非 IDB 阈值。未达 256MB 的文件解密期整驻内存数组（150~256MB 之间单文件仍可能吃紧），达阈值才逐块落 IDB。
@@ -155,6 +161,7 @@ graph TD
       }
   }
   ```
+- **交付前置校验（R14，组装之前执行）**：组装成本决定通路——目标集合（单文件或批量）若含任一 `storeType === 'idb'`（≥256MB，点击时须从 IndexedDB 整读，峰值≈文件大小且耗时可能超出 Transient Activation 存活窗），则该集合**整体不进 share**，也**不期望移动端 `a.download` 成功**（否则落入“点击→组装超窗→NotAllowedError→重试”循环）；UI 须在点击**前**即对此类文件展示“文件较大，建议桌面端保存”（R9 的交付侧落地）。全部 `storeType === 'memory'` 的小集合才正常走下述预判分流。
 - **分支执行流**：
   1. **Web Share 分支**（`canUseWebShare` 成立）：在当前手势内直接调用 `await navigator.share({ files })`；
      - `AbortError`（用户点击取消/关闭分享面板）：属于正常交互，**静默忽略**，释放 `isSaving` 状态锁，保持页面与按钮就绪，**绝不报错也绝不自动切道**；
@@ -170,7 +177,7 @@ graph TD
 - **数据结构**：在 IndexedDB `chunks` 记录中附带 `createdAt`（时间戳）与 `sessionId`，且 **`putChunk` 写入时即落两个字段**，以便按会话归属区分活跃与孤儿（现状记录仅 `{id, fileId, chunkIndex, data}`，无时间/会话维度，`download.tmpl.html`:997）；
 - **主动清扫（Session Prune）**：
   - 在页面加载 `startE2EEDownload` 启动前，自动扫描并清理所有创建时间超过 24 小时或属于已结束会话的历史残留 chunk；
-- **即时清理**：单文件保存成功确认后，调用 `EqtChunkStorage.clearFile(fileId, totalChunks)` 并更新 pending 状态为 `delivered`；
+- **即时清理**：单文件保存成功确认后（`finalizeDescriptor` 统一收尾，见 §三.2），调用 `EqtChunkStorage.clearFile(fileId, totalChunks)` 并更新 pending 状态为 `delivered`；
 - **停止/失败即时清理（R8）**：执行停止（`executeStopSharing`）、`Pipeline.abort` 或下载失败中断时，对**已写入**的分块立即尽力 `clearFile(fileId)`；现状 abort 只中止网络与 worker（`download.tmpl.html`:1216-1222、1690-1710），不清理已落盘 chunk，中断/停止同样是孤儿主源，不能只依赖 24h prune 兜底；
 - **卸载辅助与豁免（R12）**：在 `visibilitychange`（`state === 'hidden'`）时触发尽力而为的轻量清理——但该清理**必须豁免当前 pending（已解密未交付）的活跃 fileId**，仅清“非本会话 / 已超保留期 / 已确认交付”的记录；否则用户点保存、切后台选系统目录的瞬间，未交付数据会被误删。
 
@@ -209,6 +216,16 @@ graph TD
 - 端到端加解密算法实测为 **XChaCha20-Poly1305**（libsodium `crypto_aead_xchacha20poly1305_ietf_*`），非 ChaCha20-Poly1305，概述与对比表已订正；
 - `LARGE_FILE_THRESHOLD = 256MB`（`download.tmpl.html`:1049）；`success_tips_all` 中文文案定义于多语言字典 `:508`（页面显示使用处 `:848`），原文档把 `:848` 记为文案行略偏，语义一致；
 - 现状无任何 unload/pagehide/visibilitychange 生命周期监听，亦无移动 UA 分流变量（仅 `isIOS` 于 `:1133` 用于 ≥1GB 内存提示）——Phase 1/2 的“生命周期接入与 UA 判定”均为净新增逻辑。
+
+### 第三轮细化审查决议（R14-R16）
+
+> 第三轮审查基准提交 `20fb37e2`（2026-09-02）。对象为该提交新增的 `PendingFileDescriptor` 契约与预判分流伪代码，围绕「契约可落地性」与「交付时序平台机制」复核。正文已吸收。
+
+| 审查意见项 | 核心关切与技术风险 | 最终技术决议与落地方案 |
+| :--- | :--- | :--- |
+| **R14: 含 IDB 大文件的交付前置校验** | `canUseWebShare` 与分支执行流隐含“先组装出 `File[]` 再 share”；对 `storeType === 'idb'`（≥256MB）文件，点击时组装 = 从 IndexedDB 整读，峰值≈文件大小且耗时可能超出 Transient Activation 存活窗，share/`a.click` 会被 `NotAllowedError` 拦截，落入“点击→组装→超窗→失败→重试”循环；桌面无激活窗约束，移动端不可靠（承接 R9） | 交付校验提前到**组装之前**：目标集合含任一 idb 文件即**整体不进 share**，移动端亦不期望 `a.download` 成功；UI 在点击前即对 idb 文件展示“文件较大，建议桌面端保存”；仅全部 memory 的小集合走预判分流（已落实 §三.4） |
+| **R15: 契约状态机收尾与边界一致性** | descriptor `status` 缺失败回态与 delivered 后的记录/内存回收；memory 型无 IDB 可清，`chunks` 何时置 `null`、记录何时移除未写；注释“≤256MB 为 memory、>256MB 为 idb”与现状 `useIndexedDB = totalBytes >= LARGE_FILE_THRESHOLD && window.indexedDB`（:1130）边界不一致（恰好 256MB 分叉、且忽略无 IndexedDB 环境）；storeType 判定若由交付侧按 size 重算会与下载侧分叉 | 注释订正为“<256MB 为 memory、≥256MB 为 idb”；storeType 由解密启动时的单一判定函数求值写入 descriptor，交付侧不重算；补状态转移：失败（含 AbortError 与致命异常）一律回退 `pending_save` 保留数据；置 `delivered` 后统一 `finalizeDescriptor` 收尾（idb→`clearFile`，memory→`chunks=null`，记录移除/可回收）（已落实 §三.2） |
+| **R16: 局域网 HTTP 提示文案与注册时机** | §三.1 草案提示“可点击单项或长按预览保存”给用户错误预期：blob 资源在 iOS Safari 长按通常无“保存到文件”菜单（仅图片类可存图）；若 descriptor 在解密中途注册会暴露半成品，交付可能拿到不完整文件 | ①HTTP 提示改为引导“改用 https 地址打开 / 换桌面端下载”，删除长按表述（已落实 §三.1）；②descriptor 仅在单文件全部 chunk 完整落位后一次性注册，解密中不暴露半成品（已落实 §三.2） |
 
 ---
 
