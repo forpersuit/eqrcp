@@ -439,6 +439,19 @@
                 <option value="zh">简体中文</option>
             </select>
         </div>
+
+        <!-- In-App Secondary Confirmation Modal -->
+        <div id="stop-confirm-modal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 9999; align-items: center; justify-content: center; padding: 16px; backdrop-filter: blur(2px);">
+            <div class="modal-content" style="background: var(--card-bg, #ffffff); border-radius: 12px; padding: 22px 20px; max-width: 320px; width: 100%; box-shadow: 0 10px 30px rgba(0,0,0,0.25); text-align: center; border: 1px solid var(--line, rgba(0,0,0,0.1)); box-sizing: border-box;">
+                <div style="font-size: 32px; margin-bottom: 10px; line-height: 1;">⚠️</div>
+                <h3 style="margin: 0 0 8px 0; font-size: 17px; font-weight: 700; color: var(--text-primary, #1a202c);" data-i18n="confirm_stop_title">Stop Transfer?</h3>
+                <p style="margin: 0 0 20px 0; font-size: 13px; color: var(--text-secondary, #718096); line-height: 1.4;" data-i18n="confirm_stop_desc">Stopping will immediately abort the transfer and end this session.</p>
+                <div style="display: flex; gap: 10px; justify-content: center;">
+                    <button type="button" class="btn" id="btn-stop-cancel" onclick="closeStopConfirmModal()" style="flex: 1; background: var(--bg-hover, #edf2f7); color: var(--text-primary, #2d3748); border: 1px solid var(--line, #cbd5e0); min-height: 40px; margin: 0;" data-i18n="btn_cancel">Cancel</button>
+                    <button type="button" class="btn btn-danger" id="btn-stop-confirm" onclick="executeStopSharing()" style="flex: 1; background: #e53e3e; color: #fff; border: none; min-height: 40px; margin: 0;" data-i18n="btn_confirm_stop">Stop</button>
+                </div>
+            </div>
+        </div>
     </main>
 
     <script src="/assets/libsodium.js"></script>
@@ -503,7 +516,11 @@
                     can_open: '可以点击打开',
                     cannot_open: '此格式无法直接打开，请在文件管理器中查看',
                     btn_save_zip: '保存 ZIP 压缩包',
-                    zip_contents: '压缩包内包含的文件：'
+                    zip_contents: '压缩包内包含的文件：',
+                    confirm_stop_title: '停止传输？',
+                    confirm_stop_desc: '停止后当前传输将立即中断并结束本次会话。',
+                    btn_cancel: '取消',
+                    btn_confirm_stop: '确认停止'
                 },
                 en: {
                     title: 'Receive File - EQT',
@@ -536,7 +553,11 @@
                     can_open: 'Click to open/preview',
                     cannot_open: 'Cannot open directly. Please find it in file manager',
                     btn_save_zip: 'Save ZIP Archive',
-                    zip_contents: 'Files included in the ZIP:'
+                    zip_contents: 'Files included in the ZIP:',
+                    confirm_stop_title: 'Stop Transfer?',
+                    confirm_stop_desc: 'Stopping will immediately abort the transfer and end this session.',
+                    btn_cancel: 'Cancel',
+                    btn_confirm_stop: 'Confirm Stop'
                 },
                 ja: {
                     title: 'ファイル受信 - EQT',
@@ -564,7 +585,11 @@
                     btn_upgrade: 'ライセンスをアップグレード',
                     failed_status: '転送が停止しました。ボタンをクリックして再起動できます。',
                     notification_tips: '転送を一時停止または停止するには、スマートフォンの通知バーまたはブラウザのダウンロードマネージャーを使用してください。',
-                    waiting_status: '接続が中断されました。再接続を待機しています...'
+                    waiting_status: '接続が中断されました。再接続を待機しています...',
+                    confirm_stop_title: '転送を停止しますか？',
+                    confirm_stop_desc: '停止すると現在の転送は直ちに中断され、セッションが終了します。',
+                    btn_cancel: 'キャンセル',
+                    btn_confirm_stop: '停止を確認'
                 },
                 ko: {
                     title: '파일 받기 - EQT',
@@ -592,7 +617,11 @@
                     btn_upgrade: '라이선스 업그레이드',
                     failed_status: '전송이 중지되었습니다. 버튼을 클릭하여 다시 시작할 수 있습니다.',
                     notification_tips: '전송을 일시 중지하거나 중지하려면 휴대전화의 알림창이나 브라우저 다운로드 관리자를 사용하세요.',
-                    waiting_status: '연결이 중단되었습니다. 다시 연결하는 중...'
+                    waiting_status: '연결이 중단되었습니다. 다시 연결하는 중...',
+                    confirm_stop_title: '전송을 중지하시겠습니까?',
+                    confirm_stop_desc: '중지하면 현재 전송이 즉시 중단되고 세션이 종료됩니다.',
+                    btn_cancel: '취소',
+                    btn_confirm_stop: '중지 확인'
                 },
                 es: {
                     title: 'Recibir Archivo - EQT',
@@ -620,7 +649,11 @@
                     btn_upgrade: 'Actualizar Licencia',
                     failed_status: 'Transferencia detenida. Puede hacer clic en el botón para reiniciar.',
                     notification_tips: 'Para pausar o detener la transferencia, use la barra de notificaciones de su teléfono o el administrador de descargas del navegador.',
-                    waiting_status: 'Conexión interrumpida, esperando para reconectar...'
+                    waiting_status: 'Conexión interrumpida, esperando para reconectar...',
+                    confirm_stop_title: '¿Detener transferencia?',
+                    confirm_stop_desc: 'Detener cancelará inmediatamente la transferencia y finalizará la sesión.',
+                    btn_cancel: 'Cancelar',
+                    btn_confirm_stop: 'Confirmar detención'
                 },
                 de: {
                     title: 'Datei bereit zum Herunterladen - EQT',
@@ -648,7 +681,11 @@
                     btn_upgrade: 'Lizenz upgraden',
                     failed_status: 'Übertragung gestoppt. Sie können auf die Schaltfläche klicken, um neu zu starten.',
                     notification_tips: 'Um die Übertragung anzuhalten oder zu stoppen, verwenden Sie bitte die Benachrichtigungsleiste Ihres Telefons oder den Download-Manager des Browsers.',
-                    waiting_status: 'Verbindung unterbrochen, Verbindung wird wiederhergestellt...'
+                    waiting_status: 'Verbindung unterbrochen, Verbindung wird wiederhergestellt...',
+                    confirm_stop_title: 'Übertragung stoppen?',
+                    confirm_stop_desc: 'Das Stoppen bricht die Übertragung sofort ab und beendet die Sitzung.',
+                    btn_cancel: 'Abbrechen',
+                    btn_confirm_stop: 'Stoppen bestätigen'
                 },
                 fr: {
                     title: 'Recevoir le Fichier - EQT',
@@ -676,7 +713,11 @@
                     btn_upgrade: 'Mettre à niveau',
                     failed_status: 'Transfert arrêté. Vous pouvez cliquer sur le bouton pour redémarrer.',
                     notification_tips: 'Pour suspendre ou arrêter le transfert, veuillez utiliser la barre de notification de votre téléphone ou le gestionnaire de téléchargement du navigateur.',
-                    waiting_status: 'Connexion interrompue, en attente de reconnexion...'
+                    waiting_status: 'Connexion interrompue, en attente de reconnexion...',
+                    confirm_stop_title: 'Arrêter le transfert ?',
+                    confirm_stop_desc: 'L\'arrêt interrompra immédiatement le transfert et mettra fin à la session.',
+                    btn_cancel: 'Annuler',
+                    btn_confirm_stop: 'Confirmer l\'arrêt'
                 }
             };
 
@@ -1614,6 +1655,24 @@
         }
 
         function stopSharing() {
+            var modal = document.getElementById('stop-confirm-modal');
+            if (modal) {
+                modal.style.display = 'flex';
+                applyLanguage();
+            } else {
+                executeStopSharing();
+            }
+        }
+
+        function closeStopConfirmModal() {
+            var modal = document.getElementById('stop-confirm-modal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+        }
+
+        function executeStopSharing() {
+            closeStopConfirmModal();
             isDownloadStopped = true;
             isE2EEDownloadActive = false;
             if (activeDownloadPipeline) {

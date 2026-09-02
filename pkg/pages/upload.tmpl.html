@@ -549,6 +549,19 @@
                 <option value="zh">简体中文</option>
             </select>
         </div>
+
+        <!-- In-App Secondary Confirmation Modal -->
+        <div id="stop-confirm-modal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 9999; align-items: center; justify-content: center; padding: 16px; backdrop-filter: blur(2px);">
+            <div class="modal-content" style="background: var(--card-bg, #ffffff); border-radius: 12px; padding: 22px 20px; max-width: 320px; width: 100%; box-shadow: 0 10px 30px rgba(0,0,0,0.25); text-align: center; border: 1px solid var(--line, rgba(0,0,0,0.1)); box-sizing: border-box;">
+                <div style="font-size: 32px; margin-bottom: 10px; line-height: 1;">⚠️</div>
+                <h3 style="margin: 0 0 8px 0; font-size: 17px; font-weight: 700; color: var(--text-primary, #1a202c);" data-i18n="confirm_stop_title">Stop Transfer?</h3>
+                <p style="margin: 0 0 20px 0; font-size: 13px; color: var(--text-secondary, #718096); line-height: 1.4;" data-i18n="confirm_stop_desc">Stopping will immediately abort the transfer and end this session.</p>
+                <div style="display: flex; gap: 10px; justify-content: center;">
+                    <button type="button" class="btn" id="btn-stop-cancel" onclick="closeStopConfirmModal()" style="flex: 1; background: var(--bg-hover, #edf2f7); color: var(--text-primary, #2d3748); border: 1px solid var(--line, #cbd5e0); min-height: 40px; margin: 0;" data-i18n="btn_cancel">Cancel</button>
+                    <button type="button" class="btn" id="btn-stop-confirm" onclick="executeStopUpload()" style="flex: 1; background: #e53e3e; color: #fff; border: none; min-height: 40px; margin: 0;" data-i18n="btn_confirm_stop">Stop</button>
+                </div>
+            </div>
+        </div>
     </main>
     <script src="/assets/tus.min.js"></script>
     <script src="/assets/libsodium.js"></script>
@@ -591,7 +604,11 @@
                 err_reason_too_large: '文件太大，超出了传输限制。',
                 err_reason_server: '接收端电脑保存文件失败。磁盘可能已满，或者写权限被拒绝。',
                 err_reason_default: '发生未知错误，无法完成传输。',
-                badge_left: '剩余'
+                badge_left: '剩余',
+                confirm_stop_title: '停止传输？',
+                confirm_stop_desc: '停止后当前传输将立即中断并结束本次会话。',
+                btn_cancel: '取消',
+                btn_confirm_stop: '确认停止'
             },
             en: {
                 title: 'Send from this device',
@@ -629,7 +646,11 @@
                 err_free_limit_size_global: 'Free full-feature quota exceeded: File size exceeds 50MB limit. Upgrade to Plus to unlock.',
                 quota_info: 'Currently Free tier, daily remaining full-feature quota: {remaining}',
                 quota_exceeded: 'Daily free full-feature quota exceeded. Upgrade to Plus on receiver to unlock unlimited transfers.',
-                badge_left: 'left'
+                badge_left: 'left',
+                confirm_stop_title: 'Stop Transfer?',
+                confirm_stop_desc: 'Stopping will immediately abort the transfer and end this session.',
+                btn_cancel: 'Cancel',
+                btn_confirm_stop: 'Confirm Stop'
             },
             ja: {
                 title: 'このデバイスから送信',
@@ -667,7 +688,11 @@
                 err_free_limit_size_global: '無料枠超過：50MBサイズ制限を超えるファイルがあります。Plusプランを購入して解除。',
                 quota_info: '現在無料版、本日の残り受信回数：{remaining} 回',
                 quota_exceeded: '本日の無料受信制限に達しました。無制限で転送するには、レシーバーでPlusにアップグレードしてください。',
-                badge_left: '残り'
+                badge_left: '残り',
+                confirm_stop_title: '転送を停止しますか？',
+                confirm_stop_desc: '停止すると現在の転送は直ちに中断され、セッションが終了します。',
+                btn_cancel: 'キャンセル',
+                btn_confirm_stop: '停止を確認'
             },
             ko: {
                 title: '이 기기에서 전송',
@@ -705,7 +730,11 @@
                 err_free_limit_size_global: '무료 용량 초과: 50MB 용량 제한을 초과하는 파일이 존재합니다. Plus를 구매하여 제한을 해제하십시오.',
                 quota_info: '현재 무료 버전을 사용 중입니다. 오늘 남은 수신 횟수: {remaining}회',
                 quota_exceeded: '오늘 무료 수신 한도를 초과했습니다. 무제한 전송을 사용하려면 수신 기기에서 Plus로 업그레이드하십시오.',
-                badge_left: '남음'
+                badge_left: '남음',
+                confirm_stop_title: '전송을 중지하시겠습니까?',
+                confirm_stop_desc: '중지하면 현재 전송이 즉시 중단되고 세션이 종료됩니다.',
+                btn_cancel: '취소',
+                btn_confirm_stop: '중지 확인'
             },
             es: {
                 title: 'Enviar desde este dispositivo',
@@ -743,7 +772,11 @@
                 err_free_limit_size_global: 'Límite gratuito excedido: Hay archivos que superan el límite de 50MB. Compre Plus para desbloquear.',
                 quota_info: 'Actualmente en plan gratuito, transferencias diarias restantes: {remaining}',
                 quota_exceeded: 'Se ha agotado el límite de recepción gratuito. Actualice a Plus para desbloquear.',
-                badge_left: 'restan'
+                badge_left: 'restan',
+                confirm_stop_title: '¿Detener transferencia?',
+                confirm_stop_desc: 'Detener cancelará inmediatamente la transferencia y finalizará la sesión.',
+                btn_cancel: 'Cancelar',
+                btn_confirm_stop: 'Confirmar detención'
             },
             de: {
                 title: 'Von diesem Gerät senden',
@@ -781,7 +814,11 @@
                 err_free_limit_size_global: 'Kostenloses Limit überschritten: Datei überschreitet das 50MB-Limit. Kaufen Sie Plus zum Freischalten.',
                 quota_info: 'Derzeit Free-Tarif, verbleibende tägliche Empfangsbeschränkung: {remaining}',
                 quota_exceeded: 'Tägliches Freiguthaben erschöpft. Aktualisieren Sie auf Plus, um unbegrenzte Übertragungen freizuschalten.',
-                badge_left: 'übrig'
+                badge_left: 'übrig',
+                confirm_stop_title: 'Übertragung stoppen?',
+                confirm_stop_desc: 'Das Stoppen bricht die Übertragung sofort ab und beendet die Sitzung.',
+                btn_cancel: 'Abbrechen',
+                btn_confirm_stop: 'Stoppen bestätigen'
             },
             fr: {
                 title: 'Envoyer depuis cet appareil',
@@ -819,7 +856,11 @@
                 err_free_limit_size_global: 'Offre gratuite dépassée : Fichier dépasse la limite de 50 Mo. Achetez Plus pour débloquer.',
                 quota_info: 'Forfait gratuit actuel, quota restant aujourd\'hui : {remaining} fois',
                 quota_exceeded: 'Limite quotidienne de transfert gratuit atteinte. Mettez à niveau vers Plus sur le récepteur pour débloquer les transferts illimités.',
-                badge_left: 'restant'
+                badge_left: 'restant',
+                confirm_stop_title: 'Arrêter le transfert ?',
+                confirm_stop_desc: 'L\'arrêt interrompra immédiatement le transfert et mettra fin à la session.',
+                btn_cancel: 'Annuler',
+                btn_confirm_stop: 'Confirmer l\'arrêt'
             }
         };
 
@@ -2036,30 +2077,48 @@
         var stopButton = document.getElementById('stop-btn');
         if (stopButton) {
             stopButton.addEventListener('click', function() {
-                isUploadStopped = true;
-                if (activeE2EEPipeline) {
-                    try {
-                        activeE2EEPipeline.abort();
-                    } catch (e) {
-                        console.error("Failed to abort E2EE pipeline: ", e);
-                    }
-                    activeE2EEPipeline = null;
+                var modal = document.getElementById('stop-confirm-modal');
+                if (modal) {
+                    modal.style.display = 'flex';
+                    applyLanguage();
+                } else {
+                    executeStopUpload();
                 }
-                if (currentTusUpload) {
-                    try {
-                        currentTusUpload.abort();
-                    } catch (e) {
-                        console.error("Failed to abort tus: ", e);
-                    }
-                }
-                var stopXhr = new XMLHttpRequest();
-                stopXhr.open('POST', '{{.Route}}?stop=true&client_id=' + encodeURIComponent(clientID));
-                stopXhr.send();
-
-                stopButton.style.display = 'none';
-                renderUploadFailedPage(t('err_manually_stopped'));
             });
         }
+
+        window.closeStopConfirmModal = function() {
+            var modal = document.getElementById('stop-confirm-modal');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+        };
+
+        window.executeStopUpload = function() {
+            closeStopConfirmModal();
+            isUploadStopped = true;
+            if (activeE2EEPipeline) {
+                try {
+                    activeE2EEPipeline.abort();
+                } catch (e) {
+                    console.error("Failed to abort E2EE pipeline: ", e);
+                }
+                activeE2EEPipeline = null;
+            }
+            if (currentTusUpload) {
+                try {
+                    currentTusUpload.abort();
+                } catch (e) {
+                    console.error("Failed to abort tus: ", e);
+                }
+            }
+            var stopXhr = new XMLHttpRequest();
+            stopXhr.open('POST', '{{.Route}}?stop=true&client_id=' + encodeURIComponent(clientID));
+            stopXhr.send();
+
+            if (stopButton) stopButton.style.display = 'none';
+            renderUploadFailedPage(t('err_manually_stopped'));
+        };
 
         var langSelect = document.getElementById('page-lang-select');
         if (langSelect) {
