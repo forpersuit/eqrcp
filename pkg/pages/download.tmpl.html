@@ -1140,8 +1140,21 @@
                             var val = cursor.value;
                             if (val) {
                                 var isOld = val.createdAt && val.createdAt < limit;
-                                var isDifferentSession = exemptSessionId && val.sessionId && val.sessionId !== exemptSessionId && isOld;
-                                if (isOld || isDifferentSession) {
+                                var shouldDelete = false;
+                                if (exemptSessionId) {
+                                    shouldDelete = isOld && (val.sessionId !== exemptSessionId);
+                                } else {
+                                    shouldDelete = isOld;
+                                }
+                                if (shouldDelete && val.fileId) {
+                                    if (typeof sessionPendingFiles !== 'undefined' && sessionPendingFiles.has(val.fileId)) {
+                                        shouldDelete = false;
+                                    }
+                                    if (typeof activeDownloadPipeline !== 'undefined' && activeDownloadPipeline && activeDownloadPipeline.activeFileId === val.fileId) {
+                                        shouldDelete = false;
+                                    }
+                                }
+                                if (shouldDelete) {
                                     cursor.delete();
                                 }
                             }
@@ -1235,22 +1248,11 @@
             return new File([blob], descriptor.fileName, { type: descriptor.mimeType });
         }
 
-        async function deliverDesktopAll() {
-            var descriptors = Array.from(sessionPendingFiles.values());
-            for (var i = 0; i < descriptors.length; i++) {
-                var d = descriptors[i];
-                var file = await assembleDescriptorFile(d);
-                if (file) {
-                    triggerBlobDownload(file, d.fileName);
-                    finalizeDescriptor(d);
-                }
-            }
-        }
-
         async function saveToDevice(targetFileIndex) {
             if (isSaving) return;
             var dict = EqtI18n.getDict();
             var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+            var guidanceEl = document.getElementById('save-mobile-guidance');
 
             var targetDescriptors = [];
             if (typeof targetFileIndex === 'number' && targetFileIndex >= 0) {
@@ -1270,23 +1272,23 @@
             }
 
             if (targetDescriptors.length === 0) {
-                console.warn("[SaveToDevice] No pending files found for delivery.");
+                if (guidanceEl) {
+                    guidanceEl.style.display = 'block';
+                    guidanceEl.textContent = dict.save_done_tips || 'Saved to device';
+                }
                 return;
             }
 
-            // 交付前置校验 (R14 / R17)
+            // 交付前置校验 (R14 / R17 / R20)
             var hasIDB = targetDescriptors.some(function(d) { return d.storeType === 'idb'; });
             var totalBytes = targetDescriptors.reduce(function(sum, d) { return sum + (d.fileSize || 0); }, 0);
 
-            var guidanceEl = document.getElementById('save-mobile-guidance');
             if (hasIDB) {
                 if (guidanceEl) {
                     guidanceEl.style.display = 'block';
                     guidanceEl.textContent = dict.save_large_desktop_tips || 'File is large (≥256MB), saving on desktop is recommended';
                 }
-                if (targetDescriptors.length > 1) {
-                    return;
-                }
+                return; // 含任一 IDB 大文件恒 return，引导电脑端保存 (R20)
             } else if (targetDescriptors.length > 1 && totalBytes > MULTI_FILE_SHARE_THRESHOLD) {
                 if (guidanceEl) {
                     guidanceEl.style.display = 'block';
@@ -1314,8 +1316,10 @@
                     }
                 }
 
-                if (assembledFiles.length === 0) {
-                    throw new Error("Failed to assemble files for delivery");
+                // 完整性校验：若组装数小于目标数，禁止部分交付，整体回退 (R23)
+                if (assembledFiles.length !== targetDescriptors.length) {
+                    targetDescriptors.forEach(function(d) { d.status = 'pending_save'; });
+                    throw new Error("Failed to assemble all files for delivery");
                 }
 
                 var filesToShare = assembledFiles.map(function(item) { return item.file; });
@@ -1363,6 +1367,32 @@
                         }
                     }
                 }
+
+                // 更新交付完成后的按钮状态 (R24)
+                if (typeof targetFileIndex === 'number') {
+                    var singleBtn = document.querySelector('.btn-item-save[data-file-index="' + targetFileIndex + '"]');
+                    if (singleBtn) {
+                        singleBtn.disabled = true;
+                        singleBtn.textContent = '✓';
+                        singleBtn.style.opacity = '0.6';
+                        singleBtn.style.cursor = 'default';
+                    }
+                }
+                if (sessionPendingFiles.size === 0) {
+                    if (saveBtn) {
+                        saveBtn.disabled = true;
+                        saveBtn.textContent = dict.save_done_tips || 'Saved to device';
+                        saveBtn.style.opacity = '0.6';
+                        saveBtn.style.cursor = 'default';
+                    }
+                    var allItemBtns = document.querySelectorAll('.btn-item-save');
+                    allItemBtns.forEach(function(btn) {
+                        btn.disabled = true;
+                        btn.textContent = '✓';
+                        btn.style.opacity = '0.6';
+                        btn.style.cursor = 'default';
+                    });
+                }
             } catch (err) {
                 console.error("[DeliveryController] save error: ", err);
                 targetDescriptors.forEach(function(d) { d.status = 'pending_save'; });
@@ -1372,7 +1402,7 @@
                 }
             } finally {
                 isSaving = false;
-                if (saveBtn) {
+                if (saveBtn && sessionPendingFiles.size > 0) {
                     saveBtn.disabled = false;
                     saveBtn.textContent = originalBtnText;
                 }
@@ -1617,43 +1647,64 @@
             var initStatusEl = document.getElementById('download-progress-status');
             if (initStatusEl) initStatusEl.innerText = '🔒 Decrypting (1/' + filesToFetch.length + ')...';
 
+            var isMobileUA = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
             var pipeline = new EqtE2EEDownloader.Pipeline(masterKey);
             activeDownloadPipeline = pipeline;
-            await pipeline.init();
 
-            if (isDownloadStopped) {
+            try {
+                await pipeline.init();
+
+                if (isDownloadStopped) {
+                    pipeline.destroy();
+                    activeDownloadPipeline = null;
+                    return false;
+                }
+
+                var completedBytesAll = 0;
+                for (var fIdx = 0; fIdx < filesToFetch.length; fIdx++) {
+                    if (isDownloadStopped) break;
+                    var fileInfo = filesToFetch[fIdx];
+                    var desc = await pipeline.downloadFile(fileInfo, function(doneBytes, totalBytes) {
+                        if (isDownloadStopped) return;
+                        var currentTotal = completedBytesAll + doneBytes;
+                        var percent = totalBytesAll > 0 ? Math.round((currentTotal / totalBytesAll) * 100) : 100;
+                        var fillEl = document.getElementById('download-progress-fill');
+                        var percentEl = document.getElementById('download-progress-percent');
+                        var bytesEl = document.getElementById('download-progress-bytes');
+                        var statusEl = document.getElementById('download-progress-status');
+                        if (fillEl) fillEl.style.width = percent + '%';
+                        if (percentEl) percentEl.innerText = percent + '%';
+                        if (bytesEl) bytesEl.innerText = formatBytes(currentTotal) + ' / ' + formatBytes(totalBytesAll);
+                        if (statusEl) statusEl.innerText = '🔒 Decrypting (' + (fIdx + 1) + '/' + filesToFetch.length + ')...';
+                    });
+
+                    if (!isMobileUA && desc) {
+                        // 桌面端：逐个文件解密完成即时组装交付并释放内存 (R19)
+                        var file = await assembleDescriptorFile(desc);
+                        if (file) {
+                            triggerBlobDownload(file, desc.fileName);
+                        }
+                        finalizeDescriptor(desc);
+                    }
+
+                    completedBytesAll += (fileInfo.file_size || 0);
+                }
+
                 pipeline.destroy();
                 activeDownloadPipeline = null;
-                return false;
+                if (isDownloadStopped) {
+                    return false;
+                }
+            } catch (err) {
+                // E2EE 解密/网络异常失败时，闭合 pipeline 与半截分块 (R21)
+                if (pipeline) {
+                    try { pipeline.abort(); } catch (e) {}
+                }
+                activeDownloadPipeline = null;
+                throw err;
             }
 
-            var completedBytesAll = 0;
-            for (var fIdx = 0; fIdx < filesToFetch.length; fIdx++) {
-                if (isDownloadStopped) break;
-                var fileInfo = filesToFetch[fIdx];
-                await pipeline.downloadFile(fileInfo, function(doneBytes, totalBytes) {
-                    if (isDownloadStopped) return;
-                    var currentTotal = completedBytesAll + doneBytes;
-                    var percent = totalBytesAll > 0 ? Math.round((currentTotal / totalBytesAll) * 100) : 100;
-                    var fillEl = document.getElementById('download-progress-fill');
-                    var percentEl = document.getElementById('download-progress-percent');
-                    var bytesEl = document.getElementById('download-progress-bytes');
-                    var statusEl = document.getElementById('download-progress-status');
-                    if (fillEl) fillEl.style.width = percent + '%';
-                    if (percentEl) percentEl.innerText = percent + '%';
-                    if (bytesEl) bytesEl.innerText = formatBytes(currentTotal) + ' / ' + formatBytes(totalBytesAll);
-                    if (statusEl) statusEl.innerText = '🔒 Decrypting (' + (fIdx + 1) + '/' + filesToFetch.length + ')...';
-                });
-                completedBytesAll += (fileInfo.file_size || 0);
-            }
-
-            pipeline.destroy();
-            activeDownloadPipeline = null;
-            if (isDownloadStopped) {
-                return false;
-            }
             isCompleted = true;
-            var isMobileUA = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
             var fillEl = document.getElementById('download-progress-fill');
             var percentEl = document.getElementById('download-progress-percent');
             var statusEl = document.getElementById('download-progress-status');
@@ -1670,8 +1721,7 @@
             if (actionBtnRow) actionBtnRow.style.display = 'flex';
 
             if (!isMobileUA) {
-                // 桌面端：直接自动下载全部
-                deliverDesktopAll();
+                // 桌面端已在循环中逐个交付完毕，隐藏冗余下载按钮
                 if (downloadZipBtn) downloadZipBtn.style.display = 'none';
                 if (downloadSingleBtn) downloadSingleBtn.style.display = 'none';
                 if (saveMobileBtn) saveMobileBtn.style.display = 'none';

@@ -116,7 +116,7 @@ graph TD
 ### 核心机制详解
 
 #### 1. 平台分流与 UI 状态机
-- **桌面端**：解密完成后直接触发现有自动 `a.click()`，UI 显示“已开始下载”，零回退。
+- **桌面端（R19）**：在解密循环中，每个文件解密完成后**立即**组装交付（`a.click()`）并即刻 `finalizeDescriptor` 释放分块内存或清理 IDB，恢复旧逐文件释放与原生下载时序，内存峰值保持单文件大小且不向 `sessionPendingFiles` 累积，UI 显示“已开始下载”，零回退。
 - **移动端**：解密达到 100% 后**不自动调用 `a.click()`**，页面进入 `decrypted-pending-save` 状态：
   - 进度条置为 100%（绿色完成态）；
   - 顶部/操作区展示大号高亮主按钮【📥 保存到手机】（多文件时为【📥 全部保存到手机】）；
@@ -303,21 +303,24 @@ graph TD
   - 增加 `sessionId` 与 `createdAt` 存储维度；
   - 100% 解密完成时不自动调用 `assembleBlob`；
   - 在用户点击事件触发时执行 `assembleBlob` → `new File(...)`；
-  - 增加 `pruneExpired(maxAgeMs)` 清扫函数；
-- [x] **Task 2.2**: 建立 `PendingFileDescriptor` 与 `sessionPendingFiles` 会话级待交付注册表（R7 / R15 / R16）；
+  - 增加 `pruneExpired(maxAgeMs)` 清扫函数（已按 R22 修复删除谓词并显式保护当前活跃与 pending 数据）；
+- [x] **Task 2.2**: 建立 `PendingFileDescriptor` 与 `sessionPendingFiles` 会话级待交付注册表（R7 / R15 / R16 / R19）：
+  - 移动端整批解密后保留待交付表；
+  - 桌面端按 R19 在 `downloadFile` 各文件解密完成时即时组装交付并即刻 `finalizeDescriptor` 释放内存，恢复旧时序与低内存峰值；
 - [x] **Task 2.3**: 实现 `saveToDevice(fileIndex?)` 核心控制逻辑：
-  - 交付前置校验（R14 / R17）：含 IDB 大文件提示建议桌面端保存、超 150MB 多文件提示列表单存、全部 memory 且 ≤150MB 走批量/单文件交付；
+  - 交付前置校验（R14 / R17 / R20）：含 IDB 大文件恒 return 提示建议桌面端保存、超 150MB 多文件提示列表单存、全部 memory 且 ≤150MB 走批量/单文件交付；
   - 同步预判分流（R6 / R10）：封装 `canUseWebShare`，满足走 `share`，不满足同步走 `a.download` 并管理 `activeSavedBlobUrl` 单例；
+  - 完整性校验（R23）：组装文件数与目标数不等时整体回退，严禁部分交付；
   - `navigator.share` 静默捕获 `AbortError` 并回退 `pending_save` 态；
-  - 成功交付时统一调用 `finalizeDescriptor` 进行收尾释放（R15 / R18）；
+  - 成功交付时统一调用 `finalizeDescriptor` 进行收尾释放（R15 / R18），并更新按钮禁用与完成反馈状态（R24）；
   - `isSaving` 状态锁与按钮加载态（“⏳ 正在准备文件...”）。
 
 ### Phase 3：多语言（i18n）与清理闭环
 - [x] **Task 3.1**: 新增国际化词条（7 种语言完整对齐）：`btn_save_to_phone`, `btn_save_all_to_phone`, `btn_save_item`, `saving_preparing`, `save_done_tips`, `save_failed_tips`, `save_multi_large_tips`, `save_large_desktop_tips`, `save_http_ios_tips`；
 - [x] **Task 3.2**: 闭环清理逻辑：
   - 会话启动前执行 `pruneExpired(24 * 3600 * 1000)`；
-  - 停止/失败路径对已写入 chunk 即时调用 `clearFile`（R8）；
-  - `visibilitychange` 触发时轻量清理，严格豁免 `pending_save` 活跃数据（R12）。
+  - 停止/失败路径对已写入 chunk 即时调用 `clearFile` 与 abort 闭合资源（R8 / R21）；
+  - `visibilitychange` 触发时轻量清理，严格豁免 `pending_save` 活跃数据（R12 / R22）。
 
 ### Phase 4：多维度测试与验证
 - [x] **Task 4.1**: **模板语法与代码质量门禁**：
