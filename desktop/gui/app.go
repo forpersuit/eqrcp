@@ -1094,6 +1094,40 @@ func (a *App) OpenFile(path string) error {
 	return cmd.Process.Release()
 }
 
+func (a *App) ShowInFolder(path string) error {
+	a.logInfo(fmt.Sprintf("[GUI] ShowInFolder called with raw path: %s", path))
+	if path == "" {
+		return fmt.Errorf("path is empty")
+	}
+
+	path = convertCrossPlatformPath(path)
+	a.logInfo(fmt.Sprintf("[GUI] ShowInFolder translated path: %s", path))
+
+	cleaned := filepath.Clean(path)
+	if !filepath.IsAbs(cleaned) {
+		if abs, err := filepath.Abs(cleaned); err == nil {
+			cleaned = abs
+		}
+	}
+
+	// Check if target exists on disk
+	if _, err := os.Stat(cleaned); err != nil {
+		a.logInfo(fmt.Sprintf("[GUI] ShowInFolder: target %s does not exist, falling back to parent folder via OpenPath", cleaned))
+		return a.OpenPath(filepath.Dir(cleaned))
+	}
+
+	cmd, err := showInFolderCommand(cleaned)
+	if err != nil {
+		a.logError(fmt.Sprintf("[GUI] ShowInFolder: failed to create command: %v", err))
+		return a.OpenPath(cleaned)
+	}
+	if err := cmd.Start(); err != nil {
+		a.logError(fmt.Sprintf("[GUI] ShowInFolder: failed to start command: %v", err))
+		return a.OpenPath(cleaned)
+	}
+	return cmd.Process.Release()
+}
+
 func (a *App) ReadSettings() (DesktopSettings, error) {
 	if a.agent == nil {
 		return DesktopSettings{}, fmt.Errorf("agent not initialized")
@@ -1620,6 +1654,35 @@ func openFileCommand(path string) (*exec.Cmd, error) {
 		return exec.Command("xdg-open", path), nil
 	default:
 		return nil, fmt.Errorf("opening files is not supported on %s", runtime.GOOS)
+	}
+}
+
+func showInFolderCommand(path string) (*exec.Cmd, error) {
+	switch runtime.GOOS {
+	case "windows":
+		winPath := filepath.Clean(strings.ReplaceAll(path, "/", "\\"))
+		cmd := exec.Command("explorer.exe", "/select,"+winPath)
+		return cmd, nil
+	case "darwin":
+		return exec.Command("open", "-R", path), nil
+	case "linux":
+		if isWSL() {
+			out, err := exec.Command("wslpath", "-w", path).Output()
+			if err == nil {
+				winPath := strings.TrimSpace(string(out))
+				if winPath != "" {
+					return exec.Command("explorer.exe", "/select,"+winPath), nil
+				}
+			}
+			return exec.Command("explorer.exe", "/select,"+path), nil
+		}
+		info, err := os.Stat(path)
+		if err == nil && info.IsDir() {
+			return exec.Command("xdg-open", path), nil
+		}
+		return exec.Command("xdg-open", filepath.Dir(path)), nil
+	default:
+		return nil, fmt.Errorf("showing in folder is not supported on %s", runtime.GOOS)
 	}
 }
 

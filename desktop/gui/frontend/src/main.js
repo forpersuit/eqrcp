@@ -25,6 +25,7 @@ import {
     OpenExternal,
     OpenFile,
     OpenPath,
+    ShowInFolder,
     OpenURL,
     ReadSettings,
     Receive,
@@ -1187,11 +1188,33 @@ function renderReceiveDeviceProgressHtml(task) {
     let deviceProgressHtml = '';
     const clients = task.clientStates ? Object.values(task.clientStates) : [];
     const recvDir = state.receiveDir || state.settings?.output || '';
+
+    let latestReceivedPath = '';
+    for (const client of clients) {
+        if (client.files && client.files.length > 0) {
+            for (let fi = client.files.length - 1; fi >= 0; fi--) {
+                const f = client.files[fi];
+                if (f.state === 'completed' && f.path) {
+                    latestReceivedPath = f.path;
+                    break;
+                }
+            }
+        }
+        if (!latestReceivedPath && client.savedFiles && client.savedFiles.length > 0) {
+            latestReceivedPath = client.savedFiles[client.savedFiles.length - 1];
+        }
+        if (latestReceivedPath) break;
+    }
+
+    const folderBtnAttr = latestReceivedPath 
+        ? `data-show-in-folder="${escapeAttr(latestReceivedPath)}" title="${escapeAttr(t('show_in_folder_title') || 'Reveal received files in file manager')}"` 
+        : `data-open-path="${escapeAttr(recvDir)}" title="${escapeAttr(t('open_folder_title') || 'Open receive folder')}"`;
+
     const headerHtml = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
             <strong style="font-size: 12px; font-weight: 700; color: var(--text-secondary); margin: 0;">${t('devices_progress') || 'Transfer Progress'}</strong>
-            ${recvDir ? `
-                <button class="icon-button-mini path-link" data-open-path="${escapeAttr(recvDir)}" title="${escapeAttr(t('open_folder_title') || 'Open receive folder')}" style="padding: 4px; display: inline-flex; align-items: center; justify-content: center; height: 22px; width: 22px; min-height: unset; margin: 0;">
+            ${(latestReceivedPath || recvDir) ? `
+                <button class="icon-button-mini ${latestReceivedPath ? 'show-folder-action' : 'path-link'}" ${folderBtnAttr} style="padding: 4px; display: inline-flex; align-items: center; justify-content: center; height: 22px; width: 22px; min-height: unset; margin: 0;">
                     ${openFolderIcon()}
                 </button>
             ` : ''}
@@ -1293,6 +1316,9 @@ function renderReceiveDeviceProgressHtml(task) {
                                         <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(path)}" title="${escapeAttr(openFileTooltip)}" style="padding: 2px; min-height: unset; height: 18px; width: 18px;">
                                             ${openFileIcon()}
                                         </button>
+                                        <button class="icon-button-mini show-folder-action" data-show-in-folder="${escapeAttr(path)}" title="${escapeAttr(t('show_in_folder_title') || 'Show in Folder')}" style="padding: 2px; min-height: unset; height: 18px; width: 18px;">
+                                            ${openFolderIcon()}
+                                        </button>
                                     ` : ''}
                                 </div>
                             </div>
@@ -1376,6 +1402,9 @@ function renderReceiveDeviceProgressHtml(task) {
                                     ${stateText === 'completed' && path ? `
                                         <button class="icon-button-mini open-file-action" data-open-file="${escapeAttr(path)}" title="${escapeAttr(openFileTooltip)}" style="padding: 2px; min-height: unset; height: 18px; width: 18px;">
                                             ${openFileIcon()}
+                                        </button>
+                                        <button class="icon-button-mini show-folder-action" data-show-in-folder="${escapeAttr(path)}" title="${escapeAttr(t('show_in_folder_title') || 'Show in Folder')}" style="padding: 2px; min-height: unset; height: 18px; width: 18px;">
+                                            ${openFolderIcon()}
                                         </button>
                                     ` : ''}
                                 </div>
@@ -6787,6 +6816,23 @@ document.addEventListener('click', (event) => {
         if (path) {
             run(async () => {
                 await OpenPath(path);
+            }, {busy: false});
+        }
+        return;
+    }
+
+    const showFolderLink = event.target.closest('[data-show-in-folder]');
+    if (showFolderLink) {
+        const targetPath = showFolderLink.dataset.showInFolder;
+        if (targetPath) {
+            run(async () => {
+                if (window['go']?.['main']?.['App']?.['ShowInFolder']) {
+                    await window['go']['main']['App']['ShowInFolder'](targetPath);
+                } else if (typeof ShowInFolder === 'function') {
+                    await ShowInFolder(targetPath);
+                } else {
+                    await OpenPath(targetPath);
+                }
             }, {busy: false});
         }
         return;
