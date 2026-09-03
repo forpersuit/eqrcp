@@ -271,3 +271,58 @@ func TestDesktopChatPageURLDefaultSender(t *testing.T) {
 	}
 }
 
+func TestGUIAgentRunTaskEnableTLSFallbackToHTTP(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("USERPROFILE", tempHome)
+
+	testFile := filepath.Join(tempHome, "sample.txt")
+	if err := os.WriteFile(testFile, []byte("test content"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	agent := newDesktopAgent(nil)
+	agent.baseFlags.Port = 0
+	agent.baseFlags.Bind = "127.0.0.1"
+
+	_, err := agent.writeSettings(DesktopSettings{
+		EnableTLS:     true,
+		CloseBehavior: "tray",
+		Interface:     "lo",
+	})
+	if err != nil {
+		t.Fatalf("writeSettings failed: %v", err)
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- agent.runTask(AgentTask{
+			Action: "share",
+			Paths:  []string{testFile},
+		})
+	}()
+
+	var srv *server.Server
+	for i := 0; i < 20; i++ {
+		time.Sleep(50 * time.Millisecond)
+		agent.mu.Lock()
+		srv = agent.activeServer
+		agent.mu.Unlock()
+		if srv != nil {
+			break
+		}
+	}
+
+	if srv == nil {
+		t.Fatalf("expected server to be running despite missing TLS certificates (graceful HTTP fallback)")
+	}
+	if strings.HasPrefix(srv.SendURL, "https://") {
+		t.Fatalf("expected HTTP URL after fallback, got: %s", srv.SendURL)
+	}
+
+	go srv.Shutdown()
+	select {
+	case <-errCh:
+	case <-time.After(1 * time.Second):
+	}
+}

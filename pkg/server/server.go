@@ -2119,7 +2119,9 @@ func (s *Server) registerRoute(pattern string, handler http.HandlerFunc) {
 // Wait for transfer to be completed, it waits forever if kept awlive
 func (s *Server) Wait() error {
 	<-s.stopChannel
-	if err := s.instance.Shutdown(context.Background()); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := s.instance.Shutdown(ctx); err != nil {
 		log.Println(err)
 	}
 	if s.body.DeleteAfterTransfer {
@@ -2309,6 +2311,9 @@ func New(cfg *config.Config) (*Server, error) {
 		if directDomain != targetIP && !strings.HasPrefix(directDomain, "0-0-0-0") {
 			hostname = fmt.Sprintf("%s:%d", directDomain, port)
 		} else {
+			if targetIP == "0.0.0.0" || targetIP == "" || strings.HasPrefix(directDomain, "0-0-0-0") {
+				return nil, fmt.Errorf("cannot enable secure mode: unable to determine a valid non-loopback IP address to generate direct domain")
+			}
 			hostname = fmt.Sprintf("%s:%d", targetIP, port)
 		}
 	} else if bind == "0.0.0.0" {

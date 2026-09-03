@@ -67,6 +67,13 @@ func (s *AcmeStore) Delete(recordName, val string) {
 	}
 }
 
+func (s *AcmeStore) DeleteRecord(recordName string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	recordName = strings.ToLower(strings.TrimSuffix(recordName, ".")) + "."
+	delete(s.values, recordName)
+}
+
 func (s *AcmeStore) Clear() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -223,8 +230,8 @@ func (h *DNSHandler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 			})
 		}
 		if len(challenges) == 0 {
-			if strings.HasPrefix(qName, "_acme-challenge.") {
-				m.Rcode = dns.RcodeSuccess // NOERROR with 0 answers
+			if strings.HasPrefix(qName, "_acme-challenge.") || qName == cleanBase || parseIP(qName) != nil {
+				m.Rcode = dns.RcodeSuccess // NOERROR with 0 answers (NODATA)
 			} else {
 				m.Rcode = dns.RcodeNameError
 			}
@@ -300,8 +307,15 @@ func startHTTPServer(addr string, token string, defaultDomain string, store *Acm
 			}
 
 			record := strings.TrimSpace(body.Record)
+			expectedSuffix := "_acme-challenge." + strings.ToLower(strings.TrimSuffix(defaultDomain, ".")) + "."
 			if record == "" {
-				record = "_acme-challenge." + strings.TrimSuffix(defaultDomain, ".") + "."
+				record = expectedSuffix
+			} else {
+				record = strings.ToLower(strings.TrimSuffix(record, ".")) + "."
+				if !strings.HasSuffix(record, expectedSuffix) && record != expectedSuffix {
+					http.Error(w, `{"error":"record must belong to zone `+expectedSuffix+`"}`, http.StatusBadRequest)
+					return
+				}
 			}
 
 			ttlSec := body.TTL
@@ -324,6 +338,13 @@ func startHTTPServer(addr string, token string, defaultDomain string, store *Acm
 			})
 
 		case http.MethodDelete:
+			clearAll, _ := strconv.ParseBool(r.URL.Query().Get("all"))
+			if clearAll {
+				store.Clear()
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "cleared_all": true})
+				return
+			}
 			record := strings.TrimSpace(r.URL.Query().Get("record"))
 			if record == "" {
 				record = "_acme-challenge." + strings.TrimSuffix(defaultDomain, ".") + "."
@@ -332,10 +353,10 @@ func startHTTPServer(addr string, token string, defaultDomain string, store *Acm
 			if val != "" {
 				store.Delete(record, val)
 			} else {
-				store.Clear()
+				store.DeleteRecord(record)
 			}
 			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{"ok": true})
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "record": record})
 
 		default:
 			http.Error(w, `{"error":"method_not_allowed"}`, http.StatusMethodNotAllowed)
@@ -361,6 +382,12 @@ func main() {
 	token := *flagToken
 	if envToken := os.Getenv("EQT_DNS_TOKEN"); envToken != "" && token == "" {
 		token = envToken
+	}
+
+	httpListen := strings.TrimSpace(*flagHTTPListen)
+	isLoopback := httpListen == "127.0.0.1" || httpListen == "localhost" || httpListen == "::1" || strings.HasPrefix(httpListen, "127.")
+	if !isLoopback && token == "" {
+		log.Fatalf("[FATAL] Refusing to start HTTP management server on non-loopback interface (%s) without an authentication token! Please set -token or EQT_DNS_TOKEN to prevent unauthorized ACME challenge manipulation.", httpListen)
 	}
 
 	store := newAcmeStore()

@@ -174,4 +174,59 @@ func TestHTTPManagement(t *testing.T) {
 	if len(store.Get(rec)) != 1 || store.Get(rec)[0] != "token-xyz" {
 		t.Fatalf("Expected token-xyz in store, got %v", store.Get(rec))
 	}
+
+	// 5. Post ACME challenge to illegitimate zone (should fail 400)
+	bodyBadZone, _ := json.Marshal(map[string]interface{}{"record": "_acme-challenge.evil.com.", "value": "token-evil"})
+	reqPostBadZone, _ := http.NewRequest(http.MethodPost, "/acme/challenge", bytes.NewReader(bodyBadZone))
+	reqPostBadZone.Header.Set("Authorization", "Bearer secret-token")
+	rwPostBadZone := httptest.NewRecorder()
+	srv.Handler.ServeHTTP(rwPostBadZone, reqPostBadZone)
+	if rwPostBadZone.Code != http.StatusBadRequest {
+		t.Fatalf("Expected 400 for bad zone record, got %d", rwPostBadZone.Code)
+	}
+
+	// 6. Delete single record
+	reqDelRecord, _ := http.NewRequest(http.MethodDelete, "/acme/challenge?record="+rec, nil)
+	reqDelRecord.Header.Set("Authorization", "Bearer secret-token")
+	rwDelRecord := httptest.NewRecorder()
+	srv.Handler.ServeHTTP(rwDelRecord, reqDelRecord)
+	if rwDelRecord.Code != http.StatusOK {
+		t.Fatalf("Expected 200 for delete record, got %d", rwDelRecord.Code)
+	}
+	if len(store.Get(rec)) != 0 {
+		t.Fatalf("Expected 0 challenges after deleting record")
+	}
+}
+
+func TestTXTNODATAResponse(t *testing.T) {
+	store := newAcmeStore()
+	handler := &DNSHandler{
+		baseDomain: "direct.eqt.net.im",
+		store:      store,
+		ns1:        "ns1.eqt.net.im.",
+		ns2:        "ns2.eqt.net.im.",
+		soaMName:   "ns1.eqt.net.im.",
+		soaRName:   "admin.eqt.net.im.",
+	}
+
+	// 1. Query TXT on existing A record hostname (should return NOERROR with 0 answers)
+	req := new(dns.Msg)
+	req.SetQuestion("192-168-0-201.direct.eqt.net.im.", dns.TypeTXT)
+	rw := &dummyResponseWriter{}
+	handler.ServeDNS(rw, req)
+	if rw.msg.Rcode != dns.RcodeSuccess {
+		t.Fatalf("Expected NOERROR for existing name TXT query, got %d", rw.msg.Rcode)
+	}
+	if len(rw.msg.Answer) != 0 {
+		t.Fatalf("Expected 0 answers (NODATA), got %d", len(rw.msg.Answer))
+	}
+
+	// 2. Query TXT on completely non-existent name (should return NXDOMAIN)
+	reqNonExist := new(dns.Msg)
+	reqNonExist.SetQuestion("random-non-existent.direct.eqt.net.im.", dns.TypeTXT)
+	rwNonExist := &dummyResponseWriter{}
+	handler.ServeDNS(rwNonExist, reqNonExist)
+	if rwNonExist.msg.Rcode != dns.RcodeNameError {
+		t.Fatalf("Expected NXDOMAIN for non-existent name TXT query, got %d", rwNonExist.msg.Rcode)
+	}
 }

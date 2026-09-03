@@ -2,8 +2,9 @@ import { state } from './state.js';
 
 const translations = {
     "zh": {
+        "tls_cert_not_detected": "未检测到本地有效证书缓存，无证书时将自动降级为 HTTP 传输。",
         "enable_tls": "局域网传输加密 (LAN-TLS)",
-        "enable_tls_desc": "启用 Let's Encrypt 官方通配符证书与 TLS 1.3 强加密，防嗅探、地址栏安全绿锁、支持超大文件原生流式下载。",
+        "enable_tls_desc": "启用 Let's Encrypt 官方通配符证书与 TLS 加密，防局域网嗅探、地址栏安全绿锁。",
         "about": "关于 EQT",
         "about_title": "关于 EQT",
         "test_version_badge": "测试版",
@@ -429,7 +430,7 @@ const translations = {
     },
     "en": {
         "enable_tls": "LAN-TLS Encryption",
-        "enable_tls_desc": "Encrypt local transfers using Let's Encrypt wildcard certificate & TLS 1.3 (anti-sniffing, secure context, zero-OOM streaming).",
+        "enable_tls_desc": "Encrypt local transfers using Let's Encrypt wildcard certificate & TLS (anti-sniffing, secure green lock).",
         "about": "About EQT",
         "about_title": "About EQT",
         "test_version_badge": "Test Build",
@@ -855,7 +856,7 @@ const translations = {
     },
     "ja": {
         "enable_tls": "LAN-TLS 暗号化",
-        "enable_tls_desc": "Let's Encrypt 公式ワイルドカード証明書と TLS 1.3 でローカル転送を暗号化します。",
+        "enable_tls_desc": "Let's Encrypt 公式ワイルドカード証明書と TLS でローカル転送を暗号化します（盗聴防止、安全な緑の鍵）。",
         "about": "EQTについて",
         "about_title": "EQTについて",
         "test_version_badge": "テスト版",
@@ -1269,7 +1270,7 @@ const translations = {
     },
     "ko": {
         "enable_tls": "LAN-TLS 전송 암호화",
-        "enable_tls_desc": "Let's Encrypt 공식 와일드카드 인증서와 TLS 1.3으로 로컬 전송을 암호화합니다.",
+        "enable_tls_desc": "Let's Encrypt 공식 와일드카드 인증서와 TLS로 로컬 전송을 암호화합니다(스니핑 방지, 보안 녹색 자물쇠).",
         "about": "EQT 정보",
         "about_title": "EQT 정보",
         "test_version_badge": "테스트 버전",
@@ -1683,7 +1684,7 @@ const translations = {
     },
     "es": {
         "enable_tls": "Cifrado LAN-TLS",
-        "enable_tls_desc": "Cifra las transferencias locales con certificados Let's Encrypt y TLS 1.3.",
+        "enable_tls_desc": "Cifra las transferencias locales con certificados Let's Encrypt y TLS (seguridad, candado verde).",
         "about": "Acerca de EQT",
         "about_title": "Acerca de EQT",
         "test_version_badge": "Versión de prueba",
@@ -2097,7 +2098,7 @@ const translations = {
     },
     "de": {
         "enable_tls": "LAN-TLS-Verschlüsselung",
-        "enable_tls_desc": "Verschlüsselt lokale Übertragungen mit Let's Encrypt-Zertifikaten und TLS 1.3.",
+        "enable_tls_desc": "Verschlüsselt lokale Übertragungen mit Let's Encrypt-Zertifikaten und TLS (Abhörschutz, grünes Schloss).",
         "about": "Über EQT",
         "about_title": "Über EQT",
         "test_version_badge": "Testversion",
@@ -2511,7 +2512,7 @@ const translations = {
     },
     "fr": {
         "enable_tls": "Chiffrement LAN-TLS",
-        "enable_tls_desc": "Chiffre les transferts locaux avec les certificats Let's Encrypt et TLS 1.3.",
+        "enable_tls_desc": "Chiffre les transferts locaux avec les certificats Let's Encrypt et TLS (anti-reniflage, cadenas vert).",
         "about": "À propos de EQT",
         "about_title": "À propos de EQT",
         "test_version_badge": "Version de test",

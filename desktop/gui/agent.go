@@ -14,6 +14,7 @@ import (
 
 	"eqt/pkg/application"
 	"eqt/pkg/body"
+	"eqt/pkg/cert"
 	"eqt/pkg/chat/v2/diag"
 	"eqt/pkg/config"
 	"eqt/pkg/logger"
@@ -971,6 +972,10 @@ func (agent *desktopAgent) runTask(task AgentTask) error {
 	cfg.Lang = desktopSettings.Lang
 	cfg.KeepAlive = true
 	cfg.Secure = desktopSettings.EnableTLS
+	if cfg.Secure && !cert.HasValidCertificate(cfg.TlsCert, cfg.TlsKey) {
+		agent.log.Infof("runTask: LAN-TLS is enabled in settings, but no valid TLS certificate is available in ~/.config/eqt/certs. Gracefully falling back to plain HTTP.")
+		cfg.Secure = false
+	}
 	srv, err := server.New(&cfg)
 	if err != nil {
 		agent.log.Errorf("runTask: failed to instantiate server: %v", err)

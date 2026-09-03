@@ -8,6 +8,7 @@ import (
 	"eqt/cmd"
 	"eqt/desktop/crash"
 	"eqt/pkg/application"
+	"eqt/pkg/cert"
 	chatv2session "eqt/pkg/chat/v2/session"
 	"eqt/pkg/config"
 	"eqt/pkg/logger"
@@ -160,6 +161,7 @@ type AppInfo struct {
 	LogPath            string `json:"logPath,omitempty"`
 	UploadDirFreeSpace string `json:"uploadDirFreeSpace,omitempty"`
 	IsTest             bool   `json:"isTest"`
+	HasValidTLSCert    bool   `json:"hasValidTLSCert"`
 }
 
 type DesktopIntegrationStatus struct {
@@ -1228,15 +1230,16 @@ func (a *App) AppInfo() AppInfo {
 		logPath = desktopLogFilePath()
 	}
 	info := AppInfo{
-		Product:     "EQT",
-		Name:        "Easy QR Transfer",
-		Version:     version.Version(),
-		Description: "Local QR-code file transfer for desktop and mobile devices.",
-		AgentURL:    "",
-		OS:          runtime.GOOS,
-		Arch:        runtime.GOARCH,
-		LogPath:     logPath,
-		IsTest:      server.IsTestBuild(),
+		Product:         "EQT",
+		Name:            "Easy QR Transfer",
+		Version:         version.Version(),
+		Description:     "Local QR-code file transfer for desktop and mobile devices.",
+		AgentURL:        "",
+		OS:              runtime.GOOS,
+		Arch:            runtime.GOARCH,
+		LogPath:         logPath,
+		IsTest:          server.IsTestBuild(),
+		HasValidTLSCert: cert.HasValidCertificate("", ""),
 	}
 	if cli, err := findEqtCLI(); err == nil {
 		info.CLIPath = cli

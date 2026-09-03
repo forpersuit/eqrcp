@@ -167,6 +167,7 @@ export namespace main {
 	    logPath?: string;
 	    uploadDirFreeSpace?: string;
 	    isTest: boolean;
+	    hasValidTLSCert: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppInfo(source);
@@ -185,6 +186,7 @@ export namespace main {
 	        this.logPath = source["logPath"];
 	        this.uploadDirFreeSpace = source["uploadDirFreeSpace"];
 	        this.isTest = source["isTest"];
+	        this.hasValidTLSCert = source["hasValidTLSCert"];
 	    }
 	}
 	export class ChatAttachmentSaveResult {

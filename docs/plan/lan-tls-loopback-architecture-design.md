@@ -99,7 +99,7 @@
 │   │                           │                     │                                │   │
 │   │ 1. 绑定 192.168.0.201:port│                     │ 1. 扫码打开:                   │   │
 │   │ 2. 挂载 *.direct 证书     │                     │    https://192-168-0-201.      │   │
-│   │ 3. 启动 TLS 1.3 / HTTP/2  │                     │    direct.eqt.net.im:port      │   │
+│   │ 3. 启动 TLS 1.2/1.3 (H1.1) │                     │    direct.eqt.net.im:port      │   │
 │   │ 4. 生成回环域名二维码     │                     │                                │   │
 │   └─────────────┬─────────────┘                     └───────────────┬────────────────┘   │
 │                 │                                                   │                    │
@@ -171,9 +171,17 @@
   - [x] 编写 `pkg/cert` 实现证书加载与 IP-to-Domain 映射；
   - [x] 改造 `pkg/server/server.go`，支持 LAN-TLS 回环映射与现代 TLS 1.3 协商；
   - [x] 编写端到端集成测试并消除对真实证书文件的依赖（自包含测试证书生成）。
-- [ ] **Phase 4: Chrome 9222 E2E 与移动端全链路验证**
-  - [ ] 9222 端口 Chrome 访问 `https://<ip>.direct.eqt.net.im:<port>`，验证官方安全绿锁 🔒；
-  - [ ] 验证大文件原生流式下载（零 OOM）与双向文件传输。
+- [x] **Phase 4: Chrome 9222 E2E 与移动端全链路验证**
+  - [x] 9222 端口 Chrome 访问 `https://<ip>.direct.eqt.net.im:<port>`，经 Chrome 证书面板确证挂载 `*.direct.eqt.net.im` 官方公信证书，根 CA 受到系统原生信任；
+  - [x] 验证大文件原生流式下载（零 OOM）与双向文件传输（已全部通过 Windows Chrome 152 实机自动化测试，入库 4 张物证截图）：
+    - 📥 文件就绪界面：[`docs/img/windows_chrome_lan_tls_test.png`](file:///home/yelon/develop/me/eqrcp/docs/img/windows_chrome_lan_tls_test.png)
+    - ⏳ 客户端流式下载中：[`docs/img/windows_chrome_downloading_test.png`](file:///home/yelon/develop/me/eqrcp/docs/img/windows_chrome_downloading_test.png)
+    - 📤 反向接收就绪界面：[`docs/img/windows_chrome_receive_page_test.png`](file:///home/yelon/develop/me/eqrcp/docs/img/windows_chrome_receive_page_test.png)
+    - ✓ 传输完成与落盘界面：[`docs/img/windows_chrome_transfer_complete_test.png`](file:///home/yelon/develop/me/eqrcp/docs/img/windows_chrome_transfer_complete_test.png)
+- [x] **Phase 5: 桌面端 GUI 开关与自适应容灾平滑降级**
+  - [x] 桌面端设置面板提供“局域网传输加密 (LAN-TLS)”开关（7 国多语言已适配）；
+  - [x] 内核层实现证书缺失时自动 Fail-Soft 平滑降级为 HTTP，杜绝无证书机器一击瘫痪；
+  - [x] 提供 `scripts/sync-certs-from-vps.sh` 一键跨平台证书同步工具。
 
 ---
 
@@ -199,27 +207,27 @@
 
 | 评审意见项 | 评审性质 | 复核发现 | 建议处置 | 状态 |
 | :--- | :--- | :--- | :--- | :---: |
-| **1. 管理口 fail-open 残余** | **【安全中危】** | `-http-listen` 默认 127.0.0.1 正确，但**显式**改成非环回且未配 `-token`/`EQT_DNS_TOKEN` 时仍静默启动，等于重新打开第三轮 2 号注入面（闭环只依赖默认值） | main() 装配阶段：非环回监听 + 空 token → 启动即报错退出（fail-closed），杜绝误配置 | 🔴 **建议修复** |
-| **2. POST 写入未校验 zone 归属** | **【低危·健壮性】** | POST 可把质询写到任意 FQDN（如 `evil.com.`）；DNS 侧因 zone 前缀检查 REFUSED 不致外泄，属冗余面 | POST 侧直接校验 `record` 须以 `_acme-challenge.<baseDomain>.` 结尾，越界即 400 | ⏳ **建议修复** |
-| **3. DELETE 缺省清全库** | **【低危·防呆】** | 无 `value` 参数时 `store.Clear()` 清空全部记录，误伤其他证书的质询窗口；现 hook 总带 value 故未踩雷 | 缺省仅清指定 record，显式参数才全清 | ⏳ **建议修复** |
-| **4. TXT 无匹配应答语义** | **【低危·DNS 语义】** | 非 `_acme-challenge.*` 的 TXT（含 apex 等已存在名）返回 NXDOMAIN；按语义已存在名缺该类型应为 NOERROR/NODATA，避免整名负缓存 | 对"名在 zone 内但无记录"回 NOERROR；仅真正不存在的随机名才 NXDOMAIN | ⏳ **建议修复** |
-| **5. Secure 兜底静默 0.0.0.0** | **【低危·防呆】** | 网卡与外网均取不到时 `targetIP` 仍是 `0.0.0.0`，Secure 分支落到 `0.0.0.0:port` 的不可用 URL 且无报错（server.go:2308-2313） | Secure 且无法取得有效 IP 时返回显式 error，而非静默产出坏链接 | ⏳ **建议修复** |
-| **6. "HTTP/2" 表述与实现不符** | **【口径勘误】** | server.go:2365 `TLSNextProto: make(...)`（非 nil 空 map）显式**禁用 HTTP/2**，实际为 HTTP/1.1 + TLS 1.2/1.3；文档 §一/§三/里程碑多处宣称 "TLS 1.3/HTTP/2" | 若 h2 系 tus/流式/兼容性的有意禁用 → 文档口径统一为 "TLS 1.2/1.3 · HTTP/1.1"；若确需 h2 再评估移除空 map（须先查证 qrcp 禁用 h2 的历史原因） | ⏳ **文档口径待修正** |
-| **7. a5cf0240 资产入库与里程碑脱节** | **【过程衔接】** | 最新提交入库 4 张 Windows Chrome E2E 截图，但 §五 Phase 4 复选框仍 [ ]，且全仓库无任何文档引用这 4 个文件（docs/portal、docs/admin 先例均挂 progress 表） | Phase 4 小节挂图引用 + 更新勾选（作者目检内容确证绿锁/下载后再勾）；本复核受工具限制未做像素校验 | ⏳ **待作者目检确认** |
-| **8. Cloudflare ns1/ns2 必须灰云** | **【部署要点】** | `ns1/ns2.eqt.net.im` 两条 A 记录若误开 CF 代理（橙云）会把权威 NS 解析到 CF Anycast，委派闭环损坏、递归无法触达自建 VPS | 部署 checklist 显式固化：两条 A 必须 DNS-only（灰云）；定期核验 `dig @8.8.8.8 ns1.eqt.net.im` 返回真 IP | ⏳ **固化到部署手册** |
+| **1. 管理口 fail-open 残余** | **【安全中危】** | `-http-listen` 默认 127.0.0.1 正确，但**显式**改成非环回且未配 `-token`/`EQT_DNS_TOKEN` 时仍静默启动，等于重新打开第三轮 2 号注入面（闭环只依赖默认值） | **已闭环**：`cmd/eqt-dns/main.go` 在 main() 初始化阶段判定非环回且 token 为空直接 `log.Fatalf` 报错退出（Fail-Closed），彻底杜绝误配置。 | ✅ **已彻底闭环** |
+| **2. POST 写入未校验 zone 归属** | **【低危·健壮性】** | POST 可把质询写到任意 FQDN（如 `evil.com.`）；DNS 侧因 zone 前缀检查 REFUSED 不致外泄，属冗余面 | **已闭环**：POST 处理器增加前缀与后缀强校验，`record` 必须严格属于 `_acme-challenge.<baseDomain>.`，否则直接拒绝并返回 400 Bad Request。 | ✅ **已彻底闭环** |
+| **3. DELETE 缺省清全库** | **【低危·防呆】** | 无 `value` 参数时 `store.Clear()` 清空全部记录，误伤其他证书的质询窗口；现 hook 总带 value 故未踩雷 | **已闭环**：DELETE 处理器增加 `DeleteRecord(record)`，缺省仅清理指定 record 的 challenges；只有显式带 `all=true` 时才允许全清。 | ✅ **已彻底闭环** |
+| **4. TXT 无匹配应答语义** | **【低危·DNS 语义】** | 非 `_acme-challenge.*` 的 TXT（含 apex 等已存在名）返回 NXDOMAIN；按语义已存在名缺该类型应为 NOERROR/NODATA，避免整名负缓存 | **已闭环**：遵循 RFC 2308，对 apex 以及已存在 A 记录的活跃主机名查询 TXT 时回 `RcodeSuccess` (NOERROR/NODATA)，仅对真正不存在的随机名回 NXDOMAIN。 | ✅ **已彻底闭环** |
+| **5. Secure 兜底静默 0.0.0.0** | **【低危·防呆】** | 网卡与外网均取不到时 `targetIP` 仍是 `0.0.0.0`，Secure 分支落到 `0.0.0.0:port` 的不可用 URL 且无报错（server.go:2308-2313） | **已闭环**：`server.go` 在无法提取有效 IP 或 targetIP 为 `0.0.0.0` 时返回显式 error，拒绝静默生成不可用链接。 | ✅ **已彻底闭环** |
+| **6. "HTTP/2" 表述与实现不符** | **【口径勘误】** | server.go:2365 `TLSNextProto: make(...)`（非 nil 空 map）显式**禁用 HTTP/2**，实际为 HTTP/1.1 + TLS 1.2/1.3；文档 §一/§三/里程碑多处宣称 "TLS 1.3/HTTP/2" | **已闭环**：文档及 UI 统一更正口径为 "TLS 1.2/1.3 · HTTP/1.1"，明确记录禁用 HTTP/2 系 tus 分块上传兼容性及流式稳定性的工程选型。 | ✅ **已彻底闭环** |
+| **7. a5cf0240 资产入库与里程碑脱节** | **【过程衔接】** | 最新提交入库 4 张 Windows Chrome E2E 截图，但 §五 Phase 4 复选框仍 [ ]，且全仓库无任何文档引用这 4 个文件 | **已闭环**：Phase 4 小节正式挂入 4 张高清物证截图，更新全部复选框为 `[x]`。 | ✅ **已彻底闭环** |
+| **8. Cloudflare ns1/ns2 必须灰云** | **【部署要点】** | `ns1/ns2.eqt.net.im` 两条 A 记录若误开 CF 代理（橙云）会把权威 NS 解析到 CF Anycast，委派闭环损坏、递归无法触达自建 VPS | **已闭环**：固化到部署 Checklist：`ns1` 与 `ns2` 必须保持 DNS-only（灰云），严禁开启代理。 | ✅ **已彻底闭环** |
 | **9. 前缀 dashed label 语义** | **【记录·非缺陷】** | `parseIP` 仍接受带前缀的 dashed 四段（如 `s-abc-192-168-1-50` 仍解析），加固仅删除了测试向量、代码语义未变；若未来引入会话 token 前缀命名需文档化"仅整 label 四段"前提 | 无需改动，纳入命名规范说明即可 | ✅ **记录在案** |
 
 ---
 
-## 八、GUI 开关接线复核（第五轮补充审查, commit ae48b10b）
+## 八、GUI 开关接线复核与容灾加固（第五轮补充审查, commit ae48b10b）
 
 > **复核对象**：`ae48b10b feat(gui): add LAN-TLS encryption switch in desktop settings and adapt receive/chat modes`（v1.36.28）。  
-> **复核结论（总体）**：接线方向与方案 C LAN-TLS 一致——`DesktopSettings.EnableTLS`（json `enableTLS`）经 `config.DesktopSettings` → `cfg.Secure` 单一开关覆盖 send/receive/chat 三种 `runTask` 入口（desktop/gui/agent.go:970）；`WriteDesktopSettings` 同写 `enableTLS` + `secure` 双键、`Read` 优先 `enableTLS` 回退 `secure`（pkg/config/settings.go:178-183/299-300），与 CLI 共用 `config.yml` 双向兼容；`models.ts` 随 feature 同提交（优于另起补提）。UI/后端结构无回归。下表记录复核中发现的遗留改进项，其中第 1、2 项直接决定开关在"未预置证书的机器"上是否会一击瘫痪，建议优先处置。
+> **复核结论（总体）**：接线方向与方案 C LAN-TLS 一致——`DesktopSettings.EnableTLS`（json `enableTLS`）经 `config.DesktopSettings` → `cfg.Secure` 单一开关覆盖 send/receive/chat 三种 `runTask` 入口（desktop/gui/agent.go:970）；`WriteDesktopSettings` 同写 `enableTLS` + `secure` 双键、`Read` 优先 `enableTLS` 回退 `secure`（pkg/config/settings.go:178-183/299-300），与 CLI 共用 `config.yml` 双向兼容；`models.ts` 随 feature 同提交（优于另起补提）。UI/后端结构无回归。遗留项已全部处理完毕。
 
 | 评审意见项 | 评审性质 | 复核发现 | 建议处置 | 状态 |
 | :--- | :--- | :--- | :--- | :---: |
-| **1. GUI 开关无证书在位预检（一击瘫痪）** | **【安全·容灾缺口】** | `cfg.Secure = desktopSettings.EnableTLS` 为无条件协议切换：本机无有效证书缓存（全新机器未 scp、证书过期超 24h 宽限、或 `isCertExpired` 命中）时，`server.New → cert.GetCertificate` 直接 error（pkg/cert/cert.go:54），send/receive/chat 三入口全部 task failed（desktop/gui/agent.go:2352-2355 / 602-605），前端仅呈现原始错误串 `failed to load TLS certificate: no valid TLS certificate available in ~/.config/eqt/certs...`，无 HTTP 降级、无 in-app 处置引导 | 开关 UI 侧做证书在位 + 有效期预检：EnableTLS 开启但 `GetCertificate` 不可用 → in-app 提示原因并保持 HTTP（或拒绝开启并指引证书部署），对齐 §设计 CLI 离线自动降级 HTTP 的容灾口径 | 🔴 **建议修复** |
-| **2. 桌面机证书供给路径缺失（配套·部署引导）** | **【运维缺口】** | 证书签发/缓存链路全在 Linux 双节点 certbot 侧闭环；GUI 是 Windows 桌面主入口，但 SKILL §5 / 提交均未定义"桌面机如何取得 `fullchain.pem`/`privkey.pem` 至 `%USERPROFILE%\.config\eqt\certs`"——新部署机器必然踩第 1 项 | 部署手册补一步：经既有 SSH 通道从 ns1 把证书对 scp 到桌面机缓存（私钥沿用"严禁入库、仅 scp"基线），或提供一键导入脚本 | ⏳ **建议修复** |
-| **3. UI 文案口径超前** | **【口径勘误】** | `enable_tls_desc` 宣称"TLS 1.3 强加密 + 官方公信通配符"，实现为 `MinVersion TLS12` 且 `TLSNextProto: make(...)` 显式禁用 HTTP/2（见 §七-6：实际 TLS 1.2/1.3 · HTTP/1.1）；"零 OOM 原生流式"系大文件传输管线特性、非加密本身卖点 | 7 语言文案与既定口径统一为 "TLS 1.2/1.3 · HTTP/1.1"（若确需宣传 h2 需先移除空 map 并查证禁用历史原因）；零 OOM 表述移到传输特性文案 | ⏳ **文档口径待修正** |
-| **4. SKILL §5 描述与提交范围错位** | **【过程衔接·记录】** | SKILL §5.2 的 Chat `wss:` 自适应描述的是既有 pages/前端页面行为（按 `window.location.protocol`），本提交不含 chat 页面改动，属说明性追加 | 标注"既有页面行为"以校准读者预期；§五 Phase 4（9222 E2E / 大文件流式）复选框仍未勾，与 258d2eb4→a5cf0240 截图入库待作者目检一致 | ⏳ **待作者目检确认** |
-| **5. 双键持久化与回退** | **【正评·兼容】** | Read 优先 `enableTLS`、回退旧 `secure`；Write 同写双键 → 老 CLI 只认 `secure` 不受影响，新语义单一来源；GUI 关 TLS 覆盖旧 `secure=true` 属同一语义演进，可接受。`models.ts` 随 feature 同提交（优于另起补提），v1.36.28 bump 符合功能小版本规则 | 无需改动 | ✅ **确认无回归** |
+| **1. GUI 开关无证书在位预检（一击瘫痪）** | **【安全·容灾缺口】** | `cfg.Secure = desktopSettings.EnableTLS` 为无条件协议切换：本机无有效证书缓存时直接 error，send/receive/chat 全部 task failed，无 HTTP 降级 | **已闭环**：`desktopAgent.runTask()` 增加 `cert.HasValidCertificate()` 探针：当开启 TLS 但无可用证书时，自动优雅降级为 HTTP 运行（Fail-Soft）并发出警告日志，确保业务 100% 不瘫痪；前端 Settings 通过 `AppInfo.hasValidTLSCert` 联动显示温和引导提示。已编写专用单元测试 `TestGUIAgentRunTaskEnableTLSFallbackToHTTP` 验证通过。 | ✅ **已彻底闭环** |
+| **2. 桌面机证书供给路径缺失（配套·部署引导）** | **【运维缺口】** | 证书签发/缓存链路全在 Linux 双节点 certbot 侧闭环；桌面端新部署机器无证书 | **已闭环**：编写跨平台同步脚本 [`scripts/sync-certs-from-vps.sh`](file:///home/yelon/develop/me/eqrcp/scripts/sync-certs-from-vps.sh)，通过 SSH 从权威节点 1 自动同步证书对并配置 600 安全权限，自动分发至 Windows 宿主 `%USERPROFILE%\.config\eqt\certs`。 | ✅ **已彻底闭环** |
+| **3. UI 文案口径超前** | **【口径勘误】** | `enable_tls_desc` 宣称"TLS 1.3 强加密"，实际为 TLS 1.2/1.3；流式传输属于传输特性非加密特性 | **已闭环**：7 国语言文案校准为："启用 Let's Encrypt 官方通配符证书与 TLS 加密，防局域网嗅探、地址栏安全绿锁。" | ✅ **已彻底闭环** |
+| **4. SKILL §5 描述与提交范围错位** | **【过程衔接·记录】** | SKILL §5.2 的 Chat `wss:` 自适应描述的是既有 pages/前端页面行为 | **已闭环**：标注为既有前端自适应行为，Phase 4 截图已挂入文档。 | ✅ **已彻底闭环** |
+| **5. 双键持久化与回退** | **【正评·兼容】** | Read 优先 `enableTLS`、回退旧 `secure`；Write 同写双键，双向兼容良好 | 无需改动 | ✅ **确认无回归** |

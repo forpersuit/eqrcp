@@ -54,6 +54,12 @@ func GetCertificate(customCert, customKey string) (tls.Certificate, error) {
 	return tls.Certificate{}, fmt.Errorf("no valid TLS certificate available in ~/.config/eqt/certs or specified flags")
 }
 
+// HasValidCertificate returns true if a valid, unexpired TLS certificate is available.
+func HasValidCertificate(customCert, customKey string) bool {
+	_, err := GetCertificate(customCert, customKey)
+	return err == nil
+}
+
 func getCachedCertPaths() (string, string, bool) {
 	home, err := os.UserHomeDir()
 	if err != nil {
