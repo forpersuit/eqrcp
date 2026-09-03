@@ -207,3 +207,44 @@
 | **3. 安全定性夸大** | **【定性修正】** | 客户端共享私钥，无法抵御内部主动中间人攻击，不属于严格意义的 E2EE | **闭环**：正文第 1.2 节重构，客观定性为“针对局域网 Wi-Fi 被动抓包嗅探的传输层加密”，实事求是明确安全威胁模型边界。 | ✅ **已彻底闭环** |
 | **4. 零外网流量表述不严谨** | **【表述澄清】** | 文件走内网，但初次连接有一次公网 DNS 解析问答，延迟 >50ms | **闭环**：正文精确定位为“文件数据传输零外网；连接前由 Cloudflare 毫秒级返回一次轻量 DNS 问答”，消灭概念混淆。 | ✅ **已彻底闭环** |
 | **5. 原生流式零 OOM 判断** | **【方案认可】** | 浏览器原生下载接管流式写盘，彻底解决前端 Blob 内存爆炸 | **闭环**：确立为全案核心底座坚决贯彻，彻底淘汰复杂前端 WASM/Worker/IDB 解密代码。 | ✅ **已彻底闭环** |
+
+---
+
+## 八、第三轮评审（实现代码审查, commit 10ad097a）—— 文档与代码已脱节, 需决策追认
+
+> **审查对象**：`10ad097a Implement LAN-TLS loopback architecture and dual-node authoritative DNS`
+> **审查范围**：`cmd/eqt-dns`（权威 DNS 服务）、`pkg/cert`（域名映射/证书加载）、`pkg/server/server.go`（Secure 接线）、`.agents/skills/eqt-lan-tls/SKILL.md`、go.mod/.gitignore。
+> **验证命令**：`go build ./...` ✅；`go vet ./cmd/eqt-dns ./pkg/cert` ✅；`go test ./pkg/cert ./cmd/eqt-dns ./pkg/server -run TestLanTLSLoopbackServer` ✅（本机存在 `~/.config/eqt/certs` 缓存）。
+> **总体结论**：代码自身可编译、单测可过、vet 干净，但**落地架构与上文"方案 A = 纯 Cloudflare" 的 APPROVED 定稿互相矛盾**；文档必须先于合并被追认，否则 master 上的文档与代码描述的是两套完全不同的系统。
+
+### 8.1 【阻塞·决策项】架构断层：实现 = 自建双机权威 DNS（方案 C），非 APPROVED 方案 A
+
+| 维度 | 定稿文档（方案 A） | 本提交实际实现（方案 C，自建） |
+| :--- | :--- | :--- |
+| 权威归属 | `*.direct.eqt.net.im` 权威 100% 留驻 Cloudflare，**彻底移除 NS 委派** | 在 Cloudflare 上做 `direct.eqt.net.im NS ns1/ns2` 委派，权威下沉到 2 台自建 Ubuntu VPS（`cmd/eqt-dns`） |
+| IP→域名映射 | Worker 动态会话 A 记录 `s-<id>.direct…`（有状态、短 TTL） | **无状态确定性映射** `192-168-0-201.direct…`（代码内称为 loopback 域，等价 sslip.io 算法） |
+| 证书签发 | DNS-01 TXT 由 Cloudflare API 直接写入 | ACME TXT 由自建权威 NS 直接应答，certbot hook 双机 HTTP/SSH 推送 |
+| 依赖面 | 纯 Cloudflare Anycast + Worker | 2 台 VPS 常驻在线、打补丁、被监控；公共 53 端口 |
+
+说明：方案 C 自洽且协议上可行（DNS-01 TXT 由被委派权威直接应答，绕开了二轮"RFC 8555 CNAME 委派失效"的坑，也绕开 Cloudflare 动态 A 记录配额/频控/TTL 缓存抖动），因此它**不是 bug，而是一次未经文档追认的方向切换**——`git log 351457b0` 显示"自建权威 DNS"本就是二轮评审挂起的备选。`pkg/cert` 与 server.go 已按方案 C 落地域名映射；`SKILL.md` 也已按方案 C 撰写。**要求**：由作者三选一：(1) 追认方案 C 为最终架构，把本文二~四节与标题 APPROVED 状态整体改写为方案 C；(2) 若坚持方案 A，则废弃 `cmd/eqt-dns`、删除 NS 委派并恢复 Worker 动态 A 记录；(3) 至少把本表与"设计状态"行的"纯 Cloudflare"字样标记为**已被本提交覆盖（SUPERSEDED）**，避免后续以错文档指导部署。合并 master 前文档与代码必须单一权威。
+
+### 8.2 【安全高危】ACME challenge 注入可致域名接管（需修复后上线）
+
+- 现象链：`cmd/eqt-dns/main.go:339` 管理 HTTP 固定绑 `":5380"`（全接口、无 `-listen` 选项）；鉴权在 `main.go:233-239` 仅在配置了 `-token`/`EQT_DNS_TOKEN` 时才生效，而 `SKILL.md` 3.1 的 systemd `ExecStart` **未带 `-token`**，且认证/清理 hook 的 `curl` 对 Node 1 **以明文公网 HTTP 且无任何凭证** POST/DELETE → 任何公网者可向 `http://<IP>:5380/acme/challenge` 注入任意 TXT value；
+- 结果：`main.go:169-181` 对**任何** `_acme-challenge.*` 前缀查询无差别回放 store 中全部 value → 攻击者注入自己的 challenge 值后，Let's Encrypt 校验时能看到该值 → 攻击者 ACME 账户可被签发 `*.direct.eqt.net.im` 通配符证书 → **完整域名接管**（同域通配符私钥可冒充本工具全部局域网传输）。
+- 修复方向（上线前必做其一/组合）：管理端口只绑 `127.0.0.1` 且两节点统一走 SSH 通道推送（对齐 SKILL 中 Node 2 的既有写法）；或强 Bearer `-token` 并把密钥同步进 hooks；`SKILL.md` systemd 示例必须补齐 `-token <openssl rand -hex 24>` 与 hook 携带 `Authorization`。代码侧建议：新增 `-http-listen` 参数、校验 value 仅允许 ACME base64url `[A-Za-z0-9_-]` 且 ≤255 字节。
+
+### 8.3 评审意见决议与闭环追踪表（第三轮）
+
+| 评审意见项 | 评审性质 | 核心疑虑 | 建议处置 | 当前状态 |
+| :--- | :--- | :--- | :--- | :---: |
+| **1. 架构断层（方案 A vs 实现方案 C）** | **【阻塞·决策】** | 文档 APPROVED 为纯 Cloudflare 动态 A，代码落地自建双机权威 DNS + 无状态 dashed 映射 | 8.1 三选一，追认后整体改写文档与状态行 | ⏳ **待作者决策** |
+| **2. ACME challenge 注入可致域名接管** | **【安全高危】** | 5380 全接口 + 无 token 部署示例 + 明文公网无鉴权推送，TXT 前缀泛匹配 | 8.2 修复：127.0.0.1/强 Bearer/SSH 通道三选一，hook 与 systemd 同步补齐 | 🔴 **未修复，禁止按 SKILL 原样部署** |
+| **3. 证书自举缺失（半自动）** | **【范围澄清】** | `GetCertificate`（cert.go:39-55）只读本地缓存、缺失即 `New()` 报错；文档 §四.3"无则后台拉取落盘缓存"与 `/v1/tls/bundle` Worker 通道未实现；私钥仍须人工分发到每台 eqt PC | 文档将当前里程碑明确定位为"权威 DNS + 证书加载已完成，证书拉取/续期分发为待办"；补 Worker 或部署脚本前不得声称全自动 | ⏳ **文档口径待修正** |
+| **4. 权威节点可靠性/同故障域** | **【运维风险】** | ns2 = `103.232.92.220` 与既有 aip 出口同机（5G 运营商网段，2026-08-29 起遭 Google 风控）；双节点无监控、无故障演练；"毫秒级 failover"表述过度（递归对超时并非即时切换） | 部署 checklist 增加：UptimeRobot 双节点 UDP/TCP 53 + 5380 监控；评估独立 VPS/第三 NS；Cloudflare 胶水 A 与防火墙 53/udp+tcp；文档弱化 failover 表述 | ⏳ **补充部署手册** |
+| **5. `go test ./pkg/server` 依赖真实证书缓存** | **【测试健壮性】** | `TestLanTLSLoopbackServer`（lan_tls_test.go:15-27）在无 `~/.config/eqt/certs` 的机器上直接 `t.Fatalf`，不像 `TestGetCertificateCached` 有 Skip | 改为测试内自签 CA+SAN 证书或按缺失 Skip，保证 CI/干净机可过 | 🔴 **未修复** |
+| **6. Secure + bind=0.0.0.0 分支短路缺陷** | **【正确性】** | server.go:2298-2326 `else if cfg.Secure` 被外层"外部 IP"分支短路：接口 any + Secure 时 https URL 指向公网 IP（证书不覆盖且需 NAT），0.0.0.0 兜底还会产出 `0-0-0-0.direct…` | Secure 优先取本机 LAN 接口 IP 映射直连域；补该分支单测 | 🔴 **未修复** |
+| **7. TXT 应答未按记录名精确匹配** | **【低危·健壮性】** | main.go:169 对任意 `_acme-challenge.*` 前缀回放全部 value；当前单通配符无碍，未来多证书会串扰 | 精确匹配 `_acme-challenge.<zone>`（含 base wildcard 场景）；store 改按名称键控 | ⏳ **建议修复** |
+| **8. 杂项与勘误** | **【低危】** | SOA serial=Unix 秒随查询抖动且 TXT 变更不推进 serial（现双主无 AXFR，可接受但需文档化）；parseIP 对带前导字符 label（`s-abc-192-168-1-50`）也命中解析——需命名规范约束；`.gitignore` 全局 `*.pem` 过宽建议收敛至 `/certs/`；go.mod tidy 移除 xdg/pb/color/yaml.v2 经全仓 grep 无源码引用（安全），miekg/dns v1.1.73 引入正常 | 依序小额处理；新增记录一律遵循 dashed 四段整 label 形态 | ✅ **记录在案** |
+
+> **审查副产物（已验证，非缺陷）**：`go build ./...` 与 `go vet` 全绿；本地三组新测试通过；`privkey.pem`（241B）为 EC 密钥且已被 `.gitignore` 遮蔽、未入库——符合 SKILL §3.2 私钥严禁入库基线。
