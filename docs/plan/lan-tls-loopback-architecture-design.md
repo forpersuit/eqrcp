@@ -231,3 +231,17 @@
 | **3. UI 文案口径超前** | **【口径勘误】** | `enable_tls_desc` 宣称"TLS 1.3 强加密"，实际为 TLS 1.2/1.3；流式传输属于传输特性非加密特性 | **已闭环**：7 国语言文案校准为："启用 Let's Encrypt 官方通配符证书与 TLS 加密，防局域网嗅探、地址栏安全绿锁。" | ✅ **已彻底闭环** |
 | **4. SKILL §5 描述与提交范围错位** | **【过程衔接·记录】** | SKILL §5.2 的 Chat `wss:` 自适应描述的是既有 pages/前端页面行为 | **已闭环**：标注为既有前端自适应行为，Phase 4 截图已挂入文档。 | ✅ **已彻底闭环** |
 | **5. 双键持久化与回退** | **【正评·兼容】** | Read 优先 `enableTLS`、回退旧 `secure`；Write 同写双键，双向兼容良好 | 无需改动 | ✅ **确认无回归** |
+
+---
+
+## 九、修复闭环复核（第六轮补充审查, commit 2033526a）
+
+> **复核对象**：`2033526a fix(lan-tls): resolve round-4 and round-5 review comments with fail-soft fallback and security hardening`（v1.36.29）。  
+> **复核结论（正面）**：§七 第 1~5 项与 §八 第 1~4 项的落地与文档"已闭环"声明**逐条一致**——管理口 fail-closed（main() 非环回 + 空 token → `log.Fatalf` 拒绝启动）、POST zone 归属校验（越界 400 + 单测）、DELETE 缺省仅清单 record、`?all=true` 才全清、TXT 按 RFC 2308 NODATA/NXDOMAIN 区分（含 `TestTXTNODATAResponse`）、Secure 无有效 IP 显式 error、`cert.HasValidCertificate` 探针 + GUI Fail-Soft 降级（`TestGUIAgentRunTaskEnableTLSFallbackToHTTP` 通过）、7 国文案去掉 TLS 1.3/零 OOM 超前口径、SKILL 补容灾/灰云红线/同步工具、Phase 4 挂图勾选。本地复核：`go build ./...`、`go vet ./cmd/eqt-dns ./pkg/cert ./pkg/server`、`go test ./cmd/eqt-dns ./pkg/cert ./pkg/server`、`go test ./...`（desktop/gui 模块）全部通过。**修复逻辑成立，无方向性回归。** 下表仅记录复核中发现的遗留改进项（均为低/中危非阻塞）。
+
+| 评审意见项 | 评审性质 | 复核发现 | 建议处置 | 状态 |
+| :--- | :--- | :--- | :--- | :---: |
+| **1. 文档内嵌 file:// 绝对路径链接** | **【低危·文档可移植】** | Phase 4 挂图 4 处与 `sync-certs-from-vps.sh` 链接均写成 `file:///home/yelon/develop/me/eqrcp/...`——该路径仅在作者本机 WSL 有效，GitHub 渲染与其他克隆全部失效 | 一律改用仓库相对路径（`docs/img/windows_chrome_lan_tls_test.png`、`scripts/sync-certs-from-vps.sh`） | ⏳ **建议修复** |
+| **2. 同步脚本把通配符私钥扩散到本机所有 Windows 账户** | **【中危·私钥爆炸半径】** | `sync-certs-from-vps.sh` 的 WSL→Windows 段遍历 `/mnt/c/Users/*`（仅排除 All Users/Default/Public），把 `privkey.pem` 复制进**全部**用户目录；且 drvfs 复制未收紧 Windows ACL（无 icacls）。本机任一账户被攻破即可取得 `*.direct.eqt.net.im` 私钥实施 §一 所述中间人攻击 | 仅分发到当前交互 Windows 用户目录（经 `cmd.exe /c echo %USERNAME%` 解析或显式 `EQT_WIN_USER` 环境变量），并补 Windows 侧 ACL 收紧说明 | ⏳ **建议修复** |
+| **3. HTTP/2 禁用理由为作者断言、无旁证** | **【记录·口径】** | §七-6 闭环声称"禁用 HTTP/2 系 tus 分块上传兼容性及流式稳定性的工程选型"，但 `TLSNextProto: make(...)`（server.go:2365）旁无代码注释、也未给出 qrcp 历史查证依据，未来改动者可能误判为 bug 而移除 | 在该行补一行注释说明禁用意图，或给出查证出处；否则仅保留"文档口径统一"结论 | ⏳ **建议修复** |
+| **4. Phase 4 绿锁确证系作者目检声明** | **【记录·过程】** | Phase 4 已挂图勾选，绿锁/根信任结论来自作者 Chrome 证书面板目检；本次复核遵用户指示不做截图像素核验，如实记录该结论为"作者目检声明" | 无需代码改动；如需独立佐证可在后续 E2E 中纳入证书链断言 | ✅ **记录在案** |
