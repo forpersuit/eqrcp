@@ -20,7 +20,7 @@ func TestParseIP(t *testing.T) {
 		{"192-168-0-201.direct.eqt.net.im.", "192.168.0.201"},
 		{"10-0-0-5.direct.eqt.net.im.", "10.0.0.5"},
 		{"172-16-1-88.direct.eqt.net.im.", "172.16.1.88"},
-		{"s-abc123-192-168-1-50.direct.eqt.net.im.", "192.168.1.50"},
+		{"192-168-1-50.direct.eqt.net.im.", "192.168.1.50"},
 		{"192.168.0.201.direct.eqt.net.im.", "192.168.0.201"},
 		{"invalid-ip.direct.eqt.net.im.", ""},
 		{"300-1-1-1.direct.eqt.net.im.", ""},
@@ -43,22 +43,23 @@ func TestParseIP(t *testing.T) {
 
 func TestAcmeStore(t *testing.T) {
 	s := newAcmeStore()
-	s.Set("challenge-1", 100*time.Millisecond)
-	s.Set("challenge-2", 2*time.Second)
+	rec := "_acme-challenge.direct.eqt.net.im."
+	s.Set(rec, "challenge-1", 100*time.Millisecond)
+	s.Set(rec, "challenge-2", 2*time.Second)
 
-	res := s.GetAll()
+	res := s.Get(rec)
 	if len(res) != 2 {
 		t.Fatalf("Expected 2 challenges, got %d", len(res))
 	}
 
 	time.Sleep(150 * time.Millisecond)
-	resAfter := s.GetAll()
+	resAfter := s.Get(rec)
 	if len(resAfter) != 1 || resAfter[0] != "challenge-2" {
 		t.Fatalf("Expected only challenge-2 after expiry, got %v", resAfter)
 	}
 
-	s.Delete("challenge-2")
-	if len(s.GetAll()) != 0 {
+	s.Delete(rec, "challenge-2")
+	if len(s.Get(rec)) != 0 {
 		t.Fatalf("Expected 0 challenges after delete")
 	}
 }
@@ -78,7 +79,8 @@ func (d *dummyResponseWriter) Hijack()                   {}
 
 func TestDNSHandler(t *testing.T) {
 	store := newAcmeStore()
-	store.Set("test-token-123", 10*time.Second)
+	rec := "_acme-challenge.direct.eqt.net.im."
+	store.Set(rec, "test-token-123", 10*time.Second)
 
 	handler := &DNSHandler{
 		baseDomain: "direct.eqt.net.im",
@@ -103,7 +105,7 @@ func TestDNSHandler(t *testing.T) {
 		t.Fatalf("Expected 192.168.0.201, got %v", aRecord.A)
 	}
 
-	// 2. Query ACME TXT record
+	// 2. Query ACME TXT record (exact match)
 	reqTXT := new(dns.Msg)
 	reqTXT.SetQuestion("_acme-challenge.direct.eqt.net.im.", dns.TypeTXT)
 	rwTXT := &dummyResponseWriter{}
@@ -129,7 +131,7 @@ func TestDNSHandler(t *testing.T) {
 
 func TestHTTPManagement(t *testing.T) {
 	store := newAcmeStore()
-	srv := startHTTPServer("127.0.0.1:0", "secret-token", store)
+	srv := startHTTPServer("127.0.0.1:0", "secret-token", "direct.eqt.net.im", store)
 	defer srv.Close()
 
 	// 1. Health check
@@ -149,7 +151,17 @@ func TestHTTPManagement(t *testing.T) {
 		t.Fatalf("Expected 401 without auth, got %d", rwPostNoAuth.Code)
 	}
 
-	// 3. Post ACME challenge with auth
+	// 3. Post ACME challenge with invalid chars (should fail 400)
+	bodyInvalid, _ := json.Marshal(map[string]interface{}{"value": "invalid token with spaces; rm -rf"})
+	reqPostInvalid, _ := http.NewRequest(http.MethodPost, "/acme/challenge", bytes.NewReader(bodyInvalid))
+	reqPostInvalid.Header.Set("Authorization", "Bearer secret-token")
+	rwPostInvalid := httptest.NewRecorder()
+	srv.Handler.ServeHTTP(rwPostInvalid, reqPostInvalid)
+	if rwPostInvalid.Code != http.StatusBadRequest {
+		t.Fatalf("Expected 400 for invalid token value, got %d", rwPostInvalid.Code)
+	}
+
+	// 4. Post ACME challenge with valid auth
 	reqPost, _ := http.NewRequest(http.MethodPost, "/acme/challenge", bytes.NewReader(body))
 	reqPost.Header.Set("Authorization", "Bearer secret-token")
 	rwPost := httptest.NewRecorder()
@@ -158,7 +170,8 @@ func TestHTTPManagement(t *testing.T) {
 		t.Fatalf("Expected 200 for post challenge, got %d", rwPost.Code)
 	}
 
-	if len(store.GetAll()) != 1 || store.GetAll()[0] != "token-xyz" {
-		t.Fatalf("Expected token-xyz in store, got %v", store.GetAll())
+	rec := "_acme-challenge.direct.eqt.net.im."
+	if len(store.Get(rec)) != 1 || store.Get(rec)[0] != "token-xyz" {
+		t.Fatalf("Expected token-xyz in store, got %v", store.Get(rec))
 	}
 }

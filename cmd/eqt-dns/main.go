@@ -21,57 +21,99 @@ import (
 )
 
 var (
-	flagListenIP = flag.String("listen", "", "IP to bind for DNS (empty for all interfaces)")
-	flagDNSPort  = flag.Int("port", 53, "DNS UDP/TCP listen port")
-	flagHTTPPort = flag.Int("http-port", 5380, "Management HTTP listen port")
-	flagDomain   = flag.String("domain", "direct.eqt.net.im", "Base domain to handle")
-	flagToken    = flag.String("token", "", "Bearer token for management HTTP API")
-	flagNS1      = flag.String("ns1", "ns1.eqt.net.im.", "Primary nameserver")
-	flagNS2      = flag.String("ns2", "ns2.eqt.net.im.", "Secondary nameserver")
-	flagSOAMName = flag.String("soa-mname", "ns1.eqt.net.im.", "SOA primary master")
-	flagSOARName = flag.String("soa-rname", "admin.eqt.net.im.", "SOA administrator email")
+	flagListenIP   = flag.String("listen", "", "IP to bind for DNS UDP/TCP (empty for all interfaces)")
+	flagDNSPort    = flag.Int("port", 53, "DNS UDP/TCP listen port")
+	flagHTTPListen = flag.String("http-listen", "127.0.0.1", "IP to bind for management HTTP API (defaults to 127.0.0.1 for security)")
+	flagHTTPPort   = flag.Int("http-port", 5380, "Management HTTP listen port")
+	flagDomain     = flag.String("domain", "direct.eqt.net.im", "Base domain to handle")
+	flagToken      = flag.String("token", "", "Bearer token for management HTTP API")
+	flagNS1        = flag.String("ns1", "ns1.eqt.net.im.", "Primary nameserver")
+	flagNS2        = flag.String("ns2", "ns2.eqt.net.im.", "Secondary nameserver")
+	flagSOAMName   = flag.String("soa-mname", "ns1.eqt.net.im.", "SOA primary master")
+	flagSOARName   = flag.String("soa-rname", "admin.eqt.net.im.", "SOA administrator email")
 )
 
-// AcmeStore holds active ACME TXT challenges safely in memory.
+// AcmeStore holds active ACME TXT challenges safely in memory keyed by exact record name.
 type AcmeStore struct {
 	mu     sync.RWMutex
-	values map[string]time.Time
+	values map[string]map[string]time.Time // recordName -> challengeValue -> expiry
 }
 
 func newAcmeStore() *AcmeStore {
 	return &AcmeStore{
-		values: make(map[string]time.Time),
+		values: make(map[string]map[string]time.Time),
 	}
 }
 
-func (s *AcmeStore) Set(val string, ttl time.Duration) {
+func (s *AcmeStore) Set(recordName, val string, ttl time.Duration) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.values[val] = time.Now().Add(ttl)
+	recordName = strings.ToLower(strings.TrimSuffix(recordName, ".")) + "."
+	if _, ok := s.values[recordName]; !ok {
+		s.values[recordName] = make(map[string]time.Time)
+	}
+	s.values[recordName][val] = time.Now().Add(ttl)
 }
 
-func (s *AcmeStore) Delete(val string) {
+func (s *AcmeStore) Delete(recordName, val string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	delete(s.values, val)
+	recordName = strings.ToLower(strings.TrimSuffix(recordName, ".")) + "."
+	if m, ok := s.values[recordName]; ok {
+		delete(m, val)
+		if len(m) == 0 {
+			delete(s.values, recordName)
+		}
+	}
 }
 
 func (s *AcmeStore) Clear() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.values = make(map[string]time.Time)
+	s.values = make(map[string]map[string]time.Time)
 }
 
-func (s *AcmeStore) GetAll() []string {
+func (s *AcmeStore) Get(recordName string) []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	recordName = strings.ToLower(strings.TrimSuffix(recordName, ".")) + "."
+	m, ok := s.values[recordName]
+	if !ok {
+		return nil
+	}
 	now := time.Now()
 	var res []string
-	for v, exp := range s.values {
+	for v, exp := range m {
 		if exp.After(now) {
 			res = append(res, v)
 		} else {
-			delete(s.values, v)
+			delete(m, v)
+		}
+	}
+	if len(m) == 0 {
+		delete(s.values, recordName)
+	}
+	return res
+}
+
+func (s *AcmeStore) GetAllRecords() map[string][]string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now()
+	res := make(map[string][]string)
+	for rec, m := range s.values {
+		var list []string
+		for v, exp := range m {
+			if exp.After(now) {
+				list = append(list, v)
+			} else {
+				delete(m, v)
+			}
+		}
+		if len(list) > 0 {
+			res[rec] = list
+		} else {
+			delete(s.values, rec)
 		}
 	}
 	return res
@@ -80,6 +122,7 @@ func (s *AcmeStore) GetAll() []string {
 // Regex to capture dashed IPv4: exactly 4 numbers separated by hyphens.
 var (
 	reDashedExact = regexp.MustCompile(`(?:^|[^0-9])([0-9]{1,3})-([0-9]{1,3})-([0-9]{1,3})-([0-9]{1,3})$`)
+	reACMEValue   = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
 )
 
 func parseIP(domain string) net.IP {
@@ -166,24 +209,25 @@ func (h *DNSHandler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 		}
 
 	case dns.TypeTXT:
-		if strings.HasPrefix(qName, "_acme-challenge.") {
-			challenges := h.store.GetAll()
-			for _, val := range challenges {
-				m.Answer = append(m.Answer, &dns.TXT{
-					Hdr: dns.RR_Header{
-						Name:   q.Name,
-						Rrtype: dns.TypeTXT,
-						Class:  dns.ClassINET,
-						Ttl:    60,
-					},
-					Txt: []string{val},
-				})
+		// Exact ACME challenge query match
+		challenges := h.store.Get(qName)
+		for _, val := range challenges {
+			m.Answer = append(m.Answer, &dns.TXT{
+				Hdr: dns.RR_Header{
+					Name:   q.Name,
+					Rrtype: dns.TypeTXT,
+					Class:  dns.ClassINET,
+					Ttl:    60,
+				},
+				Txt: []string{val},
+			})
+		}
+		if len(challenges) == 0 {
+			if strings.HasPrefix(qName, "_acme-challenge.") {
+				m.Rcode = dns.RcodeSuccess // NOERROR with 0 answers
+			} else {
+				m.Rcode = dns.RcodeNameError
 			}
-			if len(challenges) == 0 {
-				m.Rcode = dns.RcodeSuccess // NOERROR empty
-			}
-		} else {
-			m.Rcode = dns.RcodeNameError
 		}
 
 	case dns.TypeNS:
@@ -203,7 +247,7 @@ func (h *DNSHandler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 			Hdr:     dns.RR_Header{Name: cleanBase, Rrtype: dns.TypeSOA, Class: dns.ClassINET, Ttl: 3600},
 			Ns:      h.soaMName,
 			Mbox:    h.soaRName,
-			Serial:  uint32(time.Now().Unix()),
+			Serial:  2026090301,
 			Refresh: 7200,
 			Retry:   3600,
 			Expire:  1209600,
@@ -218,7 +262,7 @@ func (h *DNSHandler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 	_ = w.WriteMsg(m)
 }
 
-func startHTTPServer(addr string, token string, store *AcmeStore) *http.Server {
+func startHTTPServer(addr string, token string, defaultDomain string, store *AcmeStore) *http.Server {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -241,35 +285,52 @@ func startHTTPServer(addr string, token string, store *AcmeStore) *http.Server {
 		switch r.Method {
 		case http.MethodPost:
 			var body struct {
-				Value string `json:"value"`
-				TTL   int    `json:"ttl"` // seconds
+				Record string `json:"record"` // optional, default _acme-challenge.<defaultDomain>
+				Value  string `json:"value"`
+				TTL    int    `json:"ttl"` // seconds
 			}
-			if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Value) == "" {
-				http.Error(w, `{"error":"invalid_payload"}`, http.StatusBadRequest)
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				http.Error(w, `{"error":"invalid_json"}`, http.StatusBadRequest)
 				return
 			}
+			val := strings.TrimSpace(body.Value)
+			if !reACMEValue.MatchString(val) {
+				http.Error(w, `{"error":"invalid_challenge_value"}`, http.StatusBadRequest)
+				return
+			}
+
+			record := strings.TrimSpace(body.Record)
+			if record == "" {
+				record = "_acme-challenge." + strings.TrimSuffix(defaultDomain, ".") + "."
+			}
+
 			ttlSec := body.TTL
 			if ttlSec <= 0 || ttlSec > 86400 {
-				ttlSec = 3600 // default 1 hour
+				ttlSec = 3600
 			}
-			store.Set(strings.TrimSpace(body.Value), time.Duration(ttlSec)*time.Second)
+			store.Set(record, val, time.Duration(ttlSec)*time.Second)
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{
-				"ok":    true,
-				"value": body.Value,
-				"ttl":   ttlSec,
+				"ok":     true,
+				"record": record,
+				"value":  val,
+				"ttl":    ttlSec,
 			})
 
 		case http.MethodGet:
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{
-				"challenges": store.GetAll(),
+				"records": store.GetAllRecords(),
 			})
 
 		case http.MethodDelete:
-			val := r.URL.Query().Get("value")
+			record := strings.TrimSpace(r.URL.Query().Get("record"))
+			if record == "" {
+				record = "_acme-challenge." + strings.TrimSuffix(defaultDomain, ".") + "."
+			}
+			val := strings.TrimSpace(r.URL.Query().Get("value"))
 			if val != "" {
-				store.Delete(val)
+				store.Delete(record, val)
 			} else {
 				store.Clear()
 			}
@@ -336,10 +397,10 @@ func main() {
 		}
 	}()
 
-	httpAddr := fmt.Sprintf(":%d", *flagHTTPPort)
-	httpSrv := startHTTPServer(httpAddr, token, store)
+	httpAddr := fmt.Sprintf("%s:%d", *flagHTTPListen, *flagHTTPPort)
+	httpSrv := startHTTPServer(httpAddr, token, *flagDomain, store)
 
-	log.Printf("[EQT-DNS] System initialized successfully. Base domain: %s", *flagDomain)
+	log.Printf("[EQT-DNS] System initialized successfully. Base domain: %s, HTTP management: %s", *flagDomain, httpAddr)
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)

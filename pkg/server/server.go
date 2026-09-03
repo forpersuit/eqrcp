@@ -2292,10 +2292,26 @@ func New(cfg *config.Config) (*Server, error) {
 			return nil, err
 		}
 	}
-	// Set the hostname
-	hostname := fmt.Sprintf("%s:%d", bind, port)
-	// Use external IP when using `interface: any`, unless a FQDN is set
-	if bind == "0.0.0.0" && cfg.FQDN == "" {
+	// Determine hostname and URLs
+	var hostname string
+	if cfg.FQDN != "" {
+		hostname = fmt.Sprintf("%s:%d", cfg.FQDN, port)
+	} else if cfg.Secure {
+		targetIP := bind
+		if targetIP == "0.0.0.0" || targetIP == "" {
+			if ip, err := util.GetInterfaceAddress(cfg.Interface); err == nil && ip != "" && ip != "0.0.0.0" {
+				targetIP = ip
+			} else if extIP, err := util.GetExternalIP(); err == nil && extIP != nil {
+				targetIP = extIP.String()
+			}
+		}
+		directDomain := cert.FormatDirectDomain(targetIP)
+		if directDomain != targetIP && !strings.HasPrefix(directDomain, "0-0-0-0") {
+			hostname = fmt.Sprintf("%s:%d", directDomain, port)
+		} else {
+			hostname = fmt.Sprintf("%s:%d", targetIP, port)
+		}
+	} else if bind == "0.0.0.0" {
 		fmt.Println("Retrieving the external IP...")
 		extIP, err := util.GetExternalIP()
 		if err != nil {
@@ -2304,25 +2320,11 @@ func New(cfg *config.Config) (*Server, error) {
 		extIPString := extIP.String()
 		fmtstring := "%s:%d"
 		if strings.Count(extIPString, ":") >= 2 {
-			// IPv6 address, wrap it in [] to add a port
 			fmtstring = "[%s]:%d"
 		}
 		hostname = fmt.Sprintf(fmtstring, extIPString, port)
-	}
-	// Use a fully-qualified domain name if set
-	if cfg.FQDN != "" {
-		hostname = fmt.Sprintf("%s:%d", cfg.FQDN, port)
-	} else if cfg.Secure {
-		targetIP := bind
-		if targetIP == "0.0.0.0" || targetIP == "" {
-			if ip, err := util.GetInterfaceAddress(cfg.Interface); err == nil && ip != "" && ip != "0.0.0.0" {
-				targetIP = ip
-			}
-		}
-		directDomain := cert.FormatDirectDomain(targetIP)
-		if directDomain != targetIP {
-			hostname = fmt.Sprintf("%s:%d", directDomain, port)
-		}
+	} else {
+		hostname = fmt.Sprintf("%s:%d", bind, port)
 	}
 	// Set URLs
 	protocol := "http"
