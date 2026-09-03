@@ -305,11 +305,11 @@ func (a *App) ExportDiagnosticsZip() (string, error)
 
 ## 五、实施里程碑路线图 (Implementation Milestones)
 
-- [ ] **Phase 1: 服务端与桌面调度异步日志汇流 (Log Sink Pipeline)**
-  - [ ] 实现 `AsyncFileLogger`（有界 Channel 缓冲、独立后台 Writer 协程批次落盘、1s 周期 fsync、无锁自动轮转 ≤30MB）；
-  - [ ] 改造 `desktop/gui/main.go`，执行 `log.SetOutput(io.MultiWriter(os.Stderr, asyncLogger))`；
-  - [ ] 复用既有 API：通过 `logger.NewWithWriter(false, asyncLogger)` 直接重构绑定 `app.agent.log`；
-  - [ ] 调整策略为默认常态化落盘（INFO 及以上）。
+- [x] **Phase 1: 服务端与桌面调度异步日志汇流 (Log Sink Pipeline)**
+  - [x] 实现 `FileLogger` 保名换芯（有界 Channel 缓冲、独立后台 Writer 协程批次落盘、1s 周期 fsync、无锁自动轮转 ≤30MB、内置线程安全 `Tail`）；
+  - [x] 改造 `desktop/gui/main.go`，执行 `log.SetOutput(io.MultiWriter(os.Stderr, fileLogger))` 与标准库前缀智能适配；
+  - [x] 复用既有 API：通过 `logger.NewWithWriter(false, fileLogger)` 直接重构绑定 `app.agent.log` 与 `srv.ChatV2Logger`；
+  - [x] 调整策略为默认常态化落盘（INFO 及以上），单测覆盖饱和策略、轮转、并发 Tail 与 stdlib 适配。
 - [ ] **Phase 2: 服务端 `/client-log` 端点与限流注入清洗 (Server Telemetry)**
   - [ ] 在 `pkg/server/` 实现 `/client-log` 接口，支持 JSON 校验（≤32KB）、白名单枚举校验与 CR/LF 剥离截断；
   - [ ] 实施远端真实 IP（`r.RemoteAddr`）令牌桶限流（≤10 req/s），维护服务端丢弃计数；

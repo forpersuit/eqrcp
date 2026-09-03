@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/base64"
@@ -1343,6 +1344,34 @@ func (a *App) GetLogFiles() []LogFileInfo {
 	}
 
 	return files
+}
+
+// GetLogTail returns the last n lines from desktop.log using the thread-safe Tail method of FileLogger.
+func (a *App) GetLogTail(lines int) ([]string, error) {
+	if a.logger != nil {
+		return a.logger.Tail(lines)
+	}
+	f, err := os.Open(desktopLogFilePath())
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	if lines <= 0 {
+		lines = 100
+	}
+	var collected []string
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		collected = append(collected, scanner.Text())
+		if len(collected) > lines*2 {
+			collected = collected[len(collected)-lines:]
+		}
+	}
+	if len(collected) > lines {
+		collected = collected[len(collected)-lines:]
+	}
+	return collected, nil
 }
 
 type GUIUpdateCheckResult struct {

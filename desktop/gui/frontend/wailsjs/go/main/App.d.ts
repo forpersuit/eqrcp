@@ -43,6 +43,8 @@ export function GetFileInfos(arg1:Array<string>):Promise<Array<main.GUIFileInfo>
 
 export function GetLogFiles():Promise<Array<main.LogFileInfo>>;
 
+export function GetLogTail(arg1:number):Promise<Array<string>>;
+
 export function GetPendingOfflineUpdate():Promise<server.PendingOfflineUpdateInfo>;
 
 export function InstallUpdate(arg1:string):Promise<void>;

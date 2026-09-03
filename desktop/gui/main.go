@@ -4,15 +4,15 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
-	"sync"
 	"syscall"
-	"time"
 
 	"github.com/wailsapp/wails/v2"
 	wailslogger "github.com/wailsapp/wails/v2/pkg/logger"
@@ -31,108 +31,6 @@ import (
 
 //go:embed all:frontend/dist
 var assets embed.FS
-
-type FileLogger struct {
-	mu       sync.RWMutex
-	file     *os.File
-	filePath string
-	enabled  bool
-}
-
-func NewFileLogger(filePath string, enabled bool) *FileLogger {
-	_ = os.MkdirAll(filepath.Dir(filePath), 0755)
-	f, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
-		return &FileLogger{filePath: filePath, enabled: false}
-	}
-	return &FileLogger{file: f, filePath: filePath, enabled: enabled}
-}
-
-func (l *FileLogger) SetLogDir(logDir string) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	var newPath string
-	if logDir != "" {
-		newPath = filepath.Join(logDir, "desktop.log")
-	} else {
-		dir, err := os.UserCacheDir()
-		if err != nil {
-			dir = os.TempDir()
-		}
-		newPath = filepath.Join(dir, "eqt", "desktop.log")
-	}
-
-	if l.filePath == newPath && l.file != nil {
-		return
-	}
-
-	if l.file != nil {
-		_ = l.file.Close()
-		l.file = nil
-	}
-
-	l.filePath = newPath
-	_ = os.MkdirAll(filepath.Dir(newPath), 0755)
-	f, err := os.OpenFile(newPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err == nil {
-		l.file = f
-	}
-}
-
-func (l *FileLogger) GetFilePath() string {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
-	return l.filePath
-}
-
-func (l *FileLogger) SetEnabled(enabled bool) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.enabled = enabled
-}
-
-func (l *FileLogger) Enabled() bool {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
-	return l.enabled
-}
-
-func (l *FileLogger) Write(p []byte) (n int, err error) {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
-	if l.enabled && l.file != nil {
-		return l.file.Write(p)
-	}
-	return len(p), nil
-}
-
-func (l *FileLogger) Close() {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	if l.file != nil {
-		_ = l.file.Close()
-		l.file = nil
-	}
-}
-
-func (l *FileLogger) log(level string, message string) {
-	timestamp := time.Now().Format("2006-01-02 15:04:05.000")
-	line := fmt.Sprintf("[%s] [%s] %s\n", timestamp, level, message)
-	fmt.Print(line)
-	if l.Enabled() && l.file != nil {
-		_, _ = l.file.WriteString(line)
-		_ = l.file.Sync()
-	}
-}
-
-func (l *FileLogger) Print(message string)   { l.log("PRINT", message) }
-func (l *FileLogger) Trace(message string)   { l.log("TRACE", message) }
-func (l *FileLogger) Debug(message string)   { l.log("DEBUG", message) }
-func (l *FileLogger) Info(message string)    { l.log("INFO", message) }
-func (l *FileLogger) Warning(message string) { l.log("WARN", message) }
-func (l *FileLogger) Error(message string)   { l.log("ERROR", message) }
-func (l *FileLogger) Fatal(message string)   { l.log("FATAL", message) }
 
 func desktopLogFilePath() string {
 	settingsApp := application.New()
@@ -327,13 +225,19 @@ func startWailsGUI() {
 	logPath := desktopLogFilePath()
 	settingsApp := application.New()
 	settings, err := config.ReadDesktopSettings(settingsApp)
-	enabled := false
+	debugLog := false
 	if err == nil {
-		enabled = settings.DebugLog || settings.DevMode
+		debugLog = settings.DebugLog || settings.DevMode
 	}
 
-	fileLogger := NewFileLogger(logPath, enabled)
+	// Always-on baseline file logger (asynchronous, non-blocking, rotating)
+	fileLogger := NewFileLogger(logPath, true)
+	fileLogger.SetDebugMode(debugLog)
 	defer fileLogger.Close()
+
+	// Redirect Go standard library log.Printf / log.Println to both os.Stderr and fileLogger
+	log.SetOutput(io.MultiWriter(os.Stderr, fileLogger))
+
 	fileLogger.Info("EQT GUI Starting...")
 
 	// Perform disaster rollback check FIRST before applying offline updates or cleaning files

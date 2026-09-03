@@ -1,0 +1,378 @@
+package main
+
+import (
+	"bufio"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+)
+
+const (
+	defaultLogChanCap   = 4096
+	maxLogFileSize      = 10 * 1024 * 1024 // 10MB
+	maxBackupLogFiles   = 2                // desktop.log.1, desktop.log.2 (总共最多 3 个文件 <= 30MB)
+	flushInterval       = 100 * time.Millisecond
+	syncInterval        = 1 * time.Second
+	errorEnqueueTimeout = 50 * time.Millisecond
+)
+
+type logEntry struct {
+	line  string
+	level string
+}
+
+// FileLogger is an asynchronous, thread-safe, rotating file logger.
+// It maintains 100% public surface compatibility with the legacy FileLogger
+// while delegating disk I/O to a single background worker goroutine to ensure
+// non-blocking operation (<= 1ms) in high-throughput network paths.
+type FileLogger struct {
+	mu          sync.RWMutex
+	file        *os.File
+	filePath    string
+	enabled     bool
+	debugMode   bool
+	currentSize int64
+
+	ch               chan logEntry
+	doneCh           chan struct{}
+	closed           bool
+	droppedInfoCount uint64
+}
+
+// NewFileLogger creates an asynchronous rotating file logger.
+func NewFileLogger(filePath string, enabled bool) *FileLogger {
+	_ = os.MkdirAll(filepath.Dir(filePath), 0755)
+	f, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	var initialSize int64
+	if err == nil && f != nil {
+		if fi, statErr := f.Stat(); statErr == nil {
+			initialSize = fi.Size()
+		}
+	}
+
+	l := &FileLogger{
+		file:        f,
+		filePath:    filePath,
+		enabled:     enabled,
+		currentSize: initialSize,
+		ch:          make(chan logEntry, defaultLogChanCap),
+		doneCh:      make(chan struct{}),
+	}
+
+	go l.workerLoop()
+	return l
+}
+
+// SetLogDir changes the directory of the log file and reopens it asynchronously.
+func (l *FileLogger) SetLogDir(logDir string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	var newPath string
+	if logDir != "" {
+		newPath = filepath.Join(logDir, "desktop.log")
+	} else {
+		dir, err := os.UserCacheDir()
+		if err != nil {
+			dir = os.TempDir()
+		}
+		newPath = filepath.Join(dir, "eqt", "desktop.log")
+	}
+
+	if l.filePath == newPath && l.file != nil {
+		return
+	}
+
+	if l.file != nil {
+		_ = l.file.Sync()
+		_ = l.file.Close()
+		l.file = nil
+	}
+
+	l.filePath = newPath
+	_ = os.MkdirAll(filepath.Dir(newPath), 0755)
+	f, err := os.OpenFile(newPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err == nil {
+		l.file = f
+		if fi, statErr := f.Stat(); statErr == nil {
+			l.currentSize = fi.Size()
+		} else {
+			l.currentSize = 0
+		}
+	}
+}
+
+// GetFilePath returns the active file path.
+func (l *FileLogger) GetFilePath() string {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.filePath
+}
+
+// SetEnabled toggles file logging.
+func (l *FileLogger) SetEnabled(enabled bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.enabled = enabled
+}
+
+// Enabled checks if file logging is enabled.
+func (l *FileLogger) Enabled() bool {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.enabled
+}
+
+// SetDebugMode toggles detailed debug/trace logging output.
+func (l *FileLogger) SetDebugMode(debug bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.debugMode = debug
+}
+
+// DebugMode checks if debug logging is enabled.
+func (l *FileLogger) DebugMode() bool {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.debugMode
+}
+
+// enqueue dispatches a log entry with bounded saturation policy.
+func (l *FileLogger) enqueue(level string, line string) {
+	if !l.Enabled() {
+		return
+	}
+	if !strings.HasSuffix(line, "\n") {
+		line += "\n"
+	}
+
+	l.mu.RLock()
+	closed := l.closed
+	l.mu.RUnlock()
+	if closed {
+		return
+	}
+
+	entry := logEntry{line: line, level: level}
+
+	// INFO / DEBUG / TRACE: Non-blocking 0ms drop on buffer saturation
+	if level != "WARN" && level != "ERROR" && level != "FATAL" {
+		select {
+		case l.ch <- entry:
+		default:
+			atomic.AddUint64(&l.droppedInfoCount, 1)
+		}
+		return
+	}
+
+	// WARN / ERROR / FATAL: Bounded timeout (50ms) to ensure critical alerts are preserved
+	select {
+	case l.ch <- entry:
+	case <-time.After(errorEnqueueTimeout):
+		// Emergency direct write fallback if queue is severely blocked
+		l.emergencyDirectWrite(line)
+	}
+}
+
+func (l *FileLogger) emergencyDirectWrite(line string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.file != nil {
+		_, _ = l.file.WriteString(line)
+		_ = l.file.Sync()
+	}
+}
+
+// workerLoop drains the channel, batches writes, checks log rotation, and performs periodic fsync.
+func (l *FileLogger) workerLoop() {
+	defer close(l.doneCh)
+	flushTicker := time.NewTicker(flushInterval)
+	defer flushTicker.Stop()
+	syncTicker := time.NewTicker(syncInterval)
+	defer syncTicker.Stop()
+
+	var batch []string
+	flush := func() {
+		if len(batch) == 0 {
+			return
+		}
+		l.mu.Lock()
+		defer l.mu.Unlock()
+		if l.file == nil {
+			batch = batch[:0]
+			return
+		}
+		for _, line := range batch {
+			l.checkAndRotateLocked(int64(len(line)))
+			if l.file != nil {
+				n, _ := l.file.WriteString(line)
+				l.currentSize += int64(n)
+			}
+		}
+		batch = batch[:0]
+	}
+
+	for {
+		select {
+		case entry, ok := <-l.ch:
+			if !ok {
+				flush()
+				return
+			}
+			batch = append(batch, entry.line)
+			if len(batch) >= 64 {
+				flush()
+			}
+		case <-flushTicker.C:
+			flush()
+		case <-syncTicker.C:
+			flush()
+			l.mu.Lock()
+			if l.file != nil {
+				_ = l.file.Sync()
+			}
+			dropped := atomic.SwapUint64(&l.droppedInfoCount, 0)
+			if dropped > 0 && l.file != nil {
+				dropNotice := fmt.Sprintf("[%s] [WARN] [LOGGER] Dropped %d non-critical log entries due to buffer saturation\n",
+					time.Now().Format("2006-01-02 15:04:05.000"), dropped)
+				l.checkAndRotateLocked(int64(len(dropNotice)))
+				if l.file != nil {
+					n, _ := l.file.WriteString(dropNotice)
+					l.currentSize += int64(n)
+				}
+			}
+			l.mu.Unlock()
+		}
+	}
+}
+
+func (l *FileLogger) checkAndRotateLocked(upcomingBytes int64) {
+	if l.file == nil || (l.currentSize+upcomingBytes) <= maxLogFileSize {
+		return
+	}
+	_ = l.file.Sync()
+	_ = l.file.Close()
+	l.file = nil
+
+	// Rotation cascade: desktop.log.1 -> desktop.log.2, desktop.log -> desktop.log.1
+	backup2 := l.filePath + ".2"
+	backup1 := l.filePath + ".1"
+	_ = os.Remove(backup2)
+	_ = os.Rename(backup1, backup2)
+	_ = os.Rename(l.filePath, backup1)
+
+	f, err := os.OpenFile(l.filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err == nil {
+		l.file = f
+		l.currentSize = 0
+	}
+}
+
+// Write implements io.Writer to adapt stdlib log.Printf and arbitrary byte streams.
+// It detects and normalizes Go standard library timestamp prefixes into the unified schema.
+func (l *FileLogger) Write(p []byte) (n int, err error) {
+	if !l.Enabled() {
+		return len(p), nil
+	}
+
+	raw := string(p)
+	rawTrimmed := strings.TrimRight(raw, "\r\n")
+	if len(rawTrimmed) == 0 {
+		return len(p), nil
+	}
+
+	timestamp := time.Now().Format("2006-01-02 15:04:05.000")
+	var line string
+
+	// Adapt standard library log prefix (format: "2006/01/02 15:04:05 <msg>")
+	if len(rawTrimmed) >= 20 && rawTrimmed[4] == '/' && rawTrimmed[7] == '/' && rawTrimmed[10] == ' ' && rawTrimmed[13] == ':' && rawTrimmed[16] == ':' {
+		body := strings.TrimSpace(rawTrimmed[19:])
+		line = fmt.Sprintf("[%s] [INFO] [SRV] %s", timestamp, body)
+	} else if strings.HasPrefix(rawTrimmed, "[") {
+		// Already structured log line
+		line = rawTrimmed
+	} else {
+		// General text
+		line = fmt.Sprintf("[%s] [INFO] %s", timestamp, rawTrimmed)
+	}
+
+	l.enqueue("INFO", line)
+	return len(p), nil
+}
+
+// Tail safely reads the last n lines from the current log file without裸读race conditions.
+func (l *FileLogger) Tail(lines int) ([]string, error) {
+	if lines <= 0 {
+		lines = 100
+	}
+
+	l.mu.RLock()
+	curPath := l.filePath
+	l.mu.RUnlock()
+
+	f, err := os.Open(curPath)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	var collected []string
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		collected = append(collected, scanner.Text())
+		if len(collected) > lines*2 {
+			collected = collected[len(collected)-lines:]
+		}
+	}
+	if err := scanner.Err(); err != nil && err != io.EOF {
+		return nil, err
+	}
+
+	if len(collected) > lines {
+		collected = collected[len(collected)-lines:]
+	}
+	return collected, nil
+}
+
+// Close gracefully flushes buffered entries and closes the underlying file handle.
+func (l *FileLogger) Close() {
+	l.mu.Lock()
+	if l.closed {
+		l.mu.Unlock()
+		return
+	}
+	l.closed = true
+	close(l.ch)
+	l.mu.Unlock()
+
+	// Wait for workerLoop to finish writing remaining queued logs
+	<-l.doneCh
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.file != nil {
+		_ = l.file.Sync()
+		_ = l.file.Close()
+		l.file = nil
+	}
+}
+
+func (l *FileLogger) log(level string, message string) {
+	timestamp := time.Now().Format("2006-01-02 15:04:05.000")
+	line := fmt.Sprintf("[%s] [%s] %s", timestamp, level, message)
+	fmt.Println(line)
+	l.enqueue(level, line)
+}
+
+func (l *FileLogger) Print(message string)   { l.log("PRINT", message) }
+func (l *FileLogger) Trace(message string)   { l.log("TRACE", message) }
+func (l *FileLogger) Debug(message string)   { l.log("DEBUG", message) }
+func (l *FileLogger) Info(message string)    { l.log("INFO", message) }
+func (l *FileLogger) Warning(message string) { l.log("WARN", message) }
+func (l *FileLogger) Error(message string)   { l.log("ERROR", message) }
+func (l *FileLogger) Fatal(message string)   { l.log("FATAL", message) }

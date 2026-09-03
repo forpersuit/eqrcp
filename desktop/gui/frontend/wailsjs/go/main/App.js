@@ -82,6 +82,10 @@ export function GetLogFiles() {
   return window['go']['main']['App']['GetLogFiles']();
 }
 
+export function GetLogTail(arg1) {
+  return window['go']['main']['App']['GetLogTail'](arg1);
+}
+
 export function GetPendingOfflineUpdate() {
   return window['go']['main']['App']['GetPendingOfflineUpdate']();
 }
