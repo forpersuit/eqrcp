@@ -35,7 +35,31 @@ if grep -qi microsoft /proc/version 2>/dev/null; then
         cp -f "${LOCAL_CERT_DIR}/fullchain.pem" "${win_cert_dir}/fullchain.pem"
         cp -f "${LOCAL_CERT_DIR}/privkey.pem" "${win_cert_dir}/privkey.pem"
         chmod 644 "${win_cert_dir}/fullchain.pem" 2>/dev/null || true
-        chmod 600 "${win_cert_dir}/privkey.pem" 2>/dev/null || true
+        
+        # Probe mount options and ACL enforcement mechanisms
+        has_metadata=false
+        if mount | grep -q '/mnt/c.*metadata'; then
+            has_metadata=true
+        fi
+        
+        win_privkey_winpath="C:\\Users\\${target_win_user}\\.config\\eqt\\certs\\privkey.pem"
+        acl_hardened=false
+        if command -v icacls.exe >/dev/null 2>&1 && icacls.exe "${win_privkey_winpath}" /inheritance:r /grant:r "${target_win_user}:(R)" >/dev/null 2>&1; then
+            acl_hardened=true
+            echo "✓ Windows NTFS DACL hardened via icacls.exe (isolated to ${target_win_user})"
+        elif [ "${has_metadata}" = "true" ]; then
+            chmod 600 "${win_cert_dir}/privkey.pem" 2>/dev/null || true
+            acl_hardened=true
+            echo "✓ Windows NTFS DACL applied via drvfs metadata mount (chmod 600)"
+        fi
+
+        if [ "${acl_hardened}" = "false" ]; then
+            chmod 600 "${win_cert_dir}/privkey.pem" 2>/dev/null || true
+            echo "ℹ Notice: /mnt/c is mounted without 'metadata' option and WSL interop is restricted."
+            echo "  To harden Windows NTFS ACL, run this once in Windows PowerShell / cmd:"
+            echo "    icacls \"${win_privkey_winpath}\" /inheritance:r /grant:r \"%USERNAME%:(R)\""
+        fi
+
         echo "✓ Synced certificates strictly to Windows user: ${target_win_user} (${win_cert_dir})"
     else
         echo "ℹ WSL detected, but target Windows user directory not found automatically."
