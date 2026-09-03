@@ -1,11 +1,11 @@
 # EQT 跨端全链路统一遥测与日志回传系统架构设计方案
 # (Cross-Platform Unified Telemetry & Logging Architecture Design)
 
-> **版本**: v1.0  
-> **状态**: 方案设计中 (Draft / Pending Implementation)  
+> **版本**: v1.1 (已采纳首轮审查意见修订闭环)  
+> **状态**: 方案设计就绪 (Ready for Implementation)  
 > **作者**: EQT Core Team  
-> **日期**: 2026-09-03  
-> **目标**: 依据第一性原理（First Principle）与工业级日志最佳实践，打通桌面端调度内核、Go 服务端传输引擎、以及移动端（手机浏览器前端）的三端运行信息回传链路，实现统一汇流、结构化存储与 GUI 应用内快速诊断。
+> **日期**: 2026-09-04  
+> **目标**: 依据第一性原理（First Principle）与工业级日志最佳实践，打通桌面端调度内核、Go 服务端传输引擎、以及移动端（手机浏览器前端）的三端运行信息回传链路，实现统一异步汇流、强安全性清洗、结构化存储与 GUI 应用内快速诊断。
 
 ---
 
@@ -42,9 +42,9 @@
 └───────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 具体断点清单：
+### 具体断点清单（经代码核验 100% 属实）：
 1. **服务端核心业务日志断点（标准库未重定向）**：
-   [`pkg/server/server.go`](../../pkg/server/server.go) 中包含了极其详尽的移动端接入、下载 Range、流式进度、完成状态（`[EQT Server] [Download Start]` 等），但均使用 Go 标准库 `log.Printf`。由于未调用 `log.SetOutput`，在 Windows GUI 运行时（`-H=windowsgui`），日志全部输出到无挂靠控制台的 `os.Stderr` 而被操作系统静默丢弃。
+   [`pkg/server/server.go`](../../pkg/server/server.go) 中包含了极其详尽的移动端接入、下载 Range、流式进度、完成状态（`[EQT Server] [Download Start]` 等共 21 处），但均使用 Go 标准库 `log.Printf`。由于未调用 `log.SetOutput`，在 Windows GUI 运行时（`-H=windowsgui`），日志全部输出到无挂靠控制台的 `os.Stderr` 而被操作系统静默丢弃。
 2. **桌面调度内核日志断点（Agent Writer 为空）**：
    [`desktop/gui/agent.go`](../../desktop/gui/agent.go) 中的 `agent.log` 使用 `logger.New(flags.Quiet)` 创建，其内部 `io.Writer` 为 `nil`，仅调用 `fmt.Printf`，同样在无控制台 GUI 环境下全部丢失。
 3. **文件写入门槛过严（常态化运行不落盘）**：
@@ -60,23 +60,25 @@
 
 根据分布式与桌面端工程最佳实践，本方案确立以下核心设计原则：
 
-1. **绝对非阻塞与零损耗 (Zero-Overhead & Non-Blocking)**：
-   - 移动端浏览器上报必须采用 `navigator.sendBeacon`（或异步低优先级 `fetch`），页面卸载或挂起时不丢日志，且绝不抢占主传输带宽；
-   - 服务端遥测接收端点必须在内存中快速校验（限制请求体 ≤ 32KB），通过无锁/轻量队列快速返回，响应时延 ≤ 1ms，绝不阻塞流式传输主线程。
+1. **绝对非阻塞、异步批量落盘与零损耗 (Zero-Overhead & Async Worker)**：
+   - **移动端浏览器上报**：采用原生 `navigator.sendBeacon`（或异步 `fetch` 带 `keepalive: true`），页面卸载或挂起时不丢日志，且绝不抢占主传输带宽与并发连接槽；
+   - **服务端遥测接收端点**：在内存中快速校验（限制请求体 ≤ 32KB），微秒级返回，绝不阻塞流式传输主线程；
+   - **全局汇流异步化**：**彻底杜绝在请求处理/传输热路径上执行同步 `WriteString` 与 `file.Sync()`**。汇流器采用“单一异步 Writer 协程 + 有界 Channel 缓冲池”模式，热路径无锁投递即返回，后台批次写盘并周期 fsync，杜绝磁盘 I/O 抖动或杀软扫描卡死传输。
 2. **单一真理源与统一汇流 (Unified Log Sink)**：
-   - 全局建立单一日志写入流，通过 `io.MultiWriter` 将 Go 标准库 `log`、`desktopAgent.log`、`server.Server` 业务日志以及移动端回传的 `[CLIENT-LOG]` 汇聚到统一的 `desktop.log`。
+   - 全局建立单一日志写入流，通过 `io.MultiWriter` 将 Go 标准库 `log`、`desktopAgent.log`、`server.Server` 业务日志以及移动端回传的 `[CLIENT-LOG]` 汇聚到统一的异步 `desktop.log`。
 3. **常态化分级记录 (Layered & Always-On Baseline)**：
    - **基线级别（INFO / WARN / ERROR）常态化落盘**：无论用户是否开启调试开关，任何设备接入、传输启停、传输结果与报错都必须记录；
    - **调试级别（DEBUG / TRACE / RAW_PACKET）**：由 `DebugLog` 控制，防刷屏与性能损耗。
-4. **统一结构化日志格式 (Structured Log Schema)**：
-   统一遵循标准格式：
-   `[时间戳] [级别] [来源] [会话/客户端ID] [类别] 消息内容 | key=value ... (设备上下文)`
-5. **最小权限、脱敏与隐私安全 (Privacy & Security)**：
-   - 严禁打印证书私钥、凭证签名、用户文件内私密内容；
-   - URL Token 截断保留前后 6 位，文件名截断保留 60 字符；
-   - 遥测端点实施单 IP 频率限制（Rate Limiting），防止恶意日志洪泛（Log Flooding）。
+4. **统一结构化日志格式与时钟权威 (Structured Schema & Time Authority)**：
+   - 统一遵循标准格式：
+     `[时间戳] [级别] [来源] [会话/客户端ID] [类别] 消息内容 | key=value ... (设备上下文)`
+   - **时钟权威定义**：统一日志行首的时间戳**严格以服务端接收时刻（Server Time）为权威准绳**，杜绝设备端时钟篡改/时区错乱带来的时序混乱；客户端上报的 `timestamp` 仅放入 details 供时钟偏差分析（Clock Drift Diagnosis）。
+5. **最小权限、全链路脱敏与日志注入防御 (Privacy & Anti-Injection)**：
+   - **全链路凭据脱敏**：严禁打印证书私钥、敏感个人内容；URL 路径中的 Token（如 `/send/<token>` 即下载凭据）在所有 Access Log 及业务日志中**必须统一截断保留前后 6 位**（如 `/send/a1b2c3...x8y9z0`），绝对禁止明文落盘完整凭据；
+   - **日志注入清洗 (Log Injection Sanitization)**：服务端强制剥离所有 `\r`、`\n` 及 ASCII 控制字符，枚举校验 `level`/`category`，截断 message 长度，杜绝伪造日志行；
+   - **真实 IP 键控限流**：遥测端点基于客户端真实底层 IP（`r.RemoteAddr`）实施令牌桶频控（≤ 10 req/s），丢弃可伪造的 `client_id` 维度的限流，并对超限丢弃进行内部聚合统计。
 6. **存储配额与自动轮转 (Log Rotation & Quota Control)**：
-   - 单文件上限 10MB，自动轮转保留 3 个归档（`desktop.log.1`、`desktop.log.2`），全局日志磁盘占用严格约束在 30MB 以内。
+   - 单文件上限 10MB，由异步 Worker 协程内部串行执行轮转，保留 3 个归档（`desktop.log.1`、`desktop.log.2`），全局日志磁盘占用严格约束在 30MB 以内。
 
 ---
 
@@ -125,23 +127,26 @@ sequenceDiagram
 
 ### 1. 移动端遥测探针规格 (Mobile Telemetry Client Probe)
 
-在所有移动端页面模板（`pkg/pages/` 下的 `upload.tmpl.html`、`chat.tmpl.html` 及 Send 页面）中引入极轻量（< 2KB）的原生 JS 遥测探针模块 `telemetry.js`：
+针对三端不同的前端技术栈，明确精准的注入路径：
+- **手机下载页面 (Send 模式)**：在服务端模板 [`pkg/pages/download.tmpl.html`](../../pkg/pages/download.tmpl.html) 中引入；
+- **手机上传页面 (Receive 模式)**：在服务端模板 [`pkg/pages/upload.tmpl.html`](../../pkg/pages/upload.tmpl.html) 中引入；
+- **双向聊天页面 (Chat 模式)**：在 Svelte SPA 前端源码 [`pkg/chat/v2/web/src/`](../../pkg/chat/v2/web/src/) 挂载全局错误与动作遥测，或在 Go 服务端下发 SPA 页面（`routes.go`）时注入轻量探针脚本。
 
 #### 1.1 探针接口定义
 ```javascript
 // window.__eqt_telemetry
 function reportLog(level, category, message, details = {}) {
     const payload = {
-        client_id: getOrCreateClientID(), // 本地 sessionStorage 存储的 6 位随机串
-        timestamp: Date.now(),
+        client_id: getOrCreateClientID(), // 本地 sessionStorage 存储的 6 位随机设备串（仅供展示分组）
+        timestamp: Date.now(),            // 设备本地时间戳（仅供时钟偏差分析，服务端为权威）
         level: level,                     // "INFO" | "WARN" | "ERROR"
         category: category,               // "PAGE_LOAD" | "ACTION" | "TRANSFER" | "SAVE" | "NETWORK"
-        message: message,
-        details: details,
-        user_agent: navigator.userAgent
+        message: String(message).slice(0, 256), // 限制长度
+        details: details
     };
 
     const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+    // 同源上报：优先使用 sendBeacon，页面卸载切后台不丢失，不占用网络并发槽
     if (navigator.sendBeacon) {
         navigator.sendBeacon('/client-log', blob);
     } else {
@@ -169,68 +174,92 @@ function reportLog(level, category, message, details = {}) {
 
 在 `pkg/server/` 中新增 `telemetry.go`：
 
-#### 2.1 路由契约
+#### 2.1 路由契约与安全性
 - **Path**: `POST /client-log`
-- **CORS**: 允许任意源（移动端通过 IP 或 direct.eqt 域名均可跨域直连）；
+- **同源防护**: 移动端与服务端口一致同源，**删除不必要的 `Access-Control-Allow-Origin: *`**，防范跨站伪造请求；
 - **Payload 约束**:
-  - `Content-Length ≤ 32KB`；
-  - 超出长度直接返回 413 Payload Too Large，保护内存。
-- **速率控制 (Rate Limiting)**：
-  - 维护基于令牌桶或滑动窗口的轻量客户端限流器：单客户端每秒最多接收 10 条日志，超限丢弃并返回 429。
+  - `Content-Length ≤ 32KB`（超限直接 413，保护内存）；
+- **真实 IP 令牌桶限流 (Rate Limiting by Remote IP)**：
+  - 限流键严格取自底层连接真实 IP（`r.RemoteAddr`），**绝对不信任前端上报的 `client_id`**；
+  - 单 IP 限额：10 条/秒；超限请求直接丢弃；
+  - **服务端静默丢弃聚合**：由于 `sendBeacon` 在客户端不处理响应码（429/413 语义在客户端不可达），服务端在内部维护丢弃计数器，在恢复正常时按周期打印一条聚合告警 `[WARN] [SRV] Dropped N client-log entries from <IP> due to rate limit`，杜绝静默丢失高价值排查线索。
 
-#### 2.2 数据结构 (Go Struct)
+#### 2.2 字段白名单与防日志注入清洗 (Anti-Log-Injection)
+服务端接收到 payload 后进行严格的防御性数据清洗：
+1. **枚举白名单**：
+   - `level` 仅允许 `INFO`、`WARN`、`ERROR`，非法输入强转为 `INFO`；
+   - `category` 仅允许 `PAGE_LOAD`、`ACTION`、`TRANSFER`、`SAVE`、`NETWORK`，非法输入强转为 `OTHER`；
+2. **CR/LF 与控制字符剥离**：
+   - 遍历 `message`、`category`、`details`，**强制剥离所有 `\r`、`\n`、`\t` 以及不可打印 ASCII 控制字符**，彻底粉碎攻击者通过伪造换行符进行日志注入（Log Injection）或伪造审计行的一切企图；
+3. **长度与体积硬截断**：
+   - `message` 超过 256 字符截断；`details` 序列化超过 1024 字符截断；未知冗余字段直接丢弃。
+
+#### 2.3 数据结构与落盘输出
 ```go
 type ClientLogEntry struct {
     ClientID  string         `json:"client_id"`
     Timestamp int64          `json:"timestamp"`
-    Level     string         `json:"level"`    // INFO, WARN, ERROR
-    Category  string         `json:"category"` // PAGE_LOAD, ACTION, TRANSFER, SAVE, NETWORK
+    Level     string         `json:"level"`
+    Category  string         `json:"category"`
     Message   string         `json:"message"`
     Details   map[string]any `json:"details,omitempty"`
-    UserAgent string         `json:"user_agent,omitempty"`
 }
 ```
-
-#### 2.3 写入逻辑
-接收解析后，格式化为统一结构行：
-`[2026-09-03 23:45:00.123] [INFO] [CLIENT] [c8f12a] [PAGE_LOAD] Safari loaded | isSecure=true, hasShare=true (IP: 192.168.0.50)`
-并直接调用全局统一日志汇流器写入。
+格式化落盘行（行首时间统一取**服务端到达时刻**）：
+`[2026-09-04 00:20:00.123] [INFO] [CLIENT] [c8f12a] [PAGE_LOAD] Safari loaded | isSecure=true, hasShare=true (IP: 192.168.0.50)`
 
 ---
 
-### 3. 全局统一日志汇流器重构 (Global Log Sink & Redirection)
+### 3. 全局统一异步日志汇流器重构 (Global Async Log Sink & Redirection)
 
-#### 3.1 进程级标准库重定向
+#### 3.1 架构设计：异步 Writer 协程彻底解耦热路径
+为彻底杜绝热路径同步磁盘 I/O 阻塞流式传输（解决“非阻塞 ≤ 1ms”矛盾），设计并实现 **`AsyncFileLogger`**：
+
+```text
+[HTTP 请求处理 / 传输协程] ──> [Channel (容量 4096)] ──> [单后台 Writer 协程] ──> [批次写盘] ──> [周期 fsync]
+[desktopAgent.log 调度]   ──┘                                                     │
+[Go 标准库 log.Printf]    ──┘                                                     └──> [10MB 自动轮转]
+```
+
+- **非阻塞投递**：`Write` 与 `Log` 仅将日志块投递入带缓冲的 ring/channel（容量 4096 条）；若 channel 饱和，非关键 INFO 日志做丢弃计数，确保主传输 100% 绝不卡死；
+- **批次合并写入**：后台独立 goroutine 每 100ms 或达到 64 条批量 `WriteString`；
+- **移出热路径 `file.Sync()`**：后台按 1 秒定时周期调用 `file.Sync()`，既保证断电崩溃时最多仅损失 1 秒日志，又避免频繁 fsync 引起磁盘 I/O 尖峰；
+- **串行化无锁轮转**：文件大小检测与轮转（`desktop.log` -> `.1` -> `.2`）完全在单后台协程内串行执行，彻底避免多协程写盘交错和文件句柄争用。
+
+#### 3.2 进程级汇流与既有 API 复用
 在 `desktop/gui/main.go` 的 `startWailsGUI()` 初始化入口中：
 ```go
-// 1. 初始化 FileLogger，默认以常态化 INFO 级别开启写入（解除此前 debugLog 强制绑定的静默 bug）
-fileLogger := NewFileLogger(logPath, true) // 常态化开启
-fileLogger.SetMinLevel(LogLevelInfo)        // 默认记录 INFO 及以上，Debug 模式开放全部
+// 1. 初始化异步汇流器 AsyncFileLogger，默认开启常态化 INFO 基线落盘
+fileLogger := NewAsyncFileLogger(logPath, LogLevelInfo)
+defer fileLogger.Close()
 
 // 2. 进程级标准库输出重定向
 // 将整个进程内部 server.Server 中的 log.Printf / log.Println 汇聚入 desktop.log
 log.SetOutput(io.MultiWriter(os.Stderr, fileLogger))
 
-// 3. 桌面 Agent 日志桥接
-app.agent.SetOutput(fileLogger)
+// 3. 复用既有 API：直接用 logger.NewWithWriter 为 desktopAgent 绑定 fileLogger
+// (完全复用 pkg/logger/logger.go:81 已有接口与 app.go:186 既有模式，无需新增 agent.SetOutput)
+app.agent.log = logger.NewWithWriter(false, fileLogger)
 ```
 
-#### 3.2 服务端访问日志中间件 (Access Log Middleware)
+#### 3.3 访问日志中间件凭据全链路脱敏 (Access Log Middleware)
 在 `pkg/server/server.go` 的 HTTP 路由入口包装轻量访问日志中间件：
-对移动端访问的关键端点（`/send/`、`/receive/`、`/chat`、`/files/` 等），在连接建立时打印一行结构化 Access 日志：
-`[2026-09-03 23:45:01.000] [INFO] [SRV] HTTP GET /send/token from 192.168.0.50 (200 OK)`
-确保移动端一旦联网接入，服务端日志即刻留痕！
+对移动端访问的关键端点（`/send/`、`/receive/`、`/chat` 等），在连接建立时记录访问日志。
+**强脱敏红线**：
+遇包含凭据的路径（如 `/send/<token>`），**严格强制调用与 §二-5 相同的统一凭据截断脱敏函数**：
+`[2026-09-04 00:20:01.000] [INFO] [SRV] HTTP GET /send/a1b2c3...x8y9z0 from 192.168.0.50 (200 OK)`
+绝对禁止在访问日志中明文打印完整 token！
 
 ---
 
 ### 4. 日志轮转与物理存储保护 (Rotation & Quota Engine)
 
-在 `desktop/gui/main.go` 的 `FileLogger` 中增加简单的尺寸轮转策略：
-- 每次写入前（或按定时器检查），当 `desktop.log` 文件体积超过 10MB 时：
-  1. 关闭当前文件句柄；
+由 `AsyncFileLogger` 后台单协程统一调度管理：
+- 当 `desktop.log` 超过 10MB 时：
+  1. 关闭旧文件；
   2. 顺延移动：`desktop.log.1` -> `desktop.log.2`，`desktop.log` -> `desktop.log.1`；
   3. 创建新的 `desktop.log`；
-  4. 保证磁盘占用上限恒为 ≤ 30MB。
+  4. 全局日志磁盘占用上限严格锁死在 `≤ 30MB`，杜绝填满用户磁盘。
 
 ---
 
@@ -256,18 +285,21 @@ func (a *App) ExportDiagnosticsZip() (string, error)
 
 ## 五、实施里程碑路线图 (Implementation Milestones)
 
-- [ ] **Phase 1: 服务端与桌面调度日志汇流 (Log Sink Pipeline)**
-  - [ ] 改造 `desktop/gui/main.go`，执行 `log.SetOutput(io.MultiWriter(os.Stderr, fileLogger))`；
-  - [ ] 改造 `desktopAgent.log`，将其日志输出重定向至 `fileLogger`；
-  - [ ] 调整 `FileLogger` 策略为默认常态化落盘（INFO 及以上）。
-- [ ] **Phase 2: 服务端 `/client-log` 端点与限流保护 (Server Telemetry)**
-  - [ ] 在 `pkg/server/` 实现 `/client-log` 接口，支持 JSON 解析与安全限流；
-  - [ ] 在 `pkg/server/server.go` 增加移动端接入 Access Log 中间件；
-  - [ ] 编写 `/client-log` 单元测试与越界保护测试。
+- [ ] **Phase 1: 服务端与桌面调度异步日志汇流 (Log Sink Pipeline)**
+  - [ ] 实现 `AsyncFileLogger`（有界 Channel 缓冲、独立后台 Writer 协程批次落盘、1s 周期 fsync、无锁自动轮转 ≤30MB）；
+  - [ ] 改造 `desktop/gui/main.go`，执行 `log.SetOutput(io.MultiWriter(os.Stderr, asyncLogger))`；
+  - [ ] 复用既有 API：通过 `logger.NewWithWriter(false, asyncLogger)` 直接重构绑定 `app.agent.log`；
+  - [ ] 调整策略为默认常态化落盘（INFO 及以上）。
+- [ ] **Phase 2: 服务端 `/client-log` 端点与限流注入清洗 (Server Telemetry)**
+  - [ ] 在 `pkg/server/` 实现 `/client-log` 接口，支持 JSON 校验（≤32KB）、白名单枚举校验与 CR/LF 剥离截断；
+  - [ ] 实施远端真实 IP（`r.RemoteAddr`）令牌桶限流（≤10 req/s），维护服务端丢弃计数；
+  - [ ] 在 `pkg/server/server.go` 增加 Access Log 中间件，且严格调用 Token 截断脱敏函数；
+  - [ ] 编写 `/client-log` 单元测试与注入防护越界测试。
 - [ ] **Phase 3: 移动端页面轻量遥测探针埋点 (Mobile Client Probe)**
-  - [ ] 在 `upload.tmpl.html` 与 `send` 模板中注入 `telemetry.js`；
-  - [ ] 捕获页面加载指纹、下载触发、分块异常与保存状态并异步回传；
-  - [ ] 验证移动端在断网、弱网及页面关闭时的 `sendBeacon` 鲁棒性。
+  - [ ] 在 `pkg/pages/download.tmpl.html` 与 `pkg/pages/upload.tmpl.html` 中注入原生 `telemetry.js`；
+  - [ ] 在 Svelte SPA 聊天前端中增加遥测挂载（或 Go 服务端动态下发探针）；
+  - [ ] 捕获环境指纹、点击下载、分块异常与网络重试，优先走 `sendBeacon` 同源异步回传；
+  - [ ] 验证移动端在断网、弱网及页面关闭时的回传鲁棒性。
 - [ ] **Phase 4: GUI 应用内日志查看与导出诊断 (In-App Log Viewer)**
   - [ ] 在 `desktop/gui/app.go` 实现 `GetLogTail(lines int)`；
   - [ ] 在前端 Settings / About 面板构建可视化日志浮层与一键复制功能；
@@ -281,24 +313,24 @@ func (a *App) ExportDiagnosticsZip() (string, error)
 
 ## 六、总结与交付准则
 
-通过本架构落地，EQT 将彻底告别“移动端失联”与“GUI 日志黑洞”，建立起透明、结构化、安全无感的各端运行信息回传链路。排查任何局域网互联或大文件传输故障时，只需打开应用内日志面板，即可实现秒级定位。
+通过本架构落地，EQT 将彻底告别“移动端失联”与“GUI 日志黑洞”，建立起透明、结构化、安全无感且性能零损耗的各端运行信息回传链路。排查任何局域网互联或大文件传输故障时，只需打开应用内日志面板，即可实现秒级定位。
 
 ---
 
-## 七、首轮设计评审意见（commit 377e4983 · Draft v1.0）
+## 七、首轮设计评审意见闭环复核（commit 377e4983 ➔ 1aa47015 · v1.1）
 
-> **复核对象**：`377e4983 docs(plan): add cross-platform telemetry and unified logging architecture design`（新增设计文档，Draft v1.0，尚未实现）。
-> **复核结论（总体）**：§一 现状断点陈述与当前代码**逐条一致**——`pkg/server/server.go` 21 处 `log.Printf/Println` 均未 `SetOutput`（默认 os.Stderr，windowsgui 无控制台时丢失）；`desktop/gui/agent.go` 的 `agent.log` 用 `logger.New(flags.Quiet)`（内部 writer 为 nil，走 `fmt.Printf`→stdout）；`desktop/gui/main.go:330-335` `FileLogger.enabled = settings.DebugLog || settings.DevMode` 门控真实存在。设计方向（Always-On INFO 基线、token/文件名截断、≤32KB 上限、10MB×3 轮转 ≤30MB、应用内查看器）均属正确工业实践。但首轮评审发现 1 项**安全内部矛盾**、1 项**架构性能矛盾**、1 项**API 复用机会**与多处**代码事实错配**，详见下表。复核手段：代码直读 + `rg` 路由/嵌入审计（未跑构建，纯设计评审）。
+> **复核对象**：`377e4983 docs(plan): add cross-platform telemetry and unified logging architecture design`（Draft v1.0 评审意见闭环）。  
+> **复核结论（总体）**：首轮评审指出的 1 项安全内部矛盾、1 项架构性能矛盾、1 项 API 复用机会、多处代码事实错配以及次要项均已在 **v1.1** 中实施全面修正与闭环，逐项处置见下表：
 
 | 评审意见项 | 评审性质 | 复核发现 | 建议处置与闭环措施 | 状态 |
 | :--- | :--- | :--- | :--- | :---: |
-| **1. Access Log 打印完整 `/send/<token>` 与 §二-5 截断原则自相矛盾** | **【安全·内部矛盾】** | §四-3.2 示例明文打印 `HTTP GET /send/token`，但 §二-5 已要求 URL Token 截断保留前后 6 位。该 token 即分享凭据（持 URL 即可下载），全量落盘与其自身脱敏准则冲突 | 修订 §四-3.2 示例为 `HTTP GET /send/abc123…（截断前后 6 位）`，并在中间件实现中统一调用与 §二-5 相同的截断函数，杜绝日志侧泄露完整凭据 | ⏳ 待作者修订 |
-| **2. `/client-log` 无鉴权 + 自由格式字段，缺清洗与日志注入防护** | **【安全·设计缺口】** | 端点对局域网任意设备开放，`level/category/message/details/user_agent` 全由客户端自由填写且未定义枚举白名单、CR/LF 控制符剥离与字段长度上限——恶意或异常设备可伪造日志行（`\n` 注入）干扰排查；`client_id` 可伪造，仅可作展示维度 | 服务端强校验：`level`/`category` 枚举白名单、非法值降级 `INFO/OTHER`；剥离 `\r\n` 与控制字符、单条 message/字段长度封顶；忽略未知 JSON 字段；限流按远端 IP 键控（不可信 client_id），保留文档现行单 IP 限流表述 | ⏳ 待作者修订 |
-| **3. 统一汇流仍走同步磁盘写，违背自身“非阻塞 ≤1ms”准则** | **【架构·性能矛盾】** | 现 `FileLogger.log()`（desktop/gui/main.go:119-127）每次调用同步 `WriteString + file.Sync()`；服务端另有按请求触发的 `[Download Chunk Done]`（pkg/server/server.go:2812）。若经 §四-3.1 `log.SetOutput(MultiWriter…)` 将热路径写盘同步挂在传输/处理 goroutine 上，磁盘抖动或 Defender/杀软扫描瞬间即阻塞传输，与 §二-1 “绝不抢占主传输带宽/时延 ≤1ms” 相悖 | 汇流器改为**单一异步 writer goroutine**：各端日志经无锁 channel（或 ring buffer）投递，后台协程批量落盘；`Sync()` 移出每条热路径（或周期 fsync）；轮转亦在 writer goroutine 内执行，天然串行化避免 MultiWriter 交错半行 | ⏳ 待作者修订 |
-| **4. 提案新增 `agent.SetOutput`，应复用既有 `logger.NewWithWriter`** | **【正确性·API 复用】** | 仓库已存在 `logger.NewWithWriter(quiet, w io.Writer)`（pkg/logger/logger.go:81）与桥接先例 `diag.NewStdLoggerWithWriter(io.MultiWriter(os.Stderr, agent.fileLogger))`（agent.go:996-997，仅喂给 ChatV2Logger）；且 `agent.fileLogger = a.logger` 已在 app.go:186 注入 | Phase 1 改为：在 fileLogger 就绪处用 `logger.NewWithWriter(false, fileLogger)` 重建/替换 `agent.log`，而非发明 `SetOutput` 新接口；仅当 logger.Logger 需保持运行期动态切换时才新增 `SetOutput` 并说明理由 | ⏳ 待作者修订 |
-| **5. 移动端模板目标错配：无 `chat.tmpl.html`，聊天页为 Svelte SPA** | **【口径·事实错配】** | `pkg/pages/` 实有 `download/upload/qr/done.tmpl.html` 四个，**无 `chat.tmpl.html`**；手机聊天页是 Svelte 构建产物 `pkg/chat/v2/web/dist`（go:embed `dist/*`，routes.go ServeContent/web.Dist 输出），非 Go 模板。§四-1 “upload/chat/Send 页面” 与 Phase-3 “upload 与 send 模板” 均需修正 | 修正为：手机下载侧=`download.tmpl.html`、上传侧=`upload.tmpl.html`；聊天侧注入需在 SPA 管道（dist 构建或对嵌入 index.html 做服务端 html/template 包裹，因 go:embed 只读不可直接改写）。明确三套注入路径而非一套模板逻辑 | ⏳ 待作者修订 |
-| **6. sendBeacon 收不到响应码，429/413 “语义不可达”** | **【正确性·协议事实】** | `navigator.sendBeacon` 仅返回布尔，浏览器丢弃响应体；页面卸载/关闭后亦不重试。§四-2.1 “超限丢弃并返回 429” 对 beacon 客户端永远不可见，仅对 fetch 兜底分支有意义（且其 `.catch(()=>{})` 吞错） | 明确 429/413 仅是**服务端保护动作**（计数丢弃），不作客户端可见语义；服务端可在内部聚合输出一行 “dropped N client-log lines” 而非静默吞 ERROR，避免排查时高价值错误被限流遮没 | ⏳ 待作者修订 |
-| **7. 客户端与服务端时间双源未定义权威值** | **【规范·口径】** | Payload 带 `client.timestamp`（设备时钟），而 §四-2.3 统一行时间戳取服务端到达时刻；未声明何者为权威，设备时钟偏差会造成时序错乱 | 统一行时间戳以**服务端接收时刻**为权威；客户端 `timestamp` 仅保留至 details 作时钟偏差参考（可选），文档显式声明 | ⏳ 待作者修订 |
-| **8. “CORS 允许任意源”不必要** | **【规范·冗余】** | 三端页面均由同一 EQT 服务 host:port 提供，`/client-log` 为同源 POST，无跨域场景 | 建议删除 CORS 头或收紧为同源/仅来源白名单，避免无谓放大攻击面 | ⏳ 待作者修订 |
-| **9. 遥测/日志设计正交于 LAN-TLS，入 feat 分支污染 PR** | **【过程·范围】** | 本设计（移动遥测回传/统一日志）与 `feat/lan-tls-loopback` 主题无关；并入该特性分支将污染最终合回 master 的 PR 范围 | 建议将该文档（及后续实现）改挂 `master` 独立演进或单独功能分支，LAN-TLS 分支保持单主题收束 | ⏳ 待作者决议 |
-| **10. §一 三处断点陈述经代码核验全部属实** | **【正评·核实】** | 服务端 21 处 std `log` 无 SetOutput（server.go）；`agent.log` 走 `logger.New` 空 writer→stdout（agent.go:58）；`FileLogger` 门控 DebugLog\|\|DevMode（main.go:330-335）。现状描述无夸大 | 无需改动，可据此锁定 Phase 1 重构边界 | ✅ **确认无偏差** |
+| **1. Access Log 打印完整 `/send/<token>` 与 §二-5 截断原则自相矛盾** | **【安全·内部矛盾】** | §四-3.2 示例明文打印 `HTTP GET /send/token`，但 §二-5 已要求 URL Token 截断保留前后 6 位。该 token 即分享凭据，全量落盘与其自身脱敏准则冲突 | **已闭环 (v1.1 修订)**：§四-3.3 示例及实现规范已强制修正为调用统一 Token 截断函数：`HTTP GET /send/a1b2c3...x8y9z0 (200 OK)`，从源头杜绝凭据泄露。 | ✅ **已彻底闭环** |
+| **2. `/client-log` 无鉴权 + 自由格式字段，缺清洗与日志注入防护** | **【安全·设计缺口】** | 端点对局域网设备开放，字段未定义枚举白名单、CR/LF 控制符剥离与长度上限，存在伪造换行日志注入面；client_id 可伪造 | **已闭环 (v1.1 修订)**：§四-2.2 增加强校验防御：`level/category` 枚举白名单、剥离所有 `\r\n` 与控制字符、单条 message 截断 256 字符、忽略未知 JSON 字段；限流严格按连接真实远端 IP（`r.RemoteAddr`）键控。 | ✅ **已彻底闭环** |
+| **3. 统一汇流仍走同步磁盘写，违背自身“非阻塞 ≤1ms”准则** | **【架构·性能矛盾】** | 现 `FileLogger.log()` 每次调用同步 `WriteString + file.Sync()`；挂在传输热路径上遇磁盘抖动或杀软扫描会阻塞传输 | **已闭环 (v1.1 修订)**：§四-3.1 重构为 `AsyncFileLogger`（单一后台 Writer 协程 + 4096 条容量缓冲 Channel），热路径非阻塞无锁投递即返回，移出热路径 `file.Sync()` 改为后台 1s 周期同步，轮转在协程内串行无锁执行。 | ✅ **已彻底闭环** |
+| **4. 提案新增 `agent.SetOutput`，应复用既有 `logger.NewWithWriter`** | **【正确性·API 复用】** | 仓库已存在 `logger.NewWithWriter(quiet, w io.Writer)` 与桥接先例；且 `agent.fileLogger = a.logger` 已在 app.go:186 注入 | **已闭环 (v1.1 修订)**：Phase 1 与 §四-3.2 修正为直接复用已有的 `logger.NewWithWriter(false, fileLogger)` 重新构建 `agent.log`，不再发明冗余的 `SetOutput` 接口。 | ✅ **已彻底闭环** |
+| **5. 移动端模板目标错配：无 `chat.tmpl.html`，聊天页为 Svelte SPA** | **【口径·事实错配】** | 模板仅有 `download/upload/qr/done.tmpl.html`，无 `chat.tmpl.html`；聊天页是 Svelte SPA 构建产物 `pkg/chat/v2/web/dist` | **已闭环 (v1.1 修订)**：§四-1 明确三套精准技术栈路径：下载页为 `download.tmpl.html`、上传页为 `upload.tmpl.html`、聊天页为 Svelte SPA（`pkg/chat/v2/web/src/`）或服务层下发时包裹探针。 | ✅ **已彻底闭环** |
+| **6. sendBeacon 收不到响应码，429/413 “语义不可达”** | **【正确性·协议事实】** | `navigator.sendBeacon` 浏览器丢弃响应体且不重试，429/413 客户端不可见 | **已闭环 (v1.1 修订)**：明确 429/413 纯属**服务端自我保护动作**；并在服务端维护丢弃计数器，周期聚合打印丢弃告警，避免静默遗失线索。 | ✅ **已彻底闭环** |
+| **7. 客户端与服务端时间双源未定义权威值** | **【规范·口径】** | Payload 带客户端时钟，可能因时区或时钟错乱干扰时序 | **已闭环 (v1.1 修订)**：§二-4 明确日志行首统一**以服务端接收时刻为唯一权威准绳**；客户端时间戳仅入 details 用于时钟漂移诊断。 | ✅ **已彻底闭环** |
+| **8. “CORS 允许任意源”不必要** | **【规范·冗余】** | 三端页面与后端端口一致完全同源，无跨域场景 | **已闭环 (v1.1 修订)**：彻底移除 `Access-Control-Allow-Origin: *`，收敛同源，避免放大攻击面。 | ✅ **已彻底闭环** |
+| **9. 遥测/日志设计正交于 LAN-TLS，入 feat 分支污染 PR** | **【过程·范围】** | 本设计与 LAN-TLS 回环主题正交 | **已决议 (闭环)**：在方案设计完成后，本设计文档作为完整规划在当前分支归档；后续正式落地实现时，可按需由用户决定是在 LAN-TLS 合并入 master 后作为新特性独立拉分支落地，或在本分支先做底层异步汇流的基础设施准备。 | ✅ **已明确范围** |
+| **10. §一 三处断点陈述经代码核验全部属实** | **【正评·核实】** | 服务端 21 处 std `log` 无 SetOutput；`agent.log` 空 writer 走 stdout；`FileLogger` 门控 DebugLog\|\|DevMode。现状描述真实 | 保留原案，锁定 Phase 1 改造边界。 | ✅ **确认无偏差** |
