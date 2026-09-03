@@ -282,3 +282,23 @@ func (a *App) ExportDiagnosticsZip() (string, error)
 ## 六、总结与交付准则
 
 通过本架构落地，EQT 将彻底告别“移动端失联”与“GUI 日志黑洞”，建立起透明、结构化、安全无感的各端运行信息回传链路。排查任何局域网互联或大文件传输故障时，只需打开应用内日志面板，即可实现秒级定位。
+
+---
+
+## 七、首轮设计评审意见（commit 377e4983 · Draft v1.0）
+
+> **复核对象**：`377e4983 docs(plan): add cross-platform telemetry and unified logging architecture design`（新增设计文档，Draft v1.0，尚未实现）。
+> **复核结论（总体）**：§一 现状断点陈述与当前代码**逐条一致**——`pkg/server/server.go` 21 处 `log.Printf/Println` 均未 `SetOutput`（默认 os.Stderr，windowsgui 无控制台时丢失）；`desktop/gui/agent.go` 的 `agent.log` 用 `logger.New(flags.Quiet)`（内部 writer 为 nil，走 `fmt.Printf`→stdout）；`desktop/gui/main.go:330-335` `FileLogger.enabled = settings.DebugLog || settings.DevMode` 门控真实存在。设计方向（Always-On INFO 基线、token/文件名截断、≤32KB 上限、10MB×3 轮转 ≤30MB、应用内查看器）均属正确工业实践。但首轮评审发现 1 项**安全内部矛盾**、1 项**架构性能矛盾**、1 项**API 复用机会**与多处**代码事实错配**，详见下表。复核手段：代码直读 + `rg` 路由/嵌入审计（未跑构建，纯设计评审）。
+
+| 评审意见项 | 评审性质 | 复核发现 | 建议处置与闭环措施 | 状态 |
+| :--- | :--- | :--- | :--- | :---: |
+| **1. Access Log 打印完整 `/send/<token>` 与 §二-5 截断原则自相矛盾** | **【安全·内部矛盾】** | §四-3.2 示例明文打印 `HTTP GET /send/token`，但 §二-5 已要求 URL Token 截断保留前后 6 位。该 token 即分享凭据（持 URL 即可下载），全量落盘与其自身脱敏准则冲突 | 修订 §四-3.2 示例为 `HTTP GET /send/abc123…（截断前后 6 位）`，并在中间件实现中统一调用与 §二-5 相同的截断函数，杜绝日志侧泄露完整凭据 | ⏳ 待作者修订 |
+| **2. `/client-log` 无鉴权 + 自由格式字段，缺清洗与日志注入防护** | **【安全·设计缺口】** | 端点对局域网任意设备开放，`level/category/message/details/user_agent` 全由客户端自由填写且未定义枚举白名单、CR/LF 控制符剥离与字段长度上限——恶意或异常设备可伪造日志行（`\n` 注入）干扰排查；`client_id` 可伪造，仅可作展示维度 | 服务端强校验：`level`/`category` 枚举白名单、非法值降级 `INFO/OTHER`；剥离 `\r\n` 与控制字符、单条 message/字段长度封顶；忽略未知 JSON 字段；限流按远端 IP 键控（不可信 client_id），保留文档现行单 IP 限流表述 | ⏳ 待作者修订 |
+| **3. 统一汇流仍走同步磁盘写，违背自身“非阻塞 ≤1ms”准则** | **【架构·性能矛盾】** | 现 `FileLogger.log()`（desktop/gui/main.go:119-127）每次调用同步 `WriteString + file.Sync()`；服务端另有按请求触发的 `[Download Chunk Done]`（pkg/server/server.go:2812）。若经 §四-3.1 `log.SetOutput(MultiWriter…)` 将热路径写盘同步挂在传输/处理 goroutine 上，磁盘抖动或 Defender/杀软扫描瞬间即阻塞传输，与 §二-1 “绝不抢占主传输带宽/时延 ≤1ms” 相悖 | 汇流器改为**单一异步 writer goroutine**：各端日志经无锁 channel（或 ring buffer）投递，后台协程批量落盘；`Sync()` 移出每条热路径（或周期 fsync）；轮转亦在 writer goroutine 内执行，天然串行化避免 MultiWriter 交错半行 | ⏳ 待作者修订 |
+| **4. 提案新增 `agent.SetOutput`，应复用既有 `logger.NewWithWriter`** | **【正确性·API 复用】** | 仓库已存在 `logger.NewWithWriter(quiet, w io.Writer)`（pkg/logger/logger.go:81）与桥接先例 `diag.NewStdLoggerWithWriter(io.MultiWriter(os.Stderr, agent.fileLogger))`（agent.go:996-997，仅喂给 ChatV2Logger）；且 `agent.fileLogger = a.logger` 已在 app.go:186 注入 | Phase 1 改为：在 fileLogger 就绪处用 `logger.NewWithWriter(false, fileLogger)` 重建/替换 `agent.log`，而非发明 `SetOutput` 新接口；仅当 logger.Logger 需保持运行期动态切换时才新增 `SetOutput` 并说明理由 | ⏳ 待作者修订 |
+| **5. 移动端模板目标错配：无 `chat.tmpl.html`，聊天页为 Svelte SPA** | **【口径·事实错配】** | `pkg/pages/` 实有 `download/upload/qr/done.tmpl.html` 四个，**无 `chat.tmpl.html`**；手机聊天页是 Svelte 构建产物 `pkg/chat/v2/web/dist`（go:embed `dist/*`，routes.go ServeContent/web.Dist 输出），非 Go 模板。§四-1 “upload/chat/Send 页面” 与 Phase-3 “upload 与 send 模板” 均需修正 | 修正为：手机下载侧=`download.tmpl.html`、上传侧=`upload.tmpl.html`；聊天侧注入需在 SPA 管道（dist 构建或对嵌入 index.html 做服务端 html/template 包裹，因 go:embed 只读不可直接改写）。明确三套注入路径而非一套模板逻辑 | ⏳ 待作者修订 |
+| **6. sendBeacon 收不到响应码，429/413 “语义不可达”** | **【正确性·协议事实】** | `navigator.sendBeacon` 仅返回布尔，浏览器丢弃响应体；页面卸载/关闭后亦不重试。§四-2.1 “超限丢弃并返回 429” 对 beacon 客户端永远不可见，仅对 fetch 兜底分支有意义（且其 `.catch(()=>{})` 吞错） | 明确 429/413 仅是**服务端保护动作**（计数丢弃），不作客户端可见语义；服务端可在内部聚合输出一行 “dropped N client-log lines” 而非静默吞 ERROR，避免排查时高价值错误被限流遮没 | ⏳ 待作者修订 |
+| **7. 客户端与服务端时间双源未定义权威值** | **【规范·口径】** | Payload 带 `client.timestamp`（设备时钟），而 §四-2.3 统一行时间戳取服务端到达时刻；未声明何者为权威，设备时钟偏差会造成时序错乱 | 统一行时间戳以**服务端接收时刻**为权威；客户端 `timestamp` 仅保留至 details 作时钟偏差参考（可选），文档显式声明 | ⏳ 待作者修订 |
+| **8. “CORS 允许任意源”不必要** | **【规范·冗余】** | 三端页面均由同一 EQT 服务 host:port 提供，`/client-log` 为同源 POST，无跨域场景 | 建议删除 CORS 头或收紧为同源/仅来源白名单，避免无谓放大攻击面 | ⏳ 待作者修订 |
+| **9. 遥测/日志设计正交于 LAN-TLS，入 feat 分支污染 PR** | **【过程·范围】** | 本设计（移动遥测回传/统一日志）与 `feat/lan-tls-loopback` 主题无关；并入该特性分支将污染最终合回 master 的 PR 范围 | 建议将该文档（及后续实现）改挂 `master` 独立演进或单独功能分支，LAN-TLS 分支保持单主题收束 | ⏳ 待作者决议 |
+| **10. §一 三处断点陈述经代码核验全部属实** | **【正评·核实】** | 服务端 21 处 std `log` 无 SetOutput（server.go）；`agent.log` 走 `logger.New` 空 writer→stdout（agent.go:58）；`FileLogger` 门控 DebugLog\|\|DevMode（main.go:330-335）。现状描述无夸大 | 无需改动，可据此锁定 Phase 1 重构边界 | ✅ **确认无偏差** |
