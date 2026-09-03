@@ -26,21 +26,21 @@ chmod 644 "${LOCAL_CERT_DIR}/fullchain.pem"
 chmod 600 "${LOCAL_CERT_DIR}/privkey.pem"
 echo "✓ Successfully installed certificates in ${LOCAL_CERT_DIR}"
 
-# WSL -> Windows host automatic replication
+# WSL -> Windows host target replication (Strict single-user confinement)
 if grep -qi microsoft /proc/version 2>/dev/null; then
-    echo "WSL environment detected. Checking Windows host users..."
-    for win_user in /mnt/c/Users/*; do
-        user_name="$(basename "${win_user}")"
-        if [ "${user_name}" != "All Users" ] && [ "${user_name}" != "Default" ] && [ "${user_name}" != "Default User" ] && [ "${user_name}" != "Public" ]; then
-            win_cert_dir="${win_user}/.config/eqt/certs"
-            mkdir -p "${win_cert_dir}" 2>/dev/null || true
-            if [ -d "${win_cert_dir}" ]; then
-                cp -f "${LOCAL_CERT_DIR}/fullchain.pem" "${win_cert_dir}/fullchain.pem" 2>/dev/null || true
-                cp -f "${LOCAL_CERT_DIR}/privkey.pem" "${win_cert_dir}/privkey.pem" 2>/dev/null || true
-                echo "✓ Synced certificates to Windows host: ${win_cert_dir}"
-            fi
-        fi
-    done
+    target_win_user="${EQT_WIN_USER:-${USER:-}}"
+    if [ -n "${target_win_user}" ] && [ -d "/mnt/c/Users/${target_win_user}" ]; then
+        win_cert_dir="/mnt/c/Users/${target_win_user}/.config/eqt/certs"
+        mkdir -p "${win_cert_dir}"
+        cp -f "${LOCAL_CERT_DIR}/fullchain.pem" "${win_cert_dir}/fullchain.pem"
+        cp -f "${LOCAL_CERT_DIR}/privkey.pem" "${win_cert_dir}/privkey.pem"
+        chmod 644 "${win_cert_dir}/fullchain.pem" 2>/dev/null || true
+        chmod 600 "${win_cert_dir}/privkey.pem" 2>/dev/null || true
+        echo "✓ Synced certificates strictly to Windows user: ${target_win_user} (${win_cert_dir})"
+    else
+        echo "ℹ WSL detected, but target Windows user directory not found automatically."
+        echo "  Set EQT_WIN_USER=<username> to sync certificates to your specific Windows profile."
+    fi
 fi
 
 echo "=== [EQT] Certificate verification ==="

@@ -2367,7 +2367,11 @@ func New(cfg *config.Config) (*Server, error) {
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       2 * time.Minute,
 		TLSConfig:         tlsCfg,
-		TLSNextProto:      make(map[string]func(*http.Server, *tls.Conn, http.Handler)),
+		// Explicitly disable HTTP/2 by providing a non-nil empty TLSNextProto map.
+		// Rationale: Enforces HTTP/1.1 over TLS 1.2/1.3 to avoid HTTP/2 multiplexing flow-control
+		// buffer stalls during large file tus-chunked PATCH transfers and SSE/WebSocket streaming
+		// on heterogeneous mobile browsers.
+		TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler)),
 	}
 	// Create channel to send message to stop server
 	app.stopChannel = make(chan bool, 1)
