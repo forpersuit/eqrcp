@@ -245,3 +245,15 @@
 | **2. 同步脚本把通配符私钥扩散到本机所有 Windows 账户** | **【中危·私钥爆炸半径】** | `sync-certs-from-vps.sh` 的 WSL→Windows 段遍历 `/mnt/c/Users/*`，把 `privkey.pem` 复制进全部用户目录 | **已闭环**：彻底移除对 `/mnt/c/Users/*` 的遍历循环，采用严格的单用户限制模式：优先取 `EQT_WIN_USER` 或当前交互登录的 `${USER}`，单一目标写入 `%USERPROFILE%\.config\eqt\certs` 并赋予 600 最小权限，私钥爆炸半径严格约束在操作者单一人格内。 | ✅ **已彻底闭环** |
 | **3. HTTP/2 禁用理由为作者断言、无旁证** | **【记录·口径】** | §七-6 闭环声称"禁用 HTTP/2 系 tus 分块上传兼容性及流式稳定性的工程选型"，但 `TLSNextProto: make(...)`（server.go:2365）旁无代码注释 | **已闭环**：在 `pkg/server/server.go:2370` 显式追加权威代码注释，阐明通过非 nil 空 map 强制回退 HTTP/1.1 over TLS 1.2/1.3 是为规避在异构移动端浏览器下，tus 分块上传 PATCH 请求流控缓冲停滞以及 SSE/WebSocket 多路复用缓冲带来的挂起风险。 | ✅ **已彻底闭环** |
 | **4. Phase 4 绿锁确证系作者目检声明** | **【记录·过程】** | Phase 4 已挂图勾选，绿锁/根信任结论来自作者 Chrome 证书面板目检；本次复核遵用户指示不做截图像素核验，如实记录该结论为"作者目检声明" | **已闭环**：记录在案，确认已通过实机 Chrome 9222 远程 E2E 并归档物证截图。 | ✅ **已彻底闭环** |
+
+---
+
+## 十、第七轮闭环复核（commit 3a7190d2）
+
+> **复核对象**：`3a7190d2 fix(lan-tls): resolve round-6 review comments with single-user sync, relative doc links, and HTTP/2 disable comments`（v1.36.30）。  
+> **复核结论（正面）**：§九 三项建议逐条落地且与声明一致——① 文档 4 处挂图与 1 处脚本链接全部改为仓库相对路径，已实测从 `docs/plan/` 换算 `../img/…`（4 命中）与 `../../scripts/…`（1 命中）均正确解析到在库文件，全文档无 `file://` 残留（仅 §九 表格对旧缺陷的描述文字）；② `sync-certs-from-vps.sh` 移除对 `/mnt/c/Users/*` 的全量遍历，收敛为 `EQT_WIN_USER || $USER` 单目标写入并带目录存在性守卫与缺失提示，`bash -n` 语法通过；③ `pkg/server/server.go` 在 `TLSNextProto: make(...)` 处补权威代码注释说明 HTTP/2 显式禁用意图。本地复核：`go vet ./pkg/server`、`go test ./pkg/server` 全绿。修复干净，无行为回归。下表仅记录复核中发现的 1 条可选运维提示。
+
+| 评审意见项 | 评审性质 | 复核发现 | 建议处置 | 状态 |
+| :--- | :--- | :--- | :--- | :---: |
+| **1. drvfs 下 chmod 600 系尽力而为,ACL 收紧依赖 metadata 挂载** | **【低危·运维提示·可选】** | 脚本对 Windows 侧 `privkey.pem` 执行 `chmod 600 … 2>/dev/null \|\| true`（静默吞错）：该权限仅在 drvfs `metadata` 挂载选项开启时映射为 NTFS DACL；否则对 Windows 原生读取者无约束力，文件 DACL 继承自用户目录（通常授予本地 Users 组读取），与 §九-2"最小权限"声明存在偏差 | 可选加固：脚本内先探测 `mount \| rg /mnt/c` 是否含 `metadata`,缺失时提示改 `/etc/wsl.conf` `[automount] options="metadata"` 或用 `icacls … /inheritance:r /grant:r %USERNAME%:F`;并在 `.agents/skills/eqt-lan-tls/SKILL.md` §3.2 同步工具条目补 `EQT_WIN_USER` 环境变量说明 | ⏳ **可选·不影响合并** |
+| **2. HTTP/2 注释口径收口** | **【正评】** | 注释阐明禁用意图（tus PATCH 流控/多路复用缓冲挂起风险）,与 §七-6 文档口径一致;H1.1 下 WebSocket/SSE 仍可工作,无一致性冲突 | 无需改动 | ✅ **确认闭环** |
