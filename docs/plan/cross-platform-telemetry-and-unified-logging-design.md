@@ -1,8 +1,8 @@
 # EQT 跨端全链路统一遥测与日志回传系统架构设计方案
 # (Cross-Platform Unified Telemetry & Logging Architecture Design)
 
-> **版本**: v1.1 (已采纳首轮审查意见修订闭环)  
-> **状态**: 方案设计就绪 (Ready for Implementation)  
+> **版本**: v1.2 (第二轮设计评审 4 项遗留项已全部冻结裁决)  
+> **状态**: 方案设计彻底冻结 (Design Frozen / Ready for Phase 1)  
 > **作者**: EQT Core Team  
 > **日期**: 2026-09-04  
 > **目标**: 依据第一性原理（First Principle）与工业级日志最佳实践，打通桌面端调度内核、Go 服务端传输引擎、以及移动端（手机浏览器前端）的三端运行信息回传链路，实现统一异步汇流、强安全性清洗、结构化存储与 GUI 应用内快速诊断。
@@ -60,12 +60,15 @@
 
 根据分布式与桌面端工程最佳实践，本方案确立以下核心设计原则：
 
-1. **绝对非阻塞、异步批量落盘与零损耗 (Zero-Overhead & Async Worker)**：
+1. **绝对非阻塞、异步批量落盘与饱和降级策略 (Zero-Overhead & Bounded Saturation)**：
    - **移动端浏览器上报**：采用原生 `navigator.sendBeacon`（或异步 `fetch` 带 `keepalive: true`），页面卸载或挂起时不丢日志，且绝不抢占主传输带宽与并发连接槽；
    - **服务端遥测接收端点**：在内存中快速校验（限制请求体 ≤ 32KB），微秒级返回，绝不阻塞流式传输主线程；
-   - **全局汇流异步化**：**彻底杜绝在请求处理/传输热路径上执行同步 `WriteString` 与 `file.Sync()`**。汇流器采用“单一异步 Writer 协程 + 有界 Channel 缓冲池”模式，热路径无锁投递即返回，后台批次写盘并周期 fsync，杜绝磁盘 I/O 抖动或杀软扫描卡死传输。
-2. **单一真理源与统一汇流 (Unified Log Sink)**：
-   - 全局建立单一日志写入流，通过 `io.MultiWriter` 将 Go 标准库 `log`、`desktopAgent.log`、`server.Server` 业务日志以及移动端回传的 `[CLIENT-LOG]` 汇聚到统一的异步 `desktop.log`。
+   - **全局汇流异步化**：**彻底杜绝在请求处理/传输热路径上执行同步 `WriteString` 与 `file.Sync()`**。汇流器采用“单一异步 Writer 协程 + 有界 Channel 缓冲池”模式，热路径无锁投递即返回，后台批次写盘并周期 fsync，杜绝磁盘 I/O 抖动或杀软扫描卡死传输；
+   - **有界满载降级冻结规则**：当容量 4096 的缓冲 Channel 饱和时：
+     - **INFO / DEBUG 级别**：立即丢弃并原子递增 `droppedInfoCount`，完全 0ms 阻塞；
+     - **WARN / ERROR / FATAL 级别**：执行**有界超时等待（上限 50ms）**。若 50ms 内仍未排空（极端严重 I/O 尖峰），则降级执行同步紧急写盘兜底，既消除永久死锁卡死传输风险，又确保 99.999% 关键报错强保落盘。
+2. **单一真理源与统一汇流范围 (Unified Log Sink Coverage)**：
+   - 全局建立单一日志写入流，通过 `io.MultiWriter` 将 **Go 标准库 `log`、`desktopAgent.log`、`server.Server` 业务日志、`pkg/chat/v2/diag` 会话诊断事件、以及移动端回传的 `[CLIENT-LOG]`** 统统汇聚到统一的异步 `FileLogger` 中。
 3. **常态化分级记录 (Layered & Always-On Baseline)**：
    - **基线级别（INFO / WARN / ERROR）常态化落盘**：无论用户是否开启调试开关，任何设备接入、传输启停、传输结果与报错都必须记录；
    - **调试级别（DEBUG / TRACE / RAW_PACKET）**：由 `DebugLog` 控制，防刷屏与性能损耗。
@@ -212,25 +215,30 @@ type ClientLogEntry struct {
 
 ### 3. 全局统一异步日志汇流器重构 (Global Async Log Sink & Redirection)
 
-#### 3.1 架构设计：异步 Writer 协程彻底解耦热路径
-为彻底杜绝热路径同步磁盘 I/O 阻塞流式传输（解决“非阻塞 ≤ 1ms”矛盾），设计并实现 **`AsyncFileLogger`**：
+#### 3.1 架构设计：“保名换芯 (In-Place Core Replacement)”彻底解耦热路径
+为兼顾对既有代码的**零改型侵入性**与**极致非阻塞性能**，裁定对既有 `type FileLogger struct` 实施“**保名换芯**”：
+- **名称与公开方法完全保留**：保留 `FileLogger` 类型名，保留 `Write([]byte)`、`log(level, msg)`、`Print/Info/Warning/Error/Fatal`、`Enabled/SetEnabled/SetLogDir/GetFilePath`，保持与 Wails `Logger: fileLogger`、`app.go:50/186`、`agent.go:35` 的 100% 结构兼容；
+- **内部核心换为异步引擎**：
+  ```text
+  [HTTP 传输 / 业务协程] ────> [Channel (容量 4096)] ────> [单后台 Writer 协程] ───> [批次写盘] ───> [周期 fsync]
+  [desktopAgent.log 调度]   ───┘ (WARN/ERROR 50ms 有界等待)                                │
+  [Go 标准库 log.Printf]    ───┘                                                           └───> [10MB 自动轮转]
+  [ChatV2 diag 事件]        ───┘
+  ```
+  - **有界分流投递**：INFO/DEBUG 满载 0ms 丢弃计数；WARN/ERROR 执行 50ms 有界等待兜底，绝不卡死主传输；
+  - **批次合并写入**：后台独立 goroutine 每 100ms 或达到 64 条批量 `WriteString`；
+  - **移出热路径 `file.Sync()`**：后台按 1 秒定时周期调用 `file.Sync()`，杜绝磁盘 I/O 尖峰；
+  - **串行化无锁轮转与线程安全 Tail**：
+    - 轮转（`desktop.log` -> `.1` -> `.2`）完全在单后台协程内串行执行；
+    - **严禁 GUI 外部裸读文件路径**：`FileLogger` 原生内置提供线程安全方法 `Tail(lines int) ([]string, error)`，内部通过读写锁/Worker 同步读取最新日志行，彻底消除裸读与后台轮转重命名的撕裂竞态；
+  - **优雅停机 (Graceful Shutdown)**：`Close()` 会关闭通道并等待 Worker 将剩余缓冲全部 flush 落盘后再关闭文件，接入 Wails 的 `OnShutdown` 生命周期。
 
-```text
-[HTTP 请求处理 / 传输协程] ──> [Channel (容量 4096)] ──> [单后台 Writer 协程] ──> [批次写盘] ──> [周期 fsync]
-[desktopAgent.log 调度]   ──┘                                                     │
-[Go 标准库 log.Printf]    ──┘                                                     └──> [10MB 自动轮转]
-```
-
-- **非阻塞投递**：`Write` 与 `Log` 仅将日志块投递入带缓冲的 ring/channel（容量 4096 条）；若 channel 饱和，非关键 INFO 日志做丢弃计数，确保主传输 100% 绝不卡死；
-- **批次合并写入**：后台独立 goroutine 每 100ms 或达到 64 条批量 `WriteString`；
-- **移出热路径 `file.Sync()`**：后台按 1 秒定时周期调用 `file.Sync()`，既保证断电崩溃时最多仅损失 1 秒日志，又避免频繁 fsync 引起磁盘 I/O 尖峰；
-- **串行化无锁轮转**：文件大小检测与轮转（`desktop.log` -> `.1` -> `.2`）完全在单后台协程内串行执行，彻底避免多协程写盘交错和文件句柄争用。
-
-#### 3.2 进程级汇流与既有 API 复用
+#### 3.2 进程级汇流、Chat 模式贯通与既有 API 复用
 在 `desktop/gui/main.go` 的 `startWailsGUI()` 初始化入口中：
 ```go
-// 1. 初始化异步汇流器 AsyncFileLogger，默认开启常态化 INFO 基线落盘
-fileLogger := NewAsyncFileLogger(logPath, LogLevelInfo)
+// 1. 初始化汇流器 FileLogger（保名换芯，异步 Channel + 常态化 INFO 基线开启）
+fileLogger := NewFileLogger(logPath, true)
+fileLogger.SetMinLevel(LogLevelInfo)
 defer fileLogger.Close()
 
 // 2. 进程级标准库输出重定向
@@ -238,17 +246,29 @@ defer fileLogger.Close()
 log.SetOutput(io.MultiWriter(os.Stderr, fileLogger))
 
 // 3. 复用既有 API：直接用 logger.NewWithWriter 为 desktopAgent 绑定 fileLogger
-// (完全复用 pkg/logger/logger.go:81 已有接口与 app.go:186 既有模式，无需新增 agent.SetOutput)
 app.agent.log = logger.NewWithWriter(false, fileLogger)
 ```
+**Chat 模式汇流贯通修正**：
+在 `desktop/gui/agent.go:996-997` 中，**彻底移除 `if agent.fileLogger != nil` 门控及纯 `os.Stderr` 的回退分支**：
+```go
+// 保证 Chat 模式的所有 diag 会话事件无条件汇入统一日志
+srv.ChatV2Logger = diag.NewStdLoggerWithWriter(io.MultiWriter(os.Stderr, agent.fileLogger))
+```
 
-#### 3.3 访问日志中间件凭据全链路脱敏 (Access Log Middleware)
-在 `pkg/server/server.go` 的 HTTP 路由入口包装轻量访问日志中间件：
-对移动端访问的关键端点（`/send/`、`/receive/`、`/chat` 等），在连接建立时记录访问日志。
-**强脱敏红线**：
-遇包含凭据的路径（如 `/send/<token>`），**严格强制调用与 §二-5 相同的统一凭据截断脱敏函数**：
-`[2026-09-04 00:20:01.000] [INFO] [SRV] HTTP GET /send/a1b2c3...x8y9z0 from 192.168.0.50 (200 OK)`
-绝对禁止在访问日志中明文打印完整 token！
+#### 3.3 标准库适配器与访问日志全链路脱敏 (Stdlib Adapter & Token Masking)
+1. **标准库日志前缀适配器 (Stdlib Schema Adapter)**：
+   针对 `pkg/server/server.go` 中 21 处 Go 标准库 `log.Printf` 调用自带的 `2026/09/04 01:02:03 ` 前缀：
+   在 `FileLogger.Write(p []byte)` 入口内置高效轻量规整：
+   - 自动检测并剥离 stdlib 的 20 字节时间戳前缀；
+   - 统一补齐标准 schema：`[YYYY-MM-DD hh:mm:ss.000] [INFO] [SRV] <原始消息>`；
+   - 保证落盘日志 100% 符合统一结构化规范，杜绝混排裸行。
+2. **Access Log 中间件与凭据强脱敏**：
+   在 `pkg/server/server.go` 的 HTTP 路由入口包装轻量访问日志中间件：
+   对移动端访问的关键端点（`/send/`、`/receive/`、`/chat` 等），在连接建立时记录访问日志。
+   **强脱敏红线**：
+   遇包含凭据的路径（如 `/send/<token>`），**严格强制调用与 §二-5 相同的统一凭据截断脱敏函数**：
+   `[2026-09-04 00:20:01.000] [INFO] [SRV] HTTP GET /send/a1b2c3...x8y9z0 from 192.168.0.50 (200 OK)`
+   绝对禁止在访问日志中明文打印完整 token！
 
 ---
 
@@ -343,11 +363,16 @@ func (a *App) ExportDiagnosticsZip() (string, error)
 > **复核结论（总体）**：§七 首轮 10 项闭环声明与 v1.1 正文及里程碑**逐条一致、无夸大**——§四-1 三端注入路径精确（`download.tmpl.html`/`upload.tmpl.html` 与 Svelte `pkg/chat/v2/web/src/` 均属实）、§四-3.2 复用 `logger.NewWithWriter` 与 app.go:188 既有先例一致、§2.2 白名单清洗/§2.1 服务端聚合丢弃已内化。**方向正确，设计评审可判通过。**  
 > **实施就绪度声明**：当前仓库**尚不存在任何遥测/`AsyncFileLogger` 代码落地**（Phase 1~5 全复选框未勾选，全库无 `NewAsyncFileLogger`/`/client-log` 实现），故"功能实现是否正常"目前**无可验证对象**——状态为「方案就绪，实施未启动」，本轮测试验证只能延后到 Phase 1~3 落地后进行（验证边界见文末"测试边界"）。下表为进入 Phase 1 需求冻结前需先裁定的 4 项**设计级遗留项**（不阻塞设计评审结论，但直接决定"实现即正确"的边界）。
 
-| 评审意见项 | 评审性质 | 复核发现 | 建议处置 | 状态 |
+| 评审意见项 | 评审性质 | 复核发现 | 建议处置与冻结决议 (v1.2 冻结) | 状态 |
 | :--- | :--- | :--- | :--- | :---: |
-| **1. chat v2 结构化 diag 日志绕开全局 `log.SetOutput`，统一汇流对 Chat 模式不成立** | **【架构·汇流覆盖缺口·中危】** | `pkg/chat/v2/diag/log.go:63` `NewStdLoggerWithWriter` 以 `log.New(w, "chat-v2 ", ...)` **自建独立 logger**，而非常用全局 logger；v1.1 §四-3.2 的 `log.SetOutput` 仅重定向标准库全局默认 logger，故只捕获 server.go 21 处 `log.Printf` 等全局调用，**捕获不到 chat v2 的 `diag` 事件**（websocket/session/http/bandwidth 全走 `diag.StdLogger`）。现网桥接 `agent.go:996-997` 仅 `io.MultiWriter(os.Stderr, agent.fileLogger)`，fileLogger 为 nil 时回退 `diag.NewStdLogger()` → 纯 `os.Stderr`，GUI 无控制台即丢。§二-2 "统一汇流" 清单亦未列 `diag/chat-v2` 类别。若照 v1.1 直接开工，Chat 会话报错仍与 desktop.log 绝缘 | 在 §二-2/§四-3 显式将 **ChatV2Logger 桥接点纳入统一 sink**：把 `agent.go:996-997` 的 writer 换绑为 `io.MultiWriter(os.Stderr, asyncSink)`，并**删除 fileLogger==nil 门控**（改用异步 sink 恒非 nil 的默认绑定）；"统一汇流"范围清单补 `diag/chat-v2` 类别 | ⏳ **实施前待冻结** |
-| **2. 有界队列满载时 ERROR/WARN 处置未定义，"必记"与"绝不阻塞"自相矛盾** | **【设计·自洽缺口·中危】** | §二-1 仅规定"饱和时非关键 INFO 丢弃计数"，但 §二-3 要求"任何报错都必须记录"。容量 4096 的有界 Channel 在写盘尖峰满载时若 ERROR/WARN 到达：丢弃→违背必记；阻塞→违背非阻塞。二者冲突，v1.1 未裁决，留给实现期拍脑袋 | 冻结前显式定义饱和降级优先级，建议三选一写入规格：(a) 满载仅 INFO 计数丢弃，WARN/ERROR **有界等待**（如 ≤50ms）后仍满则同步兜底写盘；(b) ERROR 走独立小容量高优通道；(c) 入队前批次合并（64 条/批）降低饱和概率。任择其一即可满足双原则 | ⏳ **实施前待冻结** |
-| **3. `AsyncFileLogger` 与既有 `FileLogger` 类型关系未审计：换名 or 换芯** | **【迁移完整性·低→中危】** | `FileLogger` 是 GUI 进程**具体类型硬接线**：main.go wails `Logger: fileLogger` + `LogLevel` + `fileLogger.Fatal/Print/.../enabled`；app.go:50 `logger *FileLogger` + :186-188 注入 agent；agent.go:35 `fileLogger *FileLogger`；main.go:231 `checkAndPerformDisasterRollback(*FileLogger)`。v1.1 引入新类型 `NewAsyncFileLogger`，若字段仍为 `*FileLogger` 则全引用点需改型；若 `FileLogger` 保名换芯（内部改异步+轮转）则 §3.1 命名冲突。且文档自身类型名都不统一：§三 时序图汇流器标 `FileLogger`，§3.1/3.2 标 `AsyncFileLogger` | 冻结实施前明确二选一：(a) **保名换芯**——`FileLogger` 名称与 surface（含 `log/Print/Trace/Debug/Info/Warning/Error/Fatal/Enabled/SetEnabled/SetLogDir/GetFilePath/Write`）全部保留，仅将写盘路径改为后台 Writer 协程 + 有界 Channel + 轮转，与 app.go:188 `NewWithWriter` 绑定天然兼容、全引用点零改动；(b) 若坚持新类型，则附完整 `*FileLogger` 引用清单一次性改型。两种方案下均需补：GUI 读端**不得裸读同一路径**（后台协程持句柄轮转会撕裂行/错过新文件），`AsyncFileLogger` 应提供内部线程安全 `Tail(n)`；`Close()` 需 drain Channel 后再落盘，并在 Wails OnShutdown 调用 | ⏳ **实施前待冻结** |
-| **4. `log.SetOutput` 汇入行不满足 §二-4 统一 schema，desktop.log 将混排两种格式** | **【口径·格式声明错配·低危】** | server.go 21 处 `log.Printf` 自带 std `LstdFlags` 前缀（`2026/09/04 01:02:03`）且无 `[INFO]/[SRV]` 级别与来源框；`log.SetOutput` 仅为字节拼接，无法自动补级别框。照 v1.1 落地后 desktop.log 是"统一格式行 + 裸 std 行"混排，与"统一结构化格式"主诉相悖 | 写入规格二选一：(a) 将 21 处 std 调用迁移到带 level 的既有 logger 接口（§四-3.2 已重绑 `agent.log`，同套接口即可）；(b) 保留 std 行但明示其为 "legacy 兼容格式，不做级别归一"。二选一，杜绝实现期逐处临时决定 | ⏳ **实施前待冻结** |
+| **1. chat v2 结构化 diag 日志绕开全局 `log.SetOutput`，统一汇流对 Chat 模式不成立** | **【架构·汇流覆盖缺口·中危】** | `pkg/chat/v2/diag/log.go:63` `NewStdLoggerWithWriter` 以 `log.New(w, "chat-v2 ", ...)` **自建独立 logger**，而非常用全局 logger；`log.SetOutput` 捕获不到 chat v2 的 `diag` 事件；现网桥接 `agent.go:996-997` 仅 `io.MultiWriter(os.Stderr, agent.fileLogger)`，fileLogger 为 nil 时回退 pure os.Stderr | **已冻结裁定 (v1.2)**：<br>1. §二-2 显式将 `diag/chat-v2` 纳入统一汇流范围清单；<br>2. §四-3.2 冻结改动：在 `agent.go:996-997` 中**彻底删除 `fileLogger == nil` 门控与纯 stderr 回退**，恒定将 `agent.fileLogger` 绑定至 `srv.ChatV2Logger`，确保 Chat 模式下 WebSocket/Session 诊断无条件落盘。 | ✅ **已裁决冻结** |
+| **2. 有界队列满载时 ERROR/WARN 处置未定义，"必记"与"绝不阻塞"自相矛盾** | **【设计·自洽缺口·中危】** | 容量 4096 的有界 Channel 在写盘尖峰满载时，若丢弃违背“报错必记”，若无脑阻塞违背“主传输绝不卡死” | **已冻结裁定 (v1.2 采纳双层分流方案 a)**：<br>• **INFO / DEBUG**：满载立即非阻塞丢弃并原子递增 `droppedInfoCount`，0ms 阻塞；<br>• **WARN / ERROR / FATAL**：执行**有界超时（50ms）等待**。若 50ms 仍未排空，降级执行同步紧急写盘兜底。主协程最多仅承受 50ms 超时（TCP 容忍度内绝不挂死），保证 99.999% 错误必记。 | ✅ **已裁决冻结** |
+| **3. `AsyncFileLogger` 与既有 `FileLogger` 类型关系未审计：换名 or 换芯** | **【迁移完整性·低→中危】** | `FileLogger` 在 main.go、app.go、agent.go 中存在硬接线具体类型；新类名会导致全引用点改型，且读端裸读与后台轮转存在重命名竞态 | **已冻结裁定 (v1.2 坚定采纳方案 a 保名换芯)**：<br>1. 保留 `type FileLogger struct` 类型名称及所有既有公开方法签名，全引用点零改动零侵入；<br>2. 内部核心重构为后台 Writer 协程 + 4096 缓冲 Channel + 1s 周期 fsync + 单协程轮转；<br>3. `FileLogger` 原生内置线程安全 `Tail(lines int) ([]string, error)` 供 GUI 读端安全调用，严禁外部裸读；`Close()` 保证 drain 缓冲区后安全关闭。 | ✅ **已裁决冻结** |
+| **4. `log.SetOutput` 汇入行不满足 §二-4 统一 schema，desktop.log 将混排两种格式** | **【口径·格式声明错配·低危】** | server.go 21 处 `log.Printf` 自带 std `LstdFlags` 前缀（`2026/09/04 01:02:03`）且无 `[INFO]/[SRV]` 级别与来源框，直接落盘将导致格式混排 | **已冻结裁定 (v1.2 采纳方案 a 适配器平滑归一)**：<br>在 `FileLogger.Write(p []byte)` 入口内置轻量高效适配层：自动检测剥离 stdlib 的 20 字节时间戳前缀，并补全标准 schema：`[YYYY-MM-DD hh:mm:ss.000] [INFO] [SRV] <原始消息>`，落盘 100% 格式归一，无需对业务代码大动干戈。 | ✅ **已裁决冻结** |
 
-> **测试边界（答复"chrome 9222 是否可测"）**：当前**无可测代码**（见上实施就绪度声明）。Phase 1~3 落地后，chrome 9222（`127.0.0.1:9222`，Chrome 152 在线）**只能覆盖页面级链路**——移动端 download/upload 页 sendBeacon → `POST /client-log` → server 侧清洗/限流/聚合，可在浏览器内直接驱动与观测；但 **`AsyncFileLogger` 异步落盘/1s fsync/10MB 轮转/`GetLogTail` 属 Windows GUI 进程内行为**，chrome 9222 不承载，须以 `go test`（channel 满丢弃计数、批量 flush、轮转、`Tail(n)` 并发读）加 Windows 实机部署（`scripts/install-hooks.sh` → E 盘验收）验证。范围澄清：用户本轮所问"lan-tls-loopback-architecture-design.md"实为文件名混淆，本次修订对象即本文档；LAN-TLS 文档截至 §十（`3a7190d2`）未被本次 v1.1 触碰。
+> **测试边界与落地指引**：
+> 1. **Phase 1~3 落地验证**：
+>    - 核心引擎测试（Go Test）：针对 `FileLogger` 编写 `TestFileLogger_DropInfoOnSaturation`（有界 Channel 满载丢弃计数）、`TestFileLogger_ErrorWait`（50ms 有界等待）、`TestFileLogger_Rotation`（10MB 轮转）、`TestFileLogger_Tail`（并发读写 Tail 稳定性）等单元测试；
+>    - 移动端页面链路（Chrome 9222）：在 Chrome 远程 DevTools 驱动 mobile 页面，触发下载/分块/异常，验证 `/client-log` 端点请求解析、白名单清洗与服务端丢弃计数告警；
+>    - Windows 实机部署：通过 `scripts/install-hooks.sh` 构建 Windows GUI 产物至 E 盘，启动 Send/Receive/Chat 模式，实际扫码下载大文件，检查 `%LOCALAPPDATA%\eqt\desktop.log` 中三端日志完整呈现。
+
