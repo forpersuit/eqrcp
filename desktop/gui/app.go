@@ -27,9 +27,9 @@ import (
 	"sync"
 	"time"
 
+	"fyne.io/systray"
 	"github.com/skip2/go-qrcode"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
-	"fyne.io/systray"
 )
 
 const chatSaveRetentionDays = 7
@@ -136,6 +136,7 @@ type DesktopSettings struct {
 	EnableChatV2             bool              `json:"enableChatV2"`
 	EnableTelemetry          bool              `json:"enableTelemetry"`
 	EnableNotification       bool              `json:"enableNotification"`
+	EnableTLS                bool              `json:"enableTLS"`
 	ChatDownloadDir          string            `json:"chatDownloadDir"`
 	LogDir                   string            `json:"logDir"`
 }

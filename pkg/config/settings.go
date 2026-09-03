@@ -39,6 +39,7 @@ type DesktopSettings struct {
 	EnableChatV2             bool                     `json:"enableChatV2"`
 	EnableTelemetry          bool                     `json:"enableTelemetry"`
 	EnableNotification       bool                     `json:"enableNotification"`
+	EnableTLS                bool                     `json:"enableTLS"`
 	ChatDownloadDir          string                   `json:"chatDownloadDir"`
 	LogDir                   string                   `json:"logDir"`
 }
@@ -174,6 +175,12 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 	} else if v.IsSet("enableNotifications") {
 		enableNotification = v.GetBool("enableNotifications")
 	}
+	enableTLS := false
+	if v.IsSet("enableTLS") {
+		enableTLS = v.GetBool("enableTLS")
+	} else if v.IsSet("secure") {
+		enableTLS = v.GetBool("secure")
+	}
 	chatDownloadDir := v.GetString("chatDownloadDir")
 	logDir := v.GetString("logDir")
 	return DesktopSettings{
@@ -201,6 +208,7 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 		EnableChatV2:             enableChatV2,
 		EnableTelemetry:          enableTelemetry,
 		EnableNotification:       enableNotification,
+		EnableTLS:                enableTLS,
 		ChatDownloadDir:          chatDownloadDir,
 		LogDir:                   logDir,
 	}, nil
@@ -288,6 +296,8 @@ func WriteDesktopSettings(app application.App, settings DesktopSettings) (Deskto
 	cleanV.Set("enableChatV2", settings.EnableChatV2)
 	cleanV.Set("enableTelemetry", settings.EnableTelemetry)
 	cleanV.Set("enableNotification", settings.EnableNotification)
+	cleanV.Set("enableTLS", settings.EnableTLS)
+	cleanV.Set("secure", settings.EnableTLS)
 	cleanV.Set("chatDownloadDir", strings.TrimSpace(settings.ChatDownloadDir))
 	cleanV.Set("logDir", strings.TrimSpace(settings.LogDir))
 	if err := cleanV.WriteConfig(); err != nil {

@@ -2,6 +2,8 @@ import { state } from './state.js';
 
 const translations = {
     "zh": {
+        "enable_tls": "局域网传输加密 (LAN-TLS)",
+        "enable_tls_desc": "启用 Let's Encrypt 官方通配符证书与 TLS 1.3 强加密，防嗅探、地址栏安全绿锁、支持超大文件原生流式下载。",
         "about": "关于 EQT",
         "about_title": "关于 EQT",
         "test_version_badge": "测试版",
@@ -426,6 +428,8 @@ const translations = {
         "crash_prefill_notice": "检测到上次崩溃信息，已自动填入下方表单。提交反馈时将同时上传崩溃报告。"
     },
     "en": {
+        "enable_tls": "LAN-TLS Encryption",
+        "enable_tls_desc": "Encrypt local transfers using Let's Encrypt wildcard certificate & TLS 1.3 (anti-sniffing, secure context, zero-OOM streaming).",
         "about": "About EQT",
         "about_title": "About EQT",
         "test_version_badge": "Test Build",
@@ -850,6 +854,8 @@ const translations = {
         "crash_prefill_notice": "A previous crash was detected. Crash info has been pre-filled below. Submitting feedback will also upload the crash report."
     },
     "ja": {
+        "enable_tls": "LAN-TLS 暗号化",
+        "enable_tls_desc": "Let's Encrypt 公式ワイルドカード証明書と TLS 1.3 でローカル転送を暗号化します。",
         "about": "EQTについて",
         "about_title": "EQTについて",
         "test_version_badge": "テスト版",
@@ -1262,6 +1268,8 @@ const translations = {
         "year_unit": "年"
     },
     "ko": {
+        "enable_tls": "LAN-TLS 전송 암호화",
+        "enable_tls_desc": "Let's Encrypt 공식 와일드카드 인증서와 TLS 1.3으로 로컬 전송을 암호화합니다.",
         "about": "EQT 정보",
         "about_title": "EQT 정보",
         "test_version_badge": "테스트 버전",
@@ -1674,6 +1682,8 @@ const translations = {
         "year_unit": "년"
     },
     "es": {
+        "enable_tls": "Cifrado LAN-TLS",
+        "enable_tls_desc": "Cifra las transferencias locales con certificados Let's Encrypt y TLS 1.3.",
         "about": "Acerca de EQT",
         "about_title": "Acerca de EQT",
         "test_version_badge": "Versión de prueba",
@@ -2086,6 +2096,8 @@ const translations = {
         "year_unit": "año"
     },
     "de": {
+        "enable_tls": "LAN-TLS-Verschlüsselung",
+        "enable_tls_desc": "Verschlüsselt lokale Übertragungen mit Let's Encrypt-Zertifikaten und TLS 1.3.",
         "about": "Über EQT",
         "about_title": "Über EQT",
         "test_version_badge": "Testversion",
@@ -2498,6 +2510,8 @@ const translations = {
         "year_unit": "Jahr"
     },
     "fr": {
+        "enable_tls": "Chiffrement LAN-TLS",
+        "enable_tls_desc": "Chiffre les transferts locaux avec les certificats Let's Encrypt et TLS 1.3.",
         "about": "À propos de EQT",
         "about_title": "À propos de EQT",
         "test_version_badge": "Version de test",

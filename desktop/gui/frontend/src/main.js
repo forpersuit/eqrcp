@@ -2265,6 +2265,15 @@ function renderSettingsPanel() {
                     </div>
                     <div class="setting-row">
                         <div class="setting-copy">
+                            <strong>${t('enable_tls')}</strong>
+                            <span>${t('enable_tls_desc')}</span>
+                        </div>
+                        <div class="setting-control-stack">
+                            ${renderSwitch('settings-enable-tls', Boolean(state.settings?.enableTLS))}
+                        </div>
+                    </div>
+                    <div class="setting-row">
+                        <div class="setting-copy">
                             <strong>${t('update_check_interval')}</strong>
                             <span>${t('update_check_interval_desc')}</span>
                         </div>
@@ -3917,7 +3926,7 @@ function bindEvents() {
                 state.devLicenseCode = String(e.target.value || '');
                 return;
             }
-            if (e.target.matches('#settings-interface, #settings-port, #settings-browser, #settings-chat-autosave, #settings-chat-download-dir, #settings-chat-v2, #settings-close-behavior, #settings-auto-update-mode, #settings-update-interval, #settings-lang, #settings-show-history, #settings-telemetry, #settings-notification')) {
+            if (e.target.matches('#settings-interface, #settings-port, #settings-browser, #settings-enable-tls, #settings-chat-autosave, #settings-chat-download-dir, #settings-chat-v2, #settings-close-behavior, #settings-auto-update-mode, #settings-update-interval, #settings-lang, #settings-show-history, #settings-telemetry, #settings-notification')) {
                 syncSettingsFromDOM();
                 return;
             }
@@ -4012,7 +4021,7 @@ function bindEvents() {
                 }
                 return;
             }
-            if (e.target.matches('#settings-interface, #settings-port, #settings-browser, #settings-chat-autosave, #settings-chat-download-dir, #settings-chat-v2, #settings-close-behavior, #settings-auto-update-mode, #settings-update-interval, #settings-lang, #settings-show-history, #settings-telemetry, #settings-notification')) {
+            if (e.target.matches('#settings-interface, #settings-port, #settings-browser, #settings-enable-tls, #settings-chat-autosave, #settings-chat-download-dir, #settings-chat-v2, #settings-close-behavior, #settings-auto-update-mode, #settings-update-interval, #settings-lang, #settings-show-history, #settings-telemetry, #settings-notification')) {
                 if (e.target.id === 'settings-auto-update-mode') {
                     handleAutoUpdateModeChange(e.target.value);
                     return;
@@ -4762,6 +4771,7 @@ function syncSettingsFromDOM() {
     const showHistory = document.querySelector('#settings-show-history');
     const notifSwitch = document.querySelector('#settings-notification');
     const telemetrySwitch = document.querySelector('#settings-telemetry');
+    const enableTLSSwitch = document.querySelector('#settings-enable-tls');
 
 
     if (receiveInput) state.settings.output = receiveInput.value;
@@ -4790,6 +4800,7 @@ function syncSettingsFromDOM() {
     if (showHistory) state.settings.showHistory = showHistory.checked;
     if (notifSwitch) state.settings.enableNotification = notifSwitch.checked;
     if (telemetrySwitch) state.settings.enableTelemetry = telemetrySwitch.checked;
+    if (enableTLSSwitch) state.settings.enableTLS = enableTLSSwitch.checked;
 
 
     state.receiveDir = state.settings.output || '';

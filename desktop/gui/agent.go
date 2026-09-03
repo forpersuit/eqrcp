@@ -424,6 +424,7 @@ func convertConfigSettings(s config.DesktopSettings) DesktopSettings {
 		EnableChatV2:             s.EnableChatV2,
 		EnableTelemetry:          s.EnableTelemetry,
 		EnableNotification:       s.EnableNotification,
+		EnableTLS:                s.EnableTLS,
 		ChatDownloadDir:          s.ChatDownloadDir,
 		LogDir:                   s.LogDir,
 	}
@@ -463,6 +464,7 @@ func convertAppSettings(s DesktopSettings) config.DesktopSettings {
 		EnableChatV2:             s.EnableChatV2,
 		EnableTelemetry:          s.EnableTelemetry,
 		EnableNotification:       s.EnableNotification,
+		EnableTLS:                s.EnableTLS,
 		ChatDownloadDir:          s.ChatDownloadDir,
 		LogDir:                   s.LogDir,
 	}
@@ -968,6 +970,7 @@ func (agent *desktopAgent) runTask(task AgentTask) error {
 	agent.log.Infof("runTask: instantiating qrcp server...")
 	cfg.Lang = desktopSettings.Lang
 	cfg.KeepAlive = true
+	cfg.Secure = desktopSettings.EnableTLS
 	srv, err := server.New(&cfg)
 	if err != nil {
 		agent.log.Errorf("runTask: failed to instantiate server: %v", err)
