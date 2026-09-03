@@ -27,6 +27,7 @@ import (
 	"eqt/pkg/qr"
 
 	"eqt/pkg/body"
+	"eqt/pkg/cert"
 	"eqt/pkg/chat/v2/diag"
 	chatv2http "eqt/pkg/chat/v2/http"
 	chatv2session "eqt/pkg/chat/v2/session"
@@ -2264,14 +2265,15 @@ func New(cfg *config.Config) (*Server, error) {
 	app.clientStates = make(map[string]*ClientTransferStateInfo)
 	app.clientReceiveCounted = make(map[string]bool)
 	app.expectedBytes = make(map[int]int64)
-	// Get the address of the configured interface to bind the server to.
-	// If `bind` configuration parameter has been configured, it takes precedence
-	bind, err := util.GetInterfaceAddress(cfg.Interface)
-	if err != nil {
-		return &Server{}, err
-	}
+	var bind string
+	var err error
 	if cfg.Bind != "" {
 		bind = cfg.Bind
+	} else {
+		bind, err = util.GetInterfaceAddress(cfg.Interface)
+		if err != nil {
+			return &Server{}, err
+		}
 	}
 	// Create a listener. If `port: 0`, a random one is chosen
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", bind, cfg.Port))
@@ -2310,6 +2312,17 @@ func New(cfg *config.Config) (*Server, error) {
 	// Use a fully-qualified domain name if set
 	if cfg.FQDN != "" {
 		hostname = fmt.Sprintf("%s:%d", cfg.FQDN, port)
+	} else if cfg.Secure {
+		targetIP := bind
+		if targetIP == "0.0.0.0" || targetIP == "" {
+			if ip, err := util.GetInterfaceAddress(cfg.Interface); err == nil && ip != "" && ip != "0.0.0.0" {
+				targetIP = ip
+			}
+		}
+		directDomain := cert.FormatDirectDomain(targetIP)
+		if directDomain != targetIP {
+			hostname = fmt.Sprintf("%s:%d", directDomain, port)
+		}
 	}
 	// Set URLs
 	protocol := "http"
@@ -2329,23 +2342,25 @@ func New(cfg *config.Config) (*Server, error) {
 	mux := http.NewServeMux()
 	app.mux = mux
 	registerBrandAssets(mux)
+
+	tlsCfg := &tls.Config{
+		MinVersion: tls.VersionTLS12,
+	}
+	if cfg.Secure {
+		tlsCert, err := cert.GetCertificate(cfg.TlsCert, cfg.TlsKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load TLS certificate: %w", err)
+		}
+		tlsCfg.Certificates = []tls.Certificate{tlsCert}
+	}
+
 	httpserver := &http.Server{
 		Addr:              host,
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       2 * time.Minute,
-		TLSConfig: &tls.Config{
-			MinVersion:               tls.VersionTLS12,
-			CurvePreferences:         []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256},
-			PreferServerCipherSuites: true,
-			CipherSuites: []uint16{
-				tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-				tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-				tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
-				tls.TLS_RSA_WITH_AES_256_CBC_SHA,
-			},
-		},
-		TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler)),
+		TLSConfig:         tlsCfg,
+		TLSNextProto:      make(map[string]func(*http.Server, *tls.Conn, http.Handler)),
 	}
 	// Create channel to send message to stop server
 	app.stopChannel = make(chan bool, 1)
@@ -3334,7 +3349,7 @@ func New(cfg *config.Config) (*Server, error) {
 	go func() {
 		netListener := tcpKeepAliveListener{listener.(*net.TCPListener)}
 		if cfg.Secure {
-			if err := httpserver.ServeTLS(netListener, cfg.TlsCert, cfg.TlsKey); err != http.ErrServerClosed {
+			if err := httpserver.ServeTLS(netListener, "", ""); err != http.ErrServerClosed {
 				log.Println("error starting the server:", err)
 				app.signalStop()
 			}
