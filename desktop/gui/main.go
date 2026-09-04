@@ -209,6 +209,19 @@ func setupSignalHandler() {
 	}()
 }
 
+type safeMultiWriter struct {
+	writers []io.Writer
+}
+
+func (s safeMultiWriter) Write(p []byte) (n int, err error) {
+	for _, w := range s.writers {
+		if w != nil {
+			_, _ = w.Write(p)
+		}
+	}
+	return len(p), nil
+}
+
 func startWailsGUI() {
 	// Panic recovery: save crash dump on unexpected panic
 	defer func() {
@@ -235,8 +248,9 @@ func startWailsGUI() {
 	fileLogger.SetDebugMode(debugLog)
 	defer fileLogger.Close()
 
-	// Redirect Go standard library log.Printf / log.Println to both os.Stderr and fileLogger
-	log.SetOutput(io.MultiWriter(os.Stderr, fileLogger))
+	// Redirect Go standard library log.Printf / log.Println safely to both os.Stderr and fileLogger.
+	// safeMultiWriter ensures that an invalid os.Stderr handle in Windows GUI mode does not abort writing to fileLogger.
+	log.SetOutput(safeMultiWriter{writers: []io.Writer{os.Stderr, fileLogger}})
 
 	fileLogger.Info("EQT GUI Starting...")
 

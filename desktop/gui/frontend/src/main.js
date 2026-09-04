@@ -812,7 +812,9 @@ function isTaskQRExpanded(task) {
         return state.qrExpandedTasks[taskId];
     }
     const files = task.savedFiles || [];
-    const isSharedOrReceived = task.transferState !== 'waiting' && (task.transferState === 'transferring' || task.transferTarget || task.bytesDone > 0 || files.length > 0);
+    const clientStates = task.clientStates || {};
+    const hasActiveClients = Object.values(clientStates).some(c => c && (c.state === 'transferring' || (c.activeConnections || 0) > 0));
+    const isSharedOrReceived = hasActiveClients || task.transferState === 'transferring' || (task.bytesDone > 0 && task.transferState !== 'stopped') || files.length > 0;
     const shouldCollapse = isSharedOrReceived;
     return !shouldCollapse;
 }

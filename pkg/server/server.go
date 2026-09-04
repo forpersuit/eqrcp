@@ -10,6 +10,7 @@ import (
 	"image/png"
 	"io"
 	"log"
+	"mime"
 	"net"
 	"net/http"
 	urlpkg "net/url"
@@ -1508,6 +1509,20 @@ func (s *Server) markItemDownloaded(index int) bool {
 	return s.isAllActiveClientsFinished()
 }
 
+func (s *Server) hasActiveTransferringClients(excludeClientID string) bool {
+	s.clientStatesMu.Lock()
+	defer s.clientStatesMu.Unlock()
+	for cid, cs := range s.clientStates {
+		if cid == excludeClientID || cs == nil {
+			continue
+		}
+		if cs.State == "transferring" || cs.ActiveConnections > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Server) isAllActiveClientsFinished() bool {
 	s.statusMu.Lock()
 	autoStop := s.autoStop
@@ -2696,11 +2711,22 @@ func New(cfg *config.Config) (*Server, error) {
 			state.Message = "Sending file to connected device."
 		})
 
-		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-		w.Header().Set("Pragma", "no-cache")
-		w.Header().Set("Expires", "0")
+		// iOS/iPadOS Safari over HTTPS fails file downloads with "无法下载，请重试" if Cache-Control contains no-store/no-cache.
+		// Use "private, no-transform" for file downloads and remove conflicting legacy caching headers.
+		w.Header().Set("Cache-Control", "private, no-transform")
+		w.Header().Del("Pragma")
+		w.Header().Del("Expires")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Content-Disposition", contentDisposition(downloadName))
+
+		// Explicit Content-Type to prevent iOS Safari from failing downloads due to ambiguous MIME types
+		if strings.HasSuffix(strings.ToLower(downloadName), ".zip") {
+			w.Header().Set("Content-Type", "application/zip")
+		} else if ctype := mime.TypeByExtension(filepath.Ext(downloadName)); ctype != "" {
+			w.Header().Set("Content-Type", ctype)
+		} else {
+			w.Header().Set("Content-Type", "application/octet-stream")
+		}
 		app.expectedBytesMu.Lock()
 		if app.expectedBytes == nil {
 			app.expectedBytes = make(map[int]int64)
@@ -2798,11 +2824,11 @@ func New(cfg *config.Config) (*Server, error) {
 						app.setStatus("completed", "Transfer completed.")
 						app.recordStatus()
 						go app.signalStopAfterStatusGrace()
-					} else {
+					} else if !app.hasActiveTransferringClients(clientID) {
 						app.setStatus("waiting", fmt.Sprintf("Item %s downloaded. Waiting for more connections.", downloadName))
 						app.recordStatus()
 					}
-				} else {
+				} else if !app.hasActiveTransferringClients(clientID) {
 					app.setStatus("waiting", fmt.Sprintf("Item %s downloaded. Waiting for other items.", downloadName))
 					app.recordStatus()
 				}
@@ -2845,8 +2871,10 @@ func New(cfg *config.Config) (*Server, error) {
 				state.SpeedFormatted = ""
 				state.Message = "Transfer interrupted. Waiting for retry..."
 			})
-			app.setStatus("waiting", "Transfer interrupted. Waiting for retry...")
-			app.recordStatus()
+			if !app.hasActiveTransferringClients(clientID) {
+				app.setStatus("waiting", "Transfer interrupted. Waiting for retry...")
+				app.recordStatus()
+			}
 			return
 		}
 
@@ -2919,16 +2947,20 @@ func New(cfg *config.Config) (*Server, error) {
 						app.setStatus("completed", "Transfer completed.")
 						app.recordStatus()
 						go app.signalStopAfterStatusGrace()
-					} else {
+					} else if !app.hasActiveTransferringClients(clientID) {
 						app.setStatus("waiting", fmt.Sprintf("Item %s downloaded. Waiting for more connections.", downloadName))
 						app.recordStatus()
 					}
-				} else {
+				} else if !app.hasActiveTransferringClients(clientID) {
 					app.setStatus("waiting", fmt.Sprintf("Item %s downloaded. Waiting for other items.", downloadName))
 					app.recordStatus()
 				}
 				return
 			}
+
+			// Check if this was a satisfied Range chunk request without connection error (e.g. Safari Range probe bytes=0-1)
+			isSatisfiedRangeChunk := rangeInfo.HasRange && rangeInfo.EndByte > 0 &&
+				(rangeInfo.StartByte+atomic.LoadInt64(&writtenInThisRequest) >= rangeInfo.EndByte)
 
 			// Retain current progress, mark state as waiting
 			clientDone, _ := app.getClientDownloadedAndTotal(clientID)
@@ -2938,10 +2970,20 @@ func New(cfg *config.Config) (*Server, error) {
 				state.Percent = transferPercent(state.BytesDone, state.BytesTotal)
 				state.Speed = 0
 				state.SpeedFormatted = ""
-				state.Message = "Transfer interrupted. Waiting for retry..."
+				if isSatisfiedRangeChunk {
+					state.Message = "Waiting for next chunk or connection."
+				} else {
+					state.Message = "Transfer interrupted. Waiting for retry..."
+				}
 			})
-			app.setStatus("waiting", "Transfer interrupted. Waiting for retry...")
-			app.recordStatus()
+			if !app.hasActiveTransferringClients(clientID) {
+				if isSatisfiedRangeChunk {
+					app.setStatus("waiting", "Waiting for next chunk or connection.")
+				} else {
+					app.setStatus("waiting", "Transfer interrupted. Waiting for retry...")
+				}
+				app.recordStatus()
+			}
 			return
 		}
 
@@ -2988,12 +3030,12 @@ func New(cfg *config.Config) (*Server, error) {
 				app.setStatus("completed", "Transfer completed.")
 				app.recordStatus()
 				go app.signalStopAfterStatusGrace()
-			} else {
+			} else if !app.hasActiveTransferringClients(clientID) {
 				// Keep alive when autoStop is disabled, status stays in waiting
 				app.setStatus("waiting", fmt.Sprintf("Item %s downloaded. Waiting for more connections.", downloadName))
 				app.recordStatus()
 			}
-		} else {
+		} else if !app.hasActiveTransferringClients(clientID) {
 			app.setStatus("waiting", fmt.Sprintf("Item %s downloaded. Waiting for other items.", downloadName))
 			app.recordStatus()
 		}

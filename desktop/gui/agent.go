@@ -1000,7 +1000,7 @@ func (agent *desktopAgent) runTask(task AgentTask) error {
 	srv.ViewportDebug = desktopSettings.ViewportDebug
 	var chatWriter io.Writer = os.Stderr
 	if agent.fileLogger != nil {
-		chatWriter = io.MultiWriter(os.Stderr, agent.fileLogger)
+		chatWriter = safeMultiWriter{writers: []io.Writer{os.Stderr, agent.fileLogger}}
 	}
 	srv.ChatV2Logger = diag.NewStdLoggerWithWriter(chatWriter)
 	agent.log.Infof("runTask: server instance created. BaseURL=%s", srv.BaseURL)
