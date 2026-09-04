@@ -394,3 +394,34 @@ func (a *App) ExportDiagnosticsZip() (string, error)
 
 > **交付边界**：Phase 1 引擎层本地已绿；上表 1 项回归（#1）与 2 项缺口（#2/#3）建议在 Phase 2 `/client-log` 开工前闭环，否则常开场景（用户存过设置）会退回日志黑洞，且饱和应急路径在杀软 stall 下仍有挂死余量。移动端页面级（sendBeacon → `/client-log`）与 Windows 实机桌面落盘验收仍需按上节“测试边界”在 Phase 2/5 执行。
 
+---
+
+## 十、第四轮代码复核（commit b1136360 · v1.36.32 · §九 闭环 + Phase 2 落地）
+
+> **复核对象**：`b1136360 feat(logging): close round-3 review items & implement phase 2 server telemetry and access log masking`。  
+> **复核结论（总体）**：§九 六项意见在代码层基本**逐一落实且方向正确**——`SaveSettings` 改 `SetDebugMode`（app.go:1093）恒保基线开启、`Debug()`/`Trace()` 补 DebugMode 门禁（file_logger.go）、`emergencyDirectWrite` 改 `TryLock()` 优先 + 竞争失败走独立 O_APPEND 临时句柄绝不等待、worker `Sync()` 移出独占锁区、`agent.go:996-1000` 真删 nil 门控恒绑 `NewStdLoggerWithWriter`、`log()` stdout 收敛至 DebugMode、`Tail` 增 `.1` 缝合。Phase 2 落地与冻结一致：`/client-log` 32KB `MaxBytesReader` + level/category 白名单 + CR/LF 剥离截断 + `RemoteAddr` 令牌桶（10 cap / 10 rate）+ 丢弃计数 + `wrapAccessLog` token 前后 6 位截断，`maskedPath` 不落明文 token；单测覆盖注入清洗/限流计数/尺寸/掩码。本地复核：`go vet .`、`go test . -run FileLogger -count=1`（ok eqt-desktop）、`go vet ./pkg/server`、`go test ./pkg/server -count=1`、`go build ./...` **全绿**；版本 minor+1 → v1.36.32（version.go/wails.json 双端一致，正确）。  
+> **但存在 2 项"统一汇流 schema 真值/单帧"承诺对 Phase 2 自身产物即不成立的口径缺陷（均以真实落盘物证复现），以及 2 项低危可观测/文档残项**，建议在 Phase 3 埋点开工前闭环（见下表）。
+
+### §九 六项闭环核验（代码逐条比对）
+
+| §九项 | 代码核验结果 | 状态 |
+| :--- | :--- | :---: |
+| **1. SaveSettings 关停基线回归** | `app.go:1093` 已改 `a.logger.SetDebugMode(saved.DebugLog\|\|saved.DevMode)`，enabled 恒 true；`Debug()`/`Trace()` 门禁落地（file_logger.go:430-431） | ✅ **已闭环** |
+| **2. 紧急兜底挂死 + Sync 长持锁** | `TryLock()` 优先、失败独立 O_APPEND 句柄自写自关；worker `Sync()` 经 RLock 快照后置锁外执行 | ✅ **已闭环**（残余：应急写不入 `currentSize`/轮转记账，极端持续饱和下单文件可能轻微超 10MB，低危不阻塞） |
+| **3. chat-v2 归一 + agent.go 门控** | 门控确已删除（agent.go:996-1000）；但 `Write` 的级别提取对**真实 diag 发射器死路**（只认 `[ERROR]`/`[WARN]` 括号，真实为小写无括号）→ **见下表 #2** | ⚠️ **部分闭环** |
+| **4. Tail 轮转窗口空读** | 已加 `.1` 缝合（`readTailFromFile` + 不足补读），`TestFileLogger_TailRotationStitching` 覆盖 | ✅ **已闭环** |
+| **5. log() stdout 刷屏** | stdout 打印收敛至 `DebugMode()` 开启时才执行 | ✅ **已闭环** |
+| **6. 文档残留旧名** | §四-3.2 代码块已改 `SetDebugMode`；但 §四-4 轮转 live 段仍残留 `AsyncFileLogger`、文档头 "Ready for Phase 1" 已过期 → **见下表 #4** | ⚠️ **部分闭环** |
+
+### 本轮新发现（以真实落盘物证复现）
+
+| 评审意见项 | 评审性质 | 复核发现 | 建议处置 | 状态 |
+| :--- | :--- | :--- | :--- | :---: |
+| **1. Phase 2 telemetry/access 行在统一汇流端二次加框，schema 位 2 级别恒错** | **【口径·中危·schema 违背】** | 新行经无级别的 stdlib `log.Printf` 自嵌整框（client-log 带 `[LEVEL]/[CLIENT]`，access 带 `[INFO]/[SRV]`），再被 `FileLogger.Write` 标准库分支无条件补 `[ts] [INFO] [SRV]` 包裹 → 落盘双框且**级别真值错位**。物证（探针实测）：`ERROR` 级客户端事件落为 `[ts] [INFO] [SRV] [ERROR] [CLIENT] [a1b2…] [EXCEPTION] …`；access 落为 `[ts] [INFO] [SRV] [INFO] [SRV] HTTP GET …`。与本文档 §四-4 自带 canonical 单帧 `[INFO] [SRV] HTTP GET /send/a1b2c3…x8y9z0 from …` 及 §三 时序图 `[INFO] [CLIENT] [a1b2c3] PAGE_LOAD …` 自相矛盾 | 在 `Write` 剥离 std 时间戳后识别 `^\[(INFO\|WARN\|ERROR\|DEBUG)\] \[(CLIENT\|SRV)\]` 形态 → 按首框级别**原样透传**（单帧、真级别）；否则维持旧 `[INFO] [SRV]` 包裹（对既有 `[EQT Server]` 业务行零回归）；或 client-log 改走 `pkg/logger` 结构化直写 | ⏳ **待开发闭环** |
+| **2. chat-v2 级别归一仅认大写括号，对真实 diag 发射器死路** | **【口径·中危】** | 真实 `diag.Level` 为小写无括号 `info/warn/error/debug`（log.go:19-22），`StdLogger.Log` 以 `"%s %s"` 输出；`Write` 只剥 `[ERROR]`/`[WARN]` 括号形态 → 真实 chat ERROR/WARN 恒落 `[ts] [INFO] [CHAT] error/warn …`，级别 token 泄漏为消息正文、schema 位 2 恒 INFO。物证（探针实测 3 行）。`file_logger_test.go` 用 `[ERROR]` 括号合成行覆盖，恰好掩盖此失效 | `Write` 增补对 `^(info\|warn\|error\|debug)\s` 小写 token 的识别剥离并归一；或 diag `StdLogger` 输出括号级别（注意勿破坏 chat 终端既有呈现） | ⏳ **待开发闭环** |
+| **3. 服务端遥测丢弃计数永不外显** | **【可观测·低危】** | `droppedClientLogCount`（server.go:142）仅测试可读（telemetry.go:227 自增 / telemetry_test.go:124 断言），运行期无人消费、无周期聚合告警 → 客户端被限流丢弃对排查完全不可见 | 参照 FileLogger 丢弃提示模式，端点级或 1s 周期聚合外显（如周期 `[WARN] [SRV] Dropped N client-log…`） | ⏳ **待开发闭环（可选）** |
+| **4. 文档残留未清干净 + 表头笔误** | **【文档·低危】** | §四-4 轮转 live 段仍称 `AsyncFileLogger`（line 277）；文档头 "设计彻底冻结 / Ready for Phase 1" 在 Phase 1/2 已落地后过期；§九 表头出现疑似笔误「闭环措施与**事实事实** (已修复)」（fact 重复） | 收尾 sweep：live-spec 统一 `FileLogger` 口径、状态行更新为 "Phase 1/2 已落地，Phase 3~5 实施中"、修正表头笔误 | ⏳ **待开发闭环（可选）** |
+| **5. 测试缺口记录** | **【记录·非阻塞】** | `TestWrapAccessLog` 仅断言透传/200，未捕获断言中间件实际打印的脱敏行与 `/status` 跳过语义；client-log 的 DEBUG 客户端事件在 GUI 基线被适配器一律落 INFO（频率受 10/s 限流约束，暂可接受）；`MaskTokenInPath` 函数级已覆盖但中间件接线未做输出断言 | 中间件层增补日志输出捕获断言；如欲按 debugLog 门控 DEBUG 客户端事件需服务端感知开关，留待 Phase 3 埋点规格时一并裁定 | ⏳ **记录在案** |
+
+> **交付边界**：Phase 2 端点能力（限流/清洗/脱敏/尺寸）本地全绿且无 token 明文泄露；建议在 Phase 3 移动端埋点开工前先闭环上表 #1/#2（否则"统一汇流单帧真级别"的承诺对 Phase 2 自身产出的 `[CLIENT]`/access 行即不成立，GUI 日志面板将展示双框与恒 INFO 的误导级别）；#3/#4/#5 可随工单顺带收敛。移动端页面级（sendBeacon → `/client-log`）与 Windows 实机桌面落盘验收仍待 Phase 3/5 执行。
+
