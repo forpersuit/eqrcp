@@ -224,7 +224,10 @@ func (s *Server) HandleClientLog(w http.ResponseWriter, r *http.Request) {
 	// 2. Token-bucket rate limiting based on client IP
 	ip := ExtractClientIP(r)
 	if s.telemetryLimiter != nil && !s.telemetryLimiter.Allow(ip) {
-		atomic.AddUint64(&s.droppedClientLogCount, 1)
+		dropped := atomic.AddUint64(&s.droppedClientLogCount, 1)
+		if dropped%10 == 1 {
+			log.Printf("[WARN] [SRV] Dropped client-log telemetry requests due to IP rate limiting (count=%d, IP=%s)", dropped, ip)
+		}
 		http.Error(w, "too many requests", http.StatusTooManyRequests)
 		return
 	}

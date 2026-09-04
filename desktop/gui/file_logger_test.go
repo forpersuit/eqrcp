@@ -30,12 +30,17 @@ func TestFileLogger_BasicAndAdapters(t *testing.T) {
 	log.SetOutput(logger)
 	defer log.SetOutput(origOutput)
 
+	// 2.1 传统无级别服务端日志
 	log.Printf("[EQT Server] [Download Start] clientID=c8f12a, File=test.mp4")
 
-	// 3. 测试 Chat v2 diag.NewStdLoggerWithWriter 输出适配
-	// 格式: chat-v2 2026/09/04 15:04:05 [WEBSOCKET] client connected
-	_, _ = logger.Write([]byte("chat-v2 2026/09/04 15:04:05 [WEBSOCKET] client connected\n"))
-	_, _ = logger.Write([]byte("chat-v2 2026/09/04 15:04:05 [ERROR] session handshake failed\n"))
+	// 2.2 Phase 2 遥测客户端日志与访问日志（自嵌级别与来源框）
+	log.Printf("[ERROR] [CLIENT] [c8f12a] [EXCEPTION] Uncaught TypeError in main.js | IP=192.168.1.5")
+	log.Printf("[INFO] [SRV] HTTP GET /send/a1b2c3...x8y9z0 from 192.168.1.5")
+
+	// 3. 测试 Chat v2 diag.NewStdLoggerWithWriter 真实输出（小写无括号 error/warn/info）
+	_, _ = logger.Write([]byte("chat-v2 2026/09/04 15:04:05 info client connected\n"))
+	_, _ = logger.Write([]byte("chat-v2 2026/09/04 15:04:05 error session handshake failed\n"))
+	_, _ = logger.Write([]byte("chat-v2 2026/09/04 15:04:05 warn bandwidth limit exceeded\n"))
 
 	// 优雅停机并等待 drain 完成
 	logger.Close()
@@ -53,19 +58,33 @@ func TestFileLogger_BasicAndAdapters(t *testing.T) {
 	if !strings.Contains(content, "[WARN] Testing warning message") {
 		t.Errorf("expected warn line in log, got:\n%s", content)
 	}
-	// 核验标准库适配器是否补全了 [INFO] [SRV] 并剔除了原先的裸时间前缀
+	// 核验标准库适配器是否对传统日志补全了 [INFO] [SRV]
 	if !strings.Contains(content, "[INFO] [SRV] [EQT Server] [Download Start] clientID=c8f12a, File=test.mp4") {
 		t.Errorf("expected adapted stdlib schema line in log, got:\n%s", content)
 	}
-	// 核验 Chat v2 适配器是否补齐 [CHAT] 并消除了重复时间戳
-	if !strings.Contains(content, "[INFO] [CHAT] [WEBSOCKET] client connected") {
-		t.Errorf("expected adapted chat-v2 line in log, got:\n%s", content)
+	// 核验 Phase 2 自嵌级别行是否单帧真级别透传，杜绝双框！
+	if !strings.Contains(content, "[ERROR] [CLIENT] [c8f12a] [EXCEPTION] Uncaught TypeError in main.js | IP=192.168.1.5") {
+		t.Errorf("expected single-frame client error line, got:\n%s", content)
+	}
+	if !strings.Contains(content, "[INFO] [SRV] HTTP GET /send/a1b2c3...x8y9z0 from 192.168.1.5") {
+		t.Errorf("expected single-frame access log line, got:\n%s", content)
+	}
+	if strings.Contains(content, "[INFO] [SRV] [ERROR]") || strings.Contains(content, "[INFO] [SRV] [INFO] [SRV]") {
+		t.Errorf("detected double-bracket wrapping regression:\n%s", content)
+	}
+
+	// 核验 Chat v2 真实小写级别是否正确提取并映射为 [CHAT]
+	if !strings.Contains(content, "[INFO] [CHAT] client connected") {
+		t.Errorf("expected adapted chat-v2 info line, got:\n%s", content)
 	}
 	if !strings.Contains(content, "[ERROR] [CHAT] session handshake failed") {
-		t.Errorf("expected adapted chat-v2 error line in log, got:\n%s", content)
+		t.Errorf("expected adapted chat-v2 error line, got:\n%s", content)
 	}
-	if strings.Contains(content, "chat-v2 2026/09/04") {
-		t.Errorf("expected raw chat-v2 prefix and duplicated timestamp to be stripped, but was present")
+	if !strings.Contains(content, "[WARN] [CHAT] bandwidth limit exceeded") {
+		t.Errorf("expected adapted chat-v2 warn line, got:\n%s", content)
+	}
+	if strings.Contains(content, "chat-v2 2026/09/04") || strings.Contains(content, "[INFO] [CHAT] error") {
+		t.Errorf("detected raw chat-v2 prefix or unextracted lowercase level:\n%s", content)
 	}
 }
 

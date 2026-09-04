@@ -310,24 +310,48 @@ func (l *FileLogger) Write(p []byte) (n int, err error) {
 	var line string
 	level := "INFO"
 
-	// 1. Adapt chat-v2 log prefix (format: "chat-v2 2006/01/02 15:04:05 ...")
+	// 1. Adapt chat-v2 log prefix (format: "chat-v2 2006/01/02 15:04:05 <level> <msg>")
 	if strings.HasPrefix(rawTrimmed, "chat-v2 ") {
 		rest := strings.TrimPrefix(rawTrimmed, "chat-v2 ")
 		if len(rest) >= 20 && rest[4] == '/' && rest[7] == '/' && rest[10] == ' ' && rest[13] == ':' && rest[16] == ':' {
 			rest = strings.TrimSpace(rest[19:])
 		}
-		if strings.HasPrefix(rest, "[ERROR]") {
-			level = "ERROR"
-			rest = strings.TrimSpace(strings.TrimPrefix(rest, "[ERROR]"))
-		} else if strings.HasPrefix(rest, "[WARN]") {
-			level = "WARN"
-			rest = strings.TrimSpace(strings.TrimPrefix(rest, "[WARN]"))
+		// Match both lowercase plain levels (info, warn, error, debug) and uppercase bracketed levels
+		for _, lvl := range []string{"error", "ERROR", "warn", "WARN", "debug", "DEBUG", "info", "INFO"} {
+			bracketPrefix := "[" + lvl + "]"
+			plainPrefix := lvl + " "
+			if strings.HasPrefix(rest, bracketPrefix) {
+				level = strings.ToUpper(lvl)
+				rest = strings.TrimSpace(strings.TrimPrefix(rest, bracketPrefix))
+				break
+			} else if strings.HasPrefix(rest, plainPrefix) {
+				level = strings.ToUpper(lvl)
+				rest = strings.TrimSpace(strings.TrimPrefix(rest, plainPrefix))
+				break
+			}
 		}
 		line = fmt.Sprintf("[%s] [%s] [CHAT] %s", timestamp, level, rest)
+		l.enqueue(level, line)
+		return len(p), nil
 	} else if len(rawTrimmed) >= 20 && rawTrimmed[4] == '/' && rawTrimmed[7] == '/' && rawTrimmed[10] == ' ' && rawTrimmed[13] == ':' && rawTrimmed[16] == ':' {
 		// 2. Adapt standard library log prefix (format: "2006/01/02 15:04:05 <msg>")
 		body := strings.TrimSpace(rawTrimmed[19:])
-		line = fmt.Sprintf("[%s] [INFO] [SRV] %s", timestamp, body)
+		var foundLevel string
+		for _, lvl := range []string{"INFO", "WARN", "ERROR", "DEBUG", "FATAL", "PRINT", "TRACE"} {
+			if strings.HasPrefix(body, "["+lvl+"]") {
+				foundLevel = lvl
+				break
+			}
+		}
+		if foundLevel != "" {
+			// Transparently preserve existing single-frame level box (e.g. [ERROR] [CLIENT] ... or [INFO] [SRV] ...)
+			level = foundLevel
+			line = fmt.Sprintf("[%s] %s", timestamp, body)
+		} else {
+			// Legacy unlevelled server logs (e.g. [EQT Server] [Download Start])
+			level = "INFO"
+			line = fmt.Sprintf("[%s] [INFO] [SRV] %s", timestamp, body)
+		}
 	} else if strings.HasPrefix(rawTrimmed, "[") {
 		// 3. Already structured log line
 		line = rawTrimmed

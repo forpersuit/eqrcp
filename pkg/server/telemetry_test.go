@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -154,6 +155,13 @@ func TestWrapAccessLog(t *testing.T) {
 
 	wrapped := s.wrapAccessLog(dummyHandler)
 
+	// 捕获 log 输出
+	var logBuf bytes.Buffer
+	origOutput := log.Writer()
+	log.SetOutput(&logBuf)
+	defer log.SetOutput(origOutput)
+
+	// 1. 测试敏感路径 token 脱敏记录
 	req := httptest.NewRequest(http.MethodGet, "/send/1234567890abcdef", nil)
 	req.RemoteAddr = "192.168.1.100:1234"
 	w := httptest.NewRecorder()
@@ -165,5 +173,24 @@ func TestWrapAccessLog(t *testing.T) {
 	}
 	if w.Result().StatusCode != http.StatusOK {
 		t.Errorf("expected status 200, got %d", w.Result().StatusCode)
+	}
+
+	loggedOutput := logBuf.String()
+	if !strings.Contains(loggedOutput, "[INFO] [SRV] HTTP GET /send/123456...abcdef from 192.168.1.100") {
+		t.Errorf("expected masked access log output, got: %q", loggedOutput)
+	}
+	if strings.Contains(loggedOutput, "1234567890abcdef") {
+		t.Errorf("detected unmasked plaintext token in log: %q", loggedOutput)
+	}
+
+	// 2. 测试 /status 高频轮询静音防洪
+	logBuf.Reset()
+	reqStatus := httptest.NewRequest(http.MethodGet, "/send/1234567890abcdef/status", nil)
+	reqStatus.RemoteAddr = "192.168.1.100:1234"
+	wStatus := httptest.NewRecorder()
+	wrapped.ServeHTTP(wStatus, reqStatus)
+
+	if logBuf.Len() > 0 {
+		t.Errorf("expected /status polling to be skipped from access log, but logged: %q", logBuf.String())
 	}
 }
