@@ -1014,6 +1014,9 @@ function renderDeviceProgressHtml(task) {
 function renderShareLockedPathsHtml(task) {
     const paths = task.paths || [];
     return paths.map((path, index) => {
+        const statusText = shareItemStatus(task, path, index);
+        const isCompleted = statusText.startsWith('✓');
+        const colorStyle = isCompleted ? 'color: var(--accent, #156f5a);' : 'color: var(--text-secondary);';
         return `
         <li>
             <div style="width: 100%; box-sizing: border-box; min-width: 0;">
@@ -1025,8 +1028,8 @@ function renderShareLockedPathsHtml(task) {
                         <span style="display: block; font-size: 11px; color: var(--text-secondary); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHTML(path)}</span>
                     </div>
                     <div style="flex: 0 0 auto; text-align: right; min-width: 0; margin-left: 8px;">
-                        <span class="item-status" style="font-size: 12px; font-weight: 600; color: var(--accent-strong); white-space: nowrap;">
-                            ${escapeHTML(shareItemStatus(task, path))}
+                        <span class="item-status" style="font-size: 12px; font-weight: 600; ${colorStyle} white-space: nowrap;">
+                            ${escapeHTML(statusText)}
                         </span>
                     </div>
                 </div>
@@ -2243,15 +2246,6 @@ function renderSettingsPanel() {
                         ${renderSwitch('settings-telemetry', state.settings?.enableTelemetry !== false)}
                     </div>
                 </div>
-                <div class="setting-row">
-                    <div class="setting-copy">
-                        <strong>${t('view_logs') || '运行日志'}</strong>
-                        <span>${t('view_logs_desc') || '实时查看系统汇流日志、移动端遥测回传与诊断信息。'}</span>
-                    </div>
-                    <button type="button" class="secondary btn-open-log-viewer" id="btn-open-log-viewer" style="height: 32px; padding: 0 12px; font-size: 11.5px; font-weight: 600; white-space: nowrap;">
-                        📋 ${t('btn_view_logs') || '查看日志'}
-                    </button>
-                </div>
             </section>
 
             <section class="settings-section">
@@ -2328,6 +2322,17 @@ function renderSettingsPanel() {
                             <option value="24" ${state.settings?.updateCheckIntervalHours === 24 || !state.settings?.updateCheckIntervalHours ? 'selected' : ''}>${t('hours_24')}</option>
                             <option value="48" ${state.settings?.updateCheckIntervalHours === 48 ? 'selected' : ''}>${t('hours_48')}</option>
                         </select>
+                    </div>
+                    <div class="setting-row">
+                        <div class="setting-copy">
+                            <strong>${t('view_logs') || '运行日志'}</strong>
+                            <span>${t('view_logs_desc') || '实时查看系统汇流日志、移动端遥测回传与诊断信息。'}</span>
+                        </div>
+                        <button type="button" class="secondary btn-open-log-viewer" id="btn-open-log-viewer" style="height: 32px; padding: 0 12px; font-size: 11.5px; font-weight: 600; white-space: nowrap;">
+                            📋 ${t('btn_view_logs') || '查看日志'}
+                        </button>
+                    </div>
+                </div>
             </details>
             ${state.settings?.devMode ? `
             <details class="settings-advanced-details dev-details" style="margin-top: 16px; border-color: rgba(47, 158, 115, 0.3);" ${state.settingsDevOpen ? 'open' : ''}>
@@ -2703,11 +2708,6 @@ function renderAboutPanel() {
                 <div style="grid-column: span 2; background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; text-align: left;">
                     <span style="font-size: 10px; color: var(--text-secondary); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">${t('legal') || 'Legal'}</span>
                     <span style="font-size: 12px; font-weight: 500; color: var(--text-muted);">${t('legal_notice')}</span>
-                </div>
-                <div style="grid-column: span 2; display: flex; gap: 8px; margin-top: 4px;">
-                    <button type="button" class="secondary btn-open-log-viewer" style="flex: 1; height: 34px; font-size: 11.5px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 6px;">
-                        📋 ${t('btn_view_logs') || '查看运行日志'}
-                    </button>
                 </div>
             </div>
         </div>
@@ -6220,16 +6220,25 @@ function chatSessionKey(task) {
     return `id:${task?.id || 0}`;
 }
 
-function shareItemStatus(task, path) {
+function shareItemStatus(task, path, index) {
     const current = shortName(task.transferCurrent || '');
     if (current && current === shortName(path)) {
         if (task.transferState === 'transferring') {
-            return t('running') || 'Running';
+            return `⟳ ${t('running') || 'Running'}`;
         }
         return t('active') || 'Active';
     }
+
+    const isDownloaded = (Array.isArray(task.downloadedItems) && task.downloadedItems.includes(index)) ||
+        task.transferState === 'completed' ||
+        (task.clientStates && Object.values(task.clientStates).some(c => c && c.state === 'completed'));
+
+    if (isDownloaded) {
+        return `✓ ${t('completed') || 'Completed'}`;
+    }
+
     if (task.transferState === 'waiting') {
-        return t('waiting') || 'Waiting';
+        return `⌛ ${t('waiting') || 'Waiting'}`;
     }
     return t('locked') || 'Locked';
 }

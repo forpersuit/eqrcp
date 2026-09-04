@@ -139,6 +139,7 @@ func cloneTaskRecord(record TaskRecord) TaskRecord {
 	record.Paths = append([]string(nil), record.Paths...)
 	record.SavedFiles = append([]string(nil), record.SavedFiles...)
 	record.TransferItemClientStats = append([]string(nil), record.TransferItemClientStats...)
+	record.DownloadedItems = append([]int(nil), record.DownloadedItems...)
 
 	if record.TransferClientStates != nil {
 		cloned := make(map[string]*server.ClientTransferStateInfo)
@@ -809,6 +810,7 @@ func (agent *desktopAgent) observeTransferStatus(taskID int, status server.Trans
 	agent.current.TransferItemClientStats = append([]string(nil), status.ItemClientStats...)
 	agent.current.TransferDeviceCount = status.TransferDeviceCount
 	agent.current.TransferAutoStop = status.AutoStop
+	agent.current.DownloadedItems = append([]int(nil), status.DownloadedItems...)
 	agent.current.TransferClientStates = make(map[string]*server.ClientTransferStateInfo)
 	for k, v := range status.ClientStates {
 		if v != nil {

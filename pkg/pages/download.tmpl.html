@@ -373,7 +373,7 @@
                 </div>
                 <div id="download-progress-bytes" style="font-size: 11px; color: var(--text-secondary); margin-top: 5px; text-align: left; font-weight: 500;">0 B / 0 B</div>
                 <div id="download-notification-tips" style="font-size: 11.5px; color: var(--accent-strong); margin-top: 8px; text-align: center; border-top: 1px dashed var(--line); padding-top: 8px; display: none; line-height: 1.4; font-weight: 600;" data-i18n="notification_tips">
-                    To pause or stop the transfer, please use your phone's notification bar or browser download manager.
+                    To pause or stop the transfer, please use browser download manager. Please keep screen on and stay on this page to prevent system sleep during large transfers.
                 </div>
             </div>
 
@@ -495,7 +495,7 @@
                     limit_header: '设备连接数已超限',
                     limit_tips: '根据免费版使用规则，每日非首次传输最多允许连接 2 台设备。当前任务已达上限，当其他设备退出时，本设备将自动恢复下载权限。',
                     btn_upgrade: '升级许可证解锁限制',
-                    notification_tips: '若要中止或暂停传输，请直接在您的手机下拉通知栏或浏览器下载任务中进行操作。',
+                    notification_tips: '若要中止或暂停传输，请在浏览器下载管理中操作。传输大文件时请保持屏幕常亮并停留在此页面，避免系统休眠中断。',
                     waiting_status: '连接已中断，等待重新连接...',
                     failed_status: '传输已停止。可点击按钮重新下载。',
                     downloaded_files_title: '已下载文件：',
@@ -528,7 +528,7 @@
                     limit_header: 'Device Limit Exceeded',
                     limit_tips: 'According to the free tier rules, daily non-first transfers allow up to 2 devices. This transfer has reached the limit. Once other devices disconnect, this page will automatically restore download access.',
                     btn_upgrade: 'Upgrade License to Unlock',
-                    notification_tips: 'To pause or stop the transfer, please use your phone\'s notification bar or browser download manager.',
+                    notification_tips: 'To pause or stop transfer, please use browser download manager. Please keep screen on and stay on this page to prevent system sleep during large transfers.',
                     waiting_status: 'Connection interrupted, waiting to reconnect...',
                     failed_status: 'Transfer stopped. You can click the button to restart.',
                     downloaded_files_title: 'Downloaded Files:',
@@ -921,8 +921,34 @@
         var downloadTriggered = false;
         var totalCount = {{.Count}};
         var lastKnownBytesTotal = 0;
+        var screenWakeLock = null;
+
+        async function acquireWakeLock() {
+            if ('wakeLock' in navigator && !screenWakeLock) {
+                try {
+                    screenWakeLock = await navigator.wakeLock.request('screen');
+                    screenWakeLock.addEventListener('release', function() {
+                        screenWakeLock = null;
+                    });
+                } catch (e) {}
+            }
+        }
+
+        function releaseWakeLock() {
+            if (screenWakeLock) {
+                screenWakeLock.release().catch(function() {});
+                screenWakeLock = null;
+            }
+        }
+
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'visible' && downloadTriggered && !isCompleted) {
+                acquireWakeLock();
+            }
+        });
 
         function doDownload(url, filename) {
+            acquireWakeLock();
             startStatusPolling();
             downloadTriggered = true;
             
@@ -1226,6 +1252,7 @@
         window.addEventListener('focus', handlePageWakeup);
 
         function showCompletedUI(status) {
+            releaseWakeLock();
             if (intervalId) {
                 clearInterval(intervalId);
                 intervalId = null;
@@ -1300,6 +1327,7 @@
         }
 
         function stopSharing() {
+            releaseWakeLock();
             // 1. Stop status polling to release backend active device count
             if (intervalId) {
                 clearInterval(intervalId);

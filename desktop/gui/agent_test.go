@@ -369,3 +369,39 @@ func TestGUIAgentTaskOfflineQRCodeGeneration(t *testing.T) {
 		t.Fatalf("expected history record to have empty QRCode, got: %v", agent.history)
 	}
 }
+
+func TestGUIAgentObserveTransferStatusDownloadedItems(t *testing.T) {
+	agent := newDesktopAgent(nil)
+	agent.current = &TaskRecord{ID: 10, Action: "share", State: "running"}
+
+	snapshot := server.TransferStatusSnapshot{
+		State:           "waiting",
+		DownloadedItems: []int{0, 2, 5},
+	}
+
+	agent.observeTransferStatus(10, snapshot)
+
+	agent.mu.Lock()
+	defer agent.mu.Unlock()
+
+	if agent.current == nil {
+		t.Fatal("agent.current is nil")
+	}
+	if len(agent.current.DownloadedItems) != 3 {
+		t.Fatalf("DownloadedItems length = %d, want 3", len(agent.current.DownloadedItems))
+	}
+	if agent.current.DownloadedItems[0] != 0 || agent.current.DownloadedItems[1] != 2 || agent.current.DownloadedItems[2] != 5 {
+		t.Fatalf("DownloadedItems = %v, want [0, 2, 5]", agent.current.DownloadedItems)
+	}
+
+	// Verify deep clone
+	cloned := cloneTaskRecord(*agent.current)
+	if len(cloned.DownloadedItems) != 3 {
+		t.Fatalf("cloned DownloadedItems length = %d, want 3", len(cloned.DownloadedItems))
+	}
+	cloned.DownloadedItems[0] = 999
+	if agent.current.DownloadedItems[0] == 999 {
+		t.Fatal("cloneTaskRecord did not perform deep copy of DownloadedItems")
+	}
+}
+

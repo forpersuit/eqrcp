@@ -310,6 +310,7 @@ type TransferStatusSnapshot struct {
 	ItemClientStats     []string
 	TransferDeviceCount int
 	AutoStop            bool
+	DownloadedItems     []int
 	ClientStates        map[string]*ClientTransferStateInfo
 }
 
@@ -1428,6 +1429,7 @@ func snapshotTransferStatus(status transferStatus) TransferStatusSnapshot {
 		Version:         status.Version,
 		ItemClientStats: append([]string(nil), status.ItemClientStats...),
 		AutoStop:        status.AutoStop,
+		DownloadedItems: append([]int(nil), status.DownloadedItems...),
 		ClientStates:    clientStates,
 	}
 }
