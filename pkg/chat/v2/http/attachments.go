@@ -265,7 +265,12 @@ func (h *Handler) handleUpload(w http.ResponseWriter, r *http.Request, token str
 
 			if messageID != "" {
 				jobID = "ul-" + messageID
-				h.transfer.CreateJob(token, jobID, messageID, peer, fileName, 0)
+				existingJob, getErr := h.transfer.GetJob(jobID)
+				if getErr != nil || existingJob == nil {
+					h.transfer.CreateJob(token, jobID, messageID, peer, fileName, 0)
+				} else if existingJob.FileName == "" {
+					existingJob.FileName = fileName
+				}
 				_ = h.transfer.StartJob(jobID)
 			}
 
@@ -293,8 +298,14 @@ func (h *Handler) handleUpload(w http.ResponseWriter, r *http.Request, token str
 				}
 			}
 
+			// Early guard: limit bytes to freeChatMaxAttachmentBytes + 1 if free degraded
+			var copySrc io.Reader = pr
+			if !unrestricted {
+				copySrc = io.LimitReader(pr, freeChatMaxAttachmentBytes+1)
+			}
+
 			// Stream directly to tempFile in uploadRoot
-			writtenSize, err = io.Copy(tempFile, pr)
+			writtenSize, err = io.Copy(tempFile, copySrc)
 			part.Close()
 			if err != nil {
 				cleanupTemp()
@@ -313,6 +324,13 @@ func (h *Handler) handleUpload(w http.ResponseWriter, r *http.Request, token str
 				}
 				diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusRequestEntityTooLarge, "file size exceeds 10MB free limit. Please upgrade."), fields...)
 				return
+			}
+
+			// Ensure job has non-zero BytesTotal if it wasn't pre-initialized via /upload/init
+			if jobID != "" {
+				if j, err := h.transfer.GetJob(jobID); err == nil && j.BytesTotal <= 0 {
+					_ = h.transfer.SetJobBytesTotal(jobID, writtenSize)
+				}
 			}
 
 			// Explicit close to flush to disk
@@ -367,8 +385,13 @@ func (h *Handler) handleUpload(w http.ResponseWriter, r *http.Request, token str
 	if messageID != "" {
 		if jobID == "" {
 			jobID = "ul-" + messageID
-			h.transfer.CreateJob(token, jobID, messageID, peer, fileName, writtenSize)
-			_ = h.transfer.StartJob(jobID)
+			existingJob, getErr := h.transfer.GetJob(jobID)
+			if getErr != nil || existingJob == nil {
+				h.transfer.CreateJob(token, jobID, messageID, peer, fileName, writtenSize)
+				_ = h.transfer.StartJob(jobID)
+			} else if existingJob.BytesTotal <= 0 {
+				_ = h.transfer.SetJobBytesTotal(jobID, writtenSize)
+			}
 			_ = h.transfer.UpdateProgress(jobID, writtenSize)
 		}
 		// Update physical path and complete job

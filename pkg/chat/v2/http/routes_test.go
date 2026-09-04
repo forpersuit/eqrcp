@@ -451,16 +451,33 @@ func TestSinglePassStreamingUploadQueryAndForm(t *testing.T) {
 
 	token := "stream-upload-token"
 
-	// 1. Upload with query parameters (frontend single-pass pattern)
+	// 1. Upload with pre-init (upload/init) and verify BytesTotal is preserved, not cleared to 0 (P1)
 	{
-		msgID := "msg-stream-1"
+		initPayload := `{"fileName":"stream-doc.pdf","size":55,"sender":"Tester","peer":"peer-stream"}`
+		initResp, err := http.Post(fmt.Sprintf("%s/chat-v2/%s/upload/init", server.URL, token), "application/json", strings.NewReader(initPayload))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer initResp.Body.Close()
+
+		var initMsg protocol.Message
+		if err := json.NewDecoder(initResp.Body).Decode(&initMsg); err != nil {
+			t.Fatal(err)
+		}
+		msgID := initMsg.ID
+
+		preJob, err := handler.transfer.GetJob("ul-" + msgID)
+		if err != nil || preJob.BytesTotal != 55 {
+			t.Fatalf("expected pre-init job to have BytesTotal=55, got: %+v (err: %v)", preJob, err)
+		}
+
 		var buf bytes.Buffer
 		writer := multipart.NewWriter(&buf)
 		part, err := writer.CreateFormFile("file", "stream-doc.pdf")
 		if err != nil {
 			t.Fatal(err)
 		}
-		testContent := []byte("streaming upload content without intermediary /tmp file")
+		testContent := []byte("streaming upload content without intermediary /tmp file") // 55 bytes
 		_, _ = part.Write(testContent)
 		_ = writer.Close()
 
@@ -476,6 +493,15 @@ func TestSinglePassStreamingUploadQueryAndForm(t *testing.T) {
 			t.Fatalf("expected 200, got %d: %s", resp.StatusCode, string(b))
 		}
 
+		// Verify Job BytesTotal is STILL 55, NOT zeroed out!
+		postJob, err := handler.transfer.GetJob("ul-" + msgID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if postJob.BytesTotal != 55 {
+			t.Fatalf("expected postJob.BytesTotal to remain 55, got %d", postJob.BytesTotal)
+		}
+
 		sess := handler.sessions.GetOrCreate(token)
 		filePath := sess.GetAttachment(msgID)
 		if filePath == "" {
@@ -488,9 +514,47 @@ func TestSinglePassStreamingUploadQueryAndForm(t *testing.T) {
 		if !bytes.Equal(content, testContent) {
 			t.Fatalf("content mismatch: got %q, want %q", string(content), string(testContent))
 		}
+
+		// 2. Verify attachment download complies with SKILL.md §6.1 (private, no-transform)
+		downloadURL := fmt.Sprintf("%s/chat-v2/%s/files/%s?filename=stream-doc.pdf", server.URL, token, msgID)
+		dlResp, err := http.Get(downloadURL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		dlResp.Body.Close()
+		if dlResp.Header.Get("Cache-Control") != "private, no-transform" {
+			t.Fatalf("expected Cache-Control 'private, no-transform' per SKILL.md §6.1, got %q", dlResp.Header.Get("Cache-Control"))
+		}
+
+		// 3. Verify inline download supports ETag + 304 without creating ghost jobs (P2)
+		inlineURL := fmt.Sprintf("%s/chat-v2/%s/files/%s?filename=stream-doc.pdf&inline=1", server.URL, token, msgID)
+		inlineResp, err := http.Get(inlineURL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		inlineResp.Body.Close()
+		etag := inlineResp.Header.Get("ETag")
+		if etag == "" {
+			t.Fatal("expected non-empty ETag for inline download")
+		}
+
+		req304, _ := http.NewRequest(http.MethodGet, inlineURL+"&clientId=client-304-check", nil)
+		req304.Header.Set("If-None-Match", etag)
+		resp304, err := http.DefaultClient.Do(req304)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp304.Body.Close()
+		if resp304.StatusCode != http.StatusNotModified {
+			t.Fatalf("expected 304, got %d", resp304.StatusCode)
+		}
+		// Confirm NO job was created for client-304-check!
+		if _, err := handler.transfer.GetJob("dl-" + msgID + "-client-304-check"); err == nil {
+			t.Fatal("304 response must not create dangling transfer job!")
+		}
 	}
 
-	// 2. Direct fallback upload without messageId
+	// 4. Direct fallback upload without messageId
 	{
 		var buf bytes.Buffer
 		writer := multipart.NewWriter(&buf)

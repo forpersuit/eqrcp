@@ -64,7 +64,29 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request, token s
 		}
 	}
 
-	// Create and register the download Job if it doesn't exist yet
+	// Evaluate inline caching vs attachment download headers before creating any transfer jobs
+	etag := fmt.Sprintf("\"%s-%d\"", fileID, size)
+	isInline := query.Get("inline") == "1"
+
+	if isInline {
+		w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", filename))
+		w.Header().Set("Cache-Control", "public, max-age=86400, immutable")
+		w.Header().Set("ETag", etag)
+
+		// Check 304 before creating transfer Job to prevent dangling/ghost jobs (P2)
+		if match := r.Header.Get("If-None-Match"); match != "" && (match == etag || match == "*") {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+	} else {
+		// Strict iOS Safari WebKit attachment requirements (.agents/skills/eqt-lan-tls/SKILL.md §6.1)
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+		w.Header().Set("Cache-Control", "private, no-transform")
+		w.Header().Del("Pragma")
+		w.Header().Del("Expires")
+	}
+
+	// Create and register the download Job only for active data streaming
 	jobID := "dl-" + fileID
 	if clientID != "" {
 		jobID = "dl-" + fileID + "-" + clientID
@@ -74,17 +96,7 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request, token s
 		h.transfer.CreateJob(token, jobID, messageID, clientID, filename, size)
 	}
 
-	etag := fmt.Sprintf("\"%s-%d\"", fileID, size)
-	w.Header().Set("ETag", etag)
-	w.Header().Set("Cache-Control", "public, max-age=86400, immutable")
-
-	if match := r.Header.Get("If-None-Match"); match != "" && (match == etag || match == "*") {
-		w.WriteHeader(http.StatusNotModified)
-		return
-	}
-
 	w.Header().Set("Content-Length", strconv.FormatInt(size, 10))
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.WriteHeader(http.StatusOK)
 

@@ -387,7 +387,7 @@ export const translations: Record<string, Record<Lang, string>> = {
     ko: '업로드 중',
     es: 'Subiendo',
     de: 'Wird hochgeladen',
-    fr: 'Téléchargement'
+    fr: 'Téléversement'
   },
   savingAttachment: {
     zh: '正在保存校验',
