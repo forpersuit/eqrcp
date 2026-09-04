@@ -473,3 +473,27 @@ func (a *App) ExportDiagnosticsZip() (string, error)
 
 > **交付边界**：第六轮审查 4 项发现已全数闭环（#1 类型红点 0 报错、#2 客户端时间戳无侵入并入 details、#3/#4 文档规格同步完成）。Phase 1~3 全部完成，已全面就绪推进 Phase 4 GUI 应用内日志查看浮层与多语言落地。
 
+
+---
+
+## 十三、第七轮代码复核（commit 6fad866b · 第六轮审查闭环复核）
+
+> **复核对象**：`6fad866b fix(telemetry): close round-6 review items with type gate and client timestamp`（基于 `1dc06e95` 第六轮审查文档提交）。
+> **复核结论（总体）**：该 fix 如实闭环第六轮 4 项发现，**无新增 bug、无回归、无版本断裂**。改动面精小（telemetry.ts、telemetry.go +6、telemetry_test.go +10、doc 同步），未触碰 FileLogger 与既有日志适配器契约。本地复核全绿：`cd pkg/chat/v2/web && npm run check` = **0 ERRORS / 3 WARNINGS**（3 条为 MessageList/MessageComposer 既有 a11y 警告，非本轮引入）；`go vet ./pkg/server ./pkg/pages` 与 `go test ./pkg/server ./pkg/pages -count=1` ok（8.512s）；`go build ./...` 与改动文件 `gofmt -l` 全部干净。
+>
+> 核验通过事实：
+> - **#1 类型红点（真实闭环）**：`telemetry.ts` 移除 `else if (window.fetch)` 恒真分支，改为 `if (typeof navigator !== 'undefined' && navigator.sendBeacon) … else { fetch(…, { keepalive: true }).catch(() => {}) }`；兜底分支保留 `.catch` 吞异常且外层 try/catch 仍在，无未处理 Promise 拒绝；类型门实测从 1 ERROR 归零。
+> - **#2 客户端时钟（真实闭环）**：`HandleClientLog` 在 `entry.Timestamp > 0` 时并入 `Details["client_ts"]`（Details 为 nil 时先建 map）；键名排序居字母序首位，details 1024 截断时 `client_ts` 存活；值为受控 int64，经 `%v` 渲染为纯数字、无注入面扩大。测试对既有恶意注入用例新增日志捕获并断言落盘行含 `client_ts=123456789`。
+> - **#3/#4 文档同步（真实闭环）**：§四-2.1/2.2 枚举、DEBUG 级别、fallback `CLIENT_EVENT`、限流聚合告警样例与实现一致；§五 Phase-4 清单 `GetLogTail` 勾选 `[x]`，头状态行同步为"第六轮审查项闭环"。
+> - 防护未回退：32KB 体积 / RemoteAddr 令牌桶 10/s / CR/LF 与控制字符剥离 / message 256 / details 128×1 汇总 1024 全部原样保留。
+> - 无并发会话串扰：本提交仅动上文 4 文件，版本号未动（fix 非 feature，符合小版本 bump 约定）。
+
+### 本轮复核发现
+
+| 评审意见项 | 评审性质 | 复核发现 | 建议处置 | 状态 |
+| :--- | :--- | :--- | :--- | :---: |
+| **第六轮 #1~#4 闭环真实性** | 【复核·核验】 | 四项均以实际代码/文档改动闭环、非仅表格标注：`npm run check` 0 errors 与文档声明一致；`client_ts` 断言真实落入 Go 测试；白名单与 Phase-4 清单文字与实现逐条对齐。 | 无需处置。 | ✅ 已核验 |
+| **1. CI 类型门禁仍未纳入（第六轮建议残留）** | **【流程·低危·建议】** | round-6 建议"将 `npm run check` 纳入 CI 防类型红点漏网"未落地：`ci.yml`/`release.yml`/`deploy.yml` 与 `scripts/deploy-windows-results.sh` 仍只 `npm run build`（esbuild 剥类型不校验）。本轮类型红点仅靠人工本地 review 拦截；后续 `telemetry.ts` 若再引入类型错误，CI 保持绿灯的复发窗口仍在。 | 可选二选一：CI 的 chat web 步骤加 `npm run check`；或在 chat `package.json` 把 `build` 前置为 `check && build`（本地兜底）。 | ⏳ 可选待办 |
+| **2. `typeof navigator` 守卫为装饰性（口径）** | 【口径·极低】 | telemetry.ts 仅运行于浏览器（`initTelemetry` 先 `typeof window` 早退、websocket 钩子同属浏览器侧），`navigator` 恒在，该守卫不改变行为，但为合法 SSR 防御性写法，无害且保留了 `fetch` 兜底对非浏览器环境的兼容。 | 无需处置（保留为保险）。 | 认可 |
+
+> **交付边界**：第六轮 4 项发现全部真实闭环；第七轮未发现新缺陷、无回归，仅保留 1 项可选流程建议（#1 CI 类型门禁，Phase 4 开工前随手落地即可）。Phase 1~3 全线就绪，可推进 Phase 4 GUI 应用内日志浮层与多语言落地。
