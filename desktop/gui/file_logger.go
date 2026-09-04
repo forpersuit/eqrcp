@@ -46,8 +46,8 @@ type FileLogger struct {
 
 // NewFileLogger creates an asynchronous rotating file logger.
 func NewFileLogger(filePath string, enabled bool) *FileLogger {
-	_ = os.MkdirAll(filepath.Dir(filePath), 0755)
-	f, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	_ = os.MkdirAll(filepath.Dir(filePath), 0700)
+	f, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	var initialSize int64
 	if err == nil && f != nil {
 		if fi, statErr := f.Stat(); statErr == nil {
@@ -95,8 +95,8 @@ func (l *FileLogger) SetLogDir(logDir string) {
 	}
 
 	l.filePath = newPath
-	_ = os.MkdirAll(filepath.Dir(newPath), 0755)
-	f, err := os.OpenFile(newPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	_ = os.MkdirAll(filepath.Dir(newPath), 0700)
+	f, err := os.OpenFile(newPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err == nil {
 		l.file = f
 		if fi, statErr := f.Stat(); statErr == nil {
@@ -196,7 +196,7 @@ func (l *FileLogger) emergencyDirectWrite(line string) {
 	l.mu.RUnlock()
 
 	if targetPath != "" {
-		if f, err := os.OpenFile(targetPath, os.O_WRONLY|os.O_APPEND, 0644); err == nil {
+		if f, err := os.OpenFile(targetPath, os.O_WRONLY|os.O_APPEND, 0600); err == nil {
 			_, _ = f.WriteString(line)
 			_ = f.Close()
 		}
@@ -287,7 +287,7 @@ func (l *FileLogger) checkAndRotateLocked(upcomingBytes int64) {
 	_ = os.Rename(backup1, backup2)
 	_ = os.Rename(l.filePath, backup1)
 
-	f, err := os.OpenFile(l.filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	f, err := os.OpenFile(l.filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err == nil {
 		l.file = f
 		l.currentSize = 0
@@ -450,9 +450,17 @@ func (l *FileLogger) log(level string, message string) {
 	l.enqueue(level, line)
 }
 
-func (l *FileLogger) Print(message string)   { l.log("PRINT", message) }
-func (l *FileLogger) Trace(message string)   { if l.DebugMode() { l.log("TRACE", message) } }
-func (l *FileLogger) Debug(message string)   { if l.DebugMode() { l.log("DEBUG", message) } }
+func (l *FileLogger) Print(message string) { l.log("PRINT", message) }
+func (l *FileLogger) Trace(message string) {
+	if l.DebugMode() {
+		l.log("TRACE", message)
+	}
+}
+func (l *FileLogger) Debug(message string) {
+	if l.DebugMode() {
+		l.log("DEBUG", message)
+	}
+}
 func (l *FileLogger) Info(message string)    { l.log("INFO", message) }
 func (l *FileLogger) Warning(message string) { l.log("WARN", message) }
 func (l *FileLogger) Error(message string)   { l.log("ERROR", message) }

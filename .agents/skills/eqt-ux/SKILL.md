@@ -118,6 +118,16 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
 3. **交互与提交**：通过 `evaluate_script` 给 `#plaintext-text` 赋值并点击 `#submit`。
 4. **验证 Done 成功卡片**：数据提交完成后，验证重定向至 `?done=true`，截取 Viewport 图像确认绿色成功卡片。
 
+### E2E 移动端遥测与下载上报仿真测试步骤 (Telemetry & Download Verification)
+1. **启动本地服务**：`go run . send <file> --bind 127.0.0.1 --port 18096 --keep-alive` 并提取 Token。
+2. **浏览器页面导航**：通过 Chrome DevTools MCP `navigate_page` 访问 `http://127.0.0.1:18096/send/<token>`。
+3. **页面加载与上报校验**：
+   - 验证 `GET /assets/telemetry.js` 成功返回 200。
+   - 调用 `list_network_requests` 检查首个 `POST /client-log` 上报，验证 Payload 包含 `PAGE_LOAD` 事件且返回 204。
+4. **下载交互与上报校验**：
+   - 通过 `click` 触发下载按钮，验证连续触发包含 `DOWNLOAD_CLICK` 与 `TRANSFER` 的 `POST /client-log` 上报。
+5. **视觉截屏归档**：调用 `take_screenshot` 抓取已下载完成的 UI 视图并保存归档。
+
 ---
 
 ## 7. 推广分享海报卡 (Share Poster Card) 布局与下载一致性
