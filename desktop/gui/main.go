@@ -271,25 +271,29 @@ func startWailsGUI() {
 	app.logger = fileLogger
 	tray := newTrayController(app)
 
-	// Ensure the entire application strictly connects directly without using any proxy
-	_ = os.Unsetenv("http_proxy")
-	_ = os.Unsetenv("https_proxy")
-	_ = os.Unsetenv("all_proxy")
-	_ = os.Unsetenv("HTTP_PROXY")
-	_ = os.Unsetenv("HTTPS_PROXY")
-	_ = os.Unsetenv("ALL_PROXY")
-	if t, ok := http.DefaultTransport.(*http.Transport); ok {
-		t.Proxy = nil
-	}
+	// Apply proxy policy according to settings
+	config.ApplyProxyPolicy(settings.BlockProxy)
 
-	// Instruct WebView2 to disable proxy servers and use direct connections exclusively
-	const noProxyArg = "--no-proxy-server"
-	if curArgs := os.Getenv("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"); curArgs != "" {
-		if !strings.Contains(curArgs, "--no-proxy-server") {
-			_ = os.Setenv("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", curArgs+" "+noProxyArg)
+	if settings.BlockProxy {
+		// Instruct WebView2 to disable proxy servers and use direct connections exclusively
+		const noProxyArg = "--no-proxy-server"
+		if curArgs := os.Getenv("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"); curArgs != "" {
+			if !strings.Contains(curArgs, "--no-proxy-server") {
+				_ = os.Setenv("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", curArgs+" "+noProxyArg)
+			}
+		} else {
+			_ = os.Setenv("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", noProxyArg)
 		}
 	} else {
-		_ = os.Setenv("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", noProxyArg)
+		// When proxy is not blocked, ensure local LAN loopback domains and private IP ranges bypass proxy
+		const bypassArg = "--proxy-bypass-list=<local>;127.0.0.1;localhost;*.lan.eqt.im;*.direct.eqt.net.im;10.*;192.168.*;172.16.*;172.17.*;172.18.*;172.19.*;172.20.*;172.21.*;172.22.*;172.23.*;172.24.*;172.25.*;172.26.*;172.27.*;172.28.*;172.29.*;172.30.*;172.31.*"
+		if curArgs := os.Getenv("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"); curArgs != "" {
+			if !strings.Contains(curArgs, "--proxy-bypass-list") {
+				_ = os.Setenv("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", curArgs+" "+bypassArg)
+			}
+		} else {
+			_ = os.Setenv("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", bypassArg)
+		}
 	}
 
 	// Create application with options

@@ -437,6 +437,7 @@ func (agent *desktopAgent) writeSettings(settings config.DesktopSettings) (confi
 	if err != nil {
 		return saved, err
 	}
+	config.ApplyProxyPolicy(saved.BlockProxy)
 	agent.mu.Lock()
 	agent.notifyEnabled = saved.EnableNotification
 	srv := agent.activeServer

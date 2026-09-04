@@ -142,6 +142,7 @@ type DesktopSettings struct {
 	EnableTelemetry          bool              `json:"enableTelemetry"`
 	EnableNotification       bool              `json:"enableNotification"`
 	EnableTLS                bool              `json:"enableTLS"`
+	BlockProxy               bool              `json:"blockProxy"`
 	ChatDownloadDir          string            `json:"chatDownloadDir"`
 	LogDir                   string            `json:"logDir"`
 }
@@ -1096,6 +1097,7 @@ func (a *App) SaveSettings(settings DesktopSettings) (DesktopSettings, error) {
 		return DesktopSettings{}, err
 	}
 	a.setCloseBehavior(saved.CloseBehavior)
+	config.ApplyProxyPolicy(saved.BlockProxy)
 	if a.logger != nil {
 		a.logger.SetLogDir(saved.LogDir)
 		a.logger.SetDebugMode(saved.DebugLog || saved.DevMode)

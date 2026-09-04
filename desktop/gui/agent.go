@@ -431,6 +431,7 @@ func convertConfigSettings(s config.DesktopSettings) DesktopSettings {
 		EnableTelemetry:          s.EnableTelemetry,
 		EnableNotification:       s.EnableNotification,
 		EnableTLS:                s.EnableTLS,
+		BlockProxy:               s.BlockProxy,
 		ChatDownloadDir:          s.ChatDownloadDir,
 		LogDir:                   s.LogDir,
 	}
@@ -471,6 +472,7 @@ func convertAppSettings(s DesktopSettings) config.DesktopSettings {
 		EnableTelemetry:          s.EnableTelemetry,
 		EnableNotification:       s.EnableNotification,
 		EnableTLS:                s.EnableTLS,
+		BlockProxy:               s.BlockProxy,
 		ChatDownloadDir:          s.ChatDownloadDir,
 		LogDir:                   s.LogDir,
 	}

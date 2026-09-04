@@ -5,6 +5,8 @@ const translations = {
         "tls_cert_not_detected": "未检测到本地有效证书缓存，无证书时将自动降级为 HTTP 传输。",
         "enable_tls": "局域网传输加密 (LAN-TLS)",
         "enable_tls_desc": "启用 Let's Encrypt 官方通配符证书与 TLS 加密，防局域网嗅探、地址栏安全绿锁。",
+        "block_proxy": "屏蔽系统代理 (仅限直连)",
+        "block_proxy_desc": "默认屏蔽系统代理以确保局域网直连传输不受代理节点干扰；关闭后允许使用系统代理，局域网流量自动绕过代理。",
         "about": "关于 EQT",
         "about_title": "关于 EQT",
         "test_version_badge": "测试版",
@@ -444,6 +446,8 @@ const translations = {
     "en": {
         "enable_tls": "LAN-TLS Encryption",
         "enable_tls_desc": "Encrypt local transfers using Let's Encrypt wildcard certificate & TLS (anti-sniffing, secure green lock).",
+        "block_proxy": "Block System Proxy (Direct Only)",
+        "block_proxy_desc": "Block system proxy by default to prevent LAN transfers from routing to proxy nodes; disable to allow proxy while bypassing LAN traffic.",
         "about": "About EQT",
         "about_title": "About EQT",
         "test_version_badge": "Test Build",
@@ -883,6 +887,8 @@ const translations = {
     "ja": {
         "enable_tls": "LAN-TLS 暗号化",
         "enable_tls_desc": "Let's Encrypt 公式ワイルドカード証明書と TLS でローカル転送を暗号化します（盗聴防止、安全な緑の鍵）。",
+        "block_proxy": "システムプロキシをブロック (直接接続のみ)",
+        "block_proxy_desc": "LAN転送が外部プロキシノードに迂回されるのを防ぐためデフォルトでブロックします。オフにするとプロキシを許可しLAN通信はバイパスされます。",
         "about": "EQTについて",
         "about_title": "EQTについて",
         "test_version_badge": "テスト版",
@@ -1310,6 +1316,8 @@ const translations = {
     "ko": {
         "enable_tls": "LAN-TLS 전송 암호화",
         "enable_tls_desc": "Let's Encrypt 공식 와일드카드 인증서와 TLS로 로컬 전송을 암호화합니다(스니핑 방지, 보안 녹색 자물쇠).",
+        "block_proxy": "시스템 프록시 차단 (직접 연결 전용)",
+        "block_proxy_desc": "LAN 전송이 외부 프록시 노드로 라우팅되는 것을 방지하기 위해 기본적으로 차단합니다. 끄면 프록시를 허용하며 LAN 트래픽은 우회됩니다.",
         "about": "EQT 정보",
         "about_title": "EQT 정보",
         "test_version_badge": "테스트 버전",
@@ -1737,6 +1745,8 @@ const translations = {
     "es": {
         "enable_tls": "Cifrado LAN-TLS",
         "enable_tls_desc": "Cifra las transferencias locales con certificados Let's Encrypt y TLS (seguridad, candado verde).",
+        "block_proxy": "Bloquear proxy del sistema (Solo directo)",
+        "block_proxy_desc": "Bloquea el proxy del sistema de forma predeterminada para evitar desvíos en la LAN; desactive para permitir el proxy evitando el tráfico LAN.",
         "about": "Acerca de EQT",
         "about_title": "Acerca de EQT",
         "test_version_badge": "Versión de prueba",
@@ -2164,6 +2174,8 @@ const translations = {
     "de": {
         "enable_tls": "LAN-TLS-Verschlüsselung",
         "enable_tls_desc": "Verschlüsselt lokale Übertragungen mit Let's Encrypt-Zertifikaten und TLS (Abhörschutz, grünes Schloss).",
+        "block_proxy": "System-Proxy blockieren (Nur Direktverbindung)",
+        "block_proxy_desc": "Blockiert standardmäßig den System-Proxy für ungestörte LAN-Übertragungen; deaktivieren, um Proxy für externe Netze zu erlauben.",
         "about": "Über EQT",
         "about_title": "Über EQT",
         "test_version_badge": "Testversion",
@@ -2591,6 +2603,8 @@ const translations = {
     "fr": {
         "enable_tls": "Chiffrement LAN-TLS",
         "enable_tls_desc": "Chiffre les transferts locaux avec les certificats Let's Encrypt et TLS (anti-reniflage, cadenas vert).",
+        "block_proxy": "Bloquer le proxy système (Connexion directe)",
+        "block_proxy_desc": "Bloque le proxy système par défaut pour garantir les transferts locaux; désactiver pour autoriser le proxy en contournant le trafic LAN.",
         "about": "À propos de EQT",
         "about_title": "À propos de EQT",
         "test_version_badge": "Version de test",

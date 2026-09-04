@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"eqt/pkg/config"
 )
 
 var desktopAgentURL = getDesktopAgentURL()
@@ -23,15 +25,8 @@ var agentHTTPClient = &http.Client{
 }
 
 func init() {
-	// 工程不走任何代理，只有直连
-	_ = os.Unsetenv("http_proxy")
-	_ = os.Unsetenv("https_proxy")
-	_ = os.Unsetenv("all_proxy")
-	_ = os.Unsetenv("HTTP_PROXY")
-	_ = os.Unsetenv("HTTPS_PROXY")
-	_ = os.Unsetenv("ALL_PROXY")
-	if t, ok := http.DefaultTransport.(*http.Transport); ok {
-		t.Proxy = nil
+	if config.IsBlockProxyEnabled() {
+		config.ApplyProxyPolicy(true)
 	}
 }
 

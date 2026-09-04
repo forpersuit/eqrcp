@@ -254,7 +254,26 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
   - 采用无阻塞事件绑定与剪贴板回退策略：优先使用 `navigator.clipboard.writeText`，在未授权或非安全上下文环境下安全降级为 `textarea` + `document.execCommand('copy')`；
   - 交互反馈严格遵守无系统弹窗规范：点击后原复制图标即时切换为绿色对勾与反馈微文案，持续 2 秒后平滑复原；
   - 纳入 `EqtI18n` 契约体系（`copy_filename` 与 `copied`），支持 7 国语言即时切换与动态绑定。
-- **工程全链路纯直连准则 (Strict Direct Connection Policy)**:
-  - 桌面端 WebView2 内核启动时显式注入 `--no-proxy-server` 命令行参数，彻底杜绝操作系统本地代理（如 10808 等代理端口）对回环通信和静态资源的拦截；
-  - Go 后端（CLI/GUI/Launcher）启动时全面清除 `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY` 环境变量，并将 `http.DefaultTransport.Proxy` 设为 `nil`；
+- **系统代理可控屏蔽与局域网分流准则 (Configurable Proxy Policy & LAN Bypass)**:
+  - 默认开启“屏蔽系统代理 (仅限直连)”（`blockProxy: true`）：
+    - 局域网传输场景下，必须避免外部代理软件（如 Clash、v2ray、系统全局代理）拦截私有 IP 与 `*.lan.eqt.im` 局域网 TLS 回环请求而引发 502 Bad Gateway 或超时；
+    - 开启时，WebView2 注入 `--no-proxy-server`，Go 运行时清空代理环境变量并将 `http.DefaultTransport.Proxy` 设为 `nil`；
+  - 允许在高级设置中切换关闭：
+    - 关闭后，Go 网络客户端恢复 `http.ProxyFromEnvironment`，WebView2 注入 `--proxy-bypass-list=<local>;127.0.0.1;localhost;*.lan.eqt.im;*.direct.eqt.net.im;10.*;192.168.*;172.16-31.*`，允许外部公网访问（如 DRM 激活、更新检查）走系统代理，同时严格保证局域网点对点流量免代理直连。
   - WSL 开发环境自动化推送脚本 `scripts/git-push-smart.sh` 默认仅探测并使用 direct-22 / direct-443 直连 SSH 路由，杜绝意外接入本地代理。
+
+---
+
+## 15. 移动端触控阴影范围精准约束规范 (Touch Feedback Boundary Constraint for Mobile Buttons)
+
+- **全局禁用移动端浏览器默认高亮遮罩**：
+  - 移动端 WebKit / Blink（iOS Safari、Android Chrome、Edge）在点击具有 `cursor: pointer` 或 `<label>` 元素时，会默认绘制半透明高亮方框（`-webkit-tap-highlight-color`）；
+  - 全局基础样式必须声明 `* { -webkit-tap-highlight-color: transparent; }`，并在按钮类显式声明，杜绝系统高亮产生“大范围阴影”的假象。
+- **点击目标与视觉按钮边界 1:1 贴合 (Exact Hit-Target Alignment)**：
+  - 严禁使用全宽父级 `<label>`（如 `width: 100%` 的 `.dropzone-label`）去包裹居中的小尺寸按钮 `<span>`，否则任何点击都会导致浏览器以全宽父级为范围触发触控高亮与伪类；
+  - 必须直接使 `<label for="files" class="btn-add-files">` 充当视觉按钮自身（`display: inline-flex`、`border-radius: 8px`），使交互区域与视觉按钮完全重合。
+- **触控端 `:hover` 污染隔离 (`@media (hover: hover)`)**：
+  - 移动端触摸屏无鼠标 Hover 状态，点击会瞬间触发并持久滞留容器的 `:hover` 样式；
+  - 若外层卡片（如 `.dropzone-box:hover`）定义了背景变深或位移，轻触按钮会导致整个大卡片变色上浮，产生“阴影效果超出按钮”的严重失真；
+  - 包含位移与背景色的 `:hover` 样式必须统一封装在 `@media (hover: hover) and (pointer: fine)` 媒体查询中，触控端仅保留按钮自身的 `:active { transform: translateY(1px) scale(0.98); box-shadow: ...; }` 精准微动反馈。
+

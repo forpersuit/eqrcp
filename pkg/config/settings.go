@@ -3,10 +3,12 @@ package config
 import (
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"eqt/pkg/application"
 	"eqt/pkg/util"
@@ -40,6 +42,7 @@ type DesktopSettings struct {
 	EnableTelemetry          bool                     `json:"enableTelemetry"`
 	EnableNotification       bool                     `json:"enableNotification"`
 	EnableTLS                bool                     `json:"enableTLS"`
+	BlockProxy               bool                     `json:"blockProxy"`
 	ChatDownloadDir          string                   `json:"chatDownloadDir"`
 	LogDir                   string                   `json:"logDir"`
 }
@@ -181,6 +184,12 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 	} else if v.IsSet("secure") {
 		enableTLS = v.GetBool("secure")
 	}
+	blockProxy := true
+	if v.IsSet("blockProxy") {
+		blockProxy = v.GetBool("blockProxy")
+	} else if v.IsSet("disableProxy") {
+		blockProxy = v.GetBool("disableProxy")
+	}
 	chatDownloadDir := v.GetString("chatDownloadDir")
 	logDir := v.GetString("logDir")
 	return DesktopSettings{
@@ -209,6 +218,7 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 		EnableTelemetry:          enableTelemetry,
 		EnableNotification:       enableNotification,
 		EnableTLS:                enableTLS,
+		BlockProxy:               blockProxy,
 		ChatDownloadDir:          chatDownloadDir,
 		LogDir:                   logDir,
 	}, nil
@@ -229,6 +239,84 @@ func IsTelemetryEnabled() bool {
 		}
 		if v.IsSet("telemetry") {
 			return v.GetBool("telemetry")
+		}
+	}
+	return true
+}
+
+var (
+	proxyEnvOnce     sync.Once
+	savedHttpProxy   string
+	savedHttpsProxy  string
+	savedAllProxy    string
+	savedHTTP_PROXY  string
+	savedHTTPS_PROXY string
+	savedALL_PROXY   string
+)
+
+func initProxySnapshot() {
+	proxyEnvOnce.Do(func() {
+		savedHttpProxy = os.Getenv("http_proxy")
+		savedHttpsProxy = os.Getenv("https_proxy")
+		savedAllProxy = os.Getenv("all_proxy")
+		savedHTTP_PROXY = os.Getenv("HTTP_PROXY")
+		savedHTTPS_PROXY = os.Getenv("HTTPS_PROXY")
+		savedALL_PROXY = os.Getenv("ALL_PROXY")
+	})
+}
+
+// ApplyProxyPolicy applies proxy behavior according to blockProxy.
+// When blockProxy is true (default), proxy environment variables are removed and http.DefaultTransport's Proxy is set to nil (direct connection only).
+// When blockProxy is false, original proxy environment variables are restored (if any) and http.DefaultTransport's Proxy is set to http.ProxyFromEnvironment.
+func ApplyProxyPolicy(blockProxy bool) {
+	initProxySnapshot()
+	if blockProxy {
+		_ = os.Unsetenv("http_proxy")
+		_ = os.Unsetenv("https_proxy")
+		_ = os.Unsetenv("all_proxy")
+		_ = os.Unsetenv("HTTP_PROXY")
+		_ = os.Unsetenv("HTTPS_PROXY")
+		_ = os.Unsetenv("ALL_PROXY")
+		if t, ok := http.DefaultTransport.(*http.Transport); ok {
+			t.Proxy = nil
+		}
+	} else {
+		if savedHttpProxy != "" {
+			_ = os.Setenv("http_proxy", savedHttpProxy)
+		}
+		if savedHttpsProxy != "" {
+			_ = os.Setenv("https_proxy", savedHttpsProxy)
+		}
+		if savedAllProxy != "" {
+			_ = os.Setenv("all_proxy", savedAllProxy)
+		}
+		if savedHTTP_PROXY != "" {
+			_ = os.Setenv("HTTP_PROXY", savedHTTP_PROXY)
+		}
+		if savedHTTPS_PROXY != "" {
+			_ = os.Setenv("HTTPS_PROXY", savedHTTPS_PROXY)
+		}
+		if savedALL_PROXY != "" {
+			_ = os.Setenv("ALL_PROXY", savedALL_PROXY)
+		}
+		if t, ok := http.DefaultTransport.(*http.Transport); ok {
+			t.Proxy = http.ProxyFromEnvironment
+		}
+	}
+}
+
+// IsBlockProxyEnabled checks whether system proxy should be blocked (defaults to true).
+func IsBlockProxyEnabled() bool {
+	if raw := os.Getenv("EQT_BLOCK_PROXY"); raw != "" {
+		return strings.EqualFold(raw, "true") || raw == "1"
+	}
+	v := GetViperInstance(application.App{})
+	if err := v.ReadInConfig(); err == nil {
+		if v.IsSet("blockProxy") {
+			return v.GetBool("blockProxy")
+		}
+		if v.IsSet("disableProxy") {
+			return v.GetBool("disableProxy")
 		}
 	}
 	return true
@@ -298,6 +386,7 @@ func WriteDesktopSettings(app application.App, settings DesktopSettings) (Deskto
 	cleanV.Set("enableNotification", settings.EnableNotification)
 	cleanV.Set("enableTLS", settings.EnableTLS)
 	cleanV.Set("secure", settings.EnableTLS)
+	cleanV.Set("blockProxy", settings.BlockProxy)
 	cleanV.Set("chatDownloadDir", strings.TrimSpace(settings.ChatDownloadDir))
 	cleanV.Set("logDir", strings.TrimSpace(settings.LogDir))
 	if err := cleanV.WriteConfig(); err != nil {

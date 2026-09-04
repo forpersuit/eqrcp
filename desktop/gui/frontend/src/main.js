@@ -2317,6 +2317,15 @@ function renderSettingsPanel() {
                     </div>
                     <div class="setting-row">
                         <div class="setting-copy">
+                            <strong>${t('block_proxy')}</strong>
+                            <span>${t('block_proxy_desc')}</span>
+                        </div>
+                        <div class="setting-control-stack">
+                            ${renderSwitch('settings-block-proxy', state.settings?.blockProxy !== false)}
+                        </div>
+                    </div>
+                    <div class="setting-row">
+                        <div class="setting-copy">
                             <strong>${t('update_check_interval')}</strong>
                             <span>${t('update_check_interval_desc')}</span>
                         </div>
@@ -4015,7 +4024,7 @@ function bindEvents() {
                 state.devLicenseCode = String(e.target.value || '');
                 return;
             }
-            if (e.target.matches('#settings-interface, #settings-port, #settings-browser, #settings-enable-tls, #settings-chat-autosave, #settings-chat-download-dir, #settings-chat-v2, #settings-close-behavior, #settings-auto-update-mode, #settings-update-interval, #settings-lang, #settings-show-history, #settings-telemetry, #settings-notification')) {
+            if (e.target.matches('#settings-interface, #settings-port, #settings-browser, #settings-enable-tls, #settings-block-proxy, #settings-chat-autosave, #settings-chat-download-dir, #settings-chat-v2, #settings-close-behavior, #settings-auto-update-mode, #settings-update-interval, #settings-lang, #settings-show-history, #settings-telemetry, #settings-notification')) {
                 syncSettingsFromDOM();
                 return;
             }
@@ -4114,7 +4123,7 @@ function bindEvents() {
                 }
                 return;
             }
-            if (e.target.matches('#settings-interface, #settings-port, #settings-browser, #settings-enable-tls, #settings-chat-autosave, #settings-chat-download-dir, #settings-chat-v2, #settings-close-behavior, #settings-auto-update-mode, #settings-update-interval, #settings-lang, #settings-show-history, #settings-telemetry, #settings-notification')) {
+            if (e.target.matches('#settings-interface, #settings-port, #settings-browser, #settings-enable-tls, #settings-block-proxy, #settings-chat-autosave, #settings-chat-download-dir, #settings-chat-v2, #settings-close-behavior, #settings-auto-update-mode, #settings-update-interval, #settings-lang, #settings-show-history, #settings-telemetry, #settings-notification')) {
                 if (e.target.id === 'settings-auto-update-mode') {
                     handleAutoUpdateModeChange(e.target.value);
                     return;
@@ -4887,6 +4896,7 @@ function syncSettingsFromDOM() {
     const notifSwitch = document.querySelector('#settings-notification');
     const telemetrySwitch = document.querySelector('#settings-telemetry');
     const enableTLSSwitch = document.querySelector('#settings-enable-tls');
+    const blockProxySwitch = document.querySelector('#settings-block-proxy');
 
 
     if (receiveInput) state.settings.output = receiveInput.value;
@@ -4916,6 +4926,7 @@ function syncSettingsFromDOM() {
     if (notifSwitch) state.settings.enableNotification = notifSwitch.checked;
     if (telemetrySwitch) state.settings.enableTelemetry = telemetrySwitch.checked;
     if (enableTLSSwitch) state.settings.enableTLS = enableTLSSwitch.checked;
+    if (blockProxySwitch) state.settings.blockProxy = blockProxySwitch.checked;
 
 
     state.receiveDir = state.settings.output || '';

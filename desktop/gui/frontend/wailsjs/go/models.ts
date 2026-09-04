@@ -314,6 +314,7 @@ export namespace main {
 	    enableTelemetry: boolean;
 	    enableNotification: boolean;
 	    enableTLS: boolean;
+	    blockProxy: boolean;
 	    chatDownloadDir: string;
 	    logDir: string;
 	
@@ -347,6 +348,7 @@ export namespace main {
 	        this.enableTelemetry = source["enableTelemetry"];
 	        this.enableNotification = source["enableNotification"];
 	        this.enableTLS = source["enableTLS"];
+	        this.blockProxy = source["blockProxy"];
 	        this.chatDownloadDir = source["chatDownloadDir"];
 	        this.logDir = source["logDir"];
 	    }
