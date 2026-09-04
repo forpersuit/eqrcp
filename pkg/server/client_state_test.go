@@ -1,7 +1,10 @@
 package server
 
 import (
+	"fmt"
+	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -682,5 +685,71 @@ func TestReceiveInitAccumulation(t *testing.T) {
 	}
 	if cs.Files[0].State != "completed" || cs.Files[1].State != "waiting" {
 		t.Errorf("file states incorrect: file1 state=%s, file2 state=%s", cs.Files[0].State, cs.Files[1].State)
+	}
+}
+
+func TestRegisterClientAndStatusConcurrencyNoDeadlock(t *testing.T) {
+	s := &Server{
+		clientLastSeen: make(map[string]time.Time),
+		clientStates:   make(map[string]*ClientTransferStateInfo),
+		clientProgress: make(map[string]map[int]int64),
+	}
+	s.status.Mode = "send"
+	s.status.BytesTotal = 1048576
+
+	done := make(chan struct{})
+	var wg sync.WaitGroup
+
+	// Concurrently invoke registerClientActivityWithID
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			for j := 0; j < 50; j++ {
+				req, _ := http.NewRequest("GET", "/test", nil)
+				s.registerClientActivityWithID(fmt.Sprintf("client-%d", id), req)
+				time.Sleep(100 * time.Microsecond)
+			}
+		}(i)
+	}
+
+	// Concurrently invoke updateStatus
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 50; j++ {
+				s.updateStatus(func(status *transferStatus) {
+					status.State = "transferring"
+				})
+				time.Sleep(100 * time.Microsecond)
+			}
+		}()
+	}
+
+	// Concurrently invoke SetAutoStop and isAllActiveClientsFinished
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 20; j++ {
+				s.SetAutoStop(true)
+				_ = s.isAllActiveClientsFinished()
+				s.SetAutoStop(false)
+				time.Sleep(200 * time.Microsecond)
+			}
+		}()
+	}
+
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Success: all goroutines completed without deadlocking
+	case <-time.After(5 * time.Second):
+		t.Fatal("Deadlock detected during concurrent registerClientActivityWithID, updateStatus, and SetAutoStop")
 	}
 }

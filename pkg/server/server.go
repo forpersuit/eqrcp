@@ -166,6 +166,7 @@ func (s *Server) SetAutoStop(enabled bool) {
 	notifyTransferStatusHook(hook, status)
 
 	if enabled {
+		s.clientStatesMu.Lock()
 		s.clientMutex.Lock()
 		if s.autoStopIgnoredClients == nil {
 			s.autoStopIgnoredClients = make(map[string]bool)
@@ -220,6 +221,7 @@ func (s *Server) SetAutoStop(enabled bool) {
 			}
 		}
 		s.clientMutex.Unlock()
+		s.clientStatesMu.Unlock()
 
 		// 打开开关意味着在所有设备都传输完成后，关闭服务
 		if s.isAllActiveClientsFinished() {
@@ -1507,12 +1509,18 @@ func (s *Server) markItemDownloaded(index int) bool {
 }
 
 func (s *Server) isAllActiveClientsFinished() bool {
+	s.statusMu.Lock()
+	autoStop := s.autoStop
+	s.statusMu.Unlock()
+
+	s.clientStatesMu.Lock()
+	defer s.clientStatesMu.Unlock()
 	s.clientMutex.Lock()
 	defer s.clientMutex.Unlock()
 
 	totalClients := 0
 	for clientID := range s.clientLastSeen {
-		if s.autoStop && s.autoStopIgnoredClients[clientID] {
+		if autoStop && s.autoStopIgnoredClients[clientID] {
 			continue
 		}
 		totalClients++
@@ -1530,7 +1538,7 @@ func (s *Server) isAllActiveClientsFinished() bool {
 		finishedTotalCount := 0
 
 		for clientID, lastSeen := range s.clientLastSeen {
-			if s.autoStop && s.autoStopIgnoredClients[clientID] {
+			if autoStop && s.autoStopIgnoredClients[clientID] {
 				continue
 			}
 			isActive := now.Sub(lastSeen) <= 8*time.Second
@@ -1568,7 +1576,7 @@ func (s *Server) isAllActiveClientsFinished() bool {
 	finishedTotalCount := 0
 
 	for clientID, lastSeen := range s.clientLastSeen {
-		if s.autoStop && s.autoStopIgnoredClients[clientID] {
+		if autoStop && s.autoStopIgnoredClients[clientID] {
 			continue
 		}
 		isActive := now.Sub(lastSeen) <= 8*time.Second
@@ -1654,10 +1662,12 @@ func (s *Server) registerClientActivityWithID(clientID string, r *http.Request) 
 	if !existed {
 		s.updateStatus(func(status *transferStatus) {})
 	}
+
+	s.statusMu.Lock()
+	total := s.status.BytesTotal
+	s.statusMu.Unlock()
+
 	s.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
-		s.statusMu.Lock()
-		total := s.status.BytesTotal
-		s.statusMu.Unlock()
 		if cs.BytesTotal <= 0 && total > 0 {
 			cs.BytesTotal = total
 		}
