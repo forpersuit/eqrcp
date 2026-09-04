@@ -413,3 +413,40 @@ func (a *App) ExportDiagnosticsZip() (string, error)
 
 > **交付边界**：第四轮审查意见 5 项缺陷已全部闭环，单元测试 100% PASS。准备进入 Phase 3 移动端轻量埋点探针落地。
 
+---
+
+## 十一、第五轮代码复核（commit de29b70c · v1.36.32 · §十 五项闭环落地核验）
+
+> **复核对象**：`de29b70c fix(logging): close round-4 review items with true single-frame levels and diag extraction`（基于 `5ea5f7aa` 第四轮审查）。
+> **复核结论（总体）**：§十 宣称闭环的 5 项，经**代码逐条比对 + 真实落盘物证 + 全量测试**核验，**全部确实闭环、无虚假声明**；另对 passthrough 误伤面与 chat-v2 提取无损性做了独立盘点，**未发现新回归**。本地复核：`cd desktop/gui && go vet .` 干净、`go test . -run 'TestFileLogger' -count=1` ok（0.615s）、`go test . -count=1` ok（1.884s 全包）；`go vet ./pkg/server`、`go test ./pkg/server -count=1` ok（9.180s）、`go build ./...` 全绿。版本保持 v1.36.32（本提交为 review 闭环 fix、无新功能面，符合「功能增加小版本 +1」规则）。
+>
+> 真实落盘物证（`desktop/gui` 临时探针跑通后即删，实测逐行）：
+> ```
+> [2026-09-04 …] [INFO]  [SRV]   [EQT Server] [Download Start] clientID=c8f12a, File=test.mp4   ← 传统业务行仍 [INFO][SRV] 包裹，零回归
+> [2026-09-04 …] [ERROR] [CLIENT] [c8f12a] [EXCEPTION] Uncaught TypeError in main.js | IP=192.168.1.5   ← 单帧真 ERROR（原双框）
+> [2026-09-04 …] [INFO]  [SRV]   HTTP GET /send/a1b2c3...x8y9z0 from 192.168.1.5                 ← 单帧（原 [INFO][SRV][INFO][SRV] 双框）
+> [2026-09-04 …] [ERROR] [CHAT] session handshake failed ws_id=1                                ← 真实 diag 小写 error → [ERROR][CHAT]
+> [2026-09-04 …] [WARN]  [CHAT] bandwidth limit exceeded                                         ← 真实 diag 小写 warn → [WARN][CHAT]
+> ```
+
+### §十 五项闭环复核事实
+
+| §十项 | 复核方式与代码证据 | 状态 |
+| :--- | :--- | :---: |
+| **1. 双框消除、schema 位 2 真级别透传** | `file_logger.go:336-354` std 分支剥离时间戳后按前置 `[LEVEL]`（INFO/WARN/ERROR/DEBUG/FATAL/PRINT/TRACE）命中即原样单帧透传、未命中才补 `[INFO] [SRV]`。落盘物证：client ERROR 落为 `[ts] [ERROR] [CLIENT] …`、access 落为 `[ts] [INFO] [SRV] HTTP …`，均单帧。全仓 `log.Printf` 括号前置盘点仅 telemetry.go 3 处自嵌帧，`[EQT Server]`/`[DRM]`/`[EQT-DNS]` 均走 legacy 包裹 → **无 passthrough 误伤**。 | ✅ **确实闭环** |
+| **2. chat-v2 真实小写级别提取无损** | `file_logger.go:314-335` 对小写裸 token（`error `/`warn `/`info `/`debug `）与大写括号双形态识别，单次 TrimPrefix 即 break（消息体不会二次误剥）。无损性论证：`diag/log.go:63` `log.New(w,"chat-v2 ",log.LstdFlags)` + `:78` 输出 `"%s %s", event.Level, …`，且 `Log()` 为 **StdLogger 唯一发射口**，故每行恒为 `chat-v2 <ts> <真级别> <msg>`，首 token 即真级别 → 提取永不失真。落盘物证：`[ERROR] [CHAT]`/`[WARN] [CHAT]` 两行。 | ✅ **确实闭环** |
+| **3. 限流丢弃周期告警外显** | `telemetry.go:227-230` 原子计数 `dropped%10==1` 时输出 `[WARN] [SRV] Dropped client-log telemetry requests …`；该行经 std log 复用 std 分支同链单帧透传（与 access 行同路径）。`TestHandleClientLog_RateLimiting` 8 连发触发 1 条（count=1）实际走通。 | ✅ **确实闭环** |
+| **4. 文档收尾** | 文档头已更新 v1.3 / 状态「Phase 1/2 落地、进入 Phase 3」；§四-4 轮转段已统一 `FileLogger`；§九 表头「事实事实」笔误已修；§十 由开发者重写为闭环核验（替换旧残留表）而非叠加矛盾内容。 | ✅ **确实闭环** |
+| **5. 测试捕获断言落地** | `telemetry_test.go:158-196` 新增 `log.Writer` 捕获：断言脱敏 `123456...abcdef` 且不落明文 token、`/status` 轮询静音防洪；`file_logger_test.go:33-88` 用真实单帧 client error / access / 小写 diag 三态断言，并反断言 `[INFO] [SRV] [ERROR]`、`[INFO] [CHAT] error` 等双框/漏提形态不得出现。全量运行 ok。 | ✅ **确实闭环** |
+
+### 补充盘点（语义细节，均非阻塞）
+
+| 观察项 | 说明 | 影响 |
+| :--- | :--- | :---: |
+| a. DEBUG 透传不受 GUI `DebugMode` 门禁约束 | DEBUG 级 client-log 现以真 `[DEBUG]` 落盘（此前恒 INFO 也照写），仅标签更真实；量级受 10/s/IP 限流约束。 | 非回归，INFO |
+| b. chat WARN/ERROR 饱和策略变化 | chat error/warn 行提取后现走 WARN/ERROR 保序分支（50ms 有界等待 + 应急直写），WebSocket 协程饱和时最坏阻塞 50ms。符合 FileLogger 冻结契约，且保住关键行。 | 非回归，INFO |
+| c. drop 告警跨 IP 聚合语义 | `count` 为全局计数、`IP` 为当下丢弃者，多源并发丢弃下归属近似；`%10==1` 在并发 ±1 抖动。可观测目标达成。 | 可接受 |
+| d. `[ts]` 前缀列宽不一致为排版而非 schema 问题 | 物证为对齐手工补空格，落盘无影响；schema 位 2/3 顺序正确。 | 纯展示 |
+
+> **交付边界**：第四轮审查 5 项全部经物证复核闭环，无剩余待办、无新增回归。建议按 §五 路线图进入 Phase 3 移动端轻量埋点（sendBeacon → `/client-log`）与 Windows 实机落盘验收；若希望该 fix 亦在应用版本留痕，可在合并 feature 分支时统一处理。
+
