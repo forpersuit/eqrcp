@@ -15,7 +15,25 @@ import (
 )
 
 var desktopAgentURL = getDesktopAgentURL()
-var agentHTTPClient = &http.Client{Timeout: time.Second}
+var agentHTTPClient = &http.Client{
+	Timeout: time.Second,
+	Transport: &http.Transport{
+		Proxy: nil,
+	},
+}
+
+func init() {
+	// 工程不走任何代理，只有直连
+	_ = os.Unsetenv("http_proxy")
+	_ = os.Unsetenv("https_proxy")
+	_ = os.Unsetenv("all_proxy")
+	_ = os.Unsetenv("HTTP_PROXY")
+	_ = os.Unsetenv("HTTPS_PROXY")
+	_ = os.Unsetenv("ALL_PROXY")
+	if t, ok := http.DefaultTransport.(*http.Transport); ok {
+		t.Proxy = nil
+	}
+}
 
 func getDesktopAgentURL() string {
 	if port := os.Getenv("EQT_AGENT_PORT"); port != "" {

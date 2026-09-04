@@ -221,6 +221,82 @@
             flex: 1;
         }
 
+        .package-name-card {
+            margin: 14px 0 16px 0;
+            padding: 10px 12px;
+            background: var(--surface-soft, rgba(0, 0, 0, 0.02));
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            box-sizing: border-box;
+            width: 100%;
+        }
+
+        .package-name-content {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            overflow: hidden;
+            min-width: 0;
+            flex: 1;
+            text-align: left;
+        }
+
+        .package-icon {
+            font-size: 16px;
+            flex-shrink: 0;
+            color: var(--accent);
+            line-height: 1;
+        }
+
+        .package-name-text {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text-primary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            word-break: break-all;
+        }
+
+        .btn-copy-filename {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            background: #ffffff;
+            color: var(--text-secondary);
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            padding: 6px 9px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+            font-size: 12px;
+            line-height: 1;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .btn-copy-filename:hover {
+            background: var(--surface-soft, #f9fafb);
+            color: var(--accent);
+            border-color: var(--accent-border);
+        }
+
+        .btn-copy-filename:active {
+            transform: scale(0.95);
+        }
+
+        .btn-copy-filename.copied {
+            border-color: rgba(16, 185, 129, 0.4);
+            background: rgba(16, 185, 129, 0.08);
+            color: #10b981;
+        }
+
         .btn {
             display: inline-block;
             width: 100%;
@@ -385,9 +461,21 @@
             {{end}}
 
             <!-- 接收包名卡片（展示最终接收包或文件名） -->
-            <div class="package-name-card" style="margin: 14px 0 16px 0; padding: 10px 14px; background: var(--surface-soft); border: 1px solid var(--line); border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 8px; word-break: break-all;">
-                <span style="font-size: 16px; flex-shrink: 0; color: var(--accent);">📦</span>
-                <span class="package-name-text" style="font-size: 14px; font-weight: 700; color: var(--text-primary);">{{.File}}</span>
+            <div class="package-name-card">
+                <div class="package-name-content">
+                    <span class="package-icon">📦</span>
+                    <span class="package-name-text" id="package-name-text" title="{{.File}}">{{.File}}</span>
+                </div>
+                <button type="button" class="btn-copy-filename" id="btn-copy-filename" title="Copy filename" aria-label="Copy filename" data-i18n-title="copy_filename">
+                    <svg class="icon-copy" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <rect x="8" y="8" width="11" height="11" rx="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                    <svg class="icon-check" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display: none;">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                    <span class="copy-feedback-text" id="copy-feedback-text" style="display: none;" data-i18n="copied">Copied</span>
+                </button>
             </div>
 
             {{if gt .Count 1}}
@@ -467,7 +555,7 @@
                 'stats_meta_multiple', 'close_hint', 'success_summary_single', 'success_summary_multiple',
                 'success_tips_all', 'limit_header', 'limit_tips', 'btn_upgrade', 'notification_tips',
                 'waiting_status', 'failed_status', 'downloaded_files_title', 'can_open', 'cannot_open',
-                'btn_save_zip', 'zip_contents'
+                'btn_save_zip', 'zip_contents', 'copy_filename', 'copied'
             ];
 
             var translations = {
@@ -502,7 +590,9 @@
                     can_open: '可以点击打开',
                     cannot_open: '此格式无法直接打开，请在文件管理器中查看',
                     btn_save_zip: '保存 ZIP 压缩包',
-                    zip_contents: '压缩包内包含的文件：'
+                    zip_contents: '压缩包内包含的文件：',
+                    copy_filename: '复制文件名',
+                    copied: '已复制'
                 },
                 en: {
                     title: 'Receive File - EQT',
@@ -535,7 +625,9 @@
                     can_open: 'Click to open/preview',
                     cannot_open: 'Cannot open directly. Please find it in file manager',
                     btn_save_zip: 'Save ZIP Archive',
-                    zip_contents: 'Files included in the ZIP:'
+                    zip_contents: 'Files included in the ZIP:',
+                    copy_filename: 'Copy filename',
+                    copied: 'Copied'
                 },
                 ja: {
                     title: 'ファイル受信 - EQT',
@@ -563,7 +655,9 @@
                     btn_upgrade: 'ライセンスをアップグレード',
                     failed_status: '転送が停止しました。ボタンをクリックして再起動できます。',
                     notification_tips: '転送を一時停止または停止するには、スマートフォンの通知バーまたはブラウザのダウンロードマネージャーを使用してください。',
-                    waiting_status: '接続が中断されました。再接続を待機しています...'
+                    waiting_status: '接続が中断されました。再接続を待機しています...',
+                    copy_filename: 'ファイル名をコピー',
+                    copied: 'コピー完了'
                 },
                 ko: {
                     title: '파일 받기 - EQT',
@@ -591,7 +685,9 @@
                     btn_upgrade: '라이선스 업그레이드',
                     failed_status: '전송이 중지되었습니다. 버튼을 클릭하여 다시 시작할 수 있습니다.',
                     notification_tips: '전송을 일시 중지하거나 중지하려면 휴대전화의 알림창이나 브라우저 다운로드 관리자를 사용하세요.',
-                    waiting_status: '연결이 중단되었습니다. 다시 연결하는 중...'
+                    waiting_status: '연결이 중단되었습니다. 다시 연결하는 중...',
+                    copy_filename: '파일명 복사',
+                    copied: '복사됨'
                 },
                 es: {
                     title: 'Recibir Archivo - EQT',
@@ -619,7 +715,9 @@
                     btn_upgrade: 'Actualizar Licencia',
                     failed_status: 'Transferencia detenida. Puede hacer clic en el botón para reiniciar.',
                     notification_tips: 'Para pausar o detener la transferencia, use la barra de notificaciones de su teléfono o el administrador de descargas del navegador.',
-                    waiting_status: 'Conexión interrumpida, esperando para reconectar...'
+                    waiting_status: 'Conexión interrumpida, esperando para reconectar...',
+                    copy_filename: 'Copiar nombre de archivo',
+                    copied: 'Copiado'
                 },
                 de: {
                     title: 'Datei bereit zum Herunterladen - EQT',
@@ -647,7 +745,9 @@
                     btn_upgrade: 'Lizenz upgraden',
                     failed_status: 'Übertragung gestoppt. Sie können auf die Schaltfläche klicken, um neu zu starten.',
                     notification_tips: 'Um die Übertragung anzuhalten oder zu stoppen, verwenden Sie bitte die Benachrichtigungsleiste Ihres Telefons oder den Download-Manager des Browsers.',
-                    waiting_status: 'Verbindung unterbrochen, Verbindung wird wiederhergestellt...'
+                    waiting_status: 'Verbindung unterbrochen, Verbindung wird wiederhergestellt...',
+                    copy_filename: 'Dateinamen kopieren',
+                    copied: 'Kopiert'
                 },
                 fr: {
                     title: 'Recevoir le Fichier - EQT',
@@ -675,7 +775,9 @@
                     btn_upgrade: 'Mettre à niveau',
                     failed_status: 'Transfert arrêté. Vous pouvez cliquer sur le bouton pour redémarrer.',
                     notification_tips: 'Pour suspendre ou arrêter le transfert, veuillez utiliser la barre de notification de votre téléphone ou le gestionnaire de téléchargement du navigateur.',
-                    waiting_status: 'Connexion interrompue, en attente de reconnexion...'
+                    waiting_status: 'Connexion interrompue, en attente de reconnexion...',
+                    copy_filename: 'Copier le nom du fichier',
+                    copied: 'Copié'
                 }
             };
 
@@ -746,6 +848,15 @@
                         var key = el.getAttribute('data-i18n');
                         if (key && dict[key]) {
                             el.textContent = dict[key];
+                        }
+                    });
+
+                    var titleElements = document.querySelectorAll('[data-i18n-title]');
+                    titleElements.forEach(function(el) {
+                        var key = el.getAttribute('data-i18n-title');
+                        if (key && dict[key]) {
+                            el.setAttribute('title', dict[key]);
+                            el.setAttribute('aria-label', dict[key]);
                         }
                     });
 
@@ -1515,6 +1626,74 @@
 
             applyLanguage();
         }
+
+        function initCopyFilenameButton() {
+            var btn = document.getElementById('btn-copy-filename');
+            var textEl = document.getElementById('package-name-text');
+            if (!btn || !textEl) return;
+
+            var copyTimeout = null;
+
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                var textToCopy = (textEl.textContent || textEl.innerText || '').trim();
+                if (!textToCopy) return;
+
+                function onCopySuccess() {
+                    btn.classList.add('copied');
+                    var iconCopy = btn.querySelector('.icon-copy');
+                    var iconCheck = btn.querySelector('.icon-check');
+                    var feedbackText = btn.querySelector('.copy-feedback-text');
+                    if (iconCopy) iconCopy.style.display = 'none';
+                    if (iconCheck) iconCheck.style.display = 'inline-block';
+                    if (feedbackText) feedbackText.style.display = 'inline';
+
+                    if (copyTimeout) clearTimeout(copyTimeout);
+                    copyTimeout = setTimeout(function() {
+                        btn.classList.remove('copied');
+                        if (iconCopy) iconCopy.style.display = 'inline-block';
+                        if (iconCheck) iconCheck.style.display = 'none';
+                        if (feedbackText) feedbackText.style.display = 'none';
+                    }, 2000);
+                }
+
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(textToCopy)
+                        .then(onCopySuccess)
+                        .catch(function() {
+                            fallbackCopy(textToCopy, onCopySuccess);
+                        });
+                } else {
+                    fallbackCopy(textToCopy, onCopySuccess);
+                }
+            });
+
+            function fallbackCopy(text, onSuccess) {
+                try {
+                    var textarea = document.createElement('textarea');
+                    textarea.value = text;
+                    textarea.style.position = 'fixed';
+                    textarea.style.top = '0';
+                    textarea.style.left = '0';
+                    textarea.style.opacity = '0';
+                    textarea.style.pointerEvents = 'none';
+                    document.body.appendChild(textarea);
+                    textarea.focus();
+                    textarea.select();
+                    var success = document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                    if (success) {
+                        onSuccess();
+                    }
+                } catch (err) {
+                    console.warn('[EQT] fallback copy failed:', err);
+                }
+            }
+        }
+
+        initCopyFilenameButton();
 
         // Auto start status polling on page load to register client activity immediately
         startStatusPolling();

@@ -242,6 +242,19 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
 - **410 Gone 会话终结处理与轮询终止 (410 Handling & Polling Teardown)**：
   - 收到 HTTP 410 时必须立即清理轮询定时器（`clearInterval`），避免页面无限发起死轮询。
   - 通过服务端响应头 `X-EQT-Transfer-State` 与本地进度双重判定：若服务端确凿标记已完成或本地进度已达标，收敛至完成对勾态（保障息屏唤醒错过 15s grace window 的观察端）；若为停止态，展示停止提示并恢复操作按钮（`actionBtnRow`）。
-- **日志与崩溃转储 7 天留存自清理 (7-Day Log & Crash Dump Retention)**：
+- **日志与崩溃转储 7 天留存自清理 (7-Day Log & Crash Dump Retention)**:
   - `file_logger.go` 在启动、切换目录和每 12 小时自检时，依据 7 天 cutoff 清理过期历史轮转日志与 `.dump` 文件；活跃 `desktop.log` 仅在闲置超期时 `Truncate(0)`；同时对齐真实崩溃转储文件 `config.DefaultConfigDir()/crash.dump`，对已上报/已忽略或超期转储执行清理。
 
+---
+
+## 14. 移动端最终文件快捷复制与工程全链路直连规范 (Mobile File Copy & Direct Connection Standard)
+
+- **最终文件卡片快捷复制 (Mobile Card Copy Interaction)**:
+  - 移动端 Share 模式界面（`download.tmpl.html`）中的接收文件名/包名卡片（`.package-name-card`）右侧集成轻量级复制按钮（`.btn-copy-filename`）；
+  - 采用无阻塞事件绑定与剪贴板回退策略：优先使用 `navigator.clipboard.writeText`，在未授权或非安全上下文环境下安全降级为 `textarea` + `document.execCommand('copy')`；
+  - 交互反馈严格遵守无系统弹窗规范：点击后原复制图标即时切换为绿色对勾与反馈微文案，持续 2 秒后平滑复原；
+  - 纳入 `EqtI18n` 契约体系（`copy_filename` 与 `copied`），支持 7 国语言即时切换与动态绑定。
+- **工程全链路纯直连准则 (Strict Direct Connection Policy)**:
+  - 桌面端 WebView2 内核启动时显式注入 `--no-proxy-server` 命令行参数，彻底杜绝操作系统本地代理（如 10808 等代理端口）对回环通信和静态资源的拦截；
+  - Go 后端（CLI/GUI/Launcher）启动时全面清除 `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY` 环境变量，并将 `http.DefaultTransport.Proxy` 设为 `nil`；
+  - WSL 开发环境自动化推送脚本 `scripts/git-push-smart.sh` 默认仅探测并使用 direct-22 / direct-443 直连 SSH 路由，杜绝意外接入本地代理。

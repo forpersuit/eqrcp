@@ -68,10 +68,13 @@ probe_route() {
 }
 
 choose_route() {
-  host="$(proxy_host)"
+  local host=""
   local candidates=("direct-22" "direct-443")
-  if [[ -n "$host" ]]; then
-    candidates+=("proxy-22" "proxy-443")
+  if [[ "${EQT_ALLOW_GIT_PROXY:-0}" == "1" ]]; then
+    host="$(proxy_host)"
+    if [[ -n "$host" ]]; then
+      candidates+=("proxy-22" "proxy-443")
+    fi
   fi
   local best=""
   local result

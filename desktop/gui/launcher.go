@@ -15,7 +15,12 @@ import (
 )
 
 var desktopAgentURL = getDesktopAgentURL()
-var agentHTTPClient = &http.Client{Timeout: time.Second}
+var agentHTTPClient = &http.Client{
+	Timeout: time.Second,
+	Transport: &http.Transport{
+		Proxy: nil,
+	},
+}
 
 func getDesktopAgentURL() string {
 	if port := os.Getenv("EQT_AGENT_PORT"); port != "" {

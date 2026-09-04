@@ -271,14 +271,25 @@ func startWailsGUI() {
 	app.logger = fileLogger
 	tray := newTrayController(app)
 
-	// Ensure WebView2 bypasses proxy for local LAN-TLS loopback domain (*.direct.eqt.net.im) and loopback addresses
-	const proxyBypassArg = "--proxy-bypass-list=*.direct.eqt.net.im;<-loopback>"
+	// Ensure the entire application strictly connects directly without using any proxy
+	_ = os.Unsetenv("http_proxy")
+	_ = os.Unsetenv("https_proxy")
+	_ = os.Unsetenv("all_proxy")
+	_ = os.Unsetenv("HTTP_PROXY")
+	_ = os.Unsetenv("HTTPS_PROXY")
+	_ = os.Unsetenv("ALL_PROXY")
+	if t, ok := http.DefaultTransport.(*http.Transport); ok {
+		t.Proxy = nil
+	}
+
+	// Instruct WebView2 to disable proxy servers and use direct connections exclusively
+	const noProxyArg = "--no-proxy-server"
 	if curArgs := os.Getenv("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"); curArgs != "" {
-		if !strings.Contains(curArgs, "--proxy-bypass-list") {
-			_ = os.Setenv("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", curArgs+" "+proxyBypassArg)
+		if !strings.Contains(curArgs, "--no-proxy-server") {
+			_ = os.Setenv("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", curArgs+" "+noProxyArg)
 		}
 	} else {
-		_ = os.Setenv("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", proxyBypassArg)
+		_ = os.Setenv("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", noProxyArg)
 	}
 
 	// Create application with options
