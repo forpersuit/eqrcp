@@ -624,3 +624,20 @@ func (a *App) ExportDiagnosticsZip() (string, error)
 
 > **交付边界**：第十轮复核确认 §十七 五项闭环全部真实落地、无虚假声明，`-race` 全绿、无竞态、无回归、无版本断裂（v1.36.34 未升符合"feat 升 / fix·test·docs 不升"先例）。本轮新增 1 项并发基准测量口径隐患（#1，中低）与 2 项极低口径残留（#2/#3），均非阻断项。**#1 不构成安全或功能回归**——限流拒绝本身即被测范围，且 `429` 丢弃路径与成功摄入路径共享同一批读 body/脱敏前置逻辑；但其使 §十六 "50 并发成功上报 ≤50ms 达标"的表述超出该基准实际所能证明的边界，建议下轮按 (a)/(b) 收敛口径或补独立成功摄入基准。
 
+---
+
+## 十九、第十一轮代码复核（commit f0cbf94f · 传输下载实时进度与速率恢复复核）
+
+> **复核对象**：`f0cbf94f Restore real-time GUI transfer progress and speed during downloads`（v1.36.34，2026-09-04 14:19，修复 `4515670f` 引入的下载进度停滞回归）。
+> **复核说明**：用户报告"传输过程中进度条不前进（一直停在 0% 或虚线），直到传完才跳 100% 或毫无变化"，HEAD 即 f0cbf94f。**本地实测**：`cd pkg/server && go test ./... -count=1` → ok（8.540s）；`go test -run TestProgressResponseWriterReadFromChunking -race -v` → PASS（0.02s）；`cd desktop/gui && go test ./... -count=1` → ok（1.977s），无回归。
+> **复核结论（总体）**：根因定位**准确且为唯一根因**——`4515670f`（Share 模式零拷贝优化）给 `progressResponseWriter` 增加 `io.ReaderFrom` 委托（util.go），Go `net/http` 探测到 ResponseWriter 实现 `io.ReaderFrom` 后走 sendfile/一次内核态拷贝，`Write` 只在文件尾部被调用一次 → `onWrite` 一次回调 → 进度卡 0% 直到 100%。修复**回退委托、强制 256KB 分块循环**（util.go:147-173，每块触发一次 `Write`→`onWrite`），`Flush()` 透传保留。配套修正真实且闭环：server.go onWrite 每块实时写 clientStates（置 `transferring` + BytesDone/Percent/Speed）+ 在 statusMu 下推进全局进度；`registerClientActivityWithID` 对新建客户端从全局 status 反填 BytesTotal；`cloneTransferStatus`/`snapshotTransferStatus`/agent.go 两条克隆链补齐 Speed 字段（此前遗漏会导致 GUI 快照丢速率）；complete/interrupt 各分支速率清 0（不残留旧速）；前端 `showProgress` 口径放宽为 `transferring` 即显示进度条（消除 0% 虚线占位）；`TestProgressResponseWriterReadFromChunking`（700KB 断言 ≥3 次分块回调）+ SKILL.md §11 固化。**但本轮发现 1 项本次提交引入的高危锁序隐患（statusMu↔clientStatesMu 死锁窗口）与 1 项同文件未随提交收敛的 clientStates 混锁读残留**——详见下表。
+
+### 本轮复核发现
+
+| 评审意见项 | 评审性质 | 复核发现 | 建议处置 | 状态 |
+| :--- | :--- | :--- | :--- | :---: |
+| **1. updateStatus 与 registerClientActivityWithID 锁序反转（AB-BA：statusMu↔clientStatesMu），并发下存在不可恢复死锁窗口** | **【并发·锁序·高（罕见但不可恢复）·本次提交引入】** | f0cbf94f 在 server.go 同时补齐互为反向的两条锁序边：(a) **statusMu→clientStatesMu**——`updateStatus` 自 1240 持 statusMu 至 1304，send 分支 1245 由 `clientMutex.Lock()` 改为 `clientStatesMu.Lock()`（本提交），receive 分支 1285 经 `getClientDownloadedAndTotal`（receive 模式 1998 取 clientStatesMu）同序（该方向在 receive 模式属预存，send 模式属本提交新增）；(b) **clientStatesMu→statusMu**——`registerClientActivityWithID` 1657-1664 由空闭包改为在 `updateClientStatus`（1775 持 clientStatesMu、锁内回调）的闭包里锁 statusMu 读 `BytesTotal`（**本提交新增的反向边，闭合了环**）。交错即死锁：G1=/status 轮询 `updateStatus` 持 statusMu、于 1245/1285 等待 clientStatesMu；G2=下载连接注册持 clientStatesMu、回调内等待 statusMu。Go Mutex 无超时，死锁后该传输实例所有后续 `updateStatus` 与 onWrite 进度写**连锁阻塞，传输永久冻结、仅重启进程可恢复**。窗口为微秒级交错、命中概率低，但后果不可恢复；`go test -race` 仅检测数据竞争、不检测死锁，故本轮测试全绿不构成对该窗口的防护。 | 最小修复：把闭包内 `statusMu.Lock()` 读 `total` 提升到 `updateClientStatus` 调用之前（单独短暂持 statusMu、不嵌套），闭包内不再锁 statusMu，恢复锁序单方向 statusMu→clientStatesMu（尽力而为反填对 TOCTOU 可接受）。若一并清理 #2，可实现 clientStates/statusMu 双锁序全库单调。 | ⏳ 建议跟进（锁序修复） |
+| **2. clientStates 混锁读残留两处（SetAutoStop / isAllActiveClientsFinished），本提交锁收敛方向未走完** | **【并发·混锁·中（预存，非本次引入）】** | 对 `clientStates` 的写方全部走 clientStatesMu（`updateClientStatus` 1775 等），读方绝大多数亦走 clientStatesMu；但 `SetAutoStop`（212 行，clientMutex 段 169-222 内读 `s.clientStates[clientID]`）与 `isAllActiveClientsFinished`（1542/1580 行，clientMutex 段 1510-1634 内读）仍持 clientMutex 读同一 map——与下载 onWrite 的 clientStatesMu 写方（`updateClientStatus`）并发即 Go map 数据竞争。f0cbf94f 仅将 `updateStatus` 一处 clientMutex→clientStatesMu（1245），同类残留两处未随本提交清理（预存问题，非本次回归；auto-stop 开启 / 全部完成判定与活跃下载写进度并发时才会触发）。 | 与 #1 一并收敛：将这两处对 `clientStates` 的读取迁至 clientStatesMu（各函数内其余 clientLastSeen/clientProgress 字段保持原 clientMutex 不变），根除 clientStates 双锁局面，随后 `-race` 可证无竞态。 | ⏳ 建议跟进（锁收敛） |
+
+> **交付边界**：第十一轮复核确认 f0cbf94f 对下载进度停滞回归的**根因定位与修复真实有效**（`io.ReaderFrom` 委托→sendfile 是唯一根因；256KB 分块回调恢复逐块实时进度；transferring 态 0% 进度条口径消除虚线占位；Speed 元数据在全部克隆链保留、终止分支清 0），全套测试绿、无回归、无版本断裂（v1.36.34 未升，符合"feat 升 / fix·test·docs 不升"先例）。本轮新增 2 项并发锁发现：#1 为**本次提交引入**的 statusMu↔clientStatesMu 锁序反转死锁窗口（高，罕见但不可恢复，且 `-race` 无法防护），#2 为预存的 clientStates 混锁读残留两处（中）。两者建议下一轮随一次"锁序统一收敛"提交闭环（纯 fix 可不升版本），或先落 #1 的最小补丁（hoist statusMu 读）立即解除死锁窗口。
+
