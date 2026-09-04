@@ -2699,6 +2699,7 @@ func New(cfg *config.Config) (*Server, error) {
 		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 		w.Header().Set("Pragma", "no-cache")
 		w.Header().Set("Expires", "0")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Content-Disposition", contentDisposition(downloadName))
 		app.expectedBytesMu.Lock()
 		if app.expectedBytes == nil {

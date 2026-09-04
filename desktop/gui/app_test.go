@@ -121,7 +121,7 @@ func TestGetLogTailAndBuildDiagnosticsZip(t *testing.T) {
 	zipPath := filepath.Join(tempDir, "diag.zip")
 	info := AppInfo{
 		Product: "EQT Test",
-		Version: "v1.36.34",
+		Version: "v1.36.35",
 		OS:      "linux",
 		Arch:    "amd64",
 	}

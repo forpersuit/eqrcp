@@ -58,6 +58,14 @@ func TestContentDispositionEscapesSpacesAsPercent20(t *testing.T) {
 	}
 }
 
+func TestContentDispositionNonASCII(t *testing.T) {
+	got := contentDisposition(`测试 报告.zip`)
+	want := `attachment; filename="file.zip"; filename*=UTF-8''%E6%B5%8B%E8%AF%95%20%E6%8A%A5%E5%91%8A.zip`
+	if got != want {
+		t.Fatalf("contentDisposition() = %q, want %q", got, want)
+	}
+}
+
 func TestQRPageIncludesURLCopyAndStop(t *testing.T) {
 	var out bytes.Buffer
 	data := struct {

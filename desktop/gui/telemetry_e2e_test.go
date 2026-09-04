@@ -281,7 +281,7 @@ func TestTelemetryAndLogging_E2E_FullPipeline(t *testing.T) {
 	zipPath := filepath.Join(tempDir, "diagnostics_export.zip")
 	appInfo := AppInfo{
 		Product: "EQT E2E",
-		Version: "v1.36.34",
+		Version: "v1.36.35",
 		OS:      "linux",
 		Arch:    "amd64",
 	}

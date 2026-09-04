@@ -746,6 +746,29 @@ function renderShare() {
 
     const hasItems = state.sharePaths.length > 0;
     const isStartShareEnabled = !state.busy && hasItems && !state.shareLimitNotice;
+
+    let shareSummaryHtml = '';
+    if (hasItems) {
+        const totalFilesCount = state.sharePaths.length;
+        let totalSizeBytes = 0;
+        let hasAnySize = false;
+        state.sharePaths.forEach(item => {
+            if (item && typeof item === 'object' && typeof item.sizeBytes === 'number' && item.sizeBytes > 0) {
+                totalSizeBytes += item.sizeBytes;
+                hasAnySize = true;
+            }
+        });
+        const formattedTotalSize = hasAnySize ? formatBytes(totalSizeBytes) : '';
+        const summaryText = formattedTotalSize
+            ? t('share_total_summary', { count: totalFilesCount, size: formattedTotalSize })
+            : t('share_total_count_only', { count: totalFilesCount });
+        shareSummaryHtml = `
+            <span class="share-summary-badge" style="font-size: 13px; color: var(--text-secondary); font-weight: 600; padding: 5px 10px; background: rgba(0,0,0,0.03); border-radius: 6px; border: 1px solid var(--line); white-space: nowrap;">
+                ${escapeHTML(summaryText)}
+            </span>
+        `;
+    }
+
     return `
         <div class="share-illustration-wrapper">
             <img src="${shareIllustrationURL}" alt="Share Onboarding" style="pointer-events: none; user-select: none; opacity: 0.85;" />
@@ -770,7 +793,8 @@ function renderShare() {
         <div class="primary-row" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 18px;">
             <div style="display: flex; align-items: center; gap: 8px;">
             </div>
-            <div style="display: flex; gap: 8px; align-items: center;">
+            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                ${shareSummaryHtml}
                 <button class="primary" id="start-share" ${state.busy || !hasItems || state.shareLimitNotice ? 'disabled' : ''}>${state.busy ? t('working') : t('start_transfer')}</button>
                 <button class="ghost" id="clear-share" ${!hasItems ? 'disabled' : ''}>${t('clear')}</button>
             </div>

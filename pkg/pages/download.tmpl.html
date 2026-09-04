@@ -920,6 +920,33 @@
 
         var downloadTriggered = false;
         var totalCount = {{.Count}};
+        var lastKnownBytesTotal = 0;
+
+        function doDownload(url, filename) {
+            startStatusPolling();
+            downloadTriggered = true;
+            
+            var progressContainer = document.getElementById('download-progress-container');
+            if (progressContainer) progressContainer.style.display = 'block';
+
+            try {
+                var a = document.createElement('a');
+                a.href = url;
+                if (filename) {
+                    a.setAttribute('download', filename);
+                }
+                a.style.display = 'none';
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(function() {
+                    if (a.parentNode) {
+                        a.parentNode.removeChild(a);
+                    }
+                }, 1000);
+            } catch (e) {
+                window.location.href = url;
+            }
+        }
 
         function triggerDownload() {
             if (window.__eqt_telemetry) {
@@ -927,23 +954,8 @@
                     count: totalCount
                 });
             }
-            startStatusPolling();
-            if (downloadTriggered) {
-                window.location.href = window.location.pathname + '?download=1&client_id=' + getOrGenerateClientId() + '&_t=' + Date.now();
-                return;
-            }
-            downloadTriggered = true;
-            
-            var iframe = document.createElement('iframe');
-            iframe.style.display = 'none';
-            iframe.src = window.location.pathname + '?download=1&client_id=' + getOrGenerateClientId() + '&_t=' + Date.now();
-            document.body.appendChild(iframe);
-            setTimeout(function() {
-                document.body.removeChild(iframe);
-            }, 3000);
-            
-            var progressContainer = document.getElementById('download-progress-container');
-            if (progressContainer) progressContainer.style.display = 'block';
+            var downloadUrl = window.location.pathname + '?download=1&client_id=' + encodeURIComponent(getOrGenerateClientId()) + '&_t=' + Date.now();
+            doDownload(downloadUrl, "{{.File}}");
         }
   
         function triggerDownloadItem(index) {
@@ -955,18 +967,8 @@
                     name: itemName
                 });
             }
-            startStatusPolling();
-            
-            var iframe = document.createElement('iframe');
-            iframe.style.display = 'none';
-            iframe.src = window.location.pathname + '?download=1&item=' + index + '&client_id=' + getOrGenerateClientId() + '&_t=' + Date.now();
-            document.body.appendChild(iframe);
-            setTimeout(function() {
-                document.body.removeChild(iframe);
-            }, 3000);
-
-            var progressContainer = document.getElementById('download-progress-container');
-            if (progressContainer) progressContainer.style.display = 'block';
+            var downloadUrl = window.location.pathname + '?download=1&item=' + index + '&client_id=' + encodeURIComponent(getOrGenerateClientId()) + '&_t=' + Date.now();
+            doDownload(downloadUrl, itemName);
         }
 
         function formatBytes(bytes) {
@@ -984,6 +986,209 @@
         var hasReportedWaiting = false;
         var hasReportedFailed = false;
         var hasReportedCompleted = false;
+        var consecutiveErrors = 0;
+        var isRequestInProgress = false;
+
+        function pollStatus(isWakeup) {
+            if (isCompleted) {
+                if (intervalId) {
+                    clearInterval(intervalId);
+                    intervalId = null;
+                }
+                return;
+            }
+            if (isRequestInProgress && !isWakeup) {
+                return;
+            }
+            isRequestInProgress = true;
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', window.location.pathname + '/status?client_id=' + encodeURIComponent(getOrGenerateClientId()) + '&_t=' + Date.now(), true);
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === 4) {
+                    isRequestInProgress = false;
+                    if (xhr.status === 200) {
+                        consecutiveErrors = 0;
+                        try {
+                            var status = JSON.parse(xhr.responseText);
+                            if (status.bytesTotal > 0) {
+                                lastKnownBytesTotal = status.bytesTotal;
+                            }
+                            
+                            if (status.clientID) {
+                                var badgeEl = document.getElementById('device-id-badge');
+                                var valEl = document.getElementById('device-id-value');
+                                if (badgeEl && valEl) {
+                                    badgeEl.style.display = 'inline-flex';
+                                    var shortId = status.clientID.length > 4 ? status.clientID.substring(status.clientID.length - 4) : status.clientID;
+                                    var devName = status.deviceName || 'Device';
+                                    valEl.innerText = devName + ' (' + shortId + ')';
+                                }
+                            }
+                            
+                            var progressContainer = document.getElementById('download-progress-container');
+                            if (progressContainer) {
+                                 var showProgress = ((status.state === 'transferring' || status.state === 'waiting' || status.state === 'failed') && (status.bytesDone || 0) > 0) || status.state === 'completed';
+                                 if (showProgress && status.bytesTotal > 0) {
+                                    progressContainer.style.display = 'block';
+                                     
+                                    var percent = status.percent || 0;
+                                    document.getElementById('download-progress-fill').style.width = percent + '%';
+                                    document.getElementById('download-progress-percent').innerText = percent + '%';
+                                     
+                                    var bytesText = formatBytes(status.bytesDone || 0) + ' / ' + formatBytes(status.bytesTotal);
+                                    document.getElementById('download-progress-bytes').innerText = bytesText;
+                                     
+                                    var statusText = 'Downloading...';
+                                    if (status.state === 'completed') {
+                                        var shortId = status.clientID && status.clientID.length > 4 ? status.clientID.substring(status.clientID.length - 4) : (status.clientID || '');
+                                        statusText = shortId ? ('ID: ' + shortId) : '100%';
+                                    } else if (status.state === 'waiting') {
+                                        if (!hasReportedWaiting) {
+                                            hasReportedWaiting = true;
+                                            if (window.__eqt_telemetry) {
+                                                window.__eqt_telemetry.report('WARN', 'CHUNK_RETRY', 'Download interrupted, waiting to reconnect', {
+                                                    bytesDone: status.bytesDone || 0
+                                                });
+                                            }
+                                        }
+                                        var dict = EqtI18n.getDict();
+                                        statusText = dict.waiting_status || 'Connection interrupted, waiting to reconnect...';
+                                    } else if (status.state === 'failed') {
+                                        if (!hasReportedFailed) {
+                                            hasReportedFailed = true;
+                                            if (window.__eqt_telemetry) {
+                                                window.__eqt_telemetry.report('ERROR', 'CHUNK_FAIL', 'Transfer stopped or failed', {
+                                                    bytesDone: status.bytesDone || 0
+                                                });
+                                            }
+                                        }
+                                        var dict = EqtI18n.getDict();
+                                        statusText = dict.failed_status || 'Transfer stopped. You can click button to restart.';
+                                    }
+                                    document.getElementById('download-progress-status').innerText = statusText;
+                                } else if (!isCompleted) {
+                                    progressContainer.style.display = 'none';
+                                }
+                            }
+
+                            var actionBtnRow = document.getElementById('action-btn-row');
+                            var notifTips = document.getElementById('download-notification-tips');
+                            if (status.state === 'transferring') {
+                                 if (actionBtnRow) actionBtnRow.style.display = 'none';
+                                 if (notifTips) notifTips.style.display = 'block';
+                            } else if (status.state === 'waiting' || status.state === 'failed') {
+                                 if (actionBtnRow) actionBtnRow.style.display = 'flex';
+                                 if (notifTips) notifTips.style.display = 'none';
+                                 applyLanguage();
+                            }
+
+                            if (status.state === 'limit_exceeded') {
+                                if (!isLimitUIActive) {
+                                    isLimitUIActive = true;
+                                    showLimitExceededUI();
+                                }
+                                return;
+                            } else {
+                                if (isLimitUIActive) {
+                                    isLimitUIActive = false;
+                                    restoreNormalUI();
+                                }
+                            }
+
+                            if (status.downloadedItems && status.downloadedItems.length > 0) {
+                                var fileRows = document.querySelectorAll('.file-item-row');
+                                status.downloadedItems.forEach(function(idx) {
+                                    if (fileRows && fileRows[idx]) {
+                                        fileRows[idx].classList.add('transferred');
+                                    }
+                                });
+                                var fallback = document.querySelector('.file-fallback');
+                                if (fallback && status.downloadedItems.indexOf(0) !== -1) {
+                                    fallback.classList.add('transferred');
+                                }
+
+                                if (status.downloadedItems.length >= totalCount) {
+                                    if (!isCompleted) {
+                                        isCompleted = true;
+                                        if (!hasReportedCompleted) {
+                                            hasReportedCompleted = true;
+                                            if (window.__eqt_telemetry) {
+                                                window.__eqt_telemetry.report('INFO', 'TRANSFER', 'All items transferred successfully', {
+                                                    count: totalCount
+                                                });
+                                            }
+                                        }
+                                        showCompletedUI(status);
+                                    }
+                                }
+                            }
+
+                            if (status.state === 'completed') {
+                                if (!isCompleted) {
+                                    isCompleted = true;
+                                    if (!hasReportedCompleted) {
+                                        hasReportedCompleted = true;
+                                        if (window.__eqt_telemetry) {
+                                            window.__eqt_telemetry.report('INFO', 'TRANSFER', 'Transfer completed successfully', {
+                                                bytesDone: status.bytesDone || 0,
+                                                bytesTotal: status.bytesTotal || 0
+                                            });
+                                        }
+                                    }
+                                    showCompletedUI(status);
+                                }
+                            }
+                        } catch(e) {}
+                    } else if (xhr.status === 410) {
+                        if (!hasReportedCompleted) {
+                            hasReportedCompleted = true;
+                            if (window.__eqt_telemetry) {
+                                window.__eqt_telemetry.report('INFO', 'TRANSFER', 'Download session completed (410 Done)');
+                            }
+                        }
+                        if (intervalId) {
+                            clearInterval(intervalId);
+                            intervalId = null;
+                        }
+                        showCompletedUI();
+                    } else {
+                        consecutiveErrors++;
+                        if (downloadTriggered && (isWakeup || consecutiveErrors >= 2)) {
+                            if (intervalId) {
+                                clearInterval(intervalId);
+                                intervalId = null;
+                            }
+                            showCompletedUI();
+                        } else if (consecutiveErrors >= 5) {
+                            if (intervalId) {
+                                clearInterval(intervalId);
+                                intervalId = null;
+                            }
+                            showCompletedUI();
+                        }
+                    }
+                }
+            };
+            xhr.onerror = function() {
+                isRequestInProgress = false;
+                consecutiveErrors++;
+                if (downloadTriggered && (isWakeup || consecutiveErrors >= 2)) {
+                    if (intervalId) {
+                        clearInterval(intervalId);
+                        intervalId = null;
+                    }
+                    showCompletedUI();
+                } else if (consecutiveErrors >= 5) {
+                    if (intervalId) {
+                        clearInterval(intervalId);
+                        intervalId = null;
+                    }
+                    showCompletedUI();
+                }
+            };
+            xhr.send();
+        }
+
         function startStatusPolling() {
             if (pollingStarted) return;
             pollingStarted = true;
@@ -999,199 +1204,56 @@
                 }
             }
 
-            var consecutiveErrors = 0;
+            consecutiveErrors = 0;
             intervalId = setInterval(function() {
                 if (isCompleted) {
                     clearInterval(intervalId);
+                    intervalId = null;
                     return;
                 }
-                var xhr = new XMLHttpRequest();
-                xhr.open('GET', window.location.pathname + '/status?client_id=' + getOrGenerateClientId(), true);
-                xhr.onreadystatechange = function() {
-                    if (xhr.readyState === 4) {
-                        if (xhr.status === 200) {
-                            consecutiveErrors = 0;
-                            try {
-                                var status = JSON.parse(xhr.responseText);
-                                
-                                if (status.clientID) {
-                                    var badgeEl = document.getElementById('device-id-badge');
-                                    var valEl = document.getElementById('device-id-value');
-                                    if (badgeEl && valEl) {
-                                        badgeEl.style.display = 'inline-flex';
-                                        var shortId = status.clientID.length > 4 ? status.clientID.substring(status.clientID.length - 4) : status.clientID;
-                                        var devName = status.deviceName || 'Device';
-                                        valEl.innerText = devName + ' (' + shortId + ')';
-                                    }
-                                }
-                                
-                                var progressContainer = document.getElementById('download-progress-container');
-                                if (progressContainer) {
-                                     var showProgress = ((status.state === 'transferring' || status.state === 'waiting' || status.state === 'failed') && (status.bytesDone || 0) > 0) || status.state === 'completed';
-                                     if (showProgress && status.bytesTotal > 0) {
-                                        progressContainer.style.display = 'block';
-                                         
-                                        var percent = status.percent || 0;
-                                        document.getElementById('download-progress-fill').style.width = percent + '%';
-                                        document.getElementById('download-progress-percent').innerText = percent + '%';
-                                         
-                                        var bytesText = formatBytes(status.bytesDone || 0) + ' / ' + formatBytes(status.bytesTotal);
-                                        document.getElementById('download-progress-bytes').innerText = bytesText;
-                                         
-                                        var statusText = 'Downloading...';
-                                        if (status.state === 'completed') {
-                                            var shortId = status.clientID && status.clientID.length > 4 ? status.clientID.substring(status.clientID.length - 4) : (status.clientID || '');
-                                            statusText = 'ID: ' + shortId;
-                                        } else if (status.state === 'waiting') {
-                                            if (!hasReportedWaiting) {
-                                                hasReportedWaiting = true;
-                                                if (window.__eqt_telemetry) {
-                                                    window.__eqt_telemetry.report('WARN', 'CHUNK_RETRY', 'Download interrupted, waiting to reconnect', {
-                                                        bytesDone: status.bytesDone || 0
-                                                    });
-                                                }
-                                            }
-                                            var dict = EqtI18n.getDict();
-                                            statusText = dict.waiting_status || 'Connection interrupted, waiting to reconnect...';
-                                        } else if (status.state === 'failed') {
-                                            if (!hasReportedFailed) {
-                                                hasReportedFailed = true;
-                                                if (window.__eqt_telemetry) {
-                                                    window.__eqt_telemetry.report('ERROR', 'CHUNK_FAIL', 'Transfer stopped or failed', {
-                                                        bytesDone: status.bytesDone || 0
-                                                    });
-                                                }
-                                            }
-                                            var dict = EqtI18n.getDict();
-                                            statusText = dict.failed_status || 'Transfer stopped. You can click button to restart.';
-                                        }
-                                        document.getElementById('download-progress-status').innerText = statusText;
-                                    } else {
-                                        progressContainer.style.display = 'none';
-                                    }
-                                }
-
-                                var actionBtnRow = document.getElementById('action-btn-row');
-                                var notifTips = document.getElementById('download-notification-tips');
-                                if (status.state === 'transferring') {
-                                     if (actionBtnRow) actionBtnRow.style.display = 'none';
-                                     if (notifTips) notifTips.style.display = 'block';
-                                } else if (status.state === 'waiting' || status.state === 'failed') {
-                                     if (actionBtnRow) actionBtnRow.style.display = 'flex';
-                                     if (notifTips) notifTips.style.display = 'none';
-                                     applyLanguage(); // update button text for redownload
-                                }
-
-                                if (status.state === 'limit_exceeded') {
-                                    if (!isLimitUIActive) {
-                                        isLimitUIActive = true;
-                                        showLimitExceededUI();
-                                    }
-                                    return;
-                                } else {
-                                    if (isLimitUIActive) {
-                                        isLimitUIActive = false;
-                                        restoreNormalUI();
-                                    }
-                                }
-
-                                if (status.downloadedItems && status.downloadedItems.length > 0) {
-                                    var fileRows = document.querySelectorAll('.file-item-row');
-                                    status.downloadedItems.forEach(function(idx) {
-                                        if (fileRows && fileRows[idx]) {
-                                            fileRows[idx].classList.add('transferred');
-                                        }
-                                    });
-                                    var fallback = document.querySelector('.file-fallback');
-                                    if (fallback && status.downloadedItems.indexOf(0) !== -1) {
-                                        fallback.classList.add('transferred');
-                                    }
-
-                                    if (status.downloadedItems.length >= totalCount) {
-                                        if (!isCompleted) {
-                                            isCompleted = true;
-                                            if (!hasReportedCompleted) {
-                                                hasReportedCompleted = true;
-                                                if (window.__eqt_telemetry) {
-                                                    window.__eqt_telemetry.report('INFO', 'TRANSFER', 'All items transferred successfully', {
-                                                        count: totalCount
-                                                    });
-                                                }
-                                            }
-                                            showCompletedUI();
-                                        }
-                                    }
-                                }
-
-                                if (status.state === 'completed') {
-                                    if (!isCompleted) {
-                                        isCompleted = true;
-                                        if (!hasReportedCompleted) {
-                                            hasReportedCompleted = true;
-                                            if (window.__eqt_telemetry) {
-                                                window.__eqt_telemetry.report('INFO', 'TRANSFER', 'Transfer completed successfully', {
-                                                    bytesDone: status.bytesDone || 0,
-                                                    bytesTotal: status.bytesTotal || 0
-                                                });
-                                            }
-                                        }
-                                        showCompletedUI();
-                                    }
-                                }
-                            } catch(e) {}
-                        } else if (xhr.status === 410) {
-                            if (!hasReportedCompleted) {
-                                hasReportedCompleted = true;
-                                if (window.__eqt_telemetry) {
-                                    window.__eqt_telemetry.report('INFO', 'TRANSFER', 'Download session completed (410 Done)');
-                                }
-                            }
-                            clearInterval(intervalId);
-                            showCompletedUI();
-                        } else {
-                            consecutiveErrors++;
-                            if (consecutiveErrors >= 5) {
-                                clearInterval(intervalId);
-                                showCompletedUI();
-                            }
-                        }
-                    }
-                };
-                xhr.onerror = function() {
-                    consecutiveErrors++;
-                    if (consecutiveErrors >= 5) {
-                        clearInterval(intervalId);
-                        showCompletedUI();
-                    }
-                };
-                xhr.send();
+                pollStatus(false);
             }, 1200);
         }
 
-        function showCompletedUI() {
+        // 监听移动端息屏唤醒、前后台切换与焦点恢复，立刻强制刷新一次状态
+        function handlePageWakeup() {
+            if (document.visibilityState === 'visible' && !isCompleted) {
+                pollStatus(true);
+            }
+        }
+        document.addEventListener('visibilitychange', handlePageWakeup);
+        window.addEventListener('pageshow', handlePageWakeup);
+        window.addEventListener('focus', handlePageWakeup);
+
+        function showCompletedUI(status) {
             if (intervalId) {
                 clearInterval(intervalId);
+                intervalId = null;
             }
+            isCompleted = true;
+            var totalBytes = (status && status.bytesTotal) || lastKnownBytesTotal || 0;
             var progressContainer = document.getElementById('download-progress-container');
-            if (isCompleted) {
-                if (progressContainer) {
-                    progressContainer.style.display = 'block';
-                    
-                    progressContainer.classList.remove('blink-completed');
-                    void progressContainer.offsetWidth;
-                    progressContainer.classList.add('blink-completed');
-                    
-                    var fillEl = document.getElementById('download-progress-fill');
-                    if (fillEl) fillEl.style.width = '100%';
-                    var percentEl = document.getElementById('download-progress-percent');
-                    if (percentEl) percentEl.innerText = '100%';
+            if (progressContainer) {
+                progressContainer.style.display = 'block';
+                
+                progressContainer.classList.remove('blink-completed');
+                void progressContainer.offsetWidth;
+                progressContainer.classList.add('blink-completed');
+                
+                var fillEl = document.getElementById('download-progress-fill');
+                if (fillEl) fillEl.style.width = '100%';
+                var percentEl = document.getElementById('download-progress-percent');
+                if (percentEl) percentEl.innerText = '100%';
+
+                var bytesEl = document.getElementById('download-progress-bytes');
+                if (bytesEl && totalBytes > 0) {
+                    bytesEl.innerText = formatBytes(totalBytes) + ' / ' + formatBytes(totalBytes);
                 }
-            } else {
-                setTimeout(function() {
-                    if (progressContainer) {
-                        progressContainer.style.display = 'none';
-                    }
-                }, 2000);
+                var statusEl = document.getElementById('download-progress-status');
+                if (statusEl) {
+                    var shortId = (status && status.clientID && status.clientID.length > 4) ? status.clientID.substring(status.clientID.length - 4) : '';
+                    statusEl.innerText = shortId ? ('ID: ' + shortId) : '100%';
+                }
             }
 
             document.getElementById('status-icon-pending').style.display = 'none';

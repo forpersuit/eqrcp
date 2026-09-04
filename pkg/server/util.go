@@ -60,16 +60,74 @@ func contentDisposition(filename string) string {
 	return contentDispositionFor("attachment", filename)
 }
 
+func sanitizeASCIIFilename(filename string) string {
+	isPureASCII := true
+	for i := 0; i < len(filename); i++ {
+		if filename[i] > 127 || filename[i] < 32 {
+			isPureASCII = false
+			break
+		}
+	}
+	if isPureASCII {
+		return filename
+	}
+
+	ext := filepath.Ext(filename)
+	cleanExt := ""
+	extIsASCII := true
+	for i := 0; i < len(ext); i++ {
+		if ext[i] > 127 || ext[i] < 32 {
+			extIsASCII = false
+			break
+		}
+	}
+	if extIsASCII {
+		cleanExt = ext
+	}
+
+	base := strings.TrimSuffix(filename, ext)
+	var cleanBase strings.Builder
+	for i := 0; i < len(base); i++ {
+		b := base[i]
+		if (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') || b == '-' || b == '_' || b == '.' {
+			cleanBase.WriteByte(b)
+		} else if b <= 127 && b >= 32 {
+			cleanBase.WriteByte('_')
+		}
+	}
+	res := strings.Trim(cleanBase.String(), "_")
+	if res == "" {
+		res = "file"
+	}
+	return res + cleanExt
+}
+
+func rfc5987PercentEncode(s string) string {
+	var buf strings.Builder
+	for i := 0; i < len(s); i++ {
+		b := s[i]
+		if (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') ||
+			b == '!' || b == '#' || b == '$' || b == '&' || b == '+' || b == '-' ||
+			b == '.' || b == '^' || b == '_' || b == '`' || b == '|' || b == '~' {
+			buf.WriteByte(b)
+		} else {
+			fmt.Fprintf(&buf, "%%%02X", b)
+		}
+	}
+	return buf.String()
+}
+
 func contentDispositionFor(disposition string, filename string) string {
 	if disposition == "" {
 		disposition = "attachment"
 	}
-	quoted := strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(filename)
+	asciiName := sanitizeASCIIFilename(filename)
+	quoted := strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(asciiName)
 	return fmt.Sprintf(
 		`%s; filename="%s"; filename*=UTF-8''%s`,
 		disposition,
 		quoted,
-		url.PathEscape(filename),
+		rfc5987PercentEncode(filename),
 	)
 }
 

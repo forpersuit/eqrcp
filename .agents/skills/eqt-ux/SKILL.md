@@ -209,6 +209,21 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
   - 在 Server（`cloneTransferStatus`, `snapshotTransferStatus`）及桌面端 Agent（`cloneTaskRecord`, `observeTransferStatus`）的结构体克隆链路中，必须显式拷贝 `Speed` 与 `SpeedFormatted`。
   - 在传输中断、失败或完成（`completed`/`failed`/`waiting`）的生命周期切换点，必须显式重置速率（`Speed = 0`, `SpeedFormatted = ""`），避免传输完成后速率徽章残留。
 
+---
+
+## 12. 移动端息屏恢复状态同步与安全文件落盘规范 (Screen Wake-up Sync & Robust Mobile Download)
+
+- **移动端息屏冻结与前台唤醒主动同步**：
+  - 移动浏览器（iOS Safari、Android Chrome、Edge）在手机息屏或退至后台时，会强制挂起或降频 JS 定时器（`setInterval`/`setTimeout`）。
+  - **规则**：严禁仅依赖 `setInterval` 被动等待状态轮询。页面必须注册 `visibilitychange`、`pageshow` 与 `focus` 事件；在 `document.visibilityState === 'visible'` 唤醒恢复的第 0 毫秒，立即主动触发一次 `pollStatus(true)` 状态同步。
+  - **完成态渲染闭环**：`showCompletedUI` 必须同步更新 `download-progress-bytes` 为 `total / total` 并将状态文字更新为完成态，杜绝仅拉满进度条宽度而下方字节数与状态仍然残留息屏前数值的瑕疵。
+- **杜绝隐藏 Iframe 3 秒销毁陷阱**：
+  - 严禁通过动态生成隐藏 `<iframe>` 并在 `setTimeout(..., 3000)` 销毁它的方式触发文件下载。在 Chromium/Edge 移动端上，宿主 frame 销毁会直接向网络栈发送 Abort 信号，中途掐断下载请求，导致文件无法落盘保存。
+  - 必须使用顶级 DOM 模拟带 `download` 属性的 `<a>` 标签点击手势（或直接顶级导航），结合服务端 `Content-Disposition: attachment` 与 `X-Content-Type-Options: nosniff`，确保移动端浏览器系统级下载管理器接管并完整保存文件。
+- **RFC 6266 / RFC 5987 纯 ASCII 回退与 UTF-8 编码**：
+  - HTTP `Content-Disposition` 标头中，`filename="..."` 必须进行纯 ASCII 防护（过滤非 ASCII 字符），完整的 Unicode 文件名由 `filename*=UTF-8''<percent-encoded>` 提供，防止 Edge 移动版等严苛客户端由于 HTTP 标头非 ASCII 字节而丢弃响应或损坏文件名。
+
+
 
 
 
