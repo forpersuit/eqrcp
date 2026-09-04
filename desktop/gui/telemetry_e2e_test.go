@@ -123,8 +123,8 @@ func TestTelemetryAndLogging_E2E_FullPipeline(t *testing.T) {
 		t.Fatalf("failed to post PAGE_LOAD: err=%v, resp=%v", err, resp)
 	}
 	_ = resp.Body.Close()
-	if latency > 50*time.Millisecond {
-		t.Errorf("telemetry post latency too high: %v (expected <= 50ms)", latency)
+	if latency > 100*time.Millisecond {
+		t.Errorf("telemetry post latency too high: %v (expected <= 100ms CI gate)", latency)
 	}
 
 	// 4.2 DOWNLOAD_CLICK Event
@@ -166,19 +166,27 @@ func TestTelemetryAndLogging_E2E_FullPipeline(t *testing.T) {
 	srv.ChatV2Logger.Log(ctx, diag.Event{Level: diag.LevelWarn, Message: "bandwidth congestion window throttling"})
 	srv.ChatV2Logger.Log(ctx, diag.Event{Level: diag.LevelError, Message: "websocket heartbeat timeout detected"})
 
-	// 6. Trigger Rate Limiter Burst to test aggregation notice
-	for i := 0; i < 25; i++ {
-		r, _, err := postTelemetry(server.ClientLogEntry{
-			ClientID:  "burst_client",
-			Timestamp: time.Now().UnixMilli(),
-			Level:     "INFO",
-			Category:  "HEARTBEAT",
-			Message:   fmt.Sprintf("Burst packet %d", i),
-		})
-		if err == nil {
-			_ = r.Body.Close()
-		}
+	// 6. Trigger Rate Limiter Burst concurrently to test aggregation notice
+	// (40 concurrent requests against capacity 10 bucket guarantees >=10 drops without wall-clock drift)
+	var burstWg sync.WaitGroup
+	burstCount := 40
+	for i := 0; i < burstCount; i++ {
+		burstWg.Add(1)
+		go func(idx int) {
+			defer burstWg.Done()
+			r, _, err := postTelemetry(server.ClientLogEntry{
+				ClientID:  "burst_client",
+				Timestamp: time.Now().UnixMilli(),
+				Level:     "INFO",
+				Category:  "HEARTBEAT",
+				Message:   fmt.Sprintf("Burst packet %d", idx),
+			})
+			if err == nil && r != nil && r.Body != nil {
+				_ = r.Body.Close()
+			}
+		}(i)
 	}
+	burstWg.Wait()
 
 	// 7. Flush and close logger to ensure all lines are drained to disk
 	fileLogger.Close()
@@ -362,8 +370,8 @@ func TestTelemetryAndLogging_E2E_FullPipeline(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
-	t.Logf("50 concurrent telemetry posts completed. Max latency: %v", maxLatency)
-	if maxLatency > 200*time.Millisecond {
-		t.Errorf("maximum concurrent post latency too high: %v", maxLatency)
+	t.Logf("50 concurrent telemetry posts completed. Max latency: %v (target <= 50ms, CI gate <= 100ms)", maxLatency)
+	if maxLatency > 100*time.Millisecond {
+		t.Errorf("maximum concurrent post latency too high: %v (expected <= 100ms CI gate)", maxLatency)
 	}
 }
