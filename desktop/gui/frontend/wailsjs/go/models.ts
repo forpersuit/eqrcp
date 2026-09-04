@@ -18,6 +18,7 @@ export namespace main {
 	    itemClientStats?: string[];
 	    transferDeviceCount?: number;
 	    transferAutoStop?: boolean;
+	    downloadedItems?: number[];
 	    clientStates?: Record<string, server.ClientTransferStateInfo>;
 	    chatState?: string;
 	    chatMessageCount?: number;
@@ -54,6 +55,7 @@ export namespace main {
 	        this.itemClientStats = source["itemClientStats"];
 	        this.transferDeviceCount = source["transferDeviceCount"];
 	        this.transferAutoStop = source["transferAutoStop"];
+	        this.downloadedItems = source["downloadedItems"];
 	        this.clientStates = this.convertValues(source["clientStates"], server.ClientTransferStateInfo, true);
 	        this.chatState = source["chatState"];
 	        this.chatMessageCount = source["chatMessageCount"];
