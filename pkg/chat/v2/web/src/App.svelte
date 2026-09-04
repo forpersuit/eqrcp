@@ -1032,36 +1032,58 @@
       client.sendLog(`[ACTION] Starting file upload for: ${file.name} (Size: ${file.size} bytes, Message ID: ${messageId})`);
     }
 
-    const uploadUrl = `/chat-v2/${token}/upload`;
+    const sender = client?.clientLabel || $currentDevice?.label || 'Me';
+    const avatar = $currentDevice?.avatar || '';
+    const peer = client?.clientPeer || localStorage.getItem('chat_peer') || '';
+
+    const queryParams = new URLSearchParams({
+      messageId: messageId,
+      sender: sender,
+      avatar: avatar,
+      peer: peer
+    });
+    const uploadUrl = `/chat-v2/${token}/upload?${queryParams.toString()}`;
+
     const formData = new FormData();
-    formData.append('file', file);
     formData.append('messageId', messageId);
-    formData.append('sender', client?.clientLabel || $currentDevice?.label || 'Me');
-    formData.append('avatar', $currentDevice?.avatar || '');
-    formData.append('peer', client?.clientPeer || localStorage.getItem('chat_peer') || '');
+    formData.append('sender', sender);
+    formData.append('avatar', avatar);
+    formData.append('peer', peer);
+    formData.append('file', file);
 
     const xhr = new XMLHttpRequest();
     let isAborted = false;
+    let lastProgressReport = 0;
     activeUploads.set('ul-' + messageId, xhr);
     xhr.open('POST', uploadUrl, true);
 
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable) {
-        const percent = Math.round((e.loaded / e.total) * 100);
+        const rawPercent = Math.round((e.loaded / e.total) * 100);
+        // When client bytes are in local socket buffer (rawPercent >= 100), hold UI at 99%
+        // with processing flag until server completes disk flush, indexing, and returns 200 OK.
+        const isIngesting = rawPercent >= 100;
+        const displayPercent = isIngesting ? 99 : rawPercent;
+
         transfers.update(map => {
           map['ul-' + messageId] = {
             id: 'ul-' + messageId,
             messageId: messageId,
-            clientId: localStorage.getItem('chat_peer') || '',
+            clientId: peer,
             fileName: file.name,
             bytesDone: e.loaded,
             bytesTotal: e.total,
-            percent: percent,
+            percent: displayPercent,
+            processing: isIngesting,
             state: 'running'
           };
           return map;
         });
-        if (client) {
+
+        // Throttle upstream progress command over WebSocket (at most once every 200ms or upon completion)
+        const now = Date.now();
+        if (client && (now - lastProgressReport >= 200 || isIngesting)) {
+          lastProgressReport = now;
           client.reportUploadProgress(messageId, e.loaded, e.total);
         }
       }

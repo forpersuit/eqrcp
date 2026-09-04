@@ -10,6 +10,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -440,6 +441,87 @@ func TestFileNotificationToBypassDevice(t *testing.T) {
 
 	if !targetEvent.Message.Downloaded {
 		t.Fatalf("expected message to be marked downloaded, got downloaded=%v", targetEvent.Message.Downloaded)
+	}
+}
+
+func TestSinglePassStreamingUploadQueryAndForm(t *testing.T) {
+	handler := NewHandler(Config{BasePath: "/chat-v2", DisableSystemMessages: true})
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	token := "stream-upload-token"
+
+	// 1. Upload with query parameters (frontend single-pass pattern)
+	{
+		msgID := "msg-stream-1"
+		var buf bytes.Buffer
+		writer := multipart.NewWriter(&buf)
+		part, err := writer.CreateFormFile("file", "stream-doc.pdf")
+		if err != nil {
+			t.Fatal(err)
+		}
+		testContent := []byte("streaming upload content without intermediary /tmp file")
+		_, _ = part.Write(testContent)
+		_ = writer.Close()
+
+		uploadURL := fmt.Sprintf("%s/chat-v2/%s/upload?messageId=%s&sender=Tester&peer=peer-stream", server.URL, token, msgID)
+		resp, err := http.Post(uploadURL, writer.FormDataContentType(), &buf)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			b, _ := io.ReadAll(resp.Body)
+			t.Fatalf("expected 200, got %d: %s", resp.StatusCode, string(b))
+		}
+
+		sess := handler.sessions.GetOrCreate(token)
+		filePath := sess.GetAttachment(msgID)
+		if filePath == "" {
+			t.Fatalf("attachment not registered for msgID %s", msgID)
+		}
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(content, testContent) {
+			t.Fatalf("content mismatch: got %q, want %q", string(content), string(testContent))
+		}
+	}
+
+	// 2. Direct fallback upload without messageId
+	{
+		var buf bytes.Buffer
+		writer := multipart.NewWriter(&buf)
+		_ = writer.WriteField("sender", "DirectUser")
+		part, err := writer.CreateFormFile("file", "direct.txt")
+		if err != nil {
+			t.Fatal(err)
+		}
+		directContent := []byte("direct fallback file content")
+		_, _ = part.Write(directContent)
+		_ = writer.Close()
+
+		uploadURL := fmt.Sprintf("%s/chat-v2/%s/upload", server.URL, token)
+		resp, err := http.Post(uploadURL, writer.FormDataContentType(), &buf)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			b, _ := io.ReadAll(resp.Body)
+			t.Fatalf("expected 200 for direct upload, got %d: %s", resp.StatusCode, string(b))
+		}
+
+		var res protocol.Message
+		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+		if res.FileName != "direct.txt" || res.Size != int64(len(directContent)) {
+			t.Fatalf("unexpected message: %+v", res)
+		}
 	}
 }
 

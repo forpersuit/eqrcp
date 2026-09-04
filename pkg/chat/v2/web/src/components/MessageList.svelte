@@ -1048,7 +1048,11 @@
                       <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-dasharray="16 16" fill="none" />
                     </svg>
                     {#if ulTx && ulTx.state === 'running'}
-                      {getTranslation('uploading', currentLang)} {ulTx.percent ?? 0}%
+                      {#if ulTx.processing || (ulTx.percent ?? 0) >= 99}
+                        {getTranslation('savingAttachment', currentLang)}...
+                      {:else}
+                        {getTranslation('uploading', currentLang)} {ulTx.percent ?? 0}%
+                      {/if}
                     {:else}
                       {getTranslation('preparing', currentLang)}...
                     {/if}

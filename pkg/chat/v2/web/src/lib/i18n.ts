@@ -380,6 +380,24 @@ export const translations: Record<string, Record<Lang, string>> = {
     de: 'Herunterladen unterbrochen oder fehlgeschlagen',
     fr: 'Téléchargement interrompu ou échec'
   },
+  uploading: {
+    zh: '正在上传',
+    en: 'Uploading',
+    ja: 'アップロード中',
+    ko: '업로드 중',
+    es: 'Subiendo',
+    de: 'Wird hochgeladen',
+    fr: 'Téléchargement'
+  },
+  savingAttachment: {
+    zh: '正在保存校验',
+    en: 'Saving & verifying',
+    ja: '保存・検証中',
+    ko: '저장 및 확인 중',
+    es: 'Guardando y verificando',
+    de: 'Speichern und Überprüfen',
+    fr: 'Enregistrement et vérification'
+  },
   uploadingFile: {
     zh: '正在上传文件',
     en: 'Uploading file',

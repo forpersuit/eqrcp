@@ -126,6 +126,7 @@ export interface TransferEvent {
   speed?: number;
   startTime?: number;
   state: TransferState;
+  processing?: boolean;
   error?: string;
   updatedAt?: string;
 }

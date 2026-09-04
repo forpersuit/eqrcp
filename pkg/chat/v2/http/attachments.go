@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"eqt/pkg/chat/v2/bandwidth"
@@ -191,109 +192,185 @@ func (h *Handler) handleUploadInit(w http.ResponseWriter, r *http.Request, token
 	_ = json.NewEncoder(w).Encode(msg)
 }
 
-// handleUpload handles file upload from web clients, writing the data to a temporary file.
+// handleUpload handles file upload from web clients, writing the data directly to a temporary file in uploadRoot via single-pass streaming.
 func (h *Handler) handleUpload(w http.ResponseWriter, r *http.Request, token string, fields ...diag.Field) {
 	if r.Method != http.MethodPost {
 		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusMethodNotAllowed, "method not allowed"), fields...)
 		return
 	}
 
-	// Parse multipart form up to 32MB in RAM, rest goes to disk
-	err := r.ParseMultipartForm(32 * 1024 * 1024)
+	mr, err := r.MultipartReader()
 	if err != nil {
-		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusBadRequest, "failed to parse multipart form: "+err.Error()), fields...)
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusBadRequest, "failed to parse multipart reader: "+err.Error()), fields...)
 		return
 	}
 
-	file, header, err := r.FormFile("file")
-	if err != nil {
-		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusBadRequest, "file parameter is required: "+err.Error()), fields...)
-		return
-	}
-	defer file.Close()
+	sender := strings.TrimSpace(r.URL.Query().Get("sender"))
+	avatar := strings.TrimSpace(r.URL.Query().Get("avatar"))
+	peer := strings.TrimSpace(r.URL.Query().Get("peer"))
+	messageID := strings.TrimSpace(r.URL.Query().Get("messageId"))
 
-	sender := r.FormValue("sender")
-	avatar := r.FormValue("avatar")
-	peer := r.FormValue("peer")
-	messageID := r.FormValue("messageId")
-
-	if sender == "" {
-		sender = "Anonymous"
-	}
-
-	unrestricted := h.attachmentUnrestricted()
-	if !unrestricted && header.Size > freeChatMaxAttachmentBytes {
-		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusRequestEntityTooLarge, "file size exceeds 10MB free limit. Please upgrade."), fields...)
-		return
-	}
-
-	// Create temp file inside dedicated uploads root directory
 	uploadRoot, err := session.UploadRoot()
 	if err != nil {
 		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorInternal, http.StatusInternalServerError, "failed to resolve upload root: "+err.Error()), fields...)
 		return
 	}
-	tempFile, err := os.CreateTemp(uploadRoot, "eqt-chat-upload-*")
-	if err != nil {
-		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorInternal, http.StatusInternalServerError, "failed to create temp file: "+err.Error()), fields...)
+
+	unrestricted := h.attachmentUnrestricted()
+
+	var (
+		tempFile    *os.File
+		fileName    string
+		writtenSize int64
+		jobID       string
+		fileFound   bool
+	)
+
+	cleanupTemp := func() {
+		if tempFile != nil {
+			_ = tempFile.Close()
+			_ = os.Remove(tempFile.Name())
+		}
+	}
+
+	for {
+		part, partErr := mr.NextPart()
+		if partErr == io.EOF {
+			break
+		}
+		if partErr != nil {
+			cleanupTemp()
+			if jobID != "" {
+				_ = h.transfer.FailJob(jobID, partErr)
+			}
+			diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusBadRequest, "failed reading multipart part: "+partErr.Error()), fields...)
+			return
+		}
+
+		formName := part.FormName()
+		if formName == "file" {
+			fileFound = true
+			fileName = part.FileName()
+			if fileName == "" {
+				fileName = "attachment"
+			}
+
+			// Create temp file directly inside uploadRoot (Single-pass streaming, 0 intermediate /tmp files)
+			tempFile, err = os.CreateTemp(uploadRoot, "eqt-chat-upload-*")
+			if err != nil {
+				part.Close()
+				diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorInternal, http.StatusInternalServerError, "failed to create temp file: "+err.Error()), fields...)
+				return
+			}
+
+			if messageID != "" {
+				jobID = "ul-" + messageID
+				h.transfer.CreateJob(token, jobID, messageID, peer, fileName, 0)
+				_ = h.transfer.StartJob(jobID)
+			}
+
+			var pr io.Reader = part
+			if jobID != "" {
+				pr = &progressReader{
+					reader:   part,
+					transfer: h.transfer,
+					jobID:    jobID,
+				}
+			}
+
+			if !unrestricted {
+				throttleJobID := jobID
+				if throttleJobID == "" {
+					throttleJobID = "ul-direct-" + generateAttachmentMsgID()
+				}
+				h.scheduler.RegisterJob(throttleJobID, false)
+				defer h.scheduler.UnregisterJob(throttleJobID)
+				pr = &throttledUploadReader{
+					reader:    pr,
+					scheduler: h.scheduler,
+					jobID:     throttleJobID,
+					startTime: time.Now(),
+				}
+			}
+
+			// Stream directly to tempFile in uploadRoot
+			writtenSize, err = io.Copy(tempFile, pr)
+			part.Close()
+			if err != nil {
+				cleanupTemp()
+				if jobID != "" {
+					_ = h.transfer.FailJob(jobID, err)
+				}
+				diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorInternal, http.StatusInternalServerError, "failed to save upload: "+err.Error()), fields...)
+				return
+			}
+
+			// Enforce free tier size limit if degraded/restricted
+			if !unrestricted && writtenSize > freeChatMaxAttachmentBytes {
+				cleanupTemp()
+				if jobID != "" {
+					_ = h.transfer.FailJob(jobID, fmt.Errorf("file size exceeds limit"))
+				}
+				diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusRequestEntityTooLarge, "file size exceeds 10MB free limit. Please upgrade."), fields...)
+				return
+			}
+
+			// Explicit close to flush to disk
+			if err := tempFile.Close(); err != nil {
+				_ = os.Remove(tempFile.Name())
+				if jobID != "" {
+					_ = h.transfer.FailJob(jobID, err)
+				}
+				diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorInternal, http.StatusInternalServerError, "failed to flush upload temp file: "+err.Error()), fields...)
+				return
+			}
+		} else {
+			// Read form field values
+			buf, readErr := io.ReadAll(io.LimitReader(part, 64*1024))
+			part.Close()
+			if readErr == nil {
+				val := strings.TrimSpace(string(buf))
+				switch formName {
+				case "messageId":
+					if messageID == "" {
+						messageID = val
+					}
+				case "sender":
+					if sender == "" {
+						sender = val
+					}
+				case "avatar":
+					if avatar == "" {
+						avatar = val
+					}
+				case "peer":
+					if peer == "" {
+						peer = val
+					}
+				}
+			}
+		}
+	}
+
+	if !fileFound || tempFile == nil {
+		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorBadCommand, http.StatusBadRequest, "file parameter is required"), fields...)
 		return
 	}
-	defer tempFile.Close()
 
-	// Wrap copy stream to report progress; throttle attachment data plane when free quota is exhausted.
-	var pr io.Reader = file
-	jobID := ""
-	if messageID != "" {
-		jobID = "ul-" + messageID
-		h.transfer.CreateJob(token, jobID, messageID, peer, header.Filename, header.Size)
-		_ = h.transfer.StartJob(jobID)
-		pr = &progressReader{
-			reader:   file,
-			transfer: h.transfer,
-			jobID:    jobID,
-		}
-	}
-	if !unrestricted {
-		if jobID == "" {
-			jobID = "ul-direct-" + generateAttachmentMsgID()
-		}
-		h.scheduler.RegisterJob(jobID, false)
-		defer h.scheduler.UnregisterJob(jobID)
-		pr = &throttledUploadReader{
-			reader:    pr,
-			scheduler: h.scheduler,
-			jobID:     jobID,
-			startTime: time.Now(),
-		}
+	if sender == "" {
+		sender = "Anonymous"
 	}
 
-	// Stream copy
-	size, err := io.Copy(tempFile, pr)
-	if err != nil {
-		tempFile.Close()
-		os.Remove(tempFile.Name())
-		if messageID != "" {
-			_ = h.transfer.FailJob("ul-"+messageID, err)
-		}
-		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorInternal, http.StatusInternalServerError, "failed to save upload: "+err.Error()), fields...)
-		return
-	}
-
-	// 显式关闭临时文件以确保数据落盘且释放文件句柄
-	if err := tempFile.Close(); err != nil {
-		os.Remove(tempFile.Name())
-		if messageID != "" {
-			_ = h.transfer.FailJob("ul-"+messageID, err)
-		}
-		diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorInternal, http.StatusInternalServerError, "failed to flush upload temp file: "+err.Error()), fields...)
-		return
-	}
-
-	fileName := header.Filename
 	mimeType := mime.TypeByExtension(filepath.Ext(fileName))
 	sess := h.sessions.GetOrCreate(token)
 
 	if messageID != "" {
+		if jobID == "" {
+			jobID = "ul-" + messageID
+			h.transfer.CreateJob(token, jobID, messageID, peer, fileName, writtenSize)
+			_ = h.transfer.StartJob(jobID)
+			_ = h.transfer.UpdateProgress(jobID, writtenSize)
+		}
 		// Update physical path and complete job
 		sess.AddAttachment(messageID, tempFile.Name())
 		// Mark as downloaded instantly when caching finishes to enable instant broadcast distribution to peer clients
@@ -306,7 +383,7 @@ func (h *Handler) handleUpload(w http.ResponseWriter, r *http.Request, token str
 			}
 			sess.Broadcast(event)
 		}
-		_ = h.transfer.CompleteJob("ul-" + messageID)
+		_ = h.transfer.CompleteJob(jobID)
 
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "success", "messageId": messageID})
@@ -328,7 +405,7 @@ func (h *Handler) handleUpload(w http.ResponseWriter, r *http.Request, token str
 			Theme:      sess.GetClientTheme(senderID),
 			Type:       protocol.MessageFile,
 			FileName:   fileName,
-			Size:       size,
+			Size:       writtenSize,
 			MimeType:   mimeType,
 			URL:        fmt.Sprintf("/chat-v2/%s/files/%s", token, msgID),
 			Downloaded: true, // Auto-mark downloaded when fallback direct upload caches successfully

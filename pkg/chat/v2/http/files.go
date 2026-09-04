@@ -74,6 +74,15 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request, token s
 		h.transfer.CreateJob(token, jobID, messageID, clientID, filename, size)
 	}
 
+	etag := fmt.Sprintf("\"%s-%d\"", fileID, size)
+	w.Header().Set("ETag", etag)
+	w.Header().Set("Cache-Control", "public, max-age=86400, immutable")
+
+	if match := r.Header.Get("If-None-Match"); match != "" && (match == etag || match == "*") {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+
 	w.Header().Set("Content-Length", strconv.FormatInt(size, 10))
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
 	w.Header().Set("Content-Type", "application/octet-stream")
