@@ -5,6 +5,7 @@
   import type { Message } from '../services/types';
   import { getThemeColors, getSenderThemeColors } from '../services/types';
   import { currentDevice, peers, chatSessionStatus } from '../state/chatStore';
+  import { isImageFile, getImageInlineUrl } from '../services/mediaPreview';
 
   const dispatch = createEventDispatcher();
 
@@ -13,6 +14,7 @@
   export let isMine: (msg: Message) => boolean;
   export let txState: Record<string, any> = {};
   export let isEmbedded = false;
+  export let token = '';
 
   let recallConfirmingId: string | null = null;
   let confirmTimer: number | null = null;
@@ -447,6 +449,15 @@
 
     // 2. File actions
     if (msg.type === 'file') {
+      if (isImageFile(msg) && token && !msg.uploading && (!ulTx || ulTx.state !== 'running')) {
+        options.push({
+          label: getTranslation('viewOriginal', currentLang),
+          action: () => {
+            window.open(getImageInlineUrl(token, msg.id), '_blank');
+            closeMenu();
+          }
+        });
+      }
       if (mine) {
         if (ulTx && ulTx.state === 'running') {
           options.push({
@@ -570,6 +581,19 @@
     if (confirmTimeout) {
       clearTimeout(confirmTimeout);
       confirmTimeout = null;
+    }
+  }
+
+  function handleImagePreviewClick(e: MouseEvent, msg: Message) {
+    if (selectionMode) {
+      if (canMultiSelect(msg)) {
+        toggleSelect(msg);
+      }
+      return;
+    }
+    e.stopPropagation();
+    if (token && msg.id) {
+      window.open(getImageInlineUrl(token, msg.id), '_blank');
     }
   }
 
@@ -1138,6 +1162,30 @@
                 {:else if msg.type === 'file'}
                   <div class="bubble-content">
                     <div class="attachment-card file-attachment">
+                      {#if isImageFile(msg) && token && !msg.uploading && (!ulTx || ulTx.state !== 'running')}
+                        <div class="image-preview-wrapper" style="margin-bottom: 8px; width: 100%;">
+                          <button
+                            type="button"
+                            class="image-preview-btn"
+                            on:click={(e) => handleImagePreviewClick(e, msg)}
+                            title={getTranslation('viewOriginal', currentLang)}
+                            style="background: none; border: none; padding: 0; margin: 0; cursor: pointer; display: block; width: 100%; border-radius: 8px; overflow: hidden; text-align: left;"
+                          >
+                            <img
+                              src={getImageInlineUrl(token, msg.id)}
+                              alt={msg.fileName || 'image'}
+                              class="inline-image-preview"
+                              loading="lazy"
+                              style="display: block; width: 100%; max-width: 280px; max-height: 220px; object-fit: cover; border-radius: 8px; border: 1px solid rgba(0, 0, 0, 0.06); transition: opacity 0.2s ease, transform 0.2s ease;"
+                              on:error={(e) => {
+                                if (e.currentTarget instanceof HTMLElement && e.currentTarget.parentElement) {
+                                  e.currentTarget.parentElement.style.display = 'none';
+                                }
+                              }}
+                            />
+                          </button>
+                        </div>
+                      {/if}
                       <div class="file-card">
                         <div class="file-icon">FILE</div>
                         <div class="file-details">

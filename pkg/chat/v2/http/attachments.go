@@ -268,8 +268,6 @@ func (h *Handler) handleUpload(w http.ResponseWriter, r *http.Request, token str
 				existingJob, getErr := h.transfer.GetJob(jobID)
 				if getErr != nil || existingJob == nil {
 					h.transfer.CreateJob(token, jobID, messageID, peer, fileName, 0)
-				} else if existingJob.FileName == "" {
-					existingJob.FileName = fileName
 				}
 				_ = h.transfer.StartJob(jobID)
 			}

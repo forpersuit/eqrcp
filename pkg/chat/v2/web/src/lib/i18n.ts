@@ -562,6 +562,15 @@ export const translations: Record<string, Record<Lang, string>> = {
     de: 'Text kopieren',
     fr: 'Copier le texte'
   },
+  viewOriginal: {
+    zh: '查看原图',
+    en: 'View Image',
+    ja: '画像を表示',
+    ko: '이미지 보기',
+    es: 'Ver imagen',
+    de: 'Bild ansehen',
+    fr: "Afficher l'image"
+  },
   cancelUpload: {
     zh: '取消上传',
     en: 'Cancel Upload',

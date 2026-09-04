@@ -533,9 +533,26 @@ func TestSinglePassStreamingUploadQueryAndForm(t *testing.T) {
 			t.Fatal(err)
 		}
 		inlineResp.Body.Close()
+		if inlineResp.Header.Get("Content-Type") != "application/pdf" {
+			t.Fatalf("expected Content-Type 'application/pdf' for inline pdf, got %q", inlineResp.Header.Get("Content-Type"))
+		}
 		etag := inlineResp.Header.Get("ETag")
 		if etag == "" {
 			t.Fatal("expected non-empty ETag for inline download")
+		}
+
+		// 3b. Verify inline download without filename query param resolves MIME type from message metadata
+		inlineNoQueryURL := fmt.Sprintf("%s/chat-v2/%s/files/%s?inline=1", server.URL, token, msgID)
+		noQueryResp, err := http.Get(inlineNoQueryURL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		noQueryResp.Body.Close()
+		if noQueryResp.Header.Get("Content-Type") != "application/pdf" {
+			t.Fatalf("expected Content-Type 'application/pdf' via message metadata resolution, got %q", noQueryResp.Header.Get("Content-Type"))
+		}
+		if !strings.Contains(noQueryResp.Header.Get("Content-Disposition"), "stream-doc.pdf") {
+			t.Fatalf("expected Content-Disposition to retain message fileName, got %q", noQueryResp.Header.Get("Content-Disposition"))
 		}
 
 		req304, _ := http.NewRequest(http.MethodGet, inlineURL+"&clientId=client-304-check", nil)

@@ -192,9 +192,12 @@ xhr.upload.onprogress = (e) => {
 
 ### 建议 5：多媒体静态资源轻量缓存与预取 (P3 - 效率优化)
 
-* **方案**：在 `pkg/chat/v2/http/files.go` 对图片、音视频等只读附件增加标准的 HTTP 强缓存头（如 `Cache-Control: public, max-age=86400, immutable`）与 `ETag` 支持。
+* **方案**：
+  - 在 `pkg/chat/v2/http/files.go` 针对内联多媒体（`inline=1`）提供标准的 HTTP 强缓存头（`Cache-Control: public, max-age=86400, immutable`）、`ETag` 与前置 304 快速响应（在建 Job 前短路，避免幽灵 Job 泄露）；同时按文件扩展名与元数据动态分流 MIME `Content-Type`（且常规下载保持 `attachment` 并遵守 SKILL.md §6.1/§6.2 移动端 Safari 规范）。
+  - 在前端 `MessageList.svelte` 中针对图片附件接线内联缩略图预览及“查看原图”交互，直接消费 `?inline=1` 强缓存通道。
 * **收益**：
-  - 重复查看图片或语音无需重新发起网络流，大幅减轻 HTTP/1.1 并发连接排队带来的开销。
+  - 静态预览直击浏览器磁盘缓存，消除重复加载与 WebSocket dl-job 状态抖动；
+  - 聊天卡片内直接呈现图片缩略图，大幅提升移动端与桌面端交互体验。
 
 ---
 

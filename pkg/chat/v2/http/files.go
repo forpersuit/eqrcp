@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -58,10 +59,15 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request, token s
 		defer fileReader.Close()
 	}
 
-	if fileReader == nil && mockSizeStr == "" {
-		if msg, ok := sess.MessageStore.Find(fileID); ok && msg.Size > 0 {
+	var msgMimeType string
+	if msg, ok := sess.MessageStore.Find(fileID); ok {
+		if fileReader == nil && mockSizeStr == "" && msg.Size > 0 {
 			size = msg.Size
 		}
+		if query.Get("filename") == "" && msg.FileName != "" {
+			filename = msg.FileName
+		}
+		msgMimeType = msg.MimeType
 	}
 
 	// Evaluate inline caching vs attachment download headers before creating any transfer jobs
@@ -96,8 +102,20 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request, token s
 		h.transfer.CreateJob(token, jobID, messageID, clientID, filename, size)
 	}
 
+	// Dynamic Content-Type resolution: prioritize extension mapping, fallback to stored MIME, then octet-stream
+	contentType := ""
+	if ext := filepath.Ext(filename); ext != "" {
+		contentType = mime.TypeByExtension(ext)
+	}
+	if contentType == "" && msgMimeType != "" {
+		contentType = msgMimeType
+	}
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
 	w.Header().Set("Content-Length", strconv.FormatInt(size, 10))
-	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Type", contentType)
 	w.WriteHeader(http.StatusOK)
 
 	// Start the job

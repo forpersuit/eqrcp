@@ -1690,6 +1690,7 @@
         txState={$transfers}
         currentLang={currentLang}
         isEmbedded={isEmbedded}
+        token={token}
         isMine={(msg) => {
           const myPeer = client?.clientPeer || localStorage.getItem('chat_peer');
           if (msg.senderId && myPeer) {
