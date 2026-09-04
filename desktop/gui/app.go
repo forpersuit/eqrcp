@@ -1090,7 +1090,7 @@ func (a *App) SaveSettings(settings DesktopSettings) (DesktopSettings, error) {
 	a.setCloseBehavior(saved.CloseBehavior)
 	if a.logger != nil {
 		a.logger.SetLogDir(saved.LogDir)
-		a.logger.SetEnabled(saved.DebugLog || saved.DevMode)
+		a.logger.SetDebugMode(saved.DebugLog || saved.DevMode)
 	}
 	if a.agent != nil {
 		a.agent.UpdateLogDir(saved.LogDir)

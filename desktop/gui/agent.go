@@ -993,11 +993,11 @@ func (agent *desktopAgent) runTask(task AgentTask) error {
 	}()
 	srv.ChatDebug = desktopSettings.DebugLog
 	srv.ViewportDebug = desktopSettings.ViewportDebug
+	var chatWriter io.Writer = os.Stderr
 	if agent.fileLogger != nil {
-		srv.ChatV2Logger = diag.NewStdLoggerWithWriter(io.MultiWriter(os.Stderr, agent.fileLogger))
-	} else {
-		srv.ChatV2Logger = diag.NewStdLogger()
+		chatWriter = io.MultiWriter(os.Stderr, agent.fileLogger)
 	}
+	srv.ChatV2Logger = diag.NewStdLoggerWithWriter(chatWriter)
 	agent.log.Infof("runTask: server instance created. BaseURL=%s", srv.BaseURL)
 	srv.SetStatusHook(func(status server.TransferStatusSnapshot) {
 		agent.observeTransferStatus(taskID, status)

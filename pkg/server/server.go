@@ -138,6 +138,8 @@ type Server struct {
 	clientSpeedTrackersMu  sync.Mutex
 	clientSubDirs          map[string]string
 	clientSubDirsMu        sync.Mutex
+	telemetryLimiter       *TelemetryRateLimiter
+	droppedClientLogCount  uint64
 }
 
 type clientSpeedTracker struct {
@@ -2267,6 +2269,7 @@ func New(cfg *config.Config) (*Server, error) {
 	app.clientStates = make(map[string]*ClientTransferStateInfo)
 	app.clientReceiveCounted = make(map[string]bool)
 	app.expectedBytes = make(map[int]int64)
+	app.telemetryLimiter = NewTelemetryRateLimiter(10, 10)
 	var bind string
 	var err error
 	if cfg.Bind != "" {
@@ -2349,6 +2352,7 @@ func New(cfg *config.Config) (*Server, error) {
 	mux := http.NewServeMux()
 	app.mux = mux
 	registerBrandAssets(mux)
+	mux.HandleFunc("/client-log", app.HandleClientLog)
 
 	tlsCfg := &tls.Config{
 		MinVersion: tls.VersionTLS12,
@@ -2363,7 +2367,7 @@ func New(cfg *config.Config) (*Server, error) {
 
 	httpserver := &http.Server{
 		Addr:              host,
-		Handler:           mux,
+		Handler:           app.wrapAccessLog(mux),
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       2 * time.Minute,
 		TLSConfig:         tlsCfg,

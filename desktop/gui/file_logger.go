@@ -174,17 +174,32 @@ func (l *FileLogger) enqueue(level string, line string) {
 	select {
 	case l.ch <- entry:
 	case <-time.After(errorEnqueueTimeout):
-		// Emergency direct write fallback if queue is severely blocked
+		// Emergency direct write fallback if queue is severely blocked.
+		// Uses independent handle without deadlocking on worker locks.
 		l.emergencyDirectWrite(line)
 	}
 }
 
 func (l *FileLogger) emergencyDirectWrite(line string) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	if l.file != nil {
-		_, _ = l.file.WriteString(line)
-		_ = l.file.Sync()
+	// 1. Try to acquire lock non-blockingly
+	if l.mu.TryLock() {
+		if l.file != nil {
+			_, _ = l.file.WriteString(line)
+		}
+		l.mu.Unlock()
+		return
+	}
+
+	// 2. If worker is stalled or holding lock during long Sync(), write via dedicated temporary handle
+	l.mu.RLock()
+	targetPath := l.filePath
+	l.mu.RUnlock()
+
+	if targetPath != "" {
+		if f, err := os.OpenFile(targetPath, os.O_WRONLY|os.O_APPEND, 0644); err == nil {
+			_, _ = f.WriteString(line)
+			_ = f.Close()
+		}
 	}
 }
 
@@ -232,21 +247,27 @@ func (l *FileLogger) workerLoop() {
 			flush()
 		case <-syncTicker.C:
 			flush()
-			l.mu.Lock()
-			if l.file != nil {
-				_ = l.file.Sync()
+
+			// Sync is executed OUTSIDE of long exclusive locks to prevent deadlocks with emergency writes
+			l.mu.RLock()
+			activeFile := l.file
+			l.mu.RUnlock()
+			if activeFile != nil {
+				_ = activeFile.Sync()
 			}
+
 			dropped := atomic.SwapUint64(&l.droppedInfoCount, 0)
-			if dropped > 0 && l.file != nil {
+			if dropped > 0 {
 				dropNotice := fmt.Sprintf("[%s] [WARN] [LOGGER] Dropped %d non-critical log entries due to buffer saturation\n",
 					time.Now().Format("2006-01-02 15:04:05.000"), dropped)
+				l.mu.Lock()
 				l.checkAndRotateLocked(int64(len(dropNotice)))
 				if l.file != nil {
 					n, _ := l.file.WriteString(dropNotice)
 					l.currentSize += int64(n)
 				}
+				l.mu.Unlock()
 			}
-			l.mu.Unlock()
 		}
 	}
 }
@@ -273,8 +294,7 @@ func (l *FileLogger) checkAndRotateLocked(upcomingBytes int64) {
 	}
 }
 
-// Write implements io.Writer to adapt stdlib log.Printf and arbitrary byte streams.
-// It detects and normalizes Go standard library timestamp prefixes into the unified schema.
+// Write implements io.Writer to adapt stdlib log.Printf, chat-v2 diag logs, and arbitrary byte streams.
 func (l *FileLogger) Write(p []byte) (n int, err error) {
 	if !l.Enabled() {
 		return len(p), nil
@@ -288,24 +308,65 @@ func (l *FileLogger) Write(p []byte) (n int, err error) {
 
 	timestamp := time.Now().Format("2006-01-02 15:04:05.000")
 	var line string
+	level := "INFO"
 
-	// Adapt standard library log prefix (format: "2006/01/02 15:04:05 <msg>")
-	if len(rawTrimmed) >= 20 && rawTrimmed[4] == '/' && rawTrimmed[7] == '/' && rawTrimmed[10] == ' ' && rawTrimmed[13] == ':' && rawTrimmed[16] == ':' {
+	// 1. Adapt chat-v2 log prefix (format: "chat-v2 2006/01/02 15:04:05 ...")
+	if strings.HasPrefix(rawTrimmed, "chat-v2 ") {
+		rest := strings.TrimPrefix(rawTrimmed, "chat-v2 ")
+		if len(rest) >= 20 && rest[4] == '/' && rest[7] == '/' && rest[10] == ' ' && rest[13] == ':' && rest[16] == ':' {
+			rest = strings.TrimSpace(rest[19:])
+		}
+		if strings.HasPrefix(rest, "[ERROR]") {
+			level = "ERROR"
+			rest = strings.TrimSpace(strings.TrimPrefix(rest, "[ERROR]"))
+		} else if strings.HasPrefix(rest, "[WARN]") {
+			level = "WARN"
+			rest = strings.TrimSpace(strings.TrimPrefix(rest, "[WARN]"))
+		}
+		line = fmt.Sprintf("[%s] [%s] [CHAT] %s", timestamp, level, rest)
+	} else if len(rawTrimmed) >= 20 && rawTrimmed[4] == '/' && rawTrimmed[7] == '/' && rawTrimmed[10] == ' ' && rawTrimmed[13] == ':' && rawTrimmed[16] == ':' {
+		// 2. Adapt standard library log prefix (format: "2006/01/02 15:04:05 <msg>")
 		body := strings.TrimSpace(rawTrimmed[19:])
 		line = fmt.Sprintf("[%s] [INFO] [SRV] %s", timestamp, body)
 	} else if strings.HasPrefix(rawTrimmed, "[") {
-		// Already structured log line
+		// 3. Already structured log line
 		line = rawTrimmed
 	} else {
-		// General text
+		// 4. General text
 		line = fmt.Sprintf("[%s] [INFO] %s", timestamp, rawTrimmed)
 	}
 
-	l.enqueue("INFO", line)
+	l.enqueue(level, line)
 	return len(p), nil
 }
 
-// Tail safely reads the last n lines from the current log file without裸读race conditions.
+// readTailFromFile reads up to maxLines from the given file.
+func readTailFromFile(filePath string, maxLines int) ([]string, error) {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	var lines []string
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+		if len(lines) > maxLines*2 {
+			lines = lines[len(lines)-maxLines:]
+		}
+	}
+	if err := scanner.Err(); err != nil && err != io.EOF {
+		return nil, err
+	}
+	if len(lines) > maxLines {
+		lines = lines[len(lines)-maxLines:]
+	}
+	return lines, nil
+}
+
+// Tail safely reads the last n lines from the current log file, stitching with desktop.log.1
+// if the current file has just rotated and contains fewer lines than requested.
 func (l *FileLogger) Tail(lines int) ([]string, error) {
 	if lines <= 0 {
 		lines = 100
@@ -315,28 +376,22 @@ func (l *FileLogger) Tail(lines int) ([]string, error) {
 	curPath := l.filePath
 	l.mu.RUnlock()
 
-	f, err := os.Open(curPath)
-	if err != nil {
+	curLines, err := readTailFromFile(curPath, lines)
+	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
-	defer f.Close()
 
-	var collected []string
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		collected = append(collected, scanner.Text())
-		if len(collected) > lines*2 {
-			collected = collected[len(collected)-lines:]
+	// If rotation just occurred and current file has fewer lines than requested,
+	// read preceding lines from desktop.log.1 to ensure full diagnosis context.
+	if len(curLines) < lines {
+		backupPath := curPath + ".1"
+		needed := lines - len(curLines)
+		if backupLines, err := readTailFromFile(backupPath, needed); err == nil && len(backupLines) > 0 {
+			curLines = append(backupLines, curLines...)
 		}
 	}
-	if err := scanner.Err(); err != nil && err != io.EOF {
-		return nil, err
-	}
 
-	if len(collected) > lines {
-		collected = collected[len(collected)-lines:]
-	}
-	return collected, nil
+	return curLines, nil
 }
 
 // Close gracefully flushes buffered entries and closes the underlying file handle.
@@ -365,13 +420,15 @@ func (l *FileLogger) Close() {
 func (l *FileLogger) log(level string, message string) {
 	timestamp := time.Now().Format("2006-01-02 15:04:05.000")
 	line := fmt.Sprintf("[%s] [%s] %s", timestamp, level, message)
-	fmt.Println(line)
+	if l.DebugMode() {
+		fmt.Println(line)
+	}
 	l.enqueue(level, line)
 }
 
 func (l *FileLogger) Print(message string)   { l.log("PRINT", message) }
-func (l *FileLogger) Trace(message string)   { l.log("TRACE", message) }
-func (l *FileLogger) Debug(message string)   { l.log("DEBUG", message) }
+func (l *FileLogger) Trace(message string)   { if l.DebugMode() { l.log("TRACE", message) } }
+func (l *FileLogger) Debug(message string)   { if l.DebugMode() { l.log("DEBUG", message) } }
 func (l *FileLogger) Info(message string)    { l.log("INFO", message) }
 func (l *FileLogger) Warning(message string) { l.log("WARN", message) }
 func (l *FileLogger) Error(message string)   { l.log("ERROR", message) }
