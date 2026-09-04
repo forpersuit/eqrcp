@@ -1242,7 +1242,7 @@ func (s *Server) updateStatus(update func(*transferStatus)) {
 
 	// 动态计算基于活跃客户端的全局进度
 	if s.status.Mode == "send" {
-		s.clientMutex.Lock()
+		s.clientStatesMu.Lock()
 		var maxDone int64
 		for _, state := range s.clientStates {
 			if state != nil {
@@ -1251,7 +1251,7 @@ func (s *Server) updateStatus(update func(*transferStatus)) {
 				}
 			}
 		}
-		s.clientMutex.Unlock()
+		s.clientStatesMu.Unlock()
 
 		if maxDone > s.status.BytesDone {
 			s.status.BytesDone = maxDone
@@ -1356,16 +1356,18 @@ func cloneTransferStatus(status transferStatus) transferStatus {
 					copy(files, v.Files)
 				}
 				m[k] = &ClientTransferStateInfo{
-					ClientID:   v.ClientID,
-					State:      v.State,
-					BytesDone:  v.BytesDone,
-					BytesTotal: v.BytesTotal,
-					Percent:    v.Percent,
-					Current:    v.Current,
-					Message:    v.Message,
-					DeviceName: v.DeviceName,
-					SavedFiles: savedFiles,
-					Files:      files,
+					ClientID:       v.ClientID,
+					State:          v.State,
+					BytesDone:      v.BytesDone,
+					BytesTotal:     v.BytesTotal,
+					Percent:        v.Percent,
+					Current:        v.Current,
+					Message:        v.Message,
+					DeviceName:     v.DeviceName,
+					SavedFiles:     savedFiles,
+					Files:          files,
+					Speed:          v.Speed,
+					SpeedFormatted: v.SpeedFormatted,
 				}
 			}
 		}
@@ -1390,16 +1392,18 @@ func snapshotTransferStatus(status transferStatus) TransferStatusSnapshot {
 					copy(files, v.Files)
 				}
 				clientStates[k] = &ClientTransferStateInfo{
-					ClientID:   v.ClientID,
-					State:      v.State,
-					BytesDone:  v.BytesDone,
-					BytesTotal: v.BytesTotal,
-					Percent:    v.Percent,
-					Current:    v.Current,
-					Message:    v.Message,
-					DeviceName: v.DeviceName,
-					SavedFiles: savedFiles,
-					Files:      files,
+					ClientID:       v.ClientID,
+					State:          v.State,
+					BytesDone:      v.BytesDone,
+					BytesTotal:     v.BytesTotal,
+					Percent:        v.Percent,
+					Current:        v.Current,
+					Message:        v.Message,
+					DeviceName:     v.DeviceName,
+					SavedFiles:     savedFiles,
+					Files:          files,
+					Speed:          v.Speed,
+					SpeedFormatted: v.SpeedFormatted,
 				}
 			}
 		}
@@ -1650,7 +1654,14 @@ func (s *Server) registerClientActivityWithID(clientID string, r *http.Request) 
 	if !existed {
 		s.updateStatus(func(status *transferStatus) {})
 	}
-	s.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {})
+	s.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
+		s.statusMu.Lock()
+		total := s.status.BytesTotal
+		s.statusMu.Unlock()
+		if cs.BytesTotal <= 0 && total > 0 {
+			cs.BytesTotal = total
+		}
+	})
 }
 
 func (s *Server) getClientID(r *http.Request, w http.ResponseWriter) string {
@@ -2713,11 +2724,24 @@ func New(cfg *config.Config) (*Server, error) {
 				var clientDone int64
 				clientDone, _ = app.getClientDownloadedAndTotal(clientID)
 
+				sp, spStr := app.calcClientSpeed(clientID, clientDone)
+
 				// Update clientStates map in real-time to allow H5 page to poll actual incremental progress
 				app.updateClientStatus(clientID, nil, func(state *ClientTransferStateInfo) {
+					state.State = "transferring"
 					state.BytesDone = clientDone
 					state.Percent = transferPercent(state.BytesDone, state.BytesTotal)
+					state.Speed = sp
+					state.SpeedFormatted = spStr
 				})
+
+				app.statusMu.Lock()
+				if clientDone > app.status.BytesDone {
+					app.status.BytesDone = clientDone
+				}
+				app.status.Percent = transferPercent(app.status.BytesDone, app.status.BytesTotal)
+				app.status.State = "transferring"
+				app.statusMu.Unlock()
 
 				// Send throttled progress updates to Wails GUI clients
 				app.triggerStatusHookThrottled()
@@ -2739,6 +2763,8 @@ func New(cfg *config.Config) (*Server, error) {
 					state.State = "completed"
 					state.BytesDone = state.BytesTotal
 					state.Percent = 100
+					state.Speed = 0
+					state.SpeedFormatted = ""
 					state.Message = "Transfer completed."
 				})
 
@@ -2804,6 +2830,8 @@ func New(cfg *config.Config) (*Server, error) {
 				state.State = "waiting"
 				state.BytesDone = clientDone
 				state.Percent = transferPercent(state.BytesDone, state.BytesTotal)
+				state.Speed = 0
+				state.SpeedFormatted = ""
 				state.Message = "Transfer interrupted. Waiting for retry..."
 			})
 			app.setStatus("waiting", "Transfer interrupted. Waiting for retry...")
@@ -2848,6 +2876,8 @@ func New(cfg *config.Config) (*Server, error) {
 					state.State = "completed"
 					state.BytesDone = state.BytesTotal
 					state.Percent = 100
+					state.Speed = 0
+					state.SpeedFormatted = ""
 					state.Message = "Transfer completed."
 				})
 
@@ -2867,6 +2897,8 @@ func New(cfg *config.Config) (*Server, error) {
 						state.State = "completed"
 						state.BytesDone = state.BytesTotal
 						state.Percent = 100
+						state.Speed = 0
+						state.SpeedFormatted = ""
 						state.Message = "Transfer completed."
 					})
 					app.statusMu.Lock()
@@ -2893,6 +2925,8 @@ func New(cfg *config.Config) (*Server, error) {
 				state.State = "waiting"
 				state.BytesDone = clientDone
 				state.Percent = transferPercent(state.BytesDone, state.BytesTotal)
+				state.Speed = 0
+				state.SpeedFormatted = ""
 				state.Message = "Transfer interrupted. Waiting for retry..."
 			})
 			app.setStatus("waiting", "Transfer interrupted. Waiting for retry...")
@@ -2921,6 +2955,8 @@ func New(cfg *config.Config) (*Server, error) {
 				state.State = "completed"
 				state.BytesDone = state.BytesTotal
 				state.Percent = 100
+				state.Speed = 0
+				state.SpeedFormatted = ""
 				state.Message = "Transfer completed."
 			})
 		}
@@ -2930,6 +2966,8 @@ func New(cfg *config.Config) (*Server, error) {
 				state.State = "completed"
 				state.BytesDone = state.BytesTotal
 				state.Percent = 100
+				state.Speed = 0
+				state.SpeedFormatted = ""
 				state.Message = "Transfer completed."
 			})
 			app.statusMu.Lock()

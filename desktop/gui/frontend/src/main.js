@@ -914,7 +914,7 @@ function renderDeviceProgressHtml(task) {
             const bytesTotal = formatSize(client.bytesTotal);
             const sizeProgressText = client.bytesTotal > 0 ? `(${bytesDone}/${bytesTotal})` : '';
 
-            const showProgress = (((client.state === 'transferring' || client.state === 'waiting') && (client.bytesDone || 0) > 0) || client.state === 'completed') && client.bytesTotal > 0;
+            const showProgress = (client.state === 'transferring' || client.state === 'completed' || (client.state === 'waiting' && (client.bytesDone || 0) > 0)) && client.bytesTotal > 0;
             const progressSectionHtml = showProgress ? `
                 <div style="flex: 1; height: 6px; background: rgba(0,0,0,0.06); border-radius: 3px; overflow: hidden; position: relative; margin: 0 12px 0 0; min-width: 60px;">
                     <div style="width: ${percent}%; height: 100%; background: var(--accent); border-radius: 3px;"></div>

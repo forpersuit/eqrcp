@@ -138,17 +138,13 @@ func (w *progressResponseWriter) Write(data []byte) (int, error) {
 	return n, err
 }
 
-func (w *progressResponseWriter) ReadFrom(r io.Reader) (n int64, err error) {
-	if rf, ok := w.ResponseWriter.(io.ReaderFrom); ok {
-		n, err = rf.ReadFrom(r)
-		if n > 0 && w.onWrite != nil {
-			w.onWrite(n)
-		}
-		if err != nil {
-			w.err = err
-		}
-		return n, err
+func (w *progressResponseWriter) Flush() {
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
 	}
+}
+
+func (w *progressResponseWriter) ReadFrom(r io.Reader) (n int64, err error) {
 	buf := make([]byte, 256*1024)
 	for {
 		nr, er := r.Read(buf)

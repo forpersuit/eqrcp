@@ -195,5 +195,20 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
   - 终端容器（`#log-viewer-terminal`）须注册到主渲染器的滚动选择器列表（`scrollableSelectors`）。
   - 拉取最新日志后实施智能吸附：刷新前判定当前视口是否处于底部附近（距底 ≤40px）；仅在显式强制（初次打开或手动点击刷新）或原先就在底部附近时执行滚底（`scrollTop = scrollHeight`）。若用户正在向上翻阅排查历史日志，则保持阅读位置，杜绝 3s 自动轮询强行打断阅读。
 
+---
+
+## 11. 文件流式传输与 GUI 进度条零延迟更新规范 (Streaming Progress & GUI Feedback)
+
+- **底层 HTTP 流式分块与 `io.ReaderFrom` 陷阱防范**：
+  - `http.ServeFile` 或类似流式服务中，封装的 `progressResponseWriter` 切忌将 `ReadFrom(r io.Reader)` 直接委托给底层的 `rf.ReadFrom(r)`。Go 标准库底层驱动会一次性阻塞读取整段文件直至 EOF，导致传输期间包装层的 `onWrite` 进度监听完全失活（仅在 100% 结束时回调一次）。
+  - **规则**：必须在 `ReadFrom` 中采用定长分块（如 256KB）循环读取并通过 `w.Write()` 递增推送，确保每写入一个 chunk 立即触发 `onWrite`，实时更新瞬时速率与已完成字节。
+- **GUI 初始传输状态防御性展示 (Zero-percent Bar vs Dashed Line)**：
+  - 前端渲染设备传输列表（`renderDeviceProgressHtml`）时，只要设备处于 `transferring` 状态且具备有效的 `bytesTotal > 0`，必须立即渲染 0% 起步的平滑进度条。
+  - **避坑规范**：严禁加入 `(client.bytesDone || 0) > 0` 这一严苛前置条件，否则在传输初态或微小数据段传输时，进度条会被误判并呈现为虚线占位（直到下载完成才突然跳 100%）。
+- **快照与克隆链路中传输速率字段完整性 (Speed Metadata Preservation)**：
+  - 在 Server（`cloneTransferStatus`, `snapshotTransferStatus`）及桌面端 Agent（`cloneTaskRecord`, `observeTransferStatus`）的结构体克隆链路中，必须显式拷贝 `Speed` 与 `SpeedFormatted`。
+  - 在传输中断、失败或完成（`completed`/`failed`/`waiting`）的生命周期切换点，必须显式重置速率（`Speed = 0`, `SpeedFormatted = ""`），避免传输完成后速率徽章残留。
+
+
 
 

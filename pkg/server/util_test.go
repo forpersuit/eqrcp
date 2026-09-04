@@ -924,6 +924,50 @@ func TestProgressResponseWriterReadFrom(t *testing.T) {
 	})
 }
 
+func TestProgressResponseWriterReadFromChunking(t *testing.T) {
+	const totalSize = 700 * 1024 // 700 KB > 256 KB chunk
+	data := make([]byte, totalSize)
+	for i := range data {
+		data[i] = byte(i % 251)
+	}
+
+	var calls int
+	var writtenChunks []int64
+	rec := httptest.NewRecorder()
+	writer := &progressResponseWriter{
+		ResponseWriter: rec,
+		onWrite: func(n int64) {
+			calls++
+			writtenChunks = append(writtenChunks, n)
+		},
+	}
+
+	n, err := writer.ReadFrom(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("ReadFrom unexpected error: %v", err)
+	}
+	if n != totalSize {
+		t.Fatalf("ReadFrom returned %d, want %d", n, totalSize)
+	}
+	// Buffer is 256KB, so 700KB should take 3 chunks: 256KB, 256KB, 188KB
+	if calls < 3 {
+		t.Fatalf("expected at least 3 onWrite chunk calls, got %d", calls)
+	}
+	var sum int64
+	for _, c := range writtenChunks {
+		sum += c
+	}
+	if sum != totalSize {
+		t.Fatalf("sum of onWrite chunks = %d, want %d", sum, totalSize)
+	}
+	if !bytes.Equal(rec.Body.Bytes(), data) {
+		t.Fatalf("recorder body does not match original data")
+	}
+
+	// Also verify Flush() works without panic
+	writer.Flush()
+}
+
 type mockReaderFromResponseWriter struct {
 	*httptest.ResponseRecorder
 }

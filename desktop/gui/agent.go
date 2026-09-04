@@ -154,16 +154,18 @@ func cloneTaskRecord(record TaskRecord) TaskRecord {
 					copy(files, v.Files)
 				}
 				cloned[k] = &server.ClientTransferStateInfo{
-					ClientID:   v.ClientID,
-					State:      v.State,
-					BytesDone:  v.BytesDone,
-					BytesTotal: v.BytesTotal,
-					Percent:    v.Percent,
-					Current:    v.Current,
-					Message:    v.Message,
-					DeviceName: v.DeviceName,
-					SavedFiles: savedFiles,
-					Files:      files,
+					ClientID:       v.ClientID,
+					State:          v.State,
+					BytesDone:      v.BytesDone,
+					BytesTotal:     v.BytesTotal,
+					Percent:        v.Percent,
+					Current:        v.Current,
+					Message:        v.Message,
+					DeviceName:     v.DeviceName,
+					SavedFiles:     savedFiles,
+					Files:          files,
+					Speed:          v.Speed,
+					SpeedFormatted: v.SpeedFormatted,
 				}
 			}
 		}
@@ -820,16 +822,18 @@ func (agent *desktopAgent) observeTransferStatus(taskID int, status server.Trans
 				copy(files, v.Files)
 			}
 			agent.current.TransferClientStates[k] = &server.ClientTransferStateInfo{
-				ClientID:   v.ClientID,
-				State:      v.State,
-				BytesDone:  v.BytesDone,
-				BytesTotal: v.BytesTotal,
-				Percent:    v.Percent,
-				Current:    v.Current,
-				Message:    v.Message,
-				DeviceName: v.DeviceName,
-				SavedFiles: savedFiles,
-				Files:      files,
+				ClientID:       v.ClientID,
+				State:          v.State,
+				BytesDone:      v.BytesDone,
+				BytesTotal:     v.BytesTotal,
+				Percent:        v.Percent,
+				Current:        v.Current,
+				Message:        v.Message,
+				DeviceName:     v.DeviceName,
+				SavedFiles:     savedFiles,
+				Files:          files,
+				Speed:          v.Speed,
+				SpeedFormatted: v.SpeedFormatted,
 			}
 		}
 	}
