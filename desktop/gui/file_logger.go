@@ -13,12 +13,14 @@ import (
 )
 
 const (
-	defaultLogChanCap   = 4096
-	maxLogFileSize      = 10 * 1024 * 1024 // 10MB
-	maxBackupLogFiles   = 2                // desktop.log.1, desktop.log.2 (总共最多 3 个文件 <= 30MB)
-	flushInterval       = 100 * time.Millisecond
-	syncInterval        = 1 * time.Second
-	errorEnqueueTimeout = 50 * time.Millisecond
+	defaultLogChanCap       = 4096
+	maxLogFileSize          = 10 * 1024 * 1024 // 10MB
+	maxBackupLogFiles       = 2                // desktop.log.1, desktop.log.2 (总共最多 3 个文件 <= 30MB)
+	defaultLogRetentionDays = 7                // 默认保存 7 天
+	flushInterval           = 100 * time.Millisecond
+	syncInterval            = 1 * time.Second
+	errorEnqueueTimeout     = 50 * time.Millisecond
+	cleanupCheckInterval    = 12 * time.Hour
 )
 
 type logEntry struct {
@@ -64,6 +66,8 @@ func NewFileLogger(filePath string, enabled bool) *FileLogger {
 		doneCh:      make(chan struct{}),
 	}
 
+	cleanupOldLogs(filepath.Dir(filePath), defaultLogRetentionDays)
+
 	go l.workerLoop()
 	return l
 }
@@ -105,6 +109,8 @@ func (l *FileLogger) SetLogDir(logDir string) {
 			l.currentSize = 0
 		}
 	}
+
+	cleanupOldLogs(filepath.Dir(newPath), defaultLogRetentionDays)
 }
 
 // GetFilePath returns the active file path.
@@ -210,6 +216,8 @@ func (l *FileLogger) workerLoop() {
 	defer flushTicker.Stop()
 	syncTicker := time.NewTicker(syncInterval)
 	defer syncTicker.Stop()
+	cleanupTicker := time.NewTicker(cleanupCheckInterval)
+	defer cleanupTicker.Stop()
 
 	var batch []string
 	flush := func() {
@@ -268,6 +276,11 @@ func (l *FileLogger) workerLoop() {
 				}
 				l.mu.Unlock()
 			}
+		case <-cleanupTicker.C:
+			l.mu.RLock()
+			dir := filepath.Dir(l.filePath)
+			l.mu.RUnlock()
+			cleanupOldLogs(dir, defaultLogRetentionDays)
 		}
 	}
 }
@@ -465,3 +478,40 @@ func (l *FileLogger) Info(message string)    { l.log("INFO", message) }
 func (l *FileLogger) Warning(message string) { l.log("WARN", message) }
 func (l *FileLogger) Error(message string)   { l.log("ERROR", message) }
 func (l *FileLogger) Fatal(message string)   { l.log("FATAL", message) }
+
+// cleanupOldLogs removes rotated log files, crash dumps, and stale logs older than retentionDays.
+func cleanupOldLogs(logDir string, retentionDays int) {
+	if logDir == "" || retentionDays <= 0 {
+		return
+	}
+	entries, err := os.ReadDir(logDir)
+	if err != nil {
+		return
+	}
+	cutoff := time.Now().Add(-time.Duration(retentionDays) * 24 * time.Hour)
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		isRotatedLog := strings.HasPrefix(name, "desktop.log.")
+		isOtherLog := strings.HasSuffix(name, ".log") && name != "desktop.log"
+		isCrashDump := strings.HasPrefix(name, "crash_") && strings.HasSuffix(name, ".dump")
+
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+
+		if name == "desktop.log" {
+			if info.ModTime().Before(cutoff) {
+				_ = os.Truncate(filepath.Join(logDir, name), 0)
+			}
+			continue
+		}
+
+		if (isRotatedLog || isOtherLog || isCrashDump) && info.ModTime().Before(cutoff) {
+			_ = os.Remove(filepath.Join(logDir, name))
+		}
+	}
+}

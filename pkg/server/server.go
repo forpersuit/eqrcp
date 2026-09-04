@@ -1941,6 +1941,20 @@ func (s *Server) isClientFinished(clientID string) bool {
 		return false
 	}
 
+	// If client is downloading ZIP archive (-1), verify zip progress against expected zip size
+	s.expectedBytesMu.Lock()
+	zipTotal := int64(0)
+	if s.expectedBytes != nil {
+		zipTotal = s.expectedBytes[-1]
+	}
+	s.expectedBytesMu.Unlock()
+
+	if zipTotal > 0 {
+		if zipProgress, hasZip := progress[-1]; hasZip {
+			return zipProgress >= zipTotal
+		}
+	}
+
 	completedForClient := 0
 	for i := 0; i < totalItems; i++ {
 		clientBytes := progress[i]
@@ -1980,6 +1994,27 @@ func (s *Server) getClientDownloadedItems(clientID string) []int {
 	progress, ok := s.clientProgress[clientID]
 	if !ok {
 		return nil
+	}
+
+	// If client is downloading ZIP archive (-1), individual items are only completed when the entire zip is complete
+	s.expectedBytesMu.Lock()
+	zipTotal := int64(0)
+	if s.expectedBytes != nil {
+		zipTotal = s.expectedBytes[-1]
+	}
+	s.expectedBytesMu.Unlock()
+
+	if zipTotal > 0 {
+		if zipProgress, hasZip := progress[-1]; hasZip {
+			if zipProgress < zipTotal {
+				return nil
+			}
+			var items []int
+			for i := 0; i < totalItems; i++ {
+				items = append(items, i)
+			}
+			return items
+		}
 	}
 
 	var items []int
@@ -2122,10 +2157,16 @@ func (s *Server) statusHandler(w http.ResponseWriter, r *http.Request) {
 					status.Message = "Transfer completed."
 				} else {
 					status.State = "waiting"
-					status.BytesDone = 0
+					status.BytesDone = cState.BytesDone
 					status.BytesTotal = s.status.BytesTotal
-					status.Percent = 0
-					status.Message = "Waiting for transfer to start."
+					if status.BytesTotal <= 0 {
+						status.BytesTotal = cState.BytesTotal
+					}
+					status.Percent = cState.Percent
+					status.Message = cState.Message
+					if status.Message == "" {
+						status.Message = "Waiting for transfer to start."
+					}
 				}
 			}
 			status.DeviceName = cState.DeviceName
@@ -2528,6 +2569,7 @@ func New(cfg *config.Config) (*Server, error) {
 				htmlVariables.Lang = app.Lang
 			}
 			clientID := app.getClientID(r, w)
+			app.resetClientDownloadedBytes(clientID, -1)
 			for idx := 0; idx < len(app.body.Paths); idx++ {
 				app.resetClientDownloadedBytes(clientID, idx)
 			}

@@ -223,7 +223,19 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
 - **RFC 6266 / RFC 5987 纯 ASCII 回退与 UTF-8 编码**：
   - HTTP `Content-Disposition` 标头中，`filename="..."` 必须进行纯 ASCII 防护（过滤非 ASCII 字符），完整的 Unicode 文件名由 `filename*=UTF-8''<percent-encoded>` 提供，防止 Edge 移动版等严苛客户端由于 HTTP 标头非 ASCII 字节而丢弃响应或损坏文件名。
 
+---
 
+## 13. 移动端 Safari 下载生命周期与假完成防护规范 (Mobile Safari Download Lifecycle & False-Completion Prevention)
 
-
-
+- **网络异常与失焦唤醒绝不视作传输完成**：
+  - 在 iOS Safari 下，触发下载会立即弹起原生系统确认弹窗（“您要下载 xxx 吗？”），导致网页失焦挂起；用户点击“下载”后页面恢复焦点并密集触发 `visibilitychange`、`pageshow` 与 `focus`。
+  - Safari 底层网络栈在开启大文件数据流时，对并发的 `/status` XHR 可能返回 `status: 0`、挂起或中断。
+  - **红线规则**：**严禁**在 `xhr.onerror`、连续错误计数（`consecutiveErrors >= 2`）或唤醒时网络错误的分支中调用 `showCompletedUI()`！网络瞬断或错误只能提示重连等待（`waiting_status`），唯有服务端确凿返回 `state === 'completed'` 或 `bytesDone >= bytesTotal > 0` 时方可判定完成。
+- **唤醒事件防抖归一 (Wakeup Debounce)**：
+  - `visibilitychange`、`pageshow` 与 `focus` 事件在系统弹窗交替或息屏唤醒时可能在数十毫秒内连续触发多次。
+  - 必须设立 200~250ms 的定时器防抖（`wakeupTimer`），规整为单次平滑的状态拉取，避免在 Safari 刚刚唤醒网络连接时连续发起多个并发请求导致连接重置。
+- **多文件 ZIP 打包下载进度与单项完结判定隔离**：
+  - 客户端通过 ZIP (`-1`) 批量下载时，服务端必须仅比对 `progress[-1] >= expectedBytes[-1]` 作为 ZIP 是否完成的唯一判据。
+  - `getClientDownloadedItems` 在 ZIP 未达到 `zipTotal` 前，严禁过早向前端返回全部已完成子项清单，防止前端因 `downloadedItems.length >= totalCount` 误触发 `showCompletedUI`。
+- **断点等待态进度记忆与零跳变 (Zero Progress Jump on Waiting State)**：
+  - 移动浏览器断流重连或 Range 握手期间（`state == 'waiting'`），服务端 `/status` 必须持续下发已接收到的最新 `cState.BytesDone` 与 `cState.Percent`，严禁在 `waiting` 分支将其暴力清零，防止前端进度条在重连瞬间闪退到 0%。

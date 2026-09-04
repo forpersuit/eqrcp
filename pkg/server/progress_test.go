@@ -519,3 +519,52 @@ func TestDownloadResponseHeaders(t *testing.T) {
 		t.Errorf("Content-Type = %q, want prefix %q", ct, "text/plain")
 	}
 }
+
+func TestZipDownloadProgressAndFinishedIntegrity(t *testing.T) {
+	tempDir := t.TempDir()
+	f1 := filepath.Join(tempDir, "file1.txt")
+	f2 := filepath.Join(tempDir, "file2.txt")
+	_ = os.WriteFile(f1, []byte("short content 1"), 0644)
+	_ = os.WriteFile(f2, []byte("short content 2"), 0644)
+
+	s := &Server{
+		body: body.Body{
+			Paths: []string{f1, f2},
+		},
+		clientProgress: make(map[string]map[int]int64),
+		expectedBytes:  make(map[int]int64),
+	}
+
+	clientID := "test_zip_client"
+	zipSize := int64(2048)
+	s.expectedBytes[-1] = zipSize
+
+	// Simulate streaming zip partially (e.g. 500 bytes out of 2048 bytes)
+	s.clientProgress[clientID] = map[int]int64{
+		-1: 500,
+		0:  500, // exceeds f1 size (~15 bytes)
+		1:  500, // exceeds f2 size (~15 bytes)
+	}
+
+	// Because zipTotal is 2048 and client only downloaded 500, it MUST NOT be finished
+	if s.isClientFinished(clientID) {
+		t.Errorf("isClientFinished = true when zip progress is only 500/2048; want false")
+	}
+
+	// Individual items must not be returned as downloaded while zip is incomplete
+	items := s.getClientDownloadedItems(clientID)
+	if len(items) != 0 {
+		t.Errorf("getClientDownloadedItems returned %v when zip is incomplete; want empty", items)
+	}
+
+	// Now simulate zip completed (2048/2048)
+	s.clientProgress[clientID][-1] = 2048
+	if !s.isClientFinished(clientID) {
+		t.Errorf("isClientFinished = false when zip progress reached 2048/2048; want true")
+	}
+
+	items = s.getClientDownloadedItems(clientID)
+	if len(items) != 2 {
+		t.Errorf("getClientDownloadedItems returned %v when zip completed; want 2 items", items)
+	}
+}

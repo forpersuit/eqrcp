@@ -816,13 +816,21 @@
             return instance;
         })();
 
+        var memoryClientId = null;
         function getOrGenerateClientId() {
-            var id = window.localStorage.getItem('eqt_client_id');
-            if (!id) {
-                id = 'cli_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
-                window.localStorage.setItem('eqt_client_id', id);
+            try {
+                var id = window.localStorage.getItem('eqt_client_id');
+                if (!id) {
+                    id = 'cli_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
+                    window.localStorage.setItem('eqt_client_id', id);
+                }
+                return id;
+            } catch (e) {
+                if (!memoryClientId) {
+                    memoryClientId = 'cli_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
+                }
+                return memoryClientId;
             }
-            return id;
         }
 
         function hslToHex(h, s, l) {
@@ -1014,6 +1022,8 @@
         var hasReportedCompleted = false;
         var consecutiveErrors = 0;
         var isRequestInProgress = false;
+        var lastKnownPercent = 0;
+        var lastKnownBytesDone = 0;
 
         function pollStatus(isWakeup) {
             if (isCompleted) {
@@ -1039,6 +1049,12 @@
                             if (status.bytesTotal > 0) {
                                 lastKnownBytesTotal = status.bytesTotal;
                             }
+                            if ((status.bytesDone || 0) > lastKnownBytesDone) {
+                                lastKnownBytesDone = status.bytesDone;
+                            }
+                            if ((status.percent || 0) > lastKnownPercent) {
+                                lastKnownPercent = status.percent;
+                            }
                             
                             if (status.clientID) {
                                 var badgeEl = document.getElementById('device-id-badge');
@@ -1053,19 +1069,27 @@
                             
                             var progressContainer = document.getElementById('download-progress-container');
                             if (progressContainer) {
-                                 var showProgress = ((status.state === 'transferring' || status.state === 'waiting' || status.state === 'failed') && (status.bytesDone || 0) > 0) || status.state === 'completed';
-                                 if (showProgress && status.bytesTotal > 0) {
+                                var currentBytes = Math.max(lastKnownBytesDone, status.bytesDone || 0);
+                                var totalBytes = status.bytesTotal || lastKnownBytesTotal || 0;
+                                var showProgress = downloadTriggered || ((status.state === 'transferring' || status.state === 'waiting' || status.state === 'failed') && currentBytes > 0) || status.state === 'completed';
+                                if (showProgress) {
                                     progressContainer.style.display = 'block';
                                      
-                                    var percent = status.percent || 0;
+                                    var percent = Math.max(lastKnownPercent, status.percent || 0);
+                                    if (status.state === 'completed') {
+                                        percent = 100;
+                                    }
                                     document.getElementById('download-progress-fill').style.width = percent + '%';
                                     document.getElementById('download-progress-percent').innerText = percent + '%';
                                      
-                                    var bytesText = formatBytes(status.bytesDone || 0) + ' / ' + formatBytes(status.bytesTotal);
-                                    document.getElementById('download-progress-bytes').innerText = bytesText;
+                                    if (totalBytes > 0) {
+                                        var displayBytes = (status.state === 'completed') ? totalBytes : currentBytes;
+                                        var bytesText = formatBytes(displayBytes) + ' / ' + formatBytes(totalBytes);
+                                        document.getElementById('download-progress-bytes').innerText = bytesText;
+                                    }
                                      
                                     var statusText = 'Downloading...';
-                                    if (status.state === 'completed') {
+                                    if (status.state === 'completed' || (totalBytes > 0 && currentBytes >= totalBytes)) {
                                         var shortId = status.clientID && status.clientID.length > 4 ? status.clientID.substring(status.clientID.length - 4) : (status.clientID || '');
                                         statusText = shortId ? ('ID: ' + shortId) : '100%';
                                     } else if (status.state === 'waiting') {
@@ -1073,7 +1097,7 @@
                                             hasReportedWaiting = true;
                                             if (window.__eqt_telemetry) {
                                                 window.__eqt_telemetry.report('WARN', 'CHUNK_RETRY', 'Download interrupted, waiting to reconnect', {
-                                                    bytesDone: status.bytesDone || 0
+                                                    bytesDone: currentBytes
                                                 });
                                             }
                                         }
@@ -1084,7 +1108,7 @@
                                             hasReportedFailed = true;
                                             if (window.__eqt_telemetry) {
                                                 window.__eqt_telemetry.report('ERROR', 'CHUNK_FAIL', 'Transfer stopped or failed', {
-                                                    bytesDone: status.bytesDone || 0
+                                                    bytesDone: currentBytes
                                                 });
                                             }
                                         }
@@ -1092,7 +1116,7 @@
                                         statusText = dict.failed_status || 'Transfer stopped. You can click button to restart.';
                                     }
                                     document.getElementById('download-progress-status').innerText = statusText;
-                                } else if (!isCompleted) {
+                                } else if (!isCompleted && !downloadTriggered) {
                                     progressContainer.style.display = 'none';
                                 }
                             }
@@ -1133,8 +1157,9 @@
                                     fallback.classList.add('transferred');
                                 }
 
-                                if (status.downloadedItems.length >= totalCount) {
-                                    if (!isCompleted) {
+                                if (totalCount > 0 && status.downloadedItems.length >= totalCount) {
+                                    var isActuallyDone = lastKnownPercent >= 100 || (status.bytesTotal > 0 && (status.bytesDone || 0) >= status.bytesTotal);
+                                    if (isActuallyDone && !isCompleted) {
                                         isCompleted = true;
                                         if (!hasReportedCompleted) {
                                             hasReportedCompleted = true;
@@ -1149,7 +1174,7 @@
                                 }
                             }
 
-                            if (status.state === 'completed') {
+                            if (status.state === 'completed' || (status.bytesTotal > 0 && (status.bytesDone || 0) >= status.bytesTotal && (status.bytesDone || 0) > 0)) {
                                 if (!isCompleted) {
                                     isCompleted = true;
                                     if (!hasReportedCompleted) {
@@ -1166,31 +1191,25 @@
                             }
                         } catch(e) {}
                     } else if (xhr.status === 410) {
-                        if (!hasReportedCompleted) {
-                            hasReportedCompleted = true;
-                            if (window.__eqt_telemetry) {
-                                window.__eqt_telemetry.report('INFO', 'TRANSFER', 'Download session completed (410 Done)');
+                        if (lastKnownPercent >= 99 || (lastKnownBytesTotal > 0 && lastKnownBytesDone >= lastKnownBytesTotal)) {
+                            if (!hasReportedCompleted) {
+                                hasReportedCompleted = true;
+                                if (window.__eqt_telemetry) {
+                                    window.__eqt_telemetry.report('INFO', 'TRANSFER', 'Download session completed (410 Done)');
+                                }
                             }
+                            showCompletedUI();
+                        } else {
+                            var dict = EqtI18n.getDict();
+                            var statusEl = document.getElementById('download-progress-status');
+                            if (statusEl) statusEl.innerText = dict.failed_status || 'Transfer stopped.';
                         }
-                        if (intervalId) {
-                            clearInterval(intervalId);
-                            intervalId = null;
-                        }
-                        showCompletedUI();
                     } else {
                         consecutiveErrors++;
-                        if (downloadTriggered && (isWakeup || consecutiveErrors >= 2)) {
-                            if (intervalId) {
-                                clearInterval(intervalId);
-                                intervalId = null;
-                            }
-                            showCompletedUI();
-                        } else if (consecutiveErrors >= 5) {
-                            if (intervalId) {
-                                clearInterval(intervalId);
-                                intervalId = null;
-                            }
-                            showCompletedUI();
+                        if (downloadTriggered && consecutiveErrors >= 3) {
+                            var dict = EqtI18n.getDict();
+                            var statusEl = document.getElementById('download-progress-status');
+                            if (statusEl) statusEl.innerText = dict.waiting_status || 'Connection interrupted, waiting to reconnect...';
                         }
                     }
                 }
@@ -1198,18 +1217,10 @@
             xhr.onerror = function() {
                 isRequestInProgress = false;
                 consecutiveErrors++;
-                if (downloadTriggered && (isWakeup || consecutiveErrors >= 2)) {
-                    if (intervalId) {
-                        clearInterval(intervalId);
-                        intervalId = null;
-                    }
-                    showCompletedUI();
-                } else if (consecutiveErrors >= 5) {
-                    if (intervalId) {
-                        clearInterval(intervalId);
-                        intervalId = null;
-                    }
-                    showCompletedUI();
+                if (downloadTriggered && consecutiveErrors >= 3) {
+                    var dict = EqtI18n.getDict();
+                    var statusEl = document.getElementById('download-progress-status');
+                    if (statusEl) statusEl.innerText = dict.waiting_status || 'Connection interrupted, waiting to reconnect...';
                 }
             };
             xhr.send();
@@ -1241,10 +1252,14 @@
             }, 1200);
         }
 
-        // 监听移动端息屏唤醒、前后台切换与焦点恢复，立刻强制刷新一次状态
+        // 监听移动端息屏唤醒、前后台切换与焦点恢复，平滑刷新状态（防抖动）
+        var wakeupTimer = null;
         function handlePageWakeup() {
             if (document.visibilityState === 'visible' && !isCompleted) {
-                pollStatus(true);
+                if (wakeupTimer) clearTimeout(wakeupTimer);
+                wakeupTimer = setTimeout(function() {
+                    pollStatus(true);
+                }, 250);
             }
         }
         document.addEventListener('visibilitychange', handlePageWakeup);

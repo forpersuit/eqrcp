@@ -272,3 +272,47 @@ func TestFileLogger_SaturationAndEmergencyWrite(t *testing.T) {
 		t.Errorf("critical error was dropped during saturation! Content:\n%s", content)
 	}
 }
+
+func TestFileLogger_RetentionCleanup(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "eqt-logger-retention-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	oldLog := filepath.Join(tempDir, "desktop.log.1")
+	recentLog := filepath.Join(tempDir, "desktop.log.2")
+	oldCrash := filepath.Join(tempDir, "crash_old.dump")
+	recentCrash := filepath.Join(tempDir, "crash_recent.dump")
+
+	_ = os.WriteFile(oldLog, []byte("old log content"), 0600)
+	_ = os.WriteFile(recentLog, []byte("recent log content"), 0600)
+	_ = os.WriteFile(oldCrash, []byte("old crash dump"), 0600)
+	_ = os.WriteFile(recentCrash, []byte("recent crash dump"), 0600)
+
+	// Set modification times: old files 8-10 days ago, recent files 1-2 days ago
+	eightDaysAgo := time.Now().Add(-8 * 24 * time.Hour)
+	tenDaysAgo := time.Now().Add(-10 * 24 * time.Hour)
+	oneDayAgo := time.Now().Add(-1 * 24 * time.Hour)
+
+	_ = os.Chtimes(oldLog, eightDaysAgo, eightDaysAgo)
+	_ = os.Chtimes(oldCrash, tenDaysAgo, tenDaysAgo)
+	_ = os.Chtimes(recentLog, oneDayAgo, oneDayAgo)
+	_ = os.Chtimes(recentCrash, oneDayAgo, oneDayAgo)
+
+	cleanupOldLogs(tempDir, defaultLogRetentionDays)
+
+	if _, err := os.Stat(oldLog); !os.IsNotExist(err) {
+		t.Errorf("expected old log %s to be cleaned up", oldLog)
+	}
+	if _, err := os.Stat(oldCrash); !os.IsNotExist(err) {
+		t.Errorf("expected old crash %s to be cleaned up", oldCrash)
+	}
+	if _, err := os.Stat(recentLog); err != nil {
+		t.Errorf("expected recent log %s to be retained, got err: %v", recentLog, err)
+	}
+	if _, err := os.Stat(recentCrash); err != nil {
+		t.Errorf("expected recent crash %s to be retained, got err: %v", recentCrash, err)
+	}
+}
+

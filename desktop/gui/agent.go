@@ -544,6 +544,9 @@ func (agent *desktopAgent) pushTask(task AgentTask) (AgentStatus, error) {
 	}
 	agent.lastError = ""
 	if task.Action == "chat" {
+		if agent.busy {
+			agent.replaceActiveLocked("stopped")
+		}
 		agent.startChatLocked(task)
 	} else {
 		if len(agent.queue) >= desktopAgentMaxQueue {

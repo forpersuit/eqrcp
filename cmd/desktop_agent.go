@@ -507,6 +507,9 @@ func (agent *desktopAgent) handleTasks(w http.ResponseWriter, r *http.Request) {
 	agent.lastError = ""
 	if task.Action == "chat" {
 		agent.log.Infof("handleTasks: starting new chat session...")
+		if agent.busy {
+			agent.replaceActiveLocked("stopped")
+		}
 		agent.startChatLocked(task)
 	} else {
 		if len(agent.queue) >= desktopAgentMaxQueue {

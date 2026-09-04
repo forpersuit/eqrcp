@@ -4659,6 +4659,7 @@ async function startChat() {
     
     // 1. Transition immediately to the chat interface with a loading status for instant UI responsiveness
     setMode('chat');
+    state.chatStarting = true;
     state.status = state.status || {};
     state.status.chat = {
         action: 'chat',
@@ -4670,8 +4671,20 @@ async function startChat() {
 
     // 2. Run settings saving and chat session startup asynchronously in the background
     run(async () => {
-        LogInfo('[Frontend] startChat: Saving settings data before Chat()...');
-        await saveSettingsData();
+        if (activeShareTask() || (state.status?.current && state.status.current.action === 'receive' && !isTaskClosed(state.status.current))) {
+            try {
+                await StopCurrent();
+            } catch (e) {
+                console.warn('[Frontend] startChat: StopCurrent failed:', e);
+            }
+        }
+
+        try {
+            LogInfo('[Frontend] startChat: Saving settings data before Chat()...');
+            await saveSettingsData();
+        } catch (e) {
+            console.warn('[Frontend] startChat: saveSettingsData failed:', e);
+        }
         state.chatQRPulseArmed = true;
         state.chatQRPromptDismissed = false;
         
@@ -4697,7 +4710,12 @@ async function startChat() {
             LogError('[Frontend] startChat: Chat() invocation failed: ' + errStr);
             console.error('[Frontend] startChat: Chat() invocation failed:', err);
             state.error = 'Failed to start chat session: ' + err;
+            if (state.status) {
+                state.status.chat = null;
+            }
             render();
+        } finally {
+            state.chatStarting = false;
         }
     }, {busy: false});
 }
@@ -5488,7 +5506,11 @@ function applyStatusData(nextStatus) {
     const prevClockTampered = state.status?.clockTampered;
     const prevLicenseReady = state.status?.licenseReady;
 
+    const prevChat = state.status?.chat;
     state.status = nextStatus;
+    if (state.chatStarting && (!nextStatus?.chat || isTaskClosed(nextStatus.chat)) && prevChat) {
+        state.status.chat = prevChat;
+    }
     state.statusLoaded = true;
     syncLicenseFromStatus(nextStatus);
 
