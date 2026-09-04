@@ -586,3 +586,23 @@ func (a *App) ExportDiagnosticsZip() (string, error)
 | **真机 E2E 浏览器仿真** | Chrome DevTools MCP (9222) 交互与抓拍 | 自动上报 PAGE_LOAD/DOWNLOAD_CLICK，视觉正常 | 网络请求 204 返回，截取下载成功画面 | ✅ **通过** |
 | **Windows 产物构建** | `bash scripts/deploy-windows-results.sh` | 编译 `eqt.exe`、`eqt-launcher.exe` 并同步 | 编译通过，产物哈希一致并同步成功 | ✅ **通过** |
 
+---
+
+## 十七、第九轮代码复核（commit 1a359efe · Phase 5 E2E 与安全权限落地复核）
+
+> **复核对象**：`1a359efe test(telemetry): verify phase 5 end-to-end integration and secure log permissions`（v1.36.34）。  
+> **复核说明**：发起"审查最新提交"时 HEAD 为 `3bd9d5af`（第八轮修复，§十五 五项闭环已逐项核验属实）；审查进行中共享工作区前进，`1a359efe`（2026-09-04 11:41）成为最新提交并引入 §十六，故本轮复核目标切换为该提交。
+> **复核结论（总体）**：`telemetry_e2e_test.go` 是货真价实的端到端集成测试——`server.New` 真实 HTTP 监听、`ChatV2Logger` 经 `diag.NewStdLoggerWithWriter` 真实接入 `FileLogger`、真实 HTTP POST、关盘后排空读盘断言；8 维断言（token 脱敏、`[INFO]/[ERROR] [CLIENT]` 级别归一、chat-v2 小写级别→`[CHAT]`、零双框嵌套、CRLF 注入防伪造帧、限流聚合 `[WARN] [SRV]`、`GetLogTail`、`buildDiagnosticsZip` 三件套+内容校验、POSIX 0600）质量高且全部为落盘事实校验。`file_logger.go` 0644→0600 / 0755→0700 四处加固点位准确无遗漏。§五 Phase 5 里程碑三子项勾选与实现一致。**本地实测全绿**：`cd desktop/gui && go test ./... -count=1` → ok（1.986s）；`go test -run TestTelemetryAndLogging_E2E_FullPipeline -v -count=1` → PASS（0.12s），并发 50 最大时延实测 43.0ms（与 §十六 记录的 0.14s / ~47ms 同量级）。本轮发现集中于**视觉验收证据缺失（#1）**、**性能指标宣称与断言阈值脱节（#2）**与两处测试鲁棒性打磨（#3/#4），均为非阻断项。
+
+### 本轮复核发现
+
+| 评审意见项 | 评审性质 | 复核发现 | 建议处置 | 状态 |
+| :--- | :--- | :--- | :--- | :---: |
+| **1. §十六 真机浏览器视觉证据缺失，引用截图未入库** | **【文档·证据链·中低】** | §十六 第 3 节称"成功截取端到端完成画面并存盘验证（`windows_chrome_telemetry_e2e_test.png`）"；但全库检索（`git ls-files docs/img`）与 Windows 验收目录（`/mnt/e/developer/results`）均**无该文件**——仓库仅存 LAN-TLS 轮次入库的 4 张 `windows_chrome_*.png`。且 `telemetry_e2e_test.go` 为纯 Go 集成测试、无浏览器驱动，无法佐证"Chrome DevTools MCP 真机导航 / 204 返回 / 截图存盘"声明。§十六 引用为悬空相对路径。 | 按 LAN-TLS 先例补入库实机/仿真截图；或删除该引用并在 §十六 明确"视觉证据仅存本地验收目录、不入库"。 | ⏳ 建议跟进（文档·证据） |
+| **2. 性能"≤50ms 达标"宣称与 CI 断言阈值脱节** | **【指标·低】** | §十六 主张并发最大时延 37.78–47.16ms（远低于 ≤50ms 规范）；但 E2E 硬断言阈值为 **≤200ms**（`telemetry_e2e_test.go:366`），50ms 仅是本地单次观测、未形成 CI 门禁。若回归至 ~120ms，测试仍绿而 ≤50ms 设计指标失守无任何告警。 | 断言收紧至 ≤50ms；或文档双口径注明"CI 门禁 200ms / 达标观测 ≤50ms"，避免宣称与断言脱节。 | ⏳ 建议跟进（门禁） |
+| **3. 单条上报 50ms 硬阈值断言脆弱** | **【测试鲁棒·低】** | `telemetry_e2e_test.go:126` 对首条 `PAGE_LOAD` 单发硬限 50ms——慢 CI / `-race` 下偶发超阈即红，属 wall-clock 脆性断言（对照：并发段阈值放宽为 200ms 反而更稳）。 | 单发阈值上调至 100ms，或改为多次采样 p95 聚合后再断言。 | ⏳ 可选打磨 |
+| **4. 限流聚合告警断言依赖墙钟时序** | **【测试鲁棒·低】** | `telemetry_e2e_test.go:170-181` 依赖连续 25 发在容量 10 / 回填 10 s⁻¹ 的限流器下产生 ≥10 丢弃以触发聚合 `[WARN]`；若慢 CI 使 25 次往返 >1s，回填部分令牌后丢弃数不足，`Dropped client-log ... rate limiting` 断言将失败。 | 改为显式轮询等待 `429` 出现后再断言聚合告警，不依赖 1s 墙钟窗口。 | ⏳ 可选打磨 |
+| **5. "目录创建权限 0700"措辞可更精确** | **【口径·极低】** | `MkdirAll(0700)` 仅对**由本组件新建**的目录生效；既有目录（可能先前以 0755 由 config 等其它组件创建）不会被 chmod 降权。日志文件本身 0600 仍可防他人读取，实际安全目标达成。 | §十六 "日志存储目录创建权限统一收紧为 0700"补"由本组件新建时"限定。 | 认可（可选） |
+
+> **交付边界**：Phase 5 实现与 E2E 验证落地扎实，无功能阻断、无回归、无版本断裂（v1.36.34 未升符合"feat 升 / fix·test 不升"先例，与 6fad866b、3bd9d5af 一致）。本轮 5 项均为非阻断：视觉证据缺失（#1）与性能门禁口径（#2）建议下轮闭环，其余为测试鲁棒性打磨。桌面端前端浮层的真实点击路径仍留待 eqt-ux Chrome E2E 与实机验收（§十六 SKILL 已固化操作步骤）。
+
