@@ -450,3 +450,26 @@ func (a *App) ExportDiagnosticsZip() (string, error)
 
 > **交付边界**：第四轮审查 5 项全部经物证复核闭环，无剩余待办、无新增回归。建议按 §五 路线图进入 Phase 3 移动端轻量埋点（sendBeacon → `/client-log`）与 Windows 实机落盘验收；若希望该 fix 亦在应用版本留痕，可在合并 feature 分支时统一处理。
 
+---
+
+## 十二、第六轮代码复核（commit d99531ba · v1.36.33 · Phase 3 移动端探针落地）
+
+> **复核对象**：`d99531ba feat(telemetry): implement phase 3 mobile client probe instrumentation`（基于 `440949d9` 第五轮审查）。
+> **复核结论（总体）**：Phase 3 主链路设计意图正确、覆盖面齐——download/upload 原生模板注入 `telemetry.js`、chat SPA 挂载 `telemetry.ts` + WebSocket 生命周期钩子、服务端 `/assets/telemetry.js` 路由与 category 白名单扩容（+9 类至 17 类）、资产下发与类别映射单测齐备。**探针实际使用到的 category 与服务端白名单双向对齐**；模板新增均为纯 JS 运行时拼接、无新增 `{{ }}` 服务端插值，文件名进 message/details 由 `sanitizeString` 剥 CR/LF + 截断兜底，未扩大 XSS/日志注入面；`/client-log` 未设 ACAO，符合 §四-2.1 同源规格。版本 v1.36.32→v1.36.33 在 `version.go` 与 `wails.json` 双端一致。本地复核：`go vet ./pkg/server ./pkg/pages`、`go test ./pkg/server ./pkg/pages -count=1` ok（9.178s）、`go test ./pkg/chat/...` 全过、`go build ./...` OK；但 `cd pkg/chat/v2/web && npm run check` **报 1 个新增类型错误**（见下表 #1），CI/打包仅 `vite build`（不做类型检查）故产物不受阻。
+>
+> 核验通过事实：
+> - 流程正确性：chat SPA `dist` 由 `go:embed dist/*` 嵌入但 **`.gitignore` 不入库**，提交本体不含聊天遥测代码；`ci.yml`/`release.yml`/`deploy.yml` 与本地 `scripts/deploy-windows-results.sh` 均在 go build 前先 `npm run build` chat web → 遥测随产物生效（评审时本地 dist 为提交后重建，时间戳晚于 commit）。
+> - 类别对齐：probe/模板实际用到的 `EXCEPTION/NETWORK_OFFLINE/NETWORK_ONLINE/DOWNLOAD_CLICK/CHUNK_RETRY/CHUNK_FAIL/UPLOAD_START/UPLOAD_PROGRESS/UPLOAD_COMPLETE/TRANSFER/PAGE_LOAD/CHAT_CONNECT/CHAT_DISCONNECT` 全部命中 `validCategories`；新增 `TestTelemetryJSAssetAndCategories` 覆盖 17 类映射与非法 fallback `CLIENT_EVENT`。
+> - 服务端防护沿用：`sanitizeLevel`（含 DEBUG）/`sanitizeCategory`/message 256 / details 128×1 汇总 1024 / 32KB 体积 / RemoteAddr 令牌桶 10/s 未回退。
+
+### 本轮复核发现
+
+| 评审意见项 | 评审性质 | 复核发现 | 建议处置 | 状态 |
+| :--- | :--- | :--- | :--- | :---: |
+| **1. 新增 `telemetry.ts` 触发类型门禁红点（`window.fetch` 恒真）** | **【类型·低危·新引入】** | `pkg/chat/v2/web/src/services/telemetry.ts:43` 采用 `else if (window.fetch)`；DOM lib 下 fetch 恒定义 → `npm run check`（svelte-check + tsc）报 "This condition will always return true since this function is always defined"（TS2774）。本地实测 `1 ERROR 3 WARN`（3 个 a11y WARN 为 MessageList/MessageComposer 既有，非本轮引入）。CI 与打包仅 `vite build`（esbuild 剥类型不校验）故不拦产物，运行时 fetch 恒在亦无碍。 | 删除守卫直接 `fetch(...).catch(() => {})`，或改 `typeof window.fetch === 'function'`；建议将 `npm run check` 纳入 CI，避免类型红点再次漏网。 | ⏳ **待开发闭环** |
+| **2. 客户端 `timestamp` 捕获即弃，时钟漂移数据全丢** | **【口径·低危】** | §二-4 原则承诺"客户端 timestamp 仅放入 details 供时钟偏差分析"；探针（telemetry.js / telemetry.ts）均发顶层 `timestamp: Date.now()`，但 `telemetry.go` `HandleClientLog` 反序列化后从不引用 `entry.Timestamp`（未并入 details、未落盘）。 | 二选一收敛：将 `timestamp` 在落盘前并入 details（如 `client_ts=<epoch>` 供偏差计算）；或 §二-4 措辞改为"客户端时间戳当前仅接收不分析"。 | ⏳ **待开发闭环（可选）** |
+| **3. §四-2.2 白名单规格文字与实现脱节** | **【文档·低危】** | doc 写 level 仅 `INFO/WARN/ERROR`（fallback INFO）、category 仅 5 类（fallback OTHER）；实现为 level 含 `DEBUG`、category 已扩容 17 类、fallback `CLIENT_EVENT`（与 v1.3/v1.4 落地不符）。§四-2.1 丢弃告警示例文案（"Dropped N entries from \<IP\>"）与实现措辞（`count=N, IP=` 聚合格式）亦有出入。 | §四-2.1/2.2 按当前实现同步枚举清单与样例文案。 | ⏳ **待开发闭环（可选）** |
+| **4. v1.4 状态行与 Phase-4 清单首项滞后** | **【文档·低危】** | 状态行宣称"进入 Phase 4（GUI 应用内日志查看与导出诊断）"，但 `GetLogTail` 早在 Phase 1/round-3 已实现（app.go:1350）并经 wailsjs 生成绑定（`App.d.ts` 数值参数 → `Array\<string\>`）；§五 Phase-4 清单首项仍标 `[ ]`，仅"前端可视化日志浮层与一键复制"尚未落地。 | Phase-4 清单首项勾选，状态行表述为"Phase 4 部分前置完成（GetLogTail 已实现并绑定，浮层 UI 待建）"。 | ⏳ **待开发闭环（可选）** |
+
+> **交付边界**：#1 类型红点建议在 Phase 4 开工前随手闭环（删守卫或改 `typeof` 一行）；#2/#3/#4 为可选口径/文档收敛项。Phase 3 主链路方向正确、单测全绿，可进入 Phase 4；移动端真实断网/弱网/页面关闭回传鲁棒性仍按 §五 测试边界留待实机或移动仿真验收。
+
