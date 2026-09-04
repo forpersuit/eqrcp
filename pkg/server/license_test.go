@@ -1106,6 +1106,7 @@ func TestSetClockTamperedTriggersCallback(t *testing.T) {
 	ResetPaidStatusCallbacksForTest()
 	t.Cleanup(ResetPaidStatusCallbacksForTest)
 	SetClockTampered(false)
+	t.Cleanup(func() { SetClockTampered(false) })
 	ch := make(chan struct {
 		paid bool
 		tier string
@@ -1134,6 +1135,7 @@ func TestSetClockTamperedDiskPersistence(t *testing.T) {
 	t.Setenv("EQT_TESTING", "true")
 	ResetPaidStatusCallbacksForTest()
 	t.Cleanup(ResetPaidStatusCallbacksForTest)
+	t.Cleanup(func() { SetClockTampered(false) })
 
 	// Step 1: Set clock tampered to true and verify both ClockTampered=true and IsPaid=false persist to disk
 	SetClockTampered(true)

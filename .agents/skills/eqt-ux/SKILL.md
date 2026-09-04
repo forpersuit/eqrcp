@@ -234,8 +234,14 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
 - **唤醒事件防抖归一 (Wakeup Debounce)**：
   - `visibilitychange`、`pageshow` 与 `focus` 事件在系统弹窗交替或息屏唤醒时可能在数十毫秒内连续触发多次。
   - 必须设立 200~250ms 的定时器防抖（`wakeupTimer`），规整为单次平滑的状态拉取，避免在 Safari 刚刚唤醒网络连接时连续发起多个并发请求导致连接重置。
-- **多文件 ZIP 打包下载进度与单项完结判定隔离**：
-  - 客户端通过 ZIP (`-1`) 批量下载时，服务端必须仅比对 `progress[-1] >= expectedBytes[-1]` 作为 ZIP 是否完成的唯一判据。
-  - `getClientDownloadedItems` 在 ZIP 未达到 `zipTotal` 前，严禁过早向前端返回全部已完成子项清单，防止前端因 `downloadedItems.length >= totalCount` 误触发 `showCompletedUI`。
+- **多文件 ZIP 打包下载进度与单项完结判定隔离 (Dual-Channel Isolation for ZIP vs Item Downloads)**：
+  - 客户端通过 ZIP (`-1`) 批量下载时，服务端仅比对 `progress[-1] >= expectedBytes[-1]` 作为 ZIP 是否完成的判据，且 ZIP 写入流严禁污染单项的 `progress[idx]` 与 `expectedBytes[idx]`。
+  - 完结判定与已下载清单支持双通道独立判定（完整下载 ZIP 归档 OR 逐项全部完成单文件下载）；客户端从 ZIP 切换为单文件逐项下载时，自动清理未完成的 partial ZIP 标记，单项判定支持物理文件尺寸 `os.Stat` 兜底，杜绝混用模式下的完结死锁。
 - **断点等待态进度记忆与零跳变 (Zero Progress Jump on Waiting State)**：
   - 移动浏览器断流重连或 Range 握手期间（`state == 'waiting'`），服务端 `/status` 必须持续下发已接收到的最新 `cState.BytesDone` 与 `cState.Percent`，严禁在 `waiting` 分支将其暴力清零，防止前端进度条在重连瞬间闪退到 0%。
+- **410 Gone 会话终结处理与轮询终止 (410 Handling & Polling Teardown)**：
+  - 收到 HTTP 410 时必须立即清理轮询定时器（`clearInterval`），避免页面无限发起死轮询。
+  - 通过服务端响应头 `X-EQT-Transfer-State` 与本地进度双重判定：若服务端确凿标记已完成或本地进度已达标，收敛至完成对勾态（保障息屏唤醒错过 15s grace window 的观察端）；若为停止态，展示停止提示并恢复操作按钮（`actionBtnRow`）。
+- **日志与崩溃转储 7 天留存自清理 (7-Day Log & Crash Dump Retention)**：
+  - `file_logger.go` 在启动、切换目录和每 12 小时自检时，依据 7 天 cutoff 清理过期历史轮转日志与 `.dump` 文件；活跃 `desktop.log` 仅在闲置超期时 `Truncate(0)`；同时对齐真实崩溃转储文件 `config.DefaultConfigDir()/crash.dump`，对已上报/已忽略或超期转储执行清理。
+

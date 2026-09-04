@@ -1126,7 +1126,7 @@
                             if (status.state === 'transferring') {
                                  if (actionBtnRow) actionBtnRow.style.display = 'none';
                                  if (notifTips) notifTips.style.display = 'block';
-                            } else if (status.state === 'waiting' || status.state === 'failed') {
+                            } else if (status.state === 'waiting' || status.state === 'failed' || status.state === 'stopped') {
                                  if (actionBtnRow) actionBtnRow.style.display = 'flex';
                                  if (notifTips) notifTips.style.display = 'none';
                                  applyLanguage();
@@ -1191,7 +1191,18 @@
                             }
                         } catch(e) {}
                     } else if (xhr.status === 410) {
-                        if (lastKnownPercent >= 99 || (lastKnownBytesTotal > 0 && lastKnownBytesDone >= lastKnownBytesTotal)) {
+                        if (intervalId) {
+                            clearInterval(intervalId);
+                            intervalId = null;
+                        }
+                        var serverState = xhr.getResponseHeader('X-EQT-Transfer-State') || '';
+                        var isServerCompleted = serverState === 'completed';
+                        var isCompletedBefore = isCompleted ||
+                            lastKnownPercent >= 90 ||
+                            (downloadTriggered && lastKnownPercent >= 50) ||
+                            (lastKnownBytesTotal > 0 && lastKnownBytesDone >= lastKnownBytesTotal);
+
+                        if (isServerCompleted || isCompletedBefore) {
                             if (!hasReportedCompleted) {
                                 hasReportedCompleted = true;
                                 if (window.__eqt_telemetry) {
@@ -1203,6 +1214,11 @@
                             var dict = EqtI18n.getDict();
                             var statusEl = document.getElementById('download-progress-status');
                             if (statusEl) statusEl.innerText = dict.failed_status || 'Transfer stopped.';
+                            var actionBtnRow = document.getElementById('action-btn-row');
+                            if (actionBtnRow) actionBtnRow.style.display = 'flex';
+                            var notifTips = document.getElementById('download-notification-tips');
+                            if (notifTips) notifTips.style.display = 'none';
+                            applyLanguage();
                         }
                     } else {
                         consecutiveErrors++;

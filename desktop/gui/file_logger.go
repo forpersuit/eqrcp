@@ -10,6 +10,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"eqt/desktop/crash"
+	"eqt/pkg/config"
 )
 
 const (
@@ -479,39 +482,65 @@ func (l *FileLogger) Warning(message string) { l.log("WARN", message) }
 func (l *FileLogger) Error(message string)   { l.log("ERROR", message) }
 func (l *FileLogger) Fatal(message string)   { l.log("FATAL", message) }
 
-// cleanupOldLogs removes rotated log files, crash dumps, and stale logs older than retentionDays.
+// cleanupOldLogs removes rotated log files, crash dumps (.dump), and stale logs older than retentionDays.
 func cleanupOldLogs(logDir string, retentionDays int) {
-	if logDir == "" || retentionDays <= 0 {
-		return
-	}
-	entries, err := os.ReadDir(logDir)
-	if err != nil {
+	if retentionDays <= 0 {
 		return
 	}
 	cutoff := time.Now().Add(-time.Duration(retentionDays) * 24 * time.Hour)
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
-		isRotatedLog := strings.HasPrefix(name, "desktop.log.")
-		isOtherLog := strings.HasSuffix(name, ".log") && name != "desktop.log"
-		isCrashDump := strings.HasPrefix(name, "crash_") && strings.HasSuffix(name, ".dump")
+	if logDir != "" {
+		entries, err := os.ReadDir(logDir)
+		if err == nil {
+			for _, entry := range entries {
+				if entry.IsDir() {
+					continue
+				}
+				name := entry.Name()
+				isRotatedLog := strings.HasPrefix(name, "desktop.log.")
+				isOtherLog := strings.HasSuffix(name, ".log") && name != "desktop.log"
+				isCrashDump := strings.HasSuffix(name, ".dump")
 
-		info, err := entry.Info()
-		if err != nil {
-			continue
-		}
+				info, err := entry.Info()
+				if err != nil {
+					continue
+				}
 
-		if name == "desktop.log" {
-			if info.ModTime().Before(cutoff) {
-				_ = os.Truncate(filepath.Join(logDir, name), 0)
+				if name == "desktop.log" {
+					if info.ModTime().Before(cutoff) {
+						_ = os.Truncate(filepath.Join(logDir, name), 0)
+					}
+					continue
+				}
+
+				if (isRotatedLog || isOtherLog || isCrashDump) && info.ModTime().Before(cutoff) {
+					_ = os.Remove(filepath.Join(logDir, name))
+				}
 			}
-			continue
 		}
+	}
 
-		if (isRotatedLog || isOtherLog || isCrashDump) && info.ModTime().Before(cutoff) {
-			_ = os.Remove(filepath.Join(logDir, name))
+	cleanStaleCrashDump(cutoff)
+}
+
+// cleanStaleCrashDump removes crash.dump from DefaultConfigDir if uploaded/dismissed or older than cutoff.
+func cleanStaleCrashDump(cutoff time.Time) {
+	rawDump, err := crash.LoadRawDump()
+	if err != nil || rawDump == nil {
+		return
+	}
+	if rawDump.Uploaded || rawDump.Dismissed {
+		_ = crash.ClearDump()
+		return
+	}
+	if t, parseErr := time.Parse(time.RFC3339, rawDump.Report.Timestamp); parseErr == nil {
+		if t.Before(cutoff) {
+			_ = crash.ClearDump()
+		}
+	} else {
+		if fi, statErr := os.Stat(filepath.Join(config.DefaultConfigDir(), "crash.dump")); statErr == nil {
+			if fi.ModTime().Before(cutoff) {
+				_ = crash.ClearDump()
+			}
 		}
 	}
 }

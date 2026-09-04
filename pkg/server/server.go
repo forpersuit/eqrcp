@@ -1105,6 +1105,7 @@ func isTerminalTransferState(state string) bool {
 
 func writeTerminalTransfer(w http.ResponseWriter, status transferStatus) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("X-EQT-Transfer-State", status.State)
 	w.WriteHeader(http.StatusGone)
 	switch status.State {
 	case "stopped":
@@ -1941,7 +1942,7 @@ func (s *Server) isClientFinished(clientID string) bool {
 		return false
 	}
 
-	// If client is downloading ZIP archive (-1), verify zip progress against expected zip size
+	// 途径 A: 客户端是否完整下载了整个 ZIP 压缩包
 	s.expectedBytesMu.Lock()
 	zipTotal := int64(0)
 	if s.expectedBytes != nil {
@@ -1950,11 +1951,12 @@ func (s *Server) isClientFinished(clientID string) bool {
 	s.expectedBytesMu.Unlock()
 
 	if zipTotal > 0 {
-		if zipProgress, hasZip := progress[-1]; hasZip {
-			return zipProgress >= zipTotal
+		if zipProgress, hasZip := progress[-1]; hasZip && zipProgress >= zipTotal && zipProgress > 0 {
+			return true
 		}
 	}
 
+	// 途径 B: 客户端是否逐项完整下载了全部单个文件
 	completedForClient := 0
 	for i := 0; i < totalItems; i++ {
 		clientBytes := progress[i]
@@ -1996,7 +1998,7 @@ func (s *Server) getClientDownloadedItems(clientID string) []int {
 		return nil
 	}
 
-	// If client is downloading ZIP archive (-1), individual items are only completed when the entire zip is complete
+	// 1. 若客户端完整下载了整个 ZIP，则所有单项均已就绪
 	s.expectedBytesMu.Lock()
 	zipTotal := int64(0)
 	if s.expectedBytes != nil {
@@ -2005,10 +2007,7 @@ func (s *Server) getClientDownloadedItems(clientID string) []int {
 	s.expectedBytesMu.Unlock()
 
 	if zipTotal > 0 {
-		if zipProgress, hasZip := progress[-1]; hasZip {
-			if zipProgress < zipTotal {
-				return nil
-			}
+		if zipProgress, hasZip := progress[-1]; hasZip && zipProgress >= zipTotal && zipProgress > 0 {
 			var items []int
 			for i := 0; i < totalItems; i++ {
 				items = append(items, i)
@@ -2017,6 +2016,7 @@ func (s *Server) getClientDownloadedItems(clientID string) []int {
 		}
 	}
 
+	// 2. 否则按单项实际进度收集已完成项
 	var items []int
 	for i := 0; i < totalItems; i++ {
 		clientBytes := progress[i]
@@ -2065,18 +2065,27 @@ func (s *Server) getClientDownloadedAndTotal(clientID string) (int64, int64) {
 		return 0, 0
 	}
 
-	s.clientMutex.Lock()
-	defer s.clientMutex.Unlock()
+	// 1. 若客户端完整下载了 ZIP 压缩包，返回整个 zip 大小
+	s.expectedBytesMu.Lock()
+	zipTotal := int64(0)
+	if s.expectedBytes != nil {
+		zipTotal = s.expectedBytes[-1]
+	}
+	s.expectedBytesMu.Unlock()
 
+	s.clientMutex.Lock()
 	progress, ok := s.clientProgress[clientID]
+	if zipTotal > 0 && ok && progress != nil {
+		if zipProgress, hasZip := progress[-1]; hasZip && zipProgress >= zipTotal && zipProgress > 0 {
+			s.clientMutex.Unlock()
+			return zipTotal, zipTotal
+		}
+	}
+
+	// 2. 若客户端仅进行纯 ZIP 下载且尚未传完，返回当前 ZIP 进度
 	if ok && progress != nil {
-		if zipProgress, hasZip := progress[-1]; hasZip {
-			var zipTotal int64
-			s.expectedBytesMu.Lock()
-			if s.expectedBytes != nil {
-				zipTotal = s.expectedBytes[-1]
-			}
-			s.expectedBytesMu.Unlock()
+		if zipProgress, hasZip := progress[-1]; hasZip && len(progress) == 1 && zipTotal > 0 {
+			s.clientMutex.Unlock()
 			if zipProgress > zipTotal {
 				zipProgress = zipTotal
 			}
@@ -2086,8 +2095,19 @@ func (s *Server) getClientDownloadedAndTotal(clientID string) (int64, int64) {
 
 	totalItems := len(s.body.Paths)
 	if totalItems == 0 {
+		s.clientMutex.Unlock()
 		return 0, 0
 	}
+
+	// 快速浅拷贝进度数据，尽早释放 clientMutex，避免在持锁时做磁盘 I/O (os.Stat)
+	var clientBytesCopy map[int]int64
+	if ok && progress != nil {
+		clientBytesCopy = make(map[int]int64, len(progress))
+		for k, v := range progress {
+			clientBytesCopy[k] = v
+		}
+	}
+	s.clientMutex.Unlock()
 
 	var downloaded int64
 	var total int64
@@ -2108,8 +2128,8 @@ func (s *Server) getClientDownloadedAndTotal(clientID string) (int64, int64) {
 		}
 		total += size
 
-		if ok {
-			clientBytes := progress[i]
+		if clientBytesCopy != nil {
+			clientBytes := clientBytesCopy[i]
 			if clientBytes > size {
 				clientBytes = size
 			}
@@ -2569,7 +2589,6 @@ func New(cfg *config.Config) (*Server, error) {
 				htmlVariables.Lang = app.Lang
 			}
 			clientID := app.getClientID(r, w)
-			app.resetClientDownloadedBytes(clientID, -1)
 			for idx := 0; idx < len(app.body.Paths); idx++ {
 				app.resetClientDownloadedBytes(clientID, idx)
 			}
@@ -2732,10 +2751,22 @@ func New(cfg *config.Config) (*Server, error) {
 		if !isAlreadyTransferring {
 			if isZipDownload {
 				app.setClientDownloadedBytes(clientID, -1, rangeInfo.StartByte)
-				for idx := 0; idx < len(app.body.Paths); idx++ {
-					app.setClientDownloadedBytes(clientID, idx, rangeInfo.StartByte)
-				}
 			} else {
+				app.clientMutex.Lock()
+				if p, ok := app.clientProgress[clientID]; ok && p != nil {
+					if zipProgress, hasZip := p[-1]; hasZip {
+						app.expectedBytesMu.Lock()
+						zipTotal := int64(0)
+						if app.expectedBytes != nil {
+							zipTotal = app.expectedBytes[-1]
+						}
+						app.expectedBytesMu.Unlock()
+						if zipTotal <= 0 || zipProgress < zipTotal {
+							delete(p, -1)
+						}
+					}
+				}
+				app.clientMutex.Unlock()
 				app.setClientDownloadedBytes(clientID, currentIndex, rangeInfo.StartByte)
 			}
 		}
@@ -2777,9 +2808,6 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 		if isZipDownload {
 			app.expectedBytes[-1] = expectedBytes
-			for idx := 0; idx < len(app.body.Paths); idx++ {
-				app.expectedBytes[idx] = expectedBytes
-			}
 		} else {
 			app.expectedBytes[currentIndex] = expectedBytes
 		}
@@ -2794,9 +2822,6 @@ func New(cfg *config.Config) (*Server, error) {
 				// Track cumulative bytes specifically for this clientID and item index
 				if isZipDownload {
 					app.addClientDownloadedBytes(clientID, -1, written)
-					for idx := 0; idx < len(app.body.Paths); idx++ {
-						app.addClientDownloadedBytes(clientID, idx, written)
-					}
 				} else {
 					app.addClientDownloadedBytes(clientID, currentIndex, written)
 				}

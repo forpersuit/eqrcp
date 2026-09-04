@@ -469,6 +469,8 @@ func TestUsageMACV1MigrationNoFalseLock(t *testing.T) {
 	defer os.Unsetenv("EQT_TESTING")
 	ResetPaidStatusCallbacksForTest()
 	defer ResetPaidStatusCallbacksForTest()
+	SetClockTampered(false)
+	defer SetClockTampered(false)
 
 	usageFile := filepath.Join(config.DefaultConfigDir(), "chat_usage.json")
 	var backup []byte

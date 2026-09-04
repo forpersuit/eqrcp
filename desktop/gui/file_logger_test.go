@@ -282,7 +282,7 @@ func TestFileLogger_RetentionCleanup(t *testing.T) {
 
 	oldLog := filepath.Join(tempDir, "desktop.log.1")
 	recentLog := filepath.Join(tempDir, "desktop.log.2")
-	oldCrash := filepath.Join(tempDir, "crash_old.dump")
+	oldCrash := filepath.Join(tempDir, "crash.dump")
 	recentCrash := filepath.Join(tempDir, "crash_recent.dump")
 
 	_ = os.WriteFile(oldLog, []byte("old log content"), 0600)
@@ -300,6 +300,19 @@ func TestFileLogger_RetentionCleanup(t *testing.T) {
 	_ = os.Chtimes(recentLog, oneDayAgo, oneDayAgo)
 	_ = os.Chtimes(recentCrash, oneDayAgo, oneDayAgo)
 
+	// Also test real crash dump in DefaultConfigDir
+	tempConfigDir, err := os.MkdirTemp("", "eqt-config-retention-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp config dir: %v", err)
+	}
+	defer os.RemoveAll(tempConfigDir)
+	t.Setenv("EQT_CONFIG_DIR", tempConfigDir)
+
+	configCrashPath := filepath.Join(tempConfigDir, "crash.dump")
+	oldDumpJSON := `{"report":{"app_version":"v1.36.37","timestamp":"` + tenDaysAgo.Format(time.RFC3339) + `"},"uploaded":false,"dismissed":false}`
+	_ = os.WriteFile(configCrashPath, []byte(oldDumpJSON), 0644)
+	_ = os.Chtimes(configCrashPath, tenDaysAgo, tenDaysAgo)
+
 	cleanupOldLogs(tempDir, defaultLogRetentionDays)
 
 	if _, err := os.Stat(oldLog); !os.IsNotExist(err) {
@@ -314,5 +327,25 @@ func TestFileLogger_RetentionCleanup(t *testing.T) {
 	if _, err := os.Stat(recentCrash); err != nil {
 		t.Errorf("expected recent crash %s to be retained, got err: %v", recentCrash, err)
 	}
-}
+	if _, err := os.Stat(configCrashPath); !os.IsNotExist(err) {
+		t.Errorf("expected stale config crash.dump to be cleaned up")
+	}
 
+	// Verify that recent pending crash dump in DefaultConfigDir is retained
+	recentDumpJSON := `{"report":{"app_version":"v1.36.37","timestamp":"` + oneDayAgo.Format(time.RFC3339) + `"},"uploaded":false,"dismissed":false}`
+	_ = os.WriteFile(configCrashPath, []byte(recentDumpJSON), 0644)
+	_ = os.Chtimes(configCrashPath, oneDayAgo, oneDayAgo)
+
+	cleanupOldLogs(tempDir, defaultLogRetentionDays)
+	if _, err := os.Stat(configCrashPath); err != nil {
+		t.Errorf("expected recent pending crash.dump to be retained, got: %v", err)
+	}
+
+	// Verify that uploaded crash dump is cleaned up even if recent
+	uploadedDumpJSON := `{"report":{"app_version":"v1.36.37","timestamp":"` + oneDayAgo.Format(time.RFC3339) + `"},"uploaded":true,"dismissed":false}`
+	_ = os.WriteFile(configCrashPath, []byte(uploadedDumpJSON), 0644)
+	cleanupOldLogs(tempDir, defaultLogRetentionDays)
+	if _, err := os.Stat(configCrashPath); !os.IsNotExist(err) {
+		t.Errorf("expected uploaded crash.dump to be cleaned up")
+	}
+}
