@@ -187,3 +187,55 @@ func TestDesktopSettingsEnableNotification(t *testing.T) {
 		t.Fatalf("reloaded.EnableNotification = false, want true")
 	}
 }
+
+func TestDesktopSettingsEnableTLSDefaultAndOverride(t *testing.T) {
+	// 1. Default should be true when unset
+	configPath := filepath.Join(t.TempDir(), "config.yml")
+	if err := os.WriteFile(configPath, []byte("interface: any\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	app := application.New()
+	app.Flags.Config = configPath
+
+	settings, err := ReadDesktopSettings(app)
+	if err != nil {
+		t.Fatalf("ReadDesktopSettings failed: %v", err)
+	}
+	if !settings.EnableTLS {
+		t.Fatalf("expected EnableTLS default to be true, got false")
+	}
+
+	// 2. Explicit false in config should be respected
+	configPathFalse := filepath.Join(t.TempDir(), "config_false.yml")
+	if err := os.WriteFile(configPathFalse, []byte("enableTLS: false\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	appFalse := application.New()
+	appFalse.Flags.Config = configPathFalse
+
+	settingsFalse, err := ReadDesktopSettings(appFalse)
+	if err != nil {
+		t.Fatalf("ReadDesktopSettings with enableTLS=false failed: %v", err)
+	}
+	if settingsFalse.EnableTLS {
+		t.Fatalf("expected EnableTLS to be false when configured, got true")
+	}
+
+	// 3. Write false and verify persistence of both keys
+	settings.EnableTLS = false
+	saved, err := WriteDesktopSettings(app, settings)
+	if err != nil {
+		t.Fatalf("WriteDesktopSettings failed: %v", err)
+	}
+	if saved.EnableTLS {
+		t.Fatalf("saved.EnableTLS = true, want false")
+	}
+
+	reloaded, err := ReadDesktopSettings(app)
+	if err != nil {
+		t.Fatalf("reloaded ReadDesktopSettings failed: %v", err)
+	}
+	if reloaded.EnableTLS {
+		t.Fatalf("reloaded.EnableTLS = true, want false")
+	}
+}

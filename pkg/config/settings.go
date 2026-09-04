@@ -175,7 +175,7 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 	} else if v.IsSet("enableNotifications") {
 		enableNotification = v.GetBool("enableNotifications")
 	}
-	enableTLS := false
+	enableTLS := true
 	if v.IsSet("enableTLS") {
 		enableTLS = v.GetBool("enableTLS")
 	} else if v.IsSet("secure") {
