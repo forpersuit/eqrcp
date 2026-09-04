@@ -21,7 +21,9 @@ assert(isImageFile({ type: 'file', fileName: 'photo.PNG' }) === true, 'png upper
 assert(isImageFile({ type: 'file', fileName: 'pic.jpeg' }) === true, 'jpeg is image');
 assert(isImageFile({ type: 'file', fileName: 'banner.webp' }) === true, 'webp is image');
 assert(isImageFile({ type: 'file', fileName: 'animation.gif' }) === true, 'gif is image');
-assert(isImageFile({ type: 'file', fileName: 'vector.svg' }) === true, 'svg is image');
+assert(isImageFile({ type: 'file', fileName: 'vector.svg' }) === false, 'svg is NOT an inline image (XSS protection)');
+assert(isImageFile({ type: 'image', fileName: 'vector.svg' }) === false, 'svg is NOT image even if type is image');
+assert(isImageFile({ type: 'file', mimeType: 'image/svg+xml' }) === false, 'svg mimeType is NOT image');
 assert(isImageFile({ type: 'file', mimeType: 'image/avif' }) === true, 'image mimeType is image');
 
 // 2. getImageInlineUrl tests

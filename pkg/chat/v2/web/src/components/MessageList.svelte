@@ -453,7 +453,7 @@
         options.push({
           label: getTranslation('viewOriginal', currentLang),
           action: () => {
-            window.open(getImageInlineUrl(token, msg.id), '_blank');
+            window.open(getImageInlineUrl(token, msg.id), '_blank', 'noopener,noreferrer');
             closeMenu();
           }
         });
@@ -593,7 +593,7 @@
     }
     e.stopPropagation();
     if (token && msg.id) {
-      window.open(getImageInlineUrl(token, msg.id), '_blank');
+      window.open(getImageInlineUrl(token, msg.id), '_blank', 'noopener,noreferrer');
     }
   }
 

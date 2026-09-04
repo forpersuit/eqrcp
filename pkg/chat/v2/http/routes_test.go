@@ -536,6 +536,12 @@ func TestSinglePassStreamingUploadQueryAndForm(t *testing.T) {
 		if inlineResp.Header.Get("Content-Type") != "application/pdf" {
 			t.Fatalf("expected Content-Type 'application/pdf' for inline pdf, got %q", inlineResp.Header.Get("Content-Type"))
 		}
+		if inlineResp.Header.Get("Content-Security-Policy") != "default-src 'none'; sandbox" {
+			t.Fatalf("expected Content-Security-Policy 'default-src 'none'; sandbox', got %q", inlineResp.Header.Get("Content-Security-Policy"))
+		}
+		if inlineResp.Header.Get("X-Content-Type-Options") != "nosniff" {
+			t.Fatalf("expected X-Content-Type-Options 'nosniff', got %q", inlineResp.Header.Get("X-Content-Type-Options"))
+		}
 		etag := inlineResp.Header.Get("ETag")
 		if etag == "" {
 			t.Fatal("expected non-empty ETag for inline download")
@@ -555,6 +561,18 @@ func TestSinglePassStreamingUploadQueryAndForm(t *testing.T) {
 			t.Fatalf("expected Content-Disposition to retain message fileName, got %q", noQueryResp.Header.Get("Content-Disposition"))
 		}
 
+		// 3c. Verify inline request (200 OK) NEVER creates a transfer job to prevent room event jitter (F2')
+		inlineJobURL := fmt.Sprintf("%s/chat-v2/%s/files/%s?filename=stream-doc.pdf&inline=1&clientId=client-inline-200", server.URL, token, msgID)
+		inlineJobResp, err := http.Get(inlineJobURL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		inlineJobResp.Body.Close()
+		if _, err := handler.transfer.GetJob("dl-" + msgID + "-client-inline-200"); err == nil {
+			t.Fatal("inline streaming must not create transfer job!")
+		}
+
+		// 3d. Verify 304 Not Modified also does not create a transfer job
 		req304, _ := http.NewRequest(http.MethodGet, inlineURL+"&clientId=client-304-check", nil)
 		req304.Header.Set("If-None-Match", etag)
 		resp304, err := http.DefaultClient.Do(req304)
@@ -565,9 +583,22 @@ func TestSinglePassStreamingUploadQueryAndForm(t *testing.T) {
 		if resp304.StatusCode != http.StatusNotModified {
 			t.Fatalf("expected 304, got %d", resp304.StatusCode)
 		}
-		// Confirm NO job was created for client-304-check!
 		if _, err := handler.transfer.GetJob("dl-" + msgID + "-client-304-check"); err == nil {
 			t.Fatal("304 response must not create dangling transfer job!")
+		}
+
+		// 3e. Verify SVG is strictly forced to attachment to prevent stored-XSS execution vectors (F1')
+		svgURL := fmt.Sprintf("%s/chat-v2/%s/files/%s?filename=malicious.svg&inline=1", server.URL, token, msgID)
+		svgResp, err := http.Get(svgURL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		svgResp.Body.Close()
+		if !strings.HasPrefix(svgResp.Header.Get("Content-Disposition"), "attachment;") {
+			t.Fatalf("expected attachment disposition for SVG even when inline=1 was requested, got %q", svgResp.Header.Get("Content-Disposition"))
+		}
+		if svgResp.Header.Get("Cache-Control") != "private, no-transform" {
+			t.Fatalf("expected private, no-transform cache control for SVG, got %q", svgResp.Header.Get("Cache-Control"))
 		}
 	}
 
@@ -1422,5 +1453,103 @@ func TestIsChatStaticToken(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("isChatStaticToken(%q) = %v, want %v", tt.token, got, tt.want)
 		}
+	}
+}
+
+func TestInlineSecurityAndJobSuppression(t *testing.T) {
+	logger := &diag.MemoryLogger{}
+	handler := NewHandler(Config{BasePath: "/chat-v2", Logger: logger, DisableSystemMessages: true})
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	token := "token-inline-sec"
+	sess := handler.sessions.GetOrCreate(token)
+
+	// Register test files in session
+	sess.MessageStore.Add(protocol.EventEnvelope{
+		Type: protocol.EventMessageAdded,
+		Message: &protocol.Message{
+			ID:       "msg-svg-xss",
+			Type:     "file",
+			FileName: "exploit.svg",
+			MimeType: "image/svg+xml",
+			Size:     1024,
+		},
+	})
+	sess.MessageStore.Add(protocol.EventEnvelope{
+		Type: protocol.EventMessageAdded,
+		Message: &protocol.Message{
+			ID:       "msg-html-xss",
+			Type:     "file",
+			FileName: "phishing.html",
+			MimeType: "text/html",
+			Size:     2048,
+		},
+	})
+	sess.MessageStore.Add(protocol.EventEnvelope{
+		Type: protocol.EventMessageAdded,
+		Message: &protocol.Message{
+			ID:       "msg-safe-png",
+			Type:     "file",
+			FileName: "diagram.png",
+			MimeType: "image/png",
+			Size:     4096,
+		},
+	})
+
+	var jobBroadcastCount int
+	handler.transfer.RegisterCallback(func(token string, eventType protocol.EventType, event protocol.TransferEvent) {
+		jobBroadcastCount++
+	})
+
+	// 1. SVG requesting inline=1 MUST be forced to attachment with private cache
+	respSvg, err := http.Get(fmt.Sprintf("%s/chat-v2/%s/files/msg-svg-xss?inline=1&mock_size=1024", server.URL, token))
+	if err != nil {
+		t.Fatal(err)
+	}
+	respSvg.Body.Close()
+	if !strings.HasPrefix(respSvg.Header.Get("Content-Disposition"), "attachment;") {
+		t.Fatalf("SVG must be forced to attachment, got: %s", respSvg.Header.Get("Content-Disposition"))
+	}
+	if respSvg.Header.Get("Cache-Control") != "private, no-transform" {
+		t.Fatalf("SVG attachment must use private cache, got: %s", respSvg.Header.Get("Cache-Control"))
+	}
+
+	// 2. HTML requesting inline=1 MUST be forced to attachment
+	respHtml, err := http.Get(fmt.Sprintf("%s/chat-v2/%s/files/msg-html-xss?inline=1&mock_size=2048", server.URL, token))
+	if err != nil {
+		t.Fatal(err)
+	}
+	respHtml.Body.Close()
+	if !strings.HasPrefix(respHtml.Header.Get("Content-Disposition"), "attachment;") {
+		t.Fatalf("HTML must be forced to attachment, got: %s", respHtml.Header.Get("Content-Disposition"))
+	}
+
+	// 3. Safe PNG requesting inline=1:
+	// - Content-Disposition must be inline
+	// - Must set CSP default-src 'none'; sandbox
+	// - Must set X-Content-Type-Options: nosniff
+	// - Must NOT create any transfer job and NOT broadcast transfer events
+	initialBroadcasts := jobBroadcastCount
+	respPng, err := http.Get(fmt.Sprintf("%s/chat-v2/%s/files/msg-safe-png?inline=1&mock_size=4096&clientId=test-client-png", server.URL, token))
+	if err != nil {
+		t.Fatal(err)
+	}
+	respPng.Body.Close()
+
+	if !strings.HasPrefix(respPng.Header.Get("Content-Disposition"), "inline;") {
+		t.Fatalf("PNG should be inline, got: %s", respPng.Header.Get("Content-Disposition"))
+	}
+	if respPng.Header.Get("Content-Security-Policy") != "default-src 'none'; sandbox" {
+		t.Fatalf("Inline PNG must include CSP sandbox, got: %s", respPng.Header.Get("Content-Security-Policy"))
+	}
+	if respPng.Header.Get("X-Content-Type-Options") != "nosniff" {
+		t.Fatalf("Inline PNG must include X-Content-Type-Options: nosniff, got: %s", respPng.Header.Get("X-Content-Type-Options"))
+	}
+	if _, err := handler.transfer.GetJob("dl-msg-safe-png-test-client-png"); err == nil {
+		t.Fatal("Inline PNG streaming must NOT create a transfer job!")
+	}
+	if jobBroadcastCount != initialBroadcasts {
+		t.Fatalf("Inline PNG streaming must NOT broadcast transfer events, got %d new broadcasts", jobBroadcastCount-initialBroadcasts)
 	}
 }

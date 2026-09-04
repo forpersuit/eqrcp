@@ -1,10 +1,16 @@
 export function isImageFile(msg: { fileName?: string; mimeType?: string; type?: string } | null | undefined): boolean {
   if (!msg) return false;
-  if (msg.type === 'image') return true;
-  const mime = (msg.mimeType || '').toLowerCase();
-  if (mime.startsWith('image/')) return true;
   const name = (msg.fileName || '').toLowerCase();
-  return /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i.test(name);
+  const mime = (msg.mimeType || '').toLowerCase();
+
+  // Strict SVG exclusion to eliminate stored XSS risks in inline previews / top-level navigation (F1')
+  if (name.endsWith('.svg') || mime === 'image/svg+xml') {
+    return false;
+  }
+
+  if (msg.type === 'image') return true;
+  if (mime.startsWith('image/')) return true;
+  return /\.(png|jpe?g|gif|webp|bmp|ico|avif)$/i.test(name);
 }
 
 export function getImageInlineUrl(token: string, messageId: string): string {

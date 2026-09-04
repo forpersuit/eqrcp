@@ -70,38 +70,6 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request, token s
 		msgMimeType = msg.MimeType
 	}
 
-	// Evaluate inline caching vs attachment download headers before creating any transfer jobs
-	etag := fmt.Sprintf("\"%s-%d\"", fileID, size)
-	isInline := query.Get("inline") == "1"
-
-	if isInline {
-		w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", filename))
-		w.Header().Set("Cache-Control", "public, max-age=86400, immutable")
-		w.Header().Set("ETag", etag)
-
-		// Check 304 before creating transfer Job to prevent dangling/ghost jobs (P2)
-		if match := r.Header.Get("If-None-Match"); match != "" && (match == etag || match == "*") {
-			w.WriteHeader(http.StatusNotModified)
-			return
-		}
-	} else {
-		// Strict iOS Safari WebKit attachment requirements (.agents/skills/eqt-lan-tls/SKILL.md §6.1)
-		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
-		w.Header().Set("Cache-Control", "private, no-transform")
-		w.Header().Del("Pragma")
-		w.Header().Del("Expires")
-	}
-
-	// Create and register the download Job only for active data streaming
-	jobID := "dl-" + fileID
-	if clientID != "" {
-		jobID = "dl-" + fileID + "-" + clientID
-	}
-	job, err := h.transfer.GetJob(jobID)
-	if err != nil || job.State == protocol.TransferCancelled || job.State == protocol.TransferFailed || job.State == protocol.TransferCompleted {
-		h.transfer.CreateJob(token, jobID, messageID, clientID, filename, size)
-	}
-
 	// Dynamic Content-Type resolution: prioritize extension mapping, fallback to stored MIME, then octet-stream
 	contentType := ""
 	if ext := filepath.Ext(filename); ext != "" {
@@ -114,8 +82,136 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request, token s
 		contentType = "application/octet-stream"
 	}
 
+	// Evaluate inline caching vs attachment download headers before creating any transfer jobs
+	etag := fmt.Sprintf("\"%s-%d\"", fileID, size)
+	isInline := query.Get("inline") == "1"
+
+	// Strict SVG and scriptable document exclusion to eliminate stored-XSS execution vectors (F1')
+	if isInline && !isSafeInlineResource(contentType, filename) {
+		isInline = false
+	}
+
+	if isInline {
+		w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", filename))
+		w.Header().Set("Cache-Control", "public, max-age=86400, immutable")
+		w.Header().Set("ETag", etag)
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; sandbox")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+
+		// Check 304 before streaming to prevent unnecessary transfers (P2)
+		if match := r.Header.Get("If-None-Match"); match != "" && (match == etag || match == "*") {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+	} else {
+		// Strict iOS Safari WebKit attachment requirements (.agents/skills/eqt-lan-tls/SKILL.md §6.1)
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+		w.Header().Set("Cache-Control", "private, no-transform")
+		w.Header().Del("Pragma")
+		w.Header().Del("Expires")
+	}
+
 	w.Header().Set("Content-Length", strconv.FormatInt(size, 10))
 	w.Header().Set("Content-Type", contentType)
+
+	if isInline {
+		w.WriteHeader(http.StatusOK)
+
+		// Inline media streaming (e.g. <img> previews) bypasses transfer jobs completely (F2')
+		// to avoid broadcasting job state changes (queued/started/completed) to the entire room.
+		if fileReader != nil {
+			if _, err := io.Copy(w, fileReader); err != nil {
+				diag.Emit(r.Context(), h.logger, diag.LevelWarn, "inline stream failed", err, fields...)
+				return
+			}
+			diag.Emit(r.Context(), h.logger, diag.LevelInfo, "inline stream completed successfully", nil, fields...)
+		} else if mockSizeStr != "" {
+			buf := make([]byte, 32*1024)
+			var totalWritten int64
+			for totalWritten < size {
+				select {
+				case <-r.Context().Done():
+					return
+				default:
+				}
+				writeSize := int64(len(buf))
+				if size-totalWritten < writeSize {
+					writeSize = size - totalWritten
+				}
+				n, err := w.Write(buf[:writeSize])
+				if err != nil {
+					return
+				}
+				totalWritten += int64(n)
+				if size < 500*1024 {
+					time.Sleep(1 * time.Millisecond)
+				}
+			}
+		} else {
+			// P2P / Duplex Streaming Proxy mode for inline media
+			h.mu.Lock()
+			rdv := &rendezvous{
+				readerChan: make(chan io.ReadCloser, 1),
+				errChan:    make(chan error, 1),
+			}
+			h.rendezvousMap[fileID] = append(h.rendezvousMap[fileID], rdv)
+			h.mu.Unlock()
+			defer func() {
+				h.mu.Lock()
+				list := h.rendezvousMap[fileID]
+				for i, r := range list {
+					if r == rdv {
+						h.rendezvousMap[fileID] = append(list[:i], list[i+1:]...)
+						break
+					}
+				}
+				if len(h.rendezvousMap[fileID]) == 0 {
+					delete(h.rendezvousMap, fileID)
+				}
+				h.mu.Unlock()
+			}()
+
+			sess.Broadcast(protocol.EventEnvelope{
+				Type: protocol.EventRequestFileData,
+				Message: &protocol.Message{
+					ID: fileID,
+				},
+				Time: time.Now(),
+			})
+
+			select {
+			case senderStream := <-rdv.readerChan:
+				defer senderStream.Close()
+				var limitReader io.Reader = senderStream
+				if msg, ok := sess.MessageStore.Find(fileID); ok && msg.Size > 0 {
+					limitReader = io.LimitReader(senderStream, msg.Size)
+				}
+				if _, err := io.Copy(w, limitReader); err != nil {
+					rdv.errChan <- err
+					diag.Emit(r.Context(), h.logger, diag.LevelWarn, "inline rendezvous copy failed", err, fields...)
+					return
+				}
+				rdv.errChan <- nil
+			case <-r.Context().Done():
+				return
+			case <-time.After(35 * time.Second):
+				http.Error(w, "Timeout waiting for sender stream", http.StatusGatewayTimeout)
+				return
+			}
+		}
+		return
+	}
+
+	// Create and register the download Job only for active data streaming
+	jobID := "dl-" + fileID
+	if clientID != "" {
+		jobID = "dl-" + fileID + "-" + clientID
+	}
+	job, err := h.transfer.GetJob(jobID)
+	if err != nil || job.State == protocol.TransferCancelled || job.State == protocol.TransferFailed || job.State == protocol.TransferCompleted {
+		h.transfer.CreateJob(token, jobID, messageID, clientID, filename, size)
+	}
+
 	w.WriteHeader(http.StatusOK)
 
 	// Start the job
@@ -519,4 +615,19 @@ func sliceContains(slice []string, val string) bool {
 		}
 	}
 	return false
+}
+
+// isSafeInlineResource checks whether a file type is safe for inline rendering.
+// Executable/scriptable documents such as SVG, HTML, XML, and JS are strictly excluded
+// to eliminate stored-XSS execution vectors when opened as top-level documents (F1').
+func isSafeInlineResource(contentType, filename string) bool {
+	ext := strings.ToLower(filepath.Ext(filename))
+	if ext == ".svg" || ext == ".html" || ext == ".htm" || ext == ".xhtml" || ext == ".xml" || ext == ".js" {
+		return false
+	}
+	ct := strings.ToLower(contentType)
+	if strings.Contains(ct, "svg") || strings.Contains(ct, "html") || strings.Contains(ct, "javascript") || strings.Contains(ct, "xml") {
+		return false
+	}
+	return true
 }
