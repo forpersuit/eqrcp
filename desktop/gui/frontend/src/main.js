@@ -1843,6 +1843,9 @@ function renderChat() {
         } else {
             urlObj.searchParams.delete('viewportDebug');
         }
+        if (state.settings?.lang) {
+            urlObj.searchParams.set('lang', state.settings.lang);
+        }
         src = urlObj.toString();
     } catch (e) {
         // Ignored
@@ -4694,7 +4697,7 @@ async function startChat() {
             LogInfo('[Frontend] startChat: Chat() resolved successfully. Status: ' + JSON.stringify(finalStatus));
             console.log('[Frontend] startChat: Chat task started. Status response:', finalStatus);
             
-            state.status = finalStatus;
+            applyStatusData(finalStatus);
             reconcileChatQRState(finalStatus);
             if (!state.chatQRPulseUntil) {
                 triggerChatQRPulse();
@@ -5510,6 +5513,14 @@ function applyStatusData(nextStatus) {
     state.status = nextStatus;
     if (state.chatStarting && (!nextStatus?.chat || isTaskClosed(nextStatus.chat)) && prevChat) {
         state.status.chat = prevChat;
+    }
+    if (state.status?.chat && prevChat && !isTaskClosed(state.status.chat)) {
+        if (!state.status.chat.pageUrl && prevChat.pageUrl) {
+            state.status.chat.pageUrl = prevChat.pageUrl;
+        }
+        if (!state.status.chat.qrCode && prevChat.qrCode) {
+            state.status.chat.qrCode = prevChat.qrCode;
+        }
     }
     state.statusLoaded = true;
     syncLicenseFromStatus(nextStatus);

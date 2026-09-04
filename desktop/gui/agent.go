@@ -49,6 +49,7 @@ type desktopAgent struct {
 	ctx           context.Context
 	notifyEnabled bool
 	notifier      func(title string, message string) error
+	chatReadyCh   chan error
 }
 
 func newDesktopAgent(ctx context.Context) *desktopAgent {
@@ -547,7 +548,34 @@ func (agent *desktopAgent) pushTask(task AgentTask) (AgentStatus, error) {
 		if agent.busy {
 			agent.replaceActiveLocked("stopped")
 		}
-		agent.startChatLocked(task)
+		readyCh := agent.startChatLocked(task)
+		agent.touchLocked()
+		agent.mu.Unlock()
+
+		select {
+		case err := <-readyCh:
+			agent.mu.Lock()
+			agent.chatReadyCh = nil
+			if err != nil {
+				agent.lastError = err.Error()
+				agent.touchLocked()
+				status := agent.snapshotLocked()
+				agent.mu.Unlock()
+				return status, err
+			}
+			agent.touchLocked()
+			status := agent.snapshotLocked()
+			agent.mu.Unlock()
+			return status, nil
+		case <-time.After(10 * time.Second):
+			agent.mu.Lock()
+			agent.chatReadyCh = nil
+			agent.lastError = "chat startup timed out"
+			agent.touchLocked()
+			status := agent.snapshotLocked()
+			agent.mu.Unlock()
+			return status, fmt.Errorf("chat startup timed out")
+		}
 	} else {
 		if len(agent.queue) >= desktopAgentMaxQueue {
 			agent.mu.Unlock()
@@ -585,7 +613,7 @@ func (agent *desktopAgent) startNextLocked() {
 	go agent.execute(task, record.ID)
 }
 
-func (agent *desktopAgent) startChatLocked(task AgentTask) {
+func (agent *desktopAgent) startChatLocked(task AgentTask) chan error {
 	agent.nextID++
 	record := TaskRecord{
 		ID:        agent.nextID,
@@ -595,8 +623,11 @@ func (agent *desktopAgent) startChatLocked(task AgentTask) {
 		StartedAt: time.Now(),
 	}
 	agent.chat = &record
+	readyCh := make(chan error, 1)
+	agent.chatReadyCh = readyCh
 	agent.notifyRecordLocked(record)
 	go agent.executeChat(task, record.ID)
+	return readyCh
 }
 
 func (agent *desktopAgent) execute(task AgentTask, id int) {
@@ -640,6 +671,12 @@ func (agent *desktopAgent) executeChat(task AgentTask, id int) {
 	err := agent.runTask(task)
 	agent.mu.Lock()
 	defer agent.mu.Unlock()
+	if agent.chatReadyCh != nil && err != nil {
+		select {
+		case agent.chatReadyCh <- err:
+		default:
+		}
+	}
 	if agent.chat != nil && agent.chat.ID == id {
 		finishedAt := time.Now()
 		agent.chat.FinishedAt = &finishedAt
@@ -755,6 +792,12 @@ func (agent *desktopAgent) replaceActiveLocked(state string) {
 }
 
 func (agent *desktopAgent) replaceChatLocked(state string) {
+	if agent.chatReadyCh != nil {
+		select {
+		case agent.chatReadyCh <- fmt.Errorf("chat stopped"):
+		default:
+		}
+	}
 	if agent.chat != nil && agent.chat.State == "running" {
 		agent.chat.State = state
 		finishedAt := time.Now()
@@ -1120,6 +1163,12 @@ func (agent *desktopAgent) setTaskPageURL(action string, pageURL string, qrConte
 			agent.chat.PageURL = pageURL
 			if qrCode != "" {
 				agent.chat.QRCode = qrCode
+			}
+		}
+		if agent.chatReadyCh != nil {
+			select {
+			case agent.chatReadyCh <- nil:
+			default:
 			}
 		}
 	} else {

@@ -271,6 +271,16 @@ func startWailsGUI() {
 	app.logger = fileLogger
 	tray := newTrayController(app)
 
+	// Ensure WebView2 bypasses proxy for local LAN-TLS loopback domain (*.direct.eqt.net.im) and loopback addresses
+	const proxyBypassArg = "--proxy-bypass-list=*.direct.eqt.net.im;<-loopback>"
+	if curArgs := os.Getenv("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"); curArgs != "" {
+		if !strings.Contains(curArgs, "--proxy-bypass-list") {
+			_ = os.Setenv("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", curArgs+" "+proxyBypassArg)
+		}
+	} else {
+		_ = os.Setenv("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", proxyBypassArg)
+	}
+
 	// Create application with options
 	err = wails.Run(&options.App{
 		Title:             "EQT",
@@ -290,7 +300,7 @@ func startWailsGUI() {
 				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.Header().Set("Content-Security-Policy",
 						"default-src 'self' 'unsafe-inline' 'unsafe-eval'; "+
-							"connect-src 'self' http://127.0.0.1:* http://localhost:*; "+
+							"connect-src 'self' http://127.0.0.1:* http://localhost:* https://*.direct.eqt.net.im:* ws: wss:; "+
 							"img-src 'self' data: http://127.0.0.1:* http://localhost:* http://*:* https://*:*; "+
 							"frame-src 'self' http://127.0.0.1:* http://localhost:* http://*:* https://*:*")
 					next.ServeHTTP(w, r)

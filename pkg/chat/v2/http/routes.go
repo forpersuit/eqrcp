@@ -217,7 +217,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	distPath := "./pkg/chat/v2/web/dist"
 	if _, err := os.Stat(distPath + "/index.html"); err == nil {
-		if token == "assets" || token == "favicon.png" {
+		if isChatStaticToken(token) {
 			localFile := distPath + "/" + token + suffix
 			if _, err := os.Stat(localFile); err == nil {
 				http.ServeFile(w, r, localFile)
@@ -238,7 +238,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if f, err := subFS.Open("index.html"); err == nil {
 				f.Close()
 				fileServer := http.FileServer(http.FS(subFS))
-				if token == "assets" || token == "favicon.png" {
+				if isChatStaticToken(token) {
 					r2 := r.Clone(r.Context())
 					r2.URL.Path = "/" + token + suffix
 					fileServer.ServeHTTP(w, r2)
@@ -650,4 +650,16 @@ func (h *Handler) handleInfo(w http.ResponseWriter, r *http.Request, token strin
 		"freeDegraded":           freeDegraded,
 	}
 	_ = json.NewEncoder(w).Encode(response)
+}
+
+func isChatStaticToken(token string) bool {
+	if token == "assets" || token == "favicon.png" || token == "favicon.svg" || token == "icons.svg" {
+		return true
+	}
+	switch filepath.Ext(token) {
+	case ".svg", ".png", ".ico", ".json", ".js", ".css", ".map", ".woff", ".woff2", ".ttf":
+		return true
+	default:
+		return false
+	}
 }

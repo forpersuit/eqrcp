@@ -1234,3 +1234,30 @@ func TestHandleZipDownload(t *testing.T) {
 		t.Fatalf("expected precreated job state to be TransferCompleted, got %s", existingJob.State)
 	}
 }
+
+func TestIsChatStaticToken(t *testing.T) {
+	tests := []struct {
+		token string
+		want  bool
+	}{
+		{"assets", true},
+		{"favicon.png", true},
+		{"favicon.svg", true},
+		{"icons.svg", true},
+		{"index.js", true},
+		{"style.css", true},
+		{"manifest.json", true},
+		{"app.ico", true},
+		{"font.woff2", true},
+		{"test-token", false},
+		{"chat-session-123", false},
+		{"random-name", false},
+	}
+
+	for _, tt := range tests {
+		got := isChatStaticToken(tt.token)
+		if got != tt.want {
+			t.Errorf("isChatStaticToken(%q) = %v, want %v", tt.token, got, tt.want)
+		}
+	}
+}
