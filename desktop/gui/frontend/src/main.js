@@ -3647,7 +3647,7 @@ function bindEvents() {
                 return;
             }
             if (e.target.closest('#btn-log-refresh')) {
-                refreshLogTail(render);
+                refreshLogTail(render, true);
                 return;
             }
             if (e.target.closest('#btn-log-copy-all')) {

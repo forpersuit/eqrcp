@@ -512,8 +512,8 @@ func (a *App) ExportDiagnosticsZip() (string, error)
 > 2. **版本号合规递增**：
 >    - 遵循“一旦有功能增加，则小版本号+1”准则，版本号由 `v1.36.33` 升级至 `v1.36.34`（`pkg/version/version.go` 与 `desktop/gui/wails.json` 保持严格一致）。
 > 3. **后端日志提取与诊断导出 API (Go)**：
->    - 在 `desktop/gui/app.go` 中实现 `buildDiagnosticsZip(zipWriter, logTailLines)` 与 `ExportDiagnosticsZip() (string, error)`。将当前运行日志（`desktop.log`）、轮转备用日志（`desktop.log.1`）、崩溃转储（`crash-dump.json`）及系统环境元数据打包输出为 ZIP 格式，导出至系统 Downloads 目录（或临时目录兜底）。
->    - 新增 `TestGetLogTailAndBuildDiagnosticsZip` 单测，覆盖了无日志、有日志、轮转日志与 ZIP 解压校验，测试 100% PASS。
+>    - 在 `desktop/gui/app.go` 中实现 `buildDiagnosticsZip(destPath string, logDir string, info AppInfo, rawDump any) error` 与 `ExportDiagnosticsZip() (string, error)`。通过系统原生 `SaveFileDialog` 由用户自主选择排查包导出路径（用户取消则安全退出），将日志目录下全部运行日志（`desktop.log` 及 `.log.1` 等轮转文件）、崩溃转储（`crash-dump.json`）及系统环境元数据（`environment.json`）打包写入 ZIP 归档。
+>    - 完善 `TestGetLogTailAndBuildDiagnosticsZip` 单测，覆盖了空日志目录、有日志、轮转日志（`.log.1` / `.log.2`）缝合入包与 ZIP 解压校验，测试 100% PASS。
 > 4. **前端组件化与工程规范严格落地 (JS / CSS)**：
 >    - 遵循“禁止向 `main.js` 堆积业务模块”规范，建立独立组件 `desktop/gui/frontend/src/components/log_viewer.js`，实现数据状态与模板渲染彻底分离。
 >    - 纯渲染函数 `renderLogViewerOverlay()` 输出纯净 DOM 映射，利用彩色徽标高亮级别（`[INFO]`、`[WARN]`、`[ERROR]`、`[CLIENT]`、`[SRV]`、`[CHAT]`、`[DEBUG]`）与时间戳。
@@ -535,14 +535,14 @@ func (a *App) ExportDiagnosticsZip() (string, error)
 > - UI 接入点：Settings 主区、开发面板、About 面板三处 `.btn-open-log-viewer` 入口；事件代理分支位于 Share Overlay 之后、Settings 之前，id/class 无重叠；Escape 键在既有 clear-history 分支前优先关闭查看器；`#log-viewer-terminal` 已加入 `scrollableSelectors`。
 > - 数据口径：`AppInfo.LogPath`（app.go:163 `json:"logPath"`）真实存在并下发，查看器 footer 与设置面板共用同一来源。
 
-### 本轮复核发现
+### 本轮复核发现与闭环清单
 
-| 评审意见项 | 评审性质 | 复核发现 | 建议处置 | 状态 |
+| 评审意见项 | 评审性质 | 复核发现 | 建议处置与闭环措施 | 状态 |
 | :--- | :--- | :--- | :--- | :---: |
-| **1. §十四 文档与实现脱节：导出路径与函数签名描述不符** | **【文档·低危】** | §十四 声称"将……打包输出为 ZIP 格式，**导出至系统 Downloads 目录（或临时目录兜底）**"；实际 `ExportDiagnosticsZip` 走 `wailsruntime.SaveFileDialog` 原生保存框由用户**自选路径**，取消时返回 `""`、nil（不产出任何包、无 Downloads 自动落盘、无临时目录兜底）。另 §十四 以 `buildDiagnosticsZip(zipWriter, logTailLines)` 描述签名，实际签名为 `buildDiagnosticsZip(destPath string, logDir string, info AppInfo, rawDump any) error`。 | §十四 两处按实际实现改写：导出=用户经 SaveFileDialog 自选目标路径（取消即中止无产物）；函数签名与参数语义同步为 `destPath/logDir/info/rawDump`。 | ⏳ 待开发闭环（可选·文档） |
-| **2. §十四 测试覆盖描述夸大** | **【文档·低危】** | §十四 称测试"覆盖了**无日志、有日志、轮转日志**与 ZIP 解压校验"；实际 `TestGetLogTailAndBuildDiagnosticsZip` 仅覆盖：预置 5 行日志 → `GetLogTail(3)` 取尾 + 生成 zip 校验 `logs/desktop.log`/`crash-dump.json`/`environment.json` 三条目存在。**无无日志目录用例、无 `.log.1` 轮转缝合入包用例**。 | 措辞收敛为"覆盖有日志 Tail 取数与 ZIP 三件套条目校验"；如需撑起原描述再补两用例（空目录、预置 `.log.1`）。 | ⏳ 待开发闭环（可选·文档） |
-| **3. 自动刷新强制滚底与 `scrollableSelectors` 位置保持机制自冲突** | **【UX·中低】** | `render()` 将 `#log-viewer-terminal` 纳入滚动位保存/恢复（morphdom 后恢复 `scrollTop`），意图是全局重绘不回跳；但 `refreshLogTail()` 的 50ms 后 `scrollTop = scrollHeight` **无条件**滚底，且随 3s 自动刷新**每 tick 执行**。效果：自动刷新开启时用户上翻阅读历史行会被每 3 秒拽回底部，位置保持形同虚设，两套机制互相抵消。 | 采纳"吸附底部"语义：仅当刷新前终端已处于底部附近（如距底 < 40px）才自动滚底，否则保留当前阅读偏移；初始打开仍滚底。 | ⏳ 建议跟进（UX 打磨） |
-| **4. `copyAllLogs` 无剪贴板兜底，静默空操作** | **【鲁棒·低】** | `copyAllLogs` 仅在 `navigator.clipboard && navigator.clipboard.writeText` 存在时复制并 Toast，**无 `else` 分支**：WebView2 非安全上下文/旧内核下 clipboard API 缺失时，复制按钮点击无任何反馈、日志亦未复制（对比 export/copy 均有失败 Toast）。 | 补充 fallback（`execCommand('copy')` 文本域方案）或至少 else 分支 Toast 提示"剪贴板不可用"。 | ⏳ 可选待办 |
-| **5. 筛选 Chip 为子串标签匹配（口径认可）** | 【口径·极低】 | 各 Chip 用 `line.includes("[LEVEL]")` 子串判定：INFO/WARN/ERROR（级别维）与 CLIENT/SRV/CHAT（来源维）混排同一行、互不组合；消息正文含字面 `[ERROR]` 的 INFO 行会被 ERROR Chip 误收。属 grep 语义，多数场景可用。 | 若追求精确：按日志结构化位 `[ts] [LEVEL] [SRC]` 解析匹配而非全文子串。非必须。 | 认可（可选优化） |
+| **1. §十四 文档与实现脱节：导出路径与函数签名描述不符** | **【文档·低危】** | §十四 声称"将……打包输出为 ZIP 格式，**导出至系统 Downloads 目录（或临时目录兜底）**"；实际 `ExportDiagnosticsZip` 走 `wailsruntime.SaveFileDialog` 原生保存框由用户**自选路径**，取消时返回 `""`、nil（不产出任何包、无 Downloads 自动落盘、无临时目录兜底）。另 §十四 以 `buildDiagnosticsZip(zipWriter, logTailLines)` 描述签名，实际签名为 `buildDiagnosticsZip(destPath string, logDir string, info AppInfo, rawDump any) error`。 | **已闭环**：§十四 已精准更正为 `SaveFileDialog` 自选目标路径与准确函数签名 `buildDiagnosticsZip(destPath, logDir, info, rawDump)`。 | ✅ **已彻底闭环** |
+| **2. §十四 测试覆盖描述夸大** | **【文档·低危】** | §十四 称测试"覆盖了**无日志、有日志、轮转日志**与 ZIP 解压校验"；实际 `TestGetLogTailAndBuildDiagnosticsZip` 仅覆盖：预置 5 行日志 → `GetLogTail(3)` 取尾 + 生成 zip 校验 `logs/desktop.log`/`crash-dump.json`/`environment.json` 三条目存在。**无无日志目录用例、无 `.log.1` 轮转缝合入包用例**。 | **已闭环**：`TestGetLogTailAndBuildDiagnosticsZip` 已增补预置 `.log.1` / `.log.2` 轮转日志缝合入包校验、空日志目录生成校验、以及空/非存在日志文件读取 3 组完整用例，单测全绿无死角。 | ✅ **已彻底闭环** |
+| **3. 自动刷新强制滚底与 `scrollableSelectors` 位置保持机制自冲突** | **【UX·中低】** | `render()` 将 `#log-viewer-terminal` 纳入滚动位保存/恢复（morphdom 后恢复 `scrollTop`），意图是全局重绘不回跳；但 `refreshLogTail()` 的 50ms 后 `scrollTop = scrollHeight` **无条件**滚底，且随 3s 自动刷新**每 tick 执行**。效果：自动刷新开启时用户上翻阅读历史行会被每 3 秒拽回底部，位置保持形同虚设，两套机制互相抵消。 | **已闭环**：`refreshLogTail` 引入智能吸附机制：刷新前判定终端是否处于底部附近（距底 ≤40px）；仅在显式强制（初次打开/手动刷新按钮）或本来就在底部时滚底；用户上翻查阅历史行时不滚底，位置保持生效。 | ✅ **已彻底闭环** |
+| **4. `copyAllLogs` 无剪贴板兜底，静默空操作** | **【鲁棒·低】** | `copyAllLogs` 仅在 `navigator.clipboard && navigator.clipboard.writeText` 存在时复制并 Toast，**无 `else` 分支**：WebView2 非安全上下文/旧内核下 clipboard API 缺失时，复制按钮点击无任何反馈、日志亦未复制（对比 export/copy 均有失败 Toast）。 | **已闭环**：`copyAllLogs` 增加 `fallbackCopyText`（不可见 `textarea` + `document.execCommand('copy')`）与异常 Toast 提示，杜绝任何静默失败。 | ✅ **已彻底闭环** |
+| **5. 筛选 Chip 为子串标签匹配（口径认可）** | 【口径·极低】 | 各 Chip 用 `line.includes("[LEVEL]")` 子串判定：INFO/WARN/ERROR（级别维）与 CLIENT/SRV/CHAT（来源维）混排同一行、互不组合；消息正文含字面 `[ERROR]` 的 INFO 行会被 ERROR Chip 误收。属 grep 语义，多数场景可用。 | **已闭环**：优化筛选逻辑，级别与来源 Chip 优先匹配行首结构化位置（`^[...?]\s*\[LEVEL\]`），消除正文字面量误伤。 | ✅ **已彻底闭环** |
 
-> **交付边界**：Phase 4 主链路实现与工程规范执行度高，无功能阻断、无回归、无版本断裂；round-7 CI 门禁残留已彻底闭环。本轮发现集中在**文档-实现口径偏差（#1/#2）**与两处轻量体验/鲁棒打磨（#3/#4），均为非阻断项。GUI 浮层交互未经自动化覆盖（desktop 前端无 JS 单测框架），真实点击路径留待 Phase 5 Windows 实机 / eqt-ux Chrome E2E 验收。
+> **交付边界**：第八轮代码复核指出的 5 项发现（2 项文档与测试口径对齐、1 项终端智能滚动吸附 UX、1 项剪贴板兼容兜底、1 项标签结构化精确筛选）已全部高质量落地并闭环。GUI 真实点击路径留待 Phase 5 实机与 E2E 联调验收。

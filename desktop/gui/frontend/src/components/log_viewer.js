@@ -65,7 +65,7 @@ export async function openLogViewer(renderCallback) {
     logViewerState.searchKeyword = '';
     logViewerState.filter = 'ALL';
     if (renderCallback) renderCallback();
-    await refreshLogTail(renderCallback);
+    await refreshLogTail(renderCallback, true);
 }
 
 export function closeLogViewer(renderCallback) {
@@ -78,7 +78,13 @@ export function closeLogViewer(renderCallback) {
     if (renderCallback) renderCallback();
 }
 
-export async function refreshLogTail(renderCallback) {
+export async function refreshLogTail(renderCallback, forceScroll = false) {
+    // 检查刷新前终端是否处于或接近底部（40px 容差）
+    const terminalEl = document.getElementById('log-viewer-terminal');
+    const wasNearBottom = terminalEl
+        ? (terminalEl.scrollHeight - terminalEl.scrollTop - terminalEl.clientHeight <= 40)
+        : true;
+
     try {
         logViewerState.isLoading = true;
         if (renderCallback) renderCallback();
@@ -89,13 +95,17 @@ export async function refreshLogTail(renderCallback) {
     } finally {
         logViewerState.isLoading = false;
         if (renderCallback) renderCallback();
-        // 自动将日志区域滚动至底部
-        setTimeout(() => {
-            const terminal = document.getElementById('log-viewer-terminal');
-            if (terminal) {
-                terminal.scrollTop = terminal.scrollHeight;
-            }
-        }, 50);
+
+        // 仅在显式强制（初次打开/手动刷新）或原先就在底部附近时，才自动吸附到底部
+        // 若用户正在上翻查阅历史日志，则保持阅读位置，不强制拽回底部
+        if (forceScroll || wasNearBottom) {
+            setTimeout(() => {
+                const terminal = document.getElementById('log-viewer-terminal');
+                if (terminal) {
+                    terminal.scrollTop = terminal.scrollHeight;
+                }
+            }, 50);
+        }
     }
 }
 
@@ -118,7 +128,7 @@ export function toggleAutoRefresh(enabled, renderCallback) {
     if (logViewerState.autoRefresh) {
         logViewerState.autoRefreshTimer = setInterval(() => {
             if (logViewerState.isOpen) {
-                refreshLogTail(renderCallback);
+                refreshLogTail(renderCallback, false);
             } else {
                 clearInterval(logViewerState.autoRefreshTimer);
                 logViewerState.autoRefreshTimer = null;
@@ -126,6 +136,29 @@ export function toggleAutoRefresh(enabled, renderCallback) {
         }, 3000);
     }
     if (renderCallback) renderCallback();
+}
+
+function fallbackCopyText(text, showToastCallback) {
+    try {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.top = '-9999px';
+        textarea.style.left = '-9999px';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        const successful = document.execCommand('copy');
+        document.body.removeChild(textarea);
+        if (successful) {
+            if (showToastCallback) showToastCallback(t('logs_copied') || '日志已复制到剪贴板');
+        } else {
+            if (showToastCallback) showToastCallback((t('copy_failed_prefix') || '复制失败: ') + 'Clipboard unavailable');
+        }
+    } catch (err) {
+        if (showToastCallback) showToastCallback((t('copy_failed_prefix') || '复制失败: ') + (err?.message || err));
+    }
 }
 
 export function copyAllLogs(showToastCallback) {
@@ -138,9 +171,11 @@ export function copyAllLogs(showToastCallback) {
     if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(content).then(() => {
             if (showToastCallback) showToastCallback(t('logs_copied') || '日志已复制到剪贴板');
-        }).catch(err => {
-            if (showToastCallback) showToastCallback('Copy failed: ' + (err?.message || err));
+        }).catch(() => {
+            fallbackCopyText(content, showToastCallback);
         });
+    } else {
+        fallbackCopyText(content, showToastCallback);
     }
 }
 
@@ -165,7 +200,27 @@ export function getFilteredLines() {
         // 1. 级别与标签筛选
         if (filter !== 'ALL') {
             const tag = `[${filter}]`;
-            if (!line.includes(tag)) {
+            // 若为级别筛选 (INFO/WARN/ERROR/DEBUG)，优先匹配行首结构化级别位，避免正文字面量误收
+            if (['INFO', 'WARN', 'ERROR', 'DEBUG'].includes(filter)) {
+                const levelMatch = line.match(/^\[?[^\]\n]+\]?\s*\[(INFO|WARN|ERROR|DEBUG)\]/);
+                if (levelMatch) {
+                    if (levelMatch[1] !== filter) {
+                        return false;
+                    }
+                } else if (!line.includes(tag)) {
+                    return false;
+                }
+            } else if (['CLIENT', 'SRV', 'CHAT'].includes(filter)) {
+                // 来源标签匹配：紧随级别位
+                const srcMatch = line.match(/^\[?[^\]\n]+\]?\s*\[[A-Z]+\]\s*\[(CLIENT|SRV|CHAT)\]/);
+                if (srcMatch) {
+                    if (srcMatch[1] !== filter) {
+                        return false;
+                    }
+                } else if (!line.includes(tag)) {
+                    return false;
+                }
+            } else if (!line.includes(tag)) {
                 return false;
             }
         }

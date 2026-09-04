@@ -178,10 +178,12 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
   - 全量重绘触发时，必须在 `onBeforeElUpdated` 中对日志搜索框（`#log-viewer-search`）进行聚焦与内容保护（`toEl.value = fromEl.value; return true;`），防止用户在连续输入检索时因后台轮询刷新丢失焦点与已输入内容。
 - **标准事件代理与零内联 `onclick`**：
   - 弹窗内的筛选 Chip、刷新、一键复制、导出诊断包及关闭按钮，统一在 `main.js` 的 `addEventListener('click')`、`'input'`、`'change'` 及 `'keydown'`（Escape 快捷键关闭）中代理分发，严禁拼装 HTML 内联 `onclick`。
-- **轻量反馈与零浏览器级 `alert`**：
+- **轻量反馈与剪贴板多重兜底 (Zero Alerts & Clipboard Fallback)**：
   - 日志复制与排查包导出反馈统一通过应用内通知（`showToast`）呈现，杜绝调用阻塞式的浏览器级 `alert()` 弹窗。
-- **终端滚动保持**：
-  - 终端容器（`#log-viewer-terminal`）须注册到主渲染器的滚动选择器列表（`scrollableSelectors`）；拉取最新日志后延迟 50ms 自动平滑滚动至底部（`scrollTop = scrollHeight`）。
+  - 复制日志内容时优先走现代 `navigator.clipboard.writeText`，若遭遇权限拒绝或 API 缺失则降级到隐藏 `textarea` + `document.execCommand('copy')` 方案，并在任何异常时弹出 Toast 提示，杜绝任何静默失败。
+- **终端滚动保持与智能吸附 (Smart Stick-to-Bottom)**：
+  - 终端容器（`#log-viewer-terminal`）须注册到主渲染器的滚动选择器列表（`scrollableSelectors`）。
+  - 拉取最新日志后实施智能吸附：刷新前判定当前视口是否处于底部附近（距底 ≤40px）；仅在显式强制（初次打开或手动点击刷新）或原先就在底部附近时执行滚底（`scrollTop = scrollHeight`）。若用户正在向上翻阅排查历史日志，则保持阅读位置，杜绝 3s 自动轮询强行打断阅读。
 
 
 
