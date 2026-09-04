@@ -66,6 +66,10 @@ export function DownloadUpdate(arg1) {
   return window['go']['main']['App']['DownloadUpdate'](arg1);
 }
 
+export function ExportDiagnosticsZip() {
+  return window['go']['main']['App']['ExportDiagnosticsZip']();
+}
+
 export function GenerateQRCodePNG(arg1, arg2) {
   return window['go']['main']['App']['GenerateQRCodePNG'](arg1, arg2);
 }

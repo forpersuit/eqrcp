@@ -1,6 +1,9 @@
 package main
 
 import (
+	"archive/zip"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -83,3 +86,73 @@ func TestAppQuitApp(t *testing.T) {
 	}
 }
 
+func TestGetLogTailAndBuildDiagnosticsZip(t *testing.T) {
+	tempDir := t.TempDir()
+	logPath := filepath.Join(tempDir, "desktop.log")
+	linesData := "line 1\nline 2\nline 3\nline 4\nline 5\n"
+	if err := os.WriteFile(logPath, []byte(linesData), 0644); err != nil {
+		t.Fatalf("failed to write test log file: %v", err)
+	}
+
+	app := NewApp()
+	logger := NewFileLogger(logPath, true)
+	app.logger = logger
+	defer logger.Close()
+
+	// 1. Verify GetLogTail
+	tails, err := app.GetLogTail(3)
+	if err != nil {
+		t.Fatalf("GetLogTail failed: %v", err)
+	}
+	if len(tails) != 3 {
+		t.Fatalf("expected 3 lines, got %d: %v", len(tails), tails)
+	}
+	if tails[len(tails)-1] != "line 5" {
+		t.Fatalf("expected last line to be 'line 5', got %q", tails[len(tails)-1])
+	}
+
+	// 2. Verify buildDiagnosticsZip
+	zipPath := filepath.Join(tempDir, "diag.zip")
+	info := AppInfo{
+		Product: "EQT Test",
+		Version: "v1.36.34",
+		OS:      "linux",
+		Arch:    "amd64",
+	}
+	rawDump := map[string]any{"reason": "test-panic"}
+
+	if err := buildDiagnosticsZip(zipPath, tempDir, info, rawDump); err != nil {
+		t.Fatalf("buildDiagnosticsZip failed: %v", err)
+	}
+
+	// Read and verify zip contents
+	r, err := zip.OpenReader(zipPath)
+	if err != nil {
+		t.Fatalf("zip.OpenReader failed: %v", err)
+	}
+	defer r.Close()
+
+	foundLog := false
+	foundCrash := false
+	foundEnv := false
+	for _, f := range r.File {
+		if f.Name == "logs/desktop.log" {
+			foundLog = true
+		}
+		if f.Name == "crash-dump.json" {
+			foundCrash = true
+		}
+		if f.Name == "environment.json" {
+			foundEnv = true
+		}
+	}
+	if !foundLog {
+		t.Errorf("expected logs/desktop.log in zip")
+	}
+	if !foundCrash {
+		t.Errorf("expected crash-dump.json in zip")
+	}
+	if !foundEnv {
+		t.Errorf("expected environment.json in zip")
+	}
+}

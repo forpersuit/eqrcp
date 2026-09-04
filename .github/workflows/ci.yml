@@ -25,6 +25,7 @@ jobs:
         working-directory: pkg/chat/v2/web
         run: |
           npm ci
+          npm run check
           npm run build
       - run: go mod download
       - run: go vet ./...
@@ -57,6 +58,7 @@ jobs:
         working-directory: pkg/chat/v2/web
         run: |
           npm ci
+          npm run check
           npm run build
       - name: Test desktop module
         working-directory: desktop/gui
@@ -97,6 +99,7 @@ jobs:
         working-directory: pkg/chat/v2/web
         run: |
           npm ci
+          npm run check
           npm run build
       - uses: golangci/golangci-lint-action@v6
         with:

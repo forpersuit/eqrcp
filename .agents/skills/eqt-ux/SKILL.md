@@ -167,4 +167,21 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
   - 任何依赖外部共享模块的组件或页面逻辑，严禁使用虚假的 `: Object` 表达式隐式伪装降级。
   - 必须显式检测 `window.EmailOtp && window.EmailOtp.Controller`；若未加载（网络拦截或加载异常），记录明确 console 告警，并在用户触发交互时通过多语言字典（`module_load_err`）向用户展示友好的重试提示，杜绝抛出裸 `TypeError`。
 
+---
+
+## 10. 桌面端应用内日志查看与排查诊断弹窗规范 (In-App Log Viewer & Diagnostics Modal)
+
+- **独立组件化与状态渲染分离 (Component & State Isolation)**：
+  - 日志查看器业务逻辑必须剥离至独立模块（如 `desktop/gui/frontend/src/components/log_viewer.js`），严禁向 `main.js` 堆砌状态与模板。
+  - 纯渲染函数（`renderLogViewerOverlay()`）仅做 `Data -> HTML` 单向映射；状态修改统一由控制器方法调度（`openLogViewer`, `closeLogViewer`, `setLogFilter`, `setLogSearch`, `toggleAutoRefresh`）。
+- **`morphdom` 增量 Diff 焦点与值保护**：
+  - 全量重绘触发时，必须在 `onBeforeElUpdated` 中对日志搜索框（`#log-viewer-search`）进行聚焦与内容保护（`toEl.value = fromEl.value; return true;`），防止用户在连续输入检索时因后台轮询刷新丢失焦点与已输入内容。
+- **标准事件代理与零内联 `onclick`**：
+  - 弹窗内的筛选 Chip、刷新、一键复制、导出诊断包及关闭按钮，统一在 `main.js` 的 `addEventListener('click')`、`'input'`、`'change'` 及 `'keydown'`（Escape 快捷键关闭）中代理分发，严禁拼装 HTML 内联 `onclick`。
+- **轻量反馈与零浏览器级 `alert`**：
+  - 日志复制与排查包导出反馈统一通过应用内通知（`showToast`）呈现，杜绝调用阻塞式的浏览器级 `alert()` 弹窗。
+- **终端滚动保持**：
+  - 终端容器（`#log-viewer-terminal`）须注册到主渲染器的滚动选择器列表（`scrollableSelectors`）；拉取最新日志后延迟 50ms 自动平滑滚动至底部（`scrollTop = scrollHeight`）。
+
+
 

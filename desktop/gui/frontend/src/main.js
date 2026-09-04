@@ -13,6 +13,7 @@ import morphdom from './vendor/morphdom.js';
 import { renderSide, toggleSearchInput, updateSearchQuery, searchQuery, showSearchInput, renderHistory, showSearchDropdown, toggleSearchDropdown, activeFocusTaskId, updateActiveFocus, getMatchResults, highlightText, showClearHistoryConfirm, toggleClearHistoryConfirm } from './components/history.js';
 import { initDragDrop, sendDebugMessageToChat } from './dragdrop.js';
 import { renderShareOverlay, closeShareOverlay, prepareMergedQRCode, downloadSharePosterImage } from './components/share.js';
+import { renderLogViewerOverlay, openLogViewer, closeLogViewer, refreshLogTail, setLogFilter, setLogSearch, toggleAutoRefresh, copyAllLogs, exportDiagnostics, logViewerState } from './components/log_viewer.js';
 
 import {ClipboardGetText, ClipboardSetText, EventsOn, LogInfo, LogError} from '../wailsjs/runtime/runtime';
 import {
@@ -527,7 +528,8 @@ function render() {
         '.locked-list',
         '.file-list-view',
         '.transfer-stage',
-        '.devices-scroll-container'
+        '.devices-scroll-container',
+        '#log-viewer-terminal'
     ];
     scrollableSelectors.forEach(selector => {
         const el = document.querySelector(selector);
@@ -620,6 +622,7 @@ function render() {
             </section>
             ${renderPanel()}
             ${renderShareOverlay(state, t, escapeAttr, escapeHTML, horizontalLogoURL, faviconURL, render)}
+            ${renderLogViewerOverlay()}
         </main>
     `.trim();
 
@@ -629,6 +632,12 @@ function render() {
     } else {
         morphdom(app.firstElementChild, newHTML, {
             onBeforeElUpdated: function(fromEl, toEl) {
+                if (fromEl.id === 'log-viewer-search') {
+                    if (document.activeElement === fromEl) {
+                        toEl.value = fromEl.value;
+                        return true;
+                    }
+                }
                 if (fromEl.id === 'chat-iframe') {
                     const fromSrc = fromEl.getAttribute('src') || '';
                     const toSrc = toEl.getAttribute('src') || '';
@@ -2207,6 +2216,15 @@ function renderSettingsPanel() {
                         ${renderSwitch('settings-telemetry', state.settings?.enableTelemetry !== false)}
                     </div>
                 </div>
+                <div class="setting-row">
+                    <div class="setting-copy">
+                        <strong>${t('view_logs') || '运行日志'}</strong>
+                        <span>${t('view_logs_desc') || '实时查看系统汇流日志、移动端遥测回传与诊断信息。'}</span>
+                    </div>
+                    <button type="button" class="secondary btn-open-log-viewer" id="btn-open-log-viewer" style="height: 32px; padding: 0 12px; font-size: 11.5px; font-weight: 600; white-space: nowrap;">
+                        📋 ${t('btn_view_logs') || '查看日志'}
+                    </button>
+                </div>
             </section>
 
             <section class="settings-section">
@@ -2317,6 +2335,7 @@ function renderSettingsPanel() {
                                     📁 ${escapeHTML(state.settings?.logDir || (state.appInfo?.logPath ? state.appInfo.logPath.substring(0, state.appInfo.logPath.lastIndexOf(state.appInfo.logPath.includes('\\') ? '\\' : '/')) : t('choose_folder')))}
                                 </div>
                                 <button type="button" id="dev-select-log-dir" class="ghost" style="padding: 6px 12px; font-size: 12px; height: 32px; border-radius: 6px; margin: 0; white-space: nowrap; font-weight: 600;">${t('btn_browse') || 'Browse...'}</button>
+                                <button type="button" class="secondary btn-open-log-viewer" style="padding: 6px 12px; font-size: 12px; height: 32px; border-radius: 6px; margin: 0; white-space: nowrap; font-weight: 600;">📋 ${t('btn_view_logs') || 'View Logs'}</button>
                             </div>
 
                             <div style="font-weight: 700; font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">${t('dev_available_log_files') || 'Available log files:'}</div>
@@ -2657,6 +2676,11 @@ function renderAboutPanel() {
                 <div style="grid-column: span 2; background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; text-align: left;">
                     <span style="font-size: 10px; color: var(--text-secondary); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">${t('legal') || 'Legal'}</span>
                     <span style="font-size: 12px; font-weight: 500; color: var(--text-muted);">${t('legal_notice')}</span>
+                </div>
+                <div style="grid-column: span 2; display: flex; gap: 8px; margin-top: 4px;">
+                    <button type="button" class="secondary btn-open-log-viewer" style="flex: 1; height: 34px; font-size: 11.5px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 6px;">
+                        📋 ${t('btn_view_logs') || '查看运行日志'}
+                    </button>
                 </div>
             </div>
         </div>
@@ -3613,6 +3637,36 @@ function bindEvents() {
                 return;
             }
 
+            // Log Viewer Overlay
+            if (e.target.closest('.btn-open-log-viewer')) {
+                openLogViewer(render);
+                return;
+            }
+            if (e.target.closest('#close-log-viewer') || e.target.id === 'log-viewer-backdrop' || (e.target.classList && e.target.classList.contains('log-viewer-backdrop'))) {
+                closeLogViewer(render);
+                return;
+            }
+            if (e.target.closest('#btn-log-refresh')) {
+                refreshLogTail(render);
+                return;
+            }
+            if (e.target.closest('#btn-log-copy-all')) {
+                copyAllLogs(showToast);
+                return;
+            }
+            if (e.target.closest('#btn-log-export')) {
+                exportDiagnostics(showToast);
+                return;
+            }
+            const filterChip = e.target.closest('.log-filter-chip');
+            if (filterChip) {
+                const targetFilter = filterChip.getAttribute('data-filter');
+                if (targetFilter) {
+                    setLogFilter(targetFilter, render);
+                }
+                return;
+            }
+
             // Settings Panel Controls
             if (e.target.closest('#open-chat-save')) {
                 openChatSaveDirectory();
@@ -3839,6 +3893,10 @@ function bindEvents() {
         }, true);
 
         document.addEventListener('input', (e) => {
+            if (e.target.id === 'log-viewer-search') {
+                setLogSearch(e.target.value, render);
+                return;
+            }
             if (e.target.id === 'redeem-code') {
                 state.tempRedeemCode = e.target.value;
                 return;
@@ -3934,6 +3992,10 @@ function bindEvents() {
         });
 
         document.addEventListener('change', async (e) => {
+            if (e.target.id === 'log-viewer-auto-refresh') {
+                toggleAutoRefresh(e.target.checked, render);
+                return;
+            }
             if (e.target.id === 'feedback-category') {
                 state.feedbackSendResult = '';
                 state.feedbackError = null;
@@ -4058,6 +4120,10 @@ function bindEvents() {
 
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
+                if (logViewerState.isOpen) {
+                    closeLogViewer(render);
+                    return;
+                }
                 if (showClearHistoryConfirm) {
                     toggleClearHistoryConfirm(false);
                     render();

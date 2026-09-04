@@ -1,6 +1,7 @@
 package main
 
 import (
+	"archive/zip"
 	"bufio"
 	"bytes"
 	"context"
@@ -1372,6 +1373,114 @@ func (a *App) GetLogTail(lines int) ([]string, error) {
 		collected = collected[len(collected)-lines:]
 	}
 	return collected, nil
+}
+
+// buildDiagnosticsZip writes diagnostic files into a zip archive at destPath.
+func buildDiagnosticsZip(destPath string, logDir string, info AppInfo, rawDump any) error {
+	zipFile, err := os.Create(destPath)
+	if err != nil {
+		return fmt.Errorf("failed to create zip file: %w", err)
+	}
+	defer zipFile.Close()
+
+	zw := zip.NewWriter(zipFile)
+	defer zw.Close()
+
+	addFileToZip := func(filePath string, zipEntryName string) {
+		f, err := os.Open(filePath)
+		if err != nil {
+			return
+		}
+		defer f.Close()
+
+		w, err := zw.Create(zipEntryName)
+		if err != nil {
+			return
+		}
+		_, _ = io.Copy(w, f)
+	}
+
+	// 1. Pack log files in logDir
+	if logDir != "" {
+		if entries, err := os.ReadDir(logDir); err == nil {
+			for _, entry := range entries {
+				if entry.IsDir() {
+					continue
+				}
+				name := entry.Name()
+				if strings.HasSuffix(name, ".log") || strings.Contains(name, ".log.") {
+					addFileToZip(filepath.Join(logDir, name), "logs/"+name)
+				}
+			}
+		}
+	}
+
+	// 2. Pack crash dump if provided
+	if rawDump != nil {
+		if dumpBytes, err := json.MarshalIndent(rawDump, "", "  "); err == nil {
+			if w, err := zw.Create("crash-dump.json"); err == nil {
+				_, _ = w.Write(dumpBytes)
+			}
+		}
+	}
+
+	// 3. Environment & diagnostic metadata
+	envData, _ := json.MarshalIndent(map[string]any{
+		"product":      info.Product,
+		"name":         info.Name,
+		"version":      info.Version,
+		"os":           info.OS,
+		"arch":         info.Arch,
+		"agent_url":    info.AgentURL,
+		"has_tls_cert": info.HasValidTLSCert,
+		"free_space":   info.UploadDirFreeSpace,
+		"export_time":  time.Now().UTC().Format(time.RFC3339),
+	}, "", "  ")
+
+	if w, err := zw.Create("environment.json"); err == nil {
+		_, _ = w.Write(envData)
+	}
+
+	return nil
+}
+
+// ExportDiagnosticsZip prompts the user to save a zip file containing system logs, crash dump, and environment info.
+func (a *App) ExportDiagnosticsZip() (string, error) {
+	defaultName := fmt.Sprintf("eqt-diagnostics-%s.zip", time.Now().Format("20060102-150405"))
+	target, err := wailsruntime.SaveFileDialog(a.ctx, wailsruntime.SaveDialogOptions{
+		Title:           "Export Diagnostics Package",
+		DefaultFilename: defaultName,
+		Filters: []wailsruntime.FileFilter{
+			{DisplayName: "ZIP Archive (*.zip)", Pattern: "*.zip"},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	if target == "" {
+		return "", nil // User cancelled save dialog
+	}
+
+	logPath := ""
+	if a.logger != nil {
+		logPath = a.logger.GetFilePath()
+	}
+	if logPath == "" {
+		logPath = desktopLogFilePath()
+	}
+	logDir := filepath.Dir(logPath)
+
+	var rawDump any
+	if dump, err := crash.LoadRawDump(); err == nil && dump != nil {
+		rawDump = dump
+	}
+
+	info := a.AppInfo()
+	if err := buildDiagnosticsZip(target, logDir, info, rawDump); err != nil {
+		return "", err
+	}
+
+	return target, nil
 }
 
 type GUIUpdateCheckResult struct {

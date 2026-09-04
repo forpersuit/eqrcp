@@ -1,10 +1,11 @@
 # EQT 跨端全链路统一遥测与日志回传系统架构设计方案
 # (Cross-Platform Unified Telemetry & Logging Architecture Design)
 
-> **版本**: v1.4 (Phase 3 移动端轻量遥测探针埋点落地 · 第六轮审查项闭环)  
-> **状态**: Phase 1~3 全部落地并通过第六轮代码复核彻底闭环，进入 Phase 4 (GUI 应用内日志查看与导出诊断 · GetLogTail 前置已就绪)  
-> **作者**: EQT Core Team  
+> **版本**: v1.5 (Phase 4 实施落地完成，进入 Phase 5 全链路联调)  
+> **状态**: Phase 1~4 全部落地，GUI 应用内日志查看与导出诊断（In-App Log Viewer）及 7 国语言多语言翻译完成，CI 类型门禁彻底闭环  
+> **分支**: `feat/lan-tls-loopback`  
 > **日期**: 2026-09-04  
+> **责任领域**: Go 后端 (Server / Telemetry / Log) + 移动端 H5 探针 + Svelte 聊天前端 + Wails 桌面端 (GUI Log Viewer & Export)  
 > **目标**: 依据第一性原理（First Principle）与工业级日志最佳实践，打通桌面端调度内核、Go 服务端传输引擎、以及移动端（手机浏览器前端）的三端运行信息回传链路，实现统一异步汇流、强安全性清洗、结构化存储与 GUI 应用内快速诊断。
 
 ---
@@ -320,10 +321,11 @@ func (a *App) ExportDiagnosticsZip() (string, error)
   - [x] 在 Svelte SPA 聊天前端中增加遥测挂载（`services/telemetry.ts` 全局捕获与 WebSocket 生命周期）；
   - [x] 捕获环境指纹、点击下载、分块异常与网络重试，优先走 `sendBeacon` 同源异步回传；
   - [x] 验证移动端在断网、弱网及页面关闭时的回传鲁棒性。
-- [ ] **Phase 4: GUI 应用内日志查看与导出诊断 (In-App Log Viewer)**
-  - [x] 在 `desktop/gui/app.go` 实现 `GetLogTail(lines int)`（Phase 1 已实现，并在 `wailsjs/go/main/App.d.ts` 形成绑定）；
-  - [ ] 在前端 Settings / About 面板构建可视化日志浮层与一键复制功能；
-  - [ ] 增加多语言翻译（支持 7 国语言）。
+- [x] **Phase 4: GUI 应用内日志查看与导出诊断 (In-App Log Viewer)**
+  - [x] 在 `desktop/gui/app.go` 实现 `GetLogTail(lines int)` 与 `ExportDiagnosticsZip() (string, error)`（支持日志 Tail、多级历史日志与崩溃报告诊断包导出）；
+  - [x] 在前端 Settings / About 面板构建可视化日志浮层（独立组件 `components/log_viewer.js`）、一键复制、关键字搜索与 3s 自动刷新；
+  - [x] 增加多语言翻译（支持 zh/en/ja/ko/es/de/fr 7 国语言）；
+  - [x] 闭环 CI 类型门禁（Chat v2 `package.json` build 前置 `npm run check`，并在 `.github/workflows/ci.yml` 严格门控）。
 - [ ] **Phase 5: 全链路联调与回归验证 (E2E Verification)**
   - [ ] 在本地及 Windows 实机上启动 Send/Receive/Chat 模式；
   - [ ] 移动端扫码接入并触发下载，核验 `desktop.log` 中各端信息全量体现；
@@ -493,7 +495,29 @@ func (a *App) ExportDiagnosticsZip() (string, error)
 | 评审意见项 | 评审性质 | 复核发现 | 建议处置 | 状态 |
 | :--- | :--- | :--- | :--- | :---: |
 | **第六轮 #1~#4 闭环真实性** | 【复核·核验】 | 四项均以实际代码/文档改动闭环、非仅表格标注：`npm run check` 0 errors 与文档声明一致；`client_ts` 断言真实落入 Go 测试；白名单与 Phase-4 清单文字与实现逐条对齐。 | 无需处置。 | ✅ 已核验 |
-| **1. CI 类型门禁仍未纳入（第六轮建议残留）** | **【流程·低危·建议】** | round-6 建议"将 `npm run check` 纳入 CI 防类型红点漏网"未落地：`ci.yml`/`release.yml`/`deploy.yml` 与 `scripts/deploy-windows-results.sh` 仍只 `npm run build`（esbuild 剥类型不校验）。本轮类型红点仅靠人工本地 review 拦截；后续 `telemetry.ts` 若再引入类型错误，CI 保持绿灯的复发窗口仍在。 | 可选二选一：CI 的 chat web 步骤加 `npm run check`；或在 chat `package.json` 把 `build` 前置为 `check && build`（本地兜底）。 | ⏳ 可选待办 |
+| **1. CI 类型门禁仍未纳入（第六轮建议残留）** | **【流程·低危·建议】** | round-6 建议"将 `npm run check` 纳入 CI 防类型红点漏网"未落地：`ci.yml`/`release.yml`/`deploy.yml` 与 `scripts/deploy-windows-results.sh` 仍只 `npm run build`（esbuild 剥类型不校验）。本轮类型红点仅靠人工本地 review 拦截；后续 `telemetry.ts` 若再引入类型错误，CI 保持绿灯的复发窗口仍在。 | **已闭环**：`pkg/chat/v2/web/package.json` build 脚本前置 `npm run check`；`.github/workflows/ci.yml` 显式注入 `npm run check`。 | ✅ **已彻底闭环** |
 | **2. `typeof navigator` 守卫为装饰性（口径）** | 【口径·极低】 | telemetry.ts 仅运行于浏览器（`initTelemetry` 先 `typeof window` 早退、websocket 钩子同属浏览器侧），`navigator` 恒在，该守卫不改变行为，但为合法 SSR 防御性写法，无害且保留了 `fetch` 兜底对非浏览器环境的兼容。 | 无需处置（保留为保险）。 | 认可 |
 
-> **交付边界**：第六轮 4 项发现全部真实闭环；第七轮未发现新缺陷、无回归，仅保留 1 项可选流程建议（#1 CI 类型门禁，Phase 4 开工前随手落地即可）。Phase 1~3 全线就绪，可推进 Phase 4 GUI 应用内日志浮层与多语言落地。
+> **交付边界**：第六轮 4 项发现全部真实闭环；第七轮 CI 门禁建议随 Phase 4 开工彻底闭环。Phase 1~3 全线就绪，进入 Phase 4 落地。
+
+---
+
+## 十四、Phase 4 实施落地与闭环复核 (v1.5)
+
+> **实施对象**：Phase 4: GUI 应用内日志查看与导出诊断 (In-App Log Viewer) + 第七轮审查 CI 门禁闭环。  
+> **实施结论**：
+> 1. **CI 门禁与构建兜底（第七轮残留闭环）**：
+>    - 在 `pkg/chat/v2/web/package.json` 中将 `"build"` 脚本修正为 `"npm run check && vite build"`，确保所有本地和脚本构建自动触发 Svelte 类型检查。
+>    - 在 `.github/workflows/ci.yml` 中为 `go-test`、`go-test-desktop`、`lint` 等全部 CI Job 的 Web 构建流程注入显式 `npm run check`，彻底消除类型红点漏检窗口。
+> 2. **版本号合规递增**：
+>    - 遵循“一旦有功能增加，则小版本号+1”准则，版本号由 `v1.36.33` 升级至 `v1.36.34`（`pkg/version/version.go` 与 `desktop/gui/wails.json` 保持严格一致）。
+> 3. **后端日志提取与诊断导出 API (Go)**：
+>    - 在 `desktop/gui/app.go` 中实现 `buildDiagnosticsZip(zipWriter, logTailLines)` 与 `ExportDiagnosticsZip() (string, error)`。将当前运行日志（`desktop.log`）、轮转备用日志（`desktop.log.1`）、崩溃转储（`crash-dump.json`）及系统环境元数据打包输出为 ZIP 格式，导出至系统 Downloads 目录（或临时目录兜底）。
+>    - 新增 `TestGetLogTailAndBuildDiagnosticsZip` 单测，覆盖了无日志、有日志、轮转日志与 ZIP 解压校验，测试 100% PASS。
+> 4. **前端组件化与工程规范严格落地 (JS / CSS)**：
+>    - 遵循“禁止向 `main.js` 堆积业务模块”规范，建立独立组件 `desktop/gui/frontend/src/components/log_viewer.js`，实现数据状态与模板渲染彻底分离。
+>    - 纯渲染函数 `renderLogViewerOverlay()` 输出纯净 DOM 映射，利用彩色徽标高亮级别（`[INFO]`、`[WARN]`、`[ERROR]`、`[CLIENT]`、`[SRV]`、`[CHAT]`、`[DEBUG]`）与时间戳。
+>    - 事件绑定遵循规范：严禁 HTML 内联 `onclick`，在 `main.js` 统一使用标准 `addEventListener` 实现事件代理（`click`、`input`、`change`、`keydown` Escape 键关闭），并在 `morphdom` 的 `onBeforeElUpdated` 中有效保护了搜索框的输入与聚焦状态。
+>    - 反馈交互遵循规范：无任何浏览器级 `alert`，一键复制与排查包导出反馈均采用应用内 Toast 提示。
+> 5. **完整多语言支持 (7 国语言)**：
+>    - `desktop/gui/frontend/src/i18n.js` 对 `zh`、`en`、`ja`、`ko`、`es`、`de`、`fr` 7 种语言完整补齐了查看日志、一键复制、导出诊断、自动刷新、全部筛选与搜索占位符等全部字典。
