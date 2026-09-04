@@ -112,3 +112,26 @@ cd desktop/gui && go test ./... -count=1  # ok (2.012s)
      - `TestHasActiveTransferringClients`：状态机守护判定覆盖（排除自身、其他客户端 transferring、其他客户端 completed、活跃连接数等分支）；
      - `TestDownloadResponseHeaders`：端到端验证真实 HTTP 下载响应头（`Cache-Control: private, no-transform`、无 `Pragma`/`Expires`、`X-Content-Type-Options: nosniff`、MIME `Content-Type: text/plain; charset=utf-8`）。
 
+---
+
+## 八、 适配复核结论（commit 04132ac4，2026-09-04）
+
+> 复核对象：`04132ac4 feat(review): close e9965383 review items with satisfied range helper and unit tests`。
+> 验证：`go test ./pkg/server/... -count=1 -run 'TestSatisfiedRangeComplete|TestHasActiveTransferringClients|TestDownloadResponseHeaders' -v` → 三个新测试全 PASS；`go test ./pkg/server/... -count=1` 全量 → ok（11.894s），无回归。
+
+**复核结论：三项适配均忠实落地、质量良好，文档状态"已闭环"成立。**
+
+1. **复核项 1（off-by-one）✅**：抽 `SatisfiedRangeComplete`（progress.go:56）语义精确（`expected = end-start+1`、`written >= expected`），调用点保留 `HasRange && EndByte>0` 前置、整体一致；表驱动测试覆盖了原 off-by-one 的正反两例（`bytes=0-1`：写 1→false、写 2→true）与越界/非法输入守卫。
+2. **复核项 2（前端死字段）✅**：按建议选项 (b) 删除 `activeConnections` 子句，注释说明后端 `json:"-"` 未下发，语义唯一、无副作用。
+3. **复核项 3（补测试）✅**：新增 3 组单测不仅覆盖建议的表驱动判据，还额外补了 `hasActiveTransferringClients` 守卫语义与真实 HTTP 下载响应头端到端断言，超出原建议范围，质量加分。
+
+**残余观察（均 Low，不阻塞闭环，纯记录）：**
+
+| # | 观察 | 建议 |
+| :--- | :--- | :--- |
+| R1 | `TestSatisfiedRangeComplete` 表驱动未显式覆盖 open-range 情形（`bytes=1000-` → `EndByte==0`），helper 的 `end<=0` 守卫与调用点前置重复但无直接用例 | 可选补 `start:1000, end:0, written:100, want:false` 一行 |
+| R2 | `TestDownloadResponseHeaders` 精确断言 `text/plain; charset=utf-8` 依赖 `mime.TypeByExtension(".txt")` 的平台返回：Windows 注册表 MIME 与部分 Linux `/etc/mime.types` 会返回无 charset 的 `text/plain`，可能导致该断言在异机/Windows 测试环境飘红 | 建议改前缀断言（`strings.HasPrefix(ct, "text/plain")`）保证跨平台稳定 |
+| R3 | 越界探测残余：当实际文件尺寸小于请求 range 上界（如单字节文件收到 Safari `bytes=0-1`）时，`http.ServeContent` 截断交付 `written=1`，helper 按请求 range 判不完备 → 该极端情形仍走 interrupted 误报。helper 无文件 size 感知，属原语义边界 | 概率极低；若需根治，须让实际交付上界 `min(end, size-1)` 参与判定。可接受现状 |
+
+**工程备注**：commit 前缀 `feat(review)` 但未升版本（内容为 fix+test+docs，v1.36.35 保持），与仓库"feat → 小版本+1"惯例措辞不一致，建议后续同类闭项使用 `fix(review)` 或 `test(review)` 前缀；纯措辞，不影响行为。
+
