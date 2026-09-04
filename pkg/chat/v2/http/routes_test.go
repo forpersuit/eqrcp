@@ -1553,3 +1553,93 @@ func TestInlineSecurityAndJobSuppression(t *testing.T) {
 		t.Fatalf("Inline PNG streaming must NOT broadcast transfer events, got %d new broadcasts", jobBroadcastCount-initialBroadcasts)
 	}
 }
+
+func TestInlineBandwidthThrottlingOnFreeSession(t *testing.T) {
+	logger := &diag.MemoryLogger{}
+	handler := NewHandler(Config{
+		BasePath:              "/chat-v2",
+		Logger:                logger,
+		DisableSystemMessages: true,
+		IsPaidOrUnrestricted:  func() bool { return false }, // Free degraded session
+	})
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	token := "token-throttle-test"
+	sess := handler.sessions.GetOrCreate(token)
+	sess.MessageStore.Add(protocol.EventEnvelope{
+		Type: protocol.EventMessageAdded,
+		Message: &protocol.Message{
+			ID:       "msg-large-img",
+			Type:     "file",
+			FileName: "large-photo.jpg",
+			MimeType: "image/jpeg",
+			Size:     10240,
+		},
+	})
+
+	// Request inline download on free session
+	resp, err := http.Get(fmt.Sprintf("%s/chat-v2/%s/files/msg-large-img?inline=1&mock_size=10240&clientId=free-client", server.URL, token))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(body) != 10240 {
+		t.Fatalf("expected 10240 bytes, got %d", len(body))
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
+func TestRendezvousTimeoutReturns504BeforeHeaders(t *testing.T) {
+	logger := &diag.MemoryLogger{}
+	handler := NewHandler(Config{
+		BasePath:              "/chat-v2",
+		Logger:                logger,
+		DisableSystemMessages: true,
+		RendezvousTimeout:     30 * time.Millisecond, // Short timeout for unit test
+	})
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	token := "token-rdv-timeout"
+	sess := handler.sessions.GetOrCreate(token)
+	sess.MessageStore.Add(protocol.EventEnvelope{
+		Type: protocol.EventMessageAdded,
+		Message: &protocol.Message{
+			ID:       "msg-no-streamer",
+			Type:     "file",
+			FileName: "remote.png",
+			MimeType: "image/png",
+			Size:     2048,
+		},
+	})
+
+	// 1. Inline request waiting for streamer that never connects
+	respInline, err := http.Get(fmt.Sprintf("%s/chat-v2/%s/files/msg-no-streamer?inline=1", server.URL, token))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer respInline.Body.Close()
+
+	if respInline.StatusCode != http.StatusGatewayTimeout {
+		t.Fatalf("expected 504 Gateway Timeout on inline rendezvous timeout, got %d", respInline.StatusCode)
+	}
+
+	// 2. Interactive download request waiting for streamer that never connects
+	respInteractive, err := http.Get(fmt.Sprintf("%s/chat-v2/%s/files/msg-no-streamer?clientId=timeout-client", server.URL, token))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer respInteractive.Body.Close()
+
+	if respInteractive.StatusCode != http.StatusGatewayTimeout {
+		t.Fatalf("expected 504 Gateway Timeout on interactive rendezvous timeout, got %d", respInteractive.StatusCode)
+	}
+}

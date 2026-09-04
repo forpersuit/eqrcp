@@ -51,6 +51,7 @@ type Config struct {
 	IsClientKicked        func(token string) bool
 	IsJoinKicked          func(join string) bool
 	KickClient            func(token string, join string)
+	RendezvousTimeout     time.Duration
 }
 
 type rendezvous struct {
@@ -73,6 +74,7 @@ type Handler struct {
 	isClientKicked       func(token string) bool
 	isJoinKicked         func(join string) bool
 	kickClient           func(token string, join string)
+	rendezvousTimeout    time.Duration
 	mu                   sync.Mutex
 	rendezvousMap        map[string][]*rendezvous
 }
@@ -161,6 +163,7 @@ func NewHandler(cfg Config) *Handler {
 		isClientKicked:       cfg.IsClientKicked,
 		isJoinKicked:         cfg.IsJoinKicked,
 		kickClient:           cfg.KickClient,
+		rendezvousTimeout:    cfg.RendezvousTimeout,
 		rendezvousMap:        make(map[string][]*rendezvous),
 	}
 }

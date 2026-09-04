@@ -121,6 +121,8 @@ WantedBy=multi-user.target
    - **Stored-XSS 防护**：不可信文件（如 `.svg`, `.html`, `.xml` 等）严禁以内联方式（`Content-Disposition: inline`）下发，即使客户端携带 `?inline=1` 亦必须服务端强制降级为 `attachment` 并应用私有缓存规则。内联白名单仅放行栅格图（`png, jpg, webp, gif, bmp, avif, ico`）。
    - **CSP Sandbox 隔离**：所有内联静态响应必须注入 `Content-Security-Policy: default-src 'none'; sandbox` 与 `X-Content-Type-Options: nosniff`，即使通过顶层窗口新标签页打开，也能完全剥离同源脚本执行权限。
    - **被动加载零 Job 解耦**：`<img>` 等内联流式请求属于被动资产加载，严禁调用 Transfer Manager 创建并广播 Transfer Job（`queued/started/completed`），数据流直接以 `io.Copy(w, reader)` 直出，避免多图加载或断线重连回放时引发全房间事件风暴与 UI 抖动。
+   - **统一带宽节流 (Unified Bandwidth Throttling)**：内联媒体传输必须与常规下载统一挂载到带宽调度器（`bandwidth.Scheduler`），受限（免费降级）会话下同样执行每写节流，杜绝通过图片内联或大图预览旁路限速。
+   - **流就绪前置判定 (Rendezvous Readiness Before Header Commit)**：在跨节点中继/对端流式代理模式下，必须等待发送端流建立就绪后才可发送 `WriteHeader(200)`。严禁在尚未拿到有效数据流前提前提交 200 OK，防止超时阶段产生多余的 WriteHeader 异常或给客户端造成破图截断。
 
 ---
 

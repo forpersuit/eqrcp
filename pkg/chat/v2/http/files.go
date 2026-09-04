@@ -111,168 +111,16 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request, token s
 		w.Header().Del("Expires")
 	}
 
-	w.Header().Set("Content-Length", strconv.FormatInt(size, 10))
-	w.Header().Set("Content-Type", contentType)
-
-	if isInline {
-		w.WriteHeader(http.StatusOK)
-
-		// Inline media streaming (e.g. <img> previews) bypasses transfer jobs completely (F2')
-		// to avoid broadcasting job state changes (queued/started/completed) to the entire room.
-		if fileReader != nil {
-			if _, err := io.Copy(w, fileReader); err != nil {
-				diag.Emit(r.Context(), h.logger, diag.LevelWarn, "inline stream failed", err, fields...)
-				return
-			}
-			diag.Emit(r.Context(), h.logger, diag.LevelInfo, "inline stream completed successfully", nil, fields...)
-		} else if mockSizeStr != "" {
-			buf := make([]byte, 32*1024)
-			var totalWritten int64
-			for totalWritten < size {
-				select {
-				case <-r.Context().Done():
-					return
-				default:
-				}
-				writeSize := int64(len(buf))
-				if size-totalWritten < writeSize {
-					writeSize = size - totalWritten
-				}
-				n, err := w.Write(buf[:writeSize])
-				if err != nil {
-					return
-				}
-				totalWritten += int64(n)
-				if size < 500*1024 {
-					time.Sleep(1 * time.Millisecond)
-				}
-			}
-		} else {
-			// P2P / Duplex Streaming Proxy mode for inline media
-			h.mu.Lock()
-			rdv := &rendezvous{
-				readerChan: make(chan io.ReadCloser, 1),
-				errChan:    make(chan error, 1),
-			}
-			h.rendezvousMap[fileID] = append(h.rendezvousMap[fileID], rdv)
-			h.mu.Unlock()
-			defer func() {
-				h.mu.Lock()
-				list := h.rendezvousMap[fileID]
-				for i, r := range list {
-					if r == rdv {
-						h.rendezvousMap[fileID] = append(list[:i], list[i+1:]...)
-						break
-					}
-				}
-				if len(h.rendezvousMap[fileID]) == 0 {
-					delete(h.rendezvousMap, fileID)
-				}
-				h.mu.Unlock()
-			}()
-
-			sess.Broadcast(protocol.EventEnvelope{
-				Type: protocol.EventRequestFileData,
-				Message: &protocol.Message{
-					ID: fileID,
-				},
-				Time: time.Now(),
-			})
-
-			select {
-			case senderStream := <-rdv.readerChan:
-				defer senderStream.Close()
-				var limitReader io.Reader = senderStream
-				if msg, ok := sess.MessageStore.Find(fileID); ok && msg.Size > 0 {
-					limitReader = io.LimitReader(senderStream, msg.Size)
-				}
-				if _, err := io.Copy(w, limitReader); err != nil {
-					rdv.errChan <- err
-					diag.Emit(r.Context(), h.logger, diag.LevelWarn, "inline rendezvous copy failed", err, fields...)
-					return
-				}
-				rdv.errChan <- nil
-			case <-r.Context().Done():
-				return
-			case <-time.After(35 * time.Second):
-				http.Error(w, "Timeout waiting for sender stream", http.StatusGatewayTimeout)
-				return
-			}
-		}
-		return
-	}
-
-	// Create and register the download Job only for active data streaming
-	jobID := "dl-" + fileID
-	if clientID != "" {
-		jobID = "dl-" + fileID + "-" + clientID
-	}
-	job, err := h.transfer.GetJob(jobID)
-	if err != nil || job.State == protocol.TransferCancelled || job.State == protocol.TransferFailed || job.State == protocol.TransferCompleted {
-		h.transfer.CreateJob(token, jobID, messageID, clientID, filename, size)
-	}
-
-	w.WriteHeader(http.StatusOK)
-
-	// Start the job
-	_ = h.transfer.StartJob(jobID)
-
-	// Attachment data plane only — WebSocket control/text paths never use this scheduler.
-	h.scheduler.RegisterJob(jobID, h.attachmentUnrestricted())
-	defer h.scheduler.UnregisterJob(jobID)
-
-	startTime := time.Now()
-
-	pw := &progressWriter{
-		writer:    w,
-		transfer:  h.transfer,
-		scheduler: h.scheduler,
-		jobID:     jobID,
-		startTime: startTime,
-	}
+	// 1. Evaluate stream source readiness BEFORE sending HTTP 200 OK headers (F2)
+	var (
+		sourceReader      io.Reader
+		rendezvousErrChan chan error
+	)
 
 	if fileReader != nil {
-		// Use standard io.Copy for robust, uncorrupted, and complete file streaming
-		if _, err := io.Copy(pw, fileReader); err != nil {
-			_ = h.transfer.FailJob(jobID, err)
-			diag.Emit(r.Context(), h.logger, diag.LevelWarn, "download stream failed", err, fields...)
-			return
-		}
-		_ = h.transfer.CompleteJob(jobID)
-		diag.Emit(r.Context(), h.logger, diag.LevelInfo, "download completed successfully", nil, fields...)
+		sourceReader = fileReader
 	} else if mockSizeStr != "" {
 		// Mock data fallback path (mainly for concurrency test suites)
-		buf := make([]byte, 32*1024) // 32KB chunks
-		var totalWritten int64
-		for totalWritten < size {
-			select {
-			case <-r.Context().Done():
-				_ = h.transfer.FailJob(jobID, r.Context().Err())
-				diag.Emit(r.Context(), h.logger, diag.LevelWarn, "download cancelled by client disconnect", r.Context().Err(), fields...)
-				return
-			default:
-			}
-
-			writeSize := int64(len(buf))
-			if size-totalWritten < writeSize {
-				writeSize = size - totalWritten
-			}
-			chunk := buf[:writeSize]
-
-			n, err := pw.Write(chunk)
-			if err != nil {
-				_ = h.transfer.FailJob(jobID, err)
-				diag.Emit(r.Context(), h.logger, diag.LevelWarn, "download mock write failed", err, fields...)
-				return
-			}
-			totalWritten += int64(n)
-
-			if size < 500*1024 {
-				time.Sleep(1 * time.Millisecond)
-			}
-		}
-		_ = h.transfer.CompleteJob(jobID)
-		diag.Emit(r.Context(), h.logger, diag.LevelInfo, "download completed successfully (mock path)", nil, fields...)
 	} else {
 		// P2P / Duplex Streaming Proxy mode:
 		// Wait for the web client (sender) to initiate POST upload stream on /upload/stream?messageId=xxx
@@ -309,37 +157,130 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request, token s
 
 		diag.Emit(r.Context(), h.logger, diag.LevelInfo, "Waiting for web client stream rendezvous", nil, append(fields, diag.F("messageID", fileID))...)
 
-		// Block and wait for connection from the sender
+		timeout := h.rendezvousTimeout
+		if timeout <= 0 {
+			timeout = 35 * time.Second
+		}
+
+		// Block and wait for connection from the sender BEFORE committing HTTP 200 headers (F2)
 		select {
 		case senderStream := <-rdv.readerChan:
 			defer senderStream.Close()
 			diag.Emit(r.Context(), h.logger, diag.LevelInfo, "Stream rendezvous established", nil, append(fields, diag.F("messageID", fileID))...)
-
-			var limitReader io.Reader = senderStream
+			rendezvousErrChan = rdv.errChan
 			if msg, ok := sess.MessageStore.Find(fileID); ok && msg.Size > 0 {
-				limitReader = io.LimitReader(senderStream, msg.Size)
+				sourceReader = io.LimitReader(senderStream, msg.Size)
+			} else {
+				sourceReader = senderStream
 			}
-
-			if _, err := io.Copy(pw, limitReader); err != nil {
-				_ = h.transfer.FailJob(jobID, err)
-				rdv.errChan <- err
-				diag.Emit(r.Context(), h.logger, diag.LevelWarn, "streaming rendezvous copy failed", err, fields...)
-				return
-			}
-			rdv.errChan <- nil
-			_ = h.transfer.CompleteJob(jobID)
-			diag.Emit(r.Context(), h.logger, diag.LevelInfo, "download completed successfully via streaming rendezvous", nil, fields...)
-
 		case <-r.Context().Done():
 			diag.Emit(r.Context(), h.logger, diag.LevelWarn, "Download context canceled", nil, append(fields, diag.F("messageID", fileID))...)
 			return
-		case <-time.After(35 * time.Second):
-			// Timed out waiting
-			_ = h.transfer.FailJob(jobID, fmt.Errorf("timeout waiting for sender stream"))
-			diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorInternal, http.StatusRequestTimeout, "timed out waiting for sender file stream"), fields...)
+		case <-time.After(timeout):
+			diag.Emit(r.Context(), h.logger, diag.LevelWarn, "Timed out waiting for sender file stream", nil, append(fields, diag.F("messageID", fileID))...)
+			if !isInline {
+				timeoutJobID := "dl-" + fileID
+				if clientID != "" {
+					timeoutJobID = "dl-" + fileID + "-" + clientID
+				}
+				_ = h.transfer.FailJob(timeoutJobID, fmt.Errorf("timeout waiting for sender stream"))
+			}
+			diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorInternal, http.StatusGatewayTimeout, "timed out waiting for sender file stream"), fields...)
 			return
 		}
 	}
+
+	// 2. Commit headers & 200 OK status only when stream source is genuinely ready
+	w.Header().Set("Content-Length", strconv.FormatInt(size, 10))
+	w.Header().Set("Content-Type", contentType)
+	w.WriteHeader(http.StatusOK)
+
+	// 3. Bandwidth throttling registration (F1):
+	// Both inline and interactive downloads adhere to session bandwidth limits.
+	throttleID := "dl-" + fileID
+	if clientID != "" {
+		throttleID = "dl-" + fileID + "-" + clientID
+	}
+	if isInline {
+		throttleID = "inline-" + throttleID
+	}
+	h.scheduler.RegisterJob(throttleID, h.attachmentUnrestricted())
+	defer h.scheduler.UnregisterJob(throttleID)
+
+	// 4. Transfer Job tracking: interactive downloads only, zero job jitter for inline media (F2')
+	var jobID string
+	if !isInline {
+		jobID = "dl-" + fileID
+		if clientID != "" {
+			jobID = "dl-" + fileID + "-" + clientID
+		}
+		job, err := h.transfer.GetJob(jobID)
+		if err != nil || job.State == protocol.TransferCancelled || job.State == protocol.TransferFailed || job.State == protocol.TransferCompleted {
+			h.transfer.CreateJob(token, jobID, messageID, clientID, filename, size)
+		}
+		_ = h.transfer.StartJob(jobID)
+	}
+
+	startTime := time.Now()
+	pw := &progressWriter{
+		writer:     w,
+		transfer:   h.transfer,
+		scheduler:  h.scheduler,
+		jobID:      jobID,
+		throttleID: throttleID,
+		startTime:  startTime,
+	}
+
+	// 5. Unified stream copying across local files, mock buffers, and live rendezvous (F3)
+	var streamErr error
+	if sourceReader != nil {
+		_, streamErr = io.Copy(pw, sourceReader)
+	} else if mockSizeStr != "" {
+		buf := make([]byte, 32*1024)
+		var totalWritten int64
+		for totalWritten < size {
+			select {
+			case <-r.Context().Done():
+				streamErr = r.Context().Err()
+				break
+			default:
+			}
+			if streamErr != nil {
+				break
+			}
+			writeSize := int64(len(buf))
+			if size-totalWritten < writeSize {
+				writeSize = size - totalWritten
+			}
+			chunk := buf[:writeSize]
+			n, err := pw.Write(chunk)
+			if err != nil {
+				streamErr = err
+				break
+			}
+			totalWritten += int64(n)
+			if size < 500*1024 {
+				time.Sleep(1 * time.Millisecond)
+			}
+		}
+	}
+
+	if rendezvousErrChan != nil {
+		rendezvousErrChan <- streamErr
+	}
+
+	if streamErr != nil {
+		if jobID != "" {
+			_ = h.transfer.FailJob(jobID, streamErr)
+		}
+		diag.Emit(r.Context(), h.logger, diag.LevelWarn, "download stream failed", streamErr, fields...)
+		return
+	}
+
+	if jobID != "" {
+		_ = h.transfer.CompleteJob(jobID)
+	}
+	diag.Emit(r.Context(), h.logger, diag.LevelInfo, "download stream completed successfully", nil, fields...)
 }
 
 // handleUploadStream receives the direct file stream from the sender and passes it to the waiting download response.
@@ -392,25 +333,32 @@ func (h *Handler) handleUploadStream(w http.ResponseWriter, r *http.Request, tok
 }
 
 type progressWriter struct {
-	writer    http.ResponseWriter
-	transfer  *transfer.Manager
-	scheduler *bandwidth.Scheduler
-	jobID     string
-	startTime time.Time
-	written   int64
+	writer     http.ResponseWriter
+	transfer   *transfer.Manager
+	scheduler  *bandwidth.Scheduler
+	jobID      string
+	throttleID string
+	startTime  time.Time
+	written    int64
 }
 
 func (pw *progressWriter) Write(p []byte) (int, error) {
-	if job, err := pw.transfer.GetJob(pw.jobID); err == nil {
-		if job.GetState() == protocol.TransferCancelled {
-			return 0, fmt.Errorf("transfer cancelled by user")
+	if pw.jobID != "" && pw.transfer != nil {
+		if job, err := pw.transfer.GetJob(pw.jobID); err == nil {
+			if job.GetState() == protocol.TransferCancelled {
+				return 0, fmt.Errorf("transfer cancelled by user")
+			}
 		}
 	}
 	n, err := pw.writer.Write(p)
 	if n > 0 {
 		pw.written += int64(n)
-		_ = pw.transfer.UpdateProgress(pw.jobID, pw.written)
-		pw.scheduler.Throttle(pw.jobID, pw.written, pw.startTime)
+		if pw.jobID != "" && pw.transfer != nil {
+			_ = pw.transfer.UpdateProgress(pw.jobID, pw.written)
+		}
+		if pw.throttleID != "" && pw.scheduler != nil {
+			pw.scheduler.Throttle(pw.throttleID, pw.written, pw.startTime)
+		}
 	}
 	return n, err
 }
