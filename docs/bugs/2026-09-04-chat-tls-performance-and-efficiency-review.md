@@ -9,15 +9,15 @@
 
 ## 一、 核心结论速览 (TL;DR)
 
-1. **TLS 对传输速度的损耗完全可以忽略（理论与实测损耗 < 1.5%）**：
-   - 局域网物理带宽（Wi-Fi 5/6 约为 30~120 MB/s）远低于现代硬件的 AES-GCM / ChaCha20 加解密吞吐极限（单核 3~8 GB/s，算力盈余达 30~80 倍）。
+1. **TLS 对传输速度的损耗完全可以忽略（理论推算协议损耗 < 1.5%）**：
+   - 局域网物理带宽（Wi-Fi 5/6 约为 30~120 MB/s）远低于现代硬件的 AES-GCM / ChaCha20 加解密吞吐极限（单核常见 1.0~3.0 GB/s，算力盈余达 8~30 倍）。
    - TLS 1.3 的 1-RTT 握手开销（0.5~2ms）通过 WebSocket 长连接与 HTTP Keep-Alive 实现彻底均摊，持续传输阶段握手开销为 0。
 2. **启用 LAN-TLS 是纯正向工程收益，解锁了移动端核心 Web 基础设施**：
    - 现代移动端浏览器（iOS Safari、Android Chrome）在非 HTTPS（非安全上下文 Secure Context）下严格屏蔽原生 API：如 `navigator.clipboard.writeText`（剪贴板复制）、`getUserMedia`（麦克风录音、摄像头实时拍照发送）。开启 TLS 是聊天交互不可或缺的前置保障。
 3. **Chat 模式当前感知延迟与速度波动的“真凶”并非 TLS，而是 I/O 管道与交互设计**：
    - **双重磁盘 I/O 与内存开销**：后端当前使用 `ParseMultipartForm(32MB)`，>32MB 文件会先写系统临时文件（`/tmp`），再通过 `io.Copy` 复制到最终附件目录，引发 2 倍磁盘写入与单次磁盘重读。
-   - **套接字缓冲造成的“假 100%”视觉停滞**：客户端 `xhr.upload.onprogress` 到 100% 仅代表数据进入本地网卡缓冲，而服务端正在执行落盘、校验与广播，导致进度蒙版在 100% 处卡顿数秒。
-   - **控制面进度事件风暴**：客户端未对 `onprogress` 做节流，超高频向 WebSocket 广播进度，浪费主线程与控制通道吞吐。
+   - **套接字缓冲造成的“假 100%”视觉停滞**：客户端 `xhr.upload.onprogress` 到 100% 仅代表数据进入本地网卡缓冲，而服务端正在执行落盘、索引更新（`MarkUploadComplete`）与向对端广播，导致进度蒙版在 100% 处卡顿数秒。
+   - **双重进度通道冗余与上行命令帧开销**：数据面服务端 `progressReader` 与控制面客户端 `report_progress` 双写同一 Job，客户端高频上行产生无谓的 JSON 解析与锁竞争。
 
 ---
 
@@ -40,37 +40,38 @@
 
 | 维度 / 指标 | 物理无线信道 (Wi-Fi 5 / Wi-Fi 6) | CPU 硬件加解密吞吐能力 (AES-128-GCM) | 算力与带宽冗余倍数 |
 | :--- | :--- | :--- | :--- |
-| **单流吞吐率** | 240 Mbps ~ 960 Mbps (30 ~ 120 MB/s) | **24 Gbps ~ 64 Gbps (3.0 ~ 8.0 GB/s)** | **30x ~ 80x 盈余** |
-| **CPU 占用率** | 100 MB/s 物理极限跑满时 | 单核占用仅增加 **1.2% ~ 1.8%** | 几乎对系统无影响 |
+| **单流吞吐率** | 240 Mbps ~ 960 Mbps (30 ~ 120 MB/s) | **8 Gbps ~ 24 Gbps (1.0 ~ 3.0 GB/s)**<br>*(AVX-512 高频下可达 4~8 GB/s)* | **8x ~ 30x 盈余** |
+| **CPU 占用率** | 100 MB/s 物理极限跑满时 | 单核占用仅增加 **2.5% ~ 5.0%** | 处于低位安全区间 |
 | **热损耗/耗电** | 射频芯片发射功耗为主导 | AES-NI 微指令级硬件流水线运算 | 边际功耗几乎不可见 |
 
-* **推论**：在纯粹的局域网局域传输中，瓶颈始终卡在**物理空中接口的信噪比、空间流数与网卡驱动调度**，TLS 层的加解密流水线具有极高的算力带宽比，绝对不会成为传输瓶颈。
+* **推论**：在纯粹的局域网局域传输中，瓶颈始终卡在**物理空中接口的信噪比、空间流数与网卡驱动调度**，TLS 层的加解密流水线具有极高的算力带宽比，绝非制约传输速度的短板。
 
 ### 3. 封包头部与协议成帧开销（Protocol Framing Overhead）
 
-在 TLS 1.3 中，每个 TLS 记录层（Record Layer）的最大负载为 16 KB（16,384 字节）：
-* **Record Header**：5 字节（类型、版本、长度）。
+在 TLS 1.3 中，每个 TLS 记录层（Record Layer）的最大明文负载为 16 KB（16,384 字节）：
+* **Record Header**：5 字节（ContentType 1B, LegacyVersion 2B, Length 2B）。
+* **Inner ContentType**：1 字节（TLS 1.3 将真实内容类型移入密文末尾）。
 * **AEAD Tag (GCM/Poly1305)**：16 字节认证标签。
-* **Padding / ContentType**：1 字节。
-* **单 Record 总损耗**：$5 + 16 + 1 = 22 \text{ 字节}$。
+* **Padding**：0~1 字节（标准明文传输通常无额外填充）。
+* **单 Record 总成帧开销**：$5 + 1 + 16 = 22 \text{ 字节}$（若仅算密文膨胀则为 17 字节）。
 * **协议头膨胀比率**：
-  $$\text{Overhead Rate} = \frac{22}{16384 + 22} \approx 0.134\%$$
+  $$\text{Overhead Rate} = \frac{22}{16384 + 22} \approx 0.134\% \quad (\text{若按 21 字节计约为 } 0.128\%)$$
 * **MTU 配合度**：在标准以太网 MTU 1500 字节（MSS 1460 字节）下，TLS 记录会被 TCP 平滑分段，带宽利用率损耗不足 0.2%。对于 100MB 的大附件，因 TLS 额外增加的传输流量仅约 130KB。
 
 ---
 
 ## 三、 为什么 LAN-TLS 不仅无害，反而是 Chat 模式的基石？
 
-在移动端浏览器生态中，纯 HTTP（非安全上下文 `Insecure Context`）正受到前所未有的严苛限制。若关闭 TLS 退回 HTTP，Chat 模式将直接面临功能残疾：
+在移动端浏览器生态中，纯 HTTP（非安全上下文 `Insecure Context`）正受到严苛限制。若关闭 TLS 退回 HTTP，Chat 模式将直接面临功能残疾：
 
-1. **系统剪贴板支持**：
+1. **系统剪贴板支持（现状刚性依赖）**：
    - 聊天室的消息文本复制、附件链接复制依赖 `navigator.clipboard.writeText`。
    - iOS Safari 与 Android Chrome 在 HTTP 环境下完全禁止调用 Clipboard API，直接抛出 `NotAllowedError`。
-2. **多媒体采集与实时通讯**：
+2. **多媒体采集与实时通讯（现状刚性依赖）**：
    - 移动端拍照上传、语音输入依赖 `navigator.mediaDevices.getUserMedia`。
    - W3C 强制规范：`getUserMedia` 必须在 Secure Context（HTTPS/WSS）下运行，纯 HTTP 局域网 IP 访问时直接为 `undefined`。
-3. **Service Worker 与高级缓存支持**：
-   - 局域网大文件分片离线与后台传输能力依赖安全通道。
+3. **Service Worker 与高级离线缓存（潜在演进空间，非当前依赖）**：
+   - 现版本 Chat Web 前端尚未注册 Service Worker；但在架构演进路线上，后续若引入 Service Worker 实现后台传输保活与离线 PWA 体验，同样必须依附安全上下文。
 
 ---
 
@@ -116,10 +117,10 @@ xhr.onload = () => {
 ```
 * **时序脱节**：
   - `xhr.upload.onprogress` 反映的是浏览器内核将数据推入移动端操作系统 TCP 发送缓冲区（Send Buffer）的进度。由于局域网吞吐快，几秒内数据即全被推入网卡发送队列，进度条瞬间显示 100%。
-  - 但此时，服务端才刚刚将全部字节读入完成，随后还要执行上面提到的 `io.Copy`（写第二次盘）、`tempFile.Close()`（刷盘落盘）、哈希与元数据索引更新、以及向其他客户端广播 `EventMessageUpdated`。
+  - 但此时，服务端才刚刚将全部字节读入完成，随后还要执行上面提到的 `io.Copy`（写第二次盘）、`tempFile.Close()`（刷盘落盘）、索引更新（`MarkUploadComplete`）、以及向其他客户端广播 `EventMessageUpdated`。
   - 在这 1~4 秒的处理时间内，HTTP 响应尚未返回，前端进度条停在 100%，蒙版不消失，给用户造成“进度完成了但系统卡死”的直观负面感受。
 
-### 3. 控制面进度事件风暴（WebSocket Event Flooding）
+### 3. 上行进度命令帧开销与控制面冗余（Upstream Command Overhead）
 
 在 `App.svelte` 的 `xhr.upload.onprogress` 中：
 ```ts
@@ -130,10 +131,18 @@ xhr.upload.onprogress = (e) => {
   }
 };
 ```
-* `onprogress` 高频触发（频率可达每秒数十次甚至上百次），每一次触发都无节制地通过单个 WebSocket 连接向服务端上报 `reportUploadProgress`，并在服务端加锁查找并广播。
-* 这极易在单信道上挤占心跳帧与关键控制指令，引发 CPU 上下文切换消耗。
+* **机制澄清**：
+  - 在服务端广播层（`manager.go:96-111` 与 `job.go:103`），`UpdateProgress` 已经内置了保护逻辑：仅当百分比跨档或距上次发送 $\ge 200\text{ms}$ 时才触发下行 `EventTransferProgress` 广播。因此不存在“服务端向对端频繁广播挤占心跳帧”的问题。
+  - **真正的瓶颈在上行通道**：客户端未对 `onprogress` 做节流，以每秒数十次的高频通过 WebSocket 发送上行 `report_progress` 命令帧（`websocket.go:338-348`）。服务端每个连接每秒需要反序列化大量无谓的 JSON 文本帧，并在 `job.mu` 上频繁加锁。
 
-### 4. HTTP/1.1 并发上限对附件浏览的挤压
+### 4. 数据面与控制面进度双写的通道冗余 (Dual-Reporting Redundancy)
+
+审查代码发现，当前架构在进度管理上存在通道双写冗余：
+- **数据面**：服务端上传路径 `progressReader`（`attachments.go:357-364`）在读取 HTTP 数据流每个 chunk 时，已直接统计绝对字节并更新至 `jobID`（`ul-{messageID}`），且受上述 200ms 广播节流保护；
+- **控制面**：客户端 Web 前端同时通过 WebSocket 发送 `report_progress`，向同一个 `jobID` 写入同一份 `bytesDone`。
+- **结论**：对端接收到的上传进度本可完全由服务端数据面的 `progressReader` 独立精准提供，客户端上行同步属于重复信令。
+
+### 5. HTTP/1.1 并发上限对附件浏览的挤压
 
 为了防止异构移动端在分片传输（tus）中的流控死锁，服务端在 `pkg/server/server.go:2477` 中显式禁用了 HTTP/2（`TLSNextProto: make(...)`）。
 * 在聊天室内查看历史消息时，若同时存在多张高清图片、头像或音视频附件，HTTP/1.1 受限于移动浏览器同域名最多 6 个并发 TCP 连接的物理约束，出现队头阻塞（Head-of-Line Blocking），导致多图并发展示时加载排队。
@@ -166,14 +175,13 @@ xhr.upload.onprogress = (e) => {
   - 符合真实物理世界客观规律；
   - 用户明确感知系统处于落盘处理阶段，消除“卡死”认知。
 
-### 建议 3：WebSocket 进度上报节流 (P2 - 稳定性优化)
+### 建议 3：客户端进度上报节流或通道收敛 (P2 - 稳定性优化)
 
-* **方案**：对 `client.reportUploadProgress(messageId, loaded, total)` 引入 150ms ~ 250ms 的时间窗口节流（Throttling）。
-* **逻辑**：
-  - 传输过程中以最多每 200ms 发送 1 次进度帧；
-  - 最终完成（`loaded === total`）或失败时立即无条件发送最终状态。
+* **方案**：
+  - **短期方案**：对前端 `client.reportUploadProgress(messageId, loaded, total)` 增加 200ms 时间窗口节流（Throttling），仅在完结/失败时无条件发送；
+  - **长期演进**：将对端进度广播完全交由服务端的 `progressReader` 驱动，客户端仅负责驱动本地 UI 状态，彻底移除上行 `report_progress` 冗余通道。
 * **收益**：
-  - 减少 80% 以上的无谓 WebSocket 握手帧与广播事件，大幅降低主线程压力。
+  - 削减客户端到服务端的无谓上行命令帧，消除 JSON 解析与锁竞争。
 
 ### 建议 4：大文件上传通道对齐 tus / 分片流 (P3 - 健壮性优化)
 
@@ -195,4 +203,4 @@ xhr.upload.onprogress = (e) => {
 * **对 TLS 的定调**：
   局域网环境下开启 TLS 1.3 对传输性能的实测影响几乎不可感知（损耗 < 1.5%），并且为移动端聊天室赋予了合规且不可替代的安全上下文能力（剪贴板、媒体权限）。
 * **传输效率的抓手**：
-  提升传输效率的关键不是弱化加密，而是**消除服务端的双重 I/O 拷贝**、**平滑前端 100% 缓冲期交互感知**、以及**节流 WebSocket 控制平面通信**。遵循上述建议落地后，Chat 模式将兼具高吞吐性能与流畅的现代移动端交互体验。
+  提升传输效率的关键不是弱化加密，而是**消除服务端的双重 I/O 拷贝**、**平滑前端 100% 缓冲期交互感知**、以及**收敛/节流进度上报的冗余通道**。遵循上述建议落地后，Chat 模式将兼具高吞吐性能与流畅的现代移动端交互体验。
