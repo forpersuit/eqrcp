@@ -813,7 +813,8 @@ function isTaskQRExpanded(task) {
     }
     const files = task.savedFiles || [];
     const clientStates = task.clientStates || {};
-    const hasActiveClients = Object.values(clientStates).some(c => c && (c.state === 'transferring' || (c.activeConnections || 0) > 0));
+    // 活跃判定以 state === 'transferring' 为准（后端 ActiveConnections 标记 json:"-" 未序列化下发）
+    const hasActiveClients = Object.values(clientStates).some(c => c && c.state === 'transferring');
     const isSharedOrReceived = hasActiveClients || task.transferState === 'transferring' || (task.bytesDone > 0 && task.transferState !== 'stopped') || files.length > 0;
     const shouldCollapse = isSharedOrReceived;
     return !shouldCollapse;

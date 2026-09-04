@@ -1,6 +1,6 @@
 # e9965383 代码审查：多设备完成 QR 闪现 + iOS Safari 下载失败/误报重试修复
 
-> 状态：🔄 待跟进（Open）—— 修复方向与主逻辑均成立，发现 3 项低危打磨建议（off-by-one、前端死字段、缺单测）
+> 状态：✅ 已闭环（Closed）—— 3 项低危打磨建议均已完成精准适配与单元测试落地
 >
 > 审查日期：2026-09-04
 > 审查对象：commit `e9965383` — "Fix QR flash on multi-device completion and Safari HTTPS download retry"
@@ -81,3 +81,34 @@ cd desktop/gui && go test ./... -count=1  # ok (2.012s)
 ## 六、 结论
 
 三项修复根因判断全部成立、方向正确、工程配套合规：多设备 QR 闪现根因为"完成路径无条件退 waiting + 前端 waiting 一票否决"，后端 `hasActiveTransferringClients` 守卫 + 前端综合判定双端闭环（`completed` 分支由 `isAllActiveClientsFinished` 天然守护，无需改动）；Windows GUI 日志短路修复直接恢复 iPad 失败诊断链；Safari 下载修复（缓存头/显式 MIME/Range 探测去误报）方向与 WebKit 附件下载约束一致。无回归、无版本断裂。3 项发现均为低危打磨建议（Range 判据 off-by-one、前端 activeConnections 死字段、缺单测），建议随一次小 fix 提交收敛。
+
+## 七、 审查意见适配落地记录
+
+1. **针对复核项 1（`isSatisfiedRangeChunk` 判据 off-by-one）**：
+   - 提取纯函数 `SatisfiedRangeComplete(start, end, written int64) bool` 到 `pkg/server/progress.go`：
+     ```go
+     func SatisfiedRangeComplete(start, end, written int64) bool {
+         if end < start || start < 0 || end <= 0 || written <= 0 {
+             return false
+         }
+         expected := end - start + 1
+         return written >= expected
+     }
+     ```
+   - 在 `pkg/server/server.go:2962` 替换为 `SatisfiedRangeComplete(rangeInfo.StartByte, rangeInfo.EndByte, atomic.LoadInt64(&writtenInThisRequest))`，彻底消除含末字节闭区间少算 1 字节的缺陷；
+   - 补充表驱动单测 `TestSatisfiedRangeComplete`，全面覆盖闭区间短写、满写、超写、非法输入等边界。
+
+2. **针对复核项 2（前端 `c.activeConnections` 恒假死字段）**：
+   - 按照建议选项 (b)，在 `desktop/gui/frontend/src/main.js:816` 剔除无值的 `(c.activeConnections || 0) > 0`，精简为：
+     ```javascript
+     // 活跃判定以 state === 'transferring' 为准（后端 ActiveConnections 标记 json:"-" 未序列化下发）
+     const hasActiveClients = Object.values(clientStates).some(c => c && c.state === 'transferring');
+     ```
+   - 消除维护歧义，语义纯粹明了。
+
+3. **针对复核项 3（关键状态机分支补全自动化测试覆盖）**：
+   - 在 `pkg/server/progress_test.go` 新增针对性自动化单测：
+     - `TestSatisfiedRangeComplete`：表驱动检验闭区间探测及分块请求满足判定；
+     - `TestHasActiveTransferringClients`：状态机守护判定覆盖（排除自身、其他客户端 transferring、其他客户端 completed、活跃连接数等分支）；
+     - `TestDownloadResponseHeaders`：端到端验证真实 HTTP 下载响应头（`Cache-Control: private, no-transform`、无 `Pragma`/`Expires`、`X-Content-Type-Options: nosniff`、MIME `Content-Type: text/plain; charset=utf-8`）。
+

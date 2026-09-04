@@ -335,3 +335,172 @@ func TestServerResumableMultiDeviceIntegration(t *testing.T) {
 		}
 	})
 }
+
+func TestSatisfiedRangeComplete(t *testing.T) {
+	tests := []struct {
+		name    string
+		start   int64
+		end     int64
+		written int64
+		want    bool
+	}{
+		{
+			name:    "Safari probe 2 bytes fulfilled",
+			start:   0,
+			end:     1,
+			written: 2,
+			want:    true,
+		},
+		{
+			name:    "Safari probe off-by-one 1 byte written (short write)",
+			start:   0,
+			end:     1,
+			written: 1,
+			want:    false,
+		},
+		{
+			name:    "Sub-range 100-199 with 100 bytes written",
+			start:   100,
+			end:     199,
+			written: 100,
+			want:    true,
+		},
+		{
+			name:    "Sub-range 100-199 with 99 bytes written (short write)",
+			start:   100,
+			end:     199,
+			written: 99,
+			want:    false,
+		},
+		{
+			name:    "Sub-range 100-199 with more bytes written",
+			start:   100,
+			end:     199,
+			written: 105,
+			want:    true,
+		},
+		{
+			name:    "Invalid end < start",
+			start:   200,
+			end:     100,
+			written: 50,
+			want:    false,
+		},
+		{
+			name:    "Negative start",
+			start:   -1,
+			end:     10,
+			written: 10,
+			want:    false,
+		},
+		{
+			name:    "Zero or negative written",
+			start:   0,
+			end:     10,
+			written: 0,
+			want:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := SatisfiedRangeComplete(tt.start, tt.end, tt.written)
+			if got != tt.want {
+				t.Errorf("SatisfiedRangeComplete(%d, %d, %d) = %v, want %v", tt.start, tt.end, tt.written, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHasActiveTransferringClients(t *testing.T) {
+	s := &Server{
+		clientStates: make(map[string]*ClientTransferStateInfo),
+	}
+
+	// Case 1: Empty clients
+	if s.hasActiveTransferringClients("") {
+		t.Errorf("expected false for empty clientStates")
+	}
+
+	// Case 2: Client A is transferring, Client B is completed
+	s.clientStates["clientA"] = &ClientTransferStateInfo{
+		State: "transferring",
+	}
+	s.clientStates["clientB"] = &ClientTransferStateInfo{
+		State: "completed",
+	}
+
+	if !s.hasActiveTransferringClients("clientB") {
+		t.Errorf("expected true when clientA is transferring and excluded client is clientB")
+	}
+	if s.hasActiveTransferringClients("clientA") {
+		t.Errorf("expected false when clientA is transferring and excluded client is clientA")
+	}
+
+	// Case 3: Client A completes
+	s.clientStates["clientA"].State = "completed"
+	if s.hasActiveTransferringClients("clientB") {
+		t.Errorf("expected false when all clients are completed")
+	}
+
+	// Case 4: Client C has active connections
+	s.clientStates["clientC"] = &ClientTransferStateInfo{
+		State:             "waiting",
+		ActiveConnections: 1,
+	}
+	if !s.hasActiveTransferringClients("clientB") {
+		t.Errorf("expected true when clientC has ActiveConnections > 0")
+	}
+}
+
+func TestDownloadResponseHeaders(t *testing.T) {
+	tempDir := t.TempDir()
+	txtFile := filepath.Join(tempDir, "sample.txt")
+	if err := os.WriteFile(txtFile, []byte("hello world for header test"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := &config.Config{
+		Interface: "lo",
+		Bind:      "127.0.0.1",
+		Port:      0,
+		KeepAlive: true,
+	}
+	serverInst, err := New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer serverInst.Shutdown()
+
+	payload, err := body.FromArgs([]string{txtFile}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverInst.Send(payload)
+
+	httpClient := &http.Client{Timeout: 3 * time.Second}
+	req, _ := http.NewRequest(http.MethodGet, serverInst.SendURL+"?download=1&client_id=test_header", nil)
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	_, _ = io.ReadAll(resp.Body)
+
+	// Check Safari compatibility headers
+	if cc := resp.Header.Get("Cache-Control"); cc != "private, no-transform" {
+		t.Errorf("Cache-Control = %q, want %q", cc, "private, no-transform")
+	}
+	if pragma := resp.Header.Get("Pragma"); pragma != "" {
+		t.Errorf("Pragma = %q, want empty", pragma)
+	}
+	if expires := resp.Header.Get("Expires"); expires != "" {
+		t.Errorf("Expires = %q, want empty", expires)
+	}
+	if xcto := resp.Header.Get("X-Content-Type-Options"); xcto != "nosniff" {
+		t.Errorf("X-Content-Type-Options = %q, want %q", xcto, "nosniff")
+	}
+	if ct := resp.Header.Get("Content-Type"); ct != "text/plain; charset=utf-8" {
+		t.Errorf("Content-Type = %q, want %q", ct, "text/plain; charset=utf-8")
+	}
+}

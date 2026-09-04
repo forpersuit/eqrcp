@@ -2960,7 +2960,7 @@ func New(cfg *config.Config) (*Server, error) {
 
 			// Check if this was a satisfied Range chunk request without connection error (e.g. Safari Range probe bytes=0-1)
 			isSatisfiedRangeChunk := rangeInfo.HasRange && rangeInfo.EndByte > 0 &&
-				(rangeInfo.StartByte+atomic.LoadInt64(&writtenInThisRequest) >= rangeInfo.EndByte)
+				SatisfiedRangeComplete(rangeInfo.StartByte, rangeInfo.EndByte, atomic.LoadInt64(&writtenInThisRequest))
 
 			// Retain current progress, mark state as waiting
 			clientDone, _ := app.getClientDownloadedAndTotal(clientID)

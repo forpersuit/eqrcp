@@ -49,6 +49,18 @@ func ParseRangeHeader(r *http.Request) RangeInfo {
 	return RangeInfo{}
 }
 
+// SatisfiedRangeComplete checks if a closed-interval Range request [start, end]
+// was fully satisfied by written bytes.
+// In HTTP Range (RFC 7233 / RFC 9110), end is inclusive.
+// e.g., bytes=0-1 requests 2 bytes (offsets 0 and 1).
+func SatisfiedRangeComplete(start, end, written int64) bool {
+	if end < start || start < 0 || end <= 0 || written <= 0 {
+		return false
+	}
+	expected := end - start + 1
+	return written >= expected
+}
+
 // CalculatePercent 辅助函数：根据已完成和总大小计算百分比
 func CalculatePercent(done, total int64) int {
 	if total <= 0 || done <= 0 {
