@@ -135,3 +135,22 @@ cd desktop/gui && go test ./... -count=1  # ok (2.012s)
 
 **工程备注**：commit 前缀 `feat(review)` 但未升版本（内容为 fix+test+docs，v1.36.35 保持），与仓库"feat → 小版本+1"惯例措辞不一致，建议后续同类闭项使用 `fix(review)` 或 `test(review)` 前缀；纯措辞，不影响行为。
 
+---
+
+## 九、 适配复核残余项（R1/R2/R3）收敛记录
+
+针对第八节提出的 3 项低危观察建议，已实施精准收敛：
+
+1. **针对 R1（补齐 open-range 单测用例）**：
+   - 在 `pkg/server/progress_test.go` 中为 `TestSatisfiedRangeComplete` 增加 `start: 1000, end: 0, written: 100, want: false` 用例，显式断言 `end <= 0` 守卫分支；同时补充越界探测夹紧用例。
+
+2. **针对 R2（`TestDownloadResponseHeaders` 跨平台 MIME 前缀兼容）**：
+   - 将 `pkg/server/progress_test.go` 中的 `Content-Type` 断言由严格全匹配 `text/plain; charset=utf-8` 调整为 `strings.HasPrefix(ct, "text/plain")`，消除 Windows 注册表与精简 Linux 环境中因系统 MIME 字典 charset 差异导致的偶发断言失败风险。
+
+3. **针对 R3（越界探测交付上界夹紧 min(end, size-1)）**：
+   - 在 `pkg/server/server.go:2962` 引入 `effectiveEnd := rangeInfo.EndByte; if expectedBytes > 0 && expectedBytes-1 < effectiveEnd { effectiveEnd = expectedBytes - 1 }`，当客户端请求 Range 上界超出实际文件大小时，以实际可交付的最大闭区间末字节参与判定，消除极端越界请求下的误报中断。
+
+4. **工程规范**：
+   - 遵从建议，将本次收敛提交前缀规范化为 `fix(review): ...`，版本号继续保持 `v1.36.35`。
+
+

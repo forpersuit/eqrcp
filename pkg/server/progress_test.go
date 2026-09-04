@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -400,6 +401,20 @@ func TestSatisfiedRangeComplete(t *testing.T) {
 			written: 0,
 			want:    false,
 		},
+		{
+			name:    "Open-ended range (end is 0)",
+			start:   1000,
+			end:     0,
+			written: 100,
+			want:    false,
+		},
+		{
+			name:    "Range overshoot clamped to file size (sub-range 90-150 on 100-byte file)",
+			start:   90,
+			end:     99, // clamped from 150 to size-1 (99)
+			written: 10,
+			want:    true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -500,7 +515,7 @@ func TestDownloadResponseHeaders(t *testing.T) {
 	if xcto := resp.Header.Get("X-Content-Type-Options"); xcto != "nosniff" {
 		t.Errorf("X-Content-Type-Options = %q, want %q", xcto, "nosniff")
 	}
-	if ct := resp.Header.Get("Content-Type"); ct != "text/plain; charset=utf-8" {
-		t.Errorf("Content-Type = %q, want %q", ct, "text/plain; charset=utf-8")
+	if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/plain") {
+		t.Errorf("Content-Type = %q, want prefix %q", ct, "text/plain")
 	}
 }
