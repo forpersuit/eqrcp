@@ -253,6 +253,12 @@ func (s *Server) HandleClientLog(w http.ResponseWriter, r *http.Request) {
 	category := sanitizeCategory(entry.Category)
 	clientID := sanitizeClientID(entry.ClientID)
 	msg := sanitizeString(entry.Message, 256)
+	if entry.Timestamp > 0 {
+		if entry.Details == nil {
+			entry.Details = make(map[string]any)
+		}
+		entry.Details["client_ts"] = entry.Timestamp
+	}
 	detailsStr := formatDetails(entry.Details, 1024)
 
 	// 5. Output structured log line (Server-arrival timestamp is sole authority)

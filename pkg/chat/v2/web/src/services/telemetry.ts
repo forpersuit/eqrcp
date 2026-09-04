@@ -38,9 +38,9 @@ export function sendTelemetry(
     };
 
     const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
-    if (navigator.sendBeacon) {
+    if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
       navigator.sendBeacon('/client-log', blob);
-    } else if (window.fetch) {
+    } else {
       fetch('/client-log', {
         method: 'POST',
         body: blob,

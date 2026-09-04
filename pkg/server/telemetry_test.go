@@ -59,11 +59,21 @@ func TestHandleClientLog_SanitizationAndAntiInjection(t *testing.T) {
 	req.RemoteAddr = "192.168.1.50:54321"
 	w := httptest.NewRecorder()
 
+	var logBuf bytes.Buffer
+	origOutput := log.Writer()
+	log.SetOutput(&logBuf)
+	defer log.SetOutput(origOutput)
+
 	s.HandleClientLog(w, req)
 
 	resp := w.Result()
 	if resp.StatusCode != http.StatusNoContent {
 		t.Errorf("expected status 204 No Content, got %d", resp.StatusCode)
+	}
+
+	loggedOutput := logBuf.String()
+	if !strings.Contains(loggedOutput, "client_ts=123456789") {
+		t.Errorf("expected logged output to contain client_ts=123456789, got: %q", loggedOutput)
 	}
 
 	// 验证内部 sanitize 逻辑

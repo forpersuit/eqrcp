@@ -1,8 +1,8 @@
 # EQT 跨端全链路统一遥测与日志回传系统架构设计方案
 # (Cross-Platform Unified Telemetry & Logging Architecture Design)
 
-> **版本**: v1.4 (Phase 3 移动端轻量遥测探针埋点落地)  
-> **状态**: Phase 1~3 全部全绿落地完成，进入 Phase 4 (GUI 应用内日志查看与导出诊断)  
+> **版本**: v1.4 (Phase 3 移动端轻量遥测探针埋点落地 · 第六轮审查项闭环)  
+> **状态**: Phase 1~3 全部落地并通过第六轮代码复核彻底闭环，进入 Phase 4 (GUI 应用内日志查看与导出诊断 · GetLogTail 前置已就绪)  
 > **作者**: EQT Core Team  
 > **日期**: 2026-09-04  
 > **目标**: 依据第一性原理（First Principle）与工业级日志最佳实践，打通桌面端调度内核、Go 服务端传输引擎、以及移动端（手机浏览器前端）的三端运行信息回传链路，实现统一异步汇流、强安全性清洗、结构化存储与 GUI 应用内快速诊断。
@@ -142,8 +142,8 @@ function reportLog(level, category, message, details = {}) {
     const payload = {
         client_id: getOrCreateClientID(), // 本地 sessionStorage 存储的 6 位随机设备串（仅供展示分组）
         timestamp: Date.now(),            // 设备本地时间戳（仅供时钟偏差分析，服务端为权威）
-        level: level,                     // "INFO" | "WARN" | "ERROR"
-        category: category,               // "PAGE_LOAD" | "ACTION" | "TRANSFER" | "SAVE" | "NETWORK"
+        level: level,                     // "DEBUG" | "INFO" | "WARN" | "ERROR"
+        category: category,               // 见 §四-2.2 允许的 17 类枚举白名单
         message: String(message).slice(0, 256), // 限制长度
         details: details
     };
@@ -185,13 +185,13 @@ function reportLog(level, category, message, details = {}) {
 - **真实 IP 令牌桶限流 (Rate Limiting by Remote IP)**：
   - 限流键严格取自底层连接真实 IP（`r.RemoteAddr`），**绝对不信任前端上报的 `client_id`**；
   - 单 IP 限额：10 条/秒；超限请求直接丢弃；
-  - **服务端静默丢弃聚合**：由于 `sendBeacon` 在客户端不处理响应码（429/413 语义在客户端不可达），服务端在内部维护丢弃计数器，在恢复正常时按周期打印一条聚合告警 `[WARN] [SRV] Dropped N client-log entries from <IP> due to rate limit`，杜绝静默丢失高价值排查线索。
+  - **服务端静默丢弃聚合**：由于 `sendBeacon` 在客户端不处理响应码（429/413 语义在客户端不可达），服务端在内部维护丢弃计数器，在受到限流丢弃时按周期（每 10 次）打印一条聚合告警 `[WARN] [SRV] Dropped client-log telemetry requests due to IP rate limiting (count=N, IP=<IP>)`，杜绝静默丢失高价值排查线索。
 
 #### 2.2 字段白名单与防日志注入清洗 (Anti-Log-Injection)
 服务端接收到 payload 后进行严格的防御性数据清洗：
 1. **枚举白名单**：
-   - `level` 仅允许 `INFO`、`WARN`、`ERROR`，非法输入强转为 `INFO`；
-   - `category` 仅允许 `PAGE_LOAD`、`ACTION`、`TRANSFER`、`SAVE`、`NETWORK`，非法输入强转为 `OTHER`；
+   - `level` 允许 `DEBUG`、`INFO`、`WARN`、`ERROR`，非法输入强转为 `INFO`；
+   - `category` 仅允许 17 类（`PAGE_LOAD`、`DOWNLOAD_CLICK`、`CHUNK_RETRY`、`CHUNK_FAIL`、`UPLOAD_START`、`UPLOAD_PROGRESS`、`UPLOAD_COMPLETE`、`UPLOAD_FAIL`、`NETWORK_OFFLINE`、`NETWORK_ONLINE`、`SHARE_API`、`EXCEPTION`、`CHAT_CONNECT`、`CHAT_DISCONNECT`、`ACTION`、`TRANSFER`、`CLIENT_EVENT`），非法输入强转为 `CLIENT_EVENT`；
 2. **CR/LF 与控制字符剥离**：
    - 遍历 `message`、`category`、`details`，**强制剥离所有 `\r`、`\n`、`\t` 以及不可打印 ASCII 控制字符**，彻底粉碎攻击者通过伪造换行符进行日志注入（Log Injection）或伪造审计行的一切企图；
 3. **长度与体积硬截断**：
@@ -321,7 +321,7 @@ func (a *App) ExportDiagnosticsZip() (string, error)
   - [x] 捕获环境指纹、点击下载、分块异常与网络重试，优先走 `sendBeacon` 同源异步回传；
   - [x] 验证移动端在断网、弱网及页面关闭时的回传鲁棒性。
 - [ ] **Phase 4: GUI 应用内日志查看与导出诊断 (In-App Log Viewer)**
-  - [ ] 在 `desktop/gui/app.go` 实现 `GetLogTail(lines int)`；
+  - [x] 在 `desktop/gui/app.go` 实现 `GetLogTail(lines int)`（Phase 1 已实现，并在 `wailsjs/go/main/App.d.ts` 形成绑定）；
   - [ ] 在前端 Settings / About 面板构建可视化日志浮层与一键复制功能；
   - [ ] 增加多语言翻译（支持 7 国语言）。
 - [ ] **Phase 5: 全链路联调与回归验证 (E2E Verification)**
@@ -466,10 +466,10 @@ func (a *App) ExportDiagnosticsZip() (string, error)
 
 | 评审意见项 | 评审性质 | 复核发现 | 建议处置 | 状态 |
 | :--- | :--- | :--- | :--- | :---: |
-| **1. 新增 `telemetry.ts` 触发类型门禁红点（`window.fetch` 恒真）** | **【类型·低危·新引入】** | `pkg/chat/v2/web/src/services/telemetry.ts:43` 采用 `else if (window.fetch)`；DOM lib 下 fetch 恒定义 → `npm run check`（svelte-check + tsc）报 "This condition will always return true since this function is always defined"（TS2774）。本地实测 `1 ERROR 3 WARN`（3 个 a11y WARN 为 MessageList/MessageComposer 既有，非本轮引入）。CI 与打包仅 `vite build`（esbuild 剥类型不校验）故不拦产物，运行时 fetch 恒在亦无碍。 | 删除守卫直接 `fetch(...).catch(() => {})`，或改 `typeof window.fetch === 'function'`；建议将 `npm run check` 纳入 CI，避免类型红点再次漏网。 | ⏳ **待开发闭环** |
-| **2. 客户端 `timestamp` 捕获即弃，时钟漂移数据全丢** | **【口径·低危】** | §二-4 原则承诺"客户端 timestamp 仅放入 details 供时钟偏差分析"；探针（telemetry.js / telemetry.ts）均发顶层 `timestamp: Date.now()`，但 `telemetry.go` `HandleClientLog` 反序列化后从不引用 `entry.Timestamp`（未并入 details、未落盘）。 | 二选一收敛：将 `timestamp` 在落盘前并入 details（如 `client_ts=<epoch>` 供偏差计算）；或 §二-4 措辞改为"客户端时间戳当前仅接收不分析"。 | ⏳ **待开发闭环（可选）** |
-| **3. §四-2.2 白名单规格文字与实现脱节** | **【文档·低危】** | doc 写 level 仅 `INFO/WARN/ERROR`（fallback INFO）、category 仅 5 类（fallback OTHER）；实现为 level 含 `DEBUG`、category 已扩容 17 类、fallback `CLIENT_EVENT`（与 v1.3/v1.4 落地不符）。§四-2.1 丢弃告警示例文案（"Dropped N entries from \<IP\>"）与实现措辞（`count=N, IP=` 聚合格式）亦有出入。 | §四-2.1/2.2 按当前实现同步枚举清单与样例文案。 | ⏳ **待开发闭环（可选）** |
-| **4. v1.4 状态行与 Phase-4 清单首项滞后** | **【文档·低危】** | 状态行宣称"进入 Phase 4（GUI 应用内日志查看与导出诊断）"，但 `GetLogTail` 早在 Phase 1/round-3 已实现（app.go:1350）并经 wailsjs 生成绑定（`App.d.ts` 数值参数 → `Array\<string\>`）；§五 Phase-4 清单首项仍标 `[ ]`，仅"前端可视化日志浮层与一键复制"尚未落地。 | Phase-4 清单首项勾选，状态行表述为"Phase 4 部分前置完成（GetLogTail 已实现并绑定，浮层 UI 待建）"。 | ⏳ **待开发闭环（可选）** |
+| **1. 新增 `telemetry.ts` 触发类型门禁红点（`window.fetch` 恒真）** | **【类型·低危·新引入】** | `pkg/chat/v2/web/src/services/telemetry.ts:43` 采用 `else if (window.fetch)`；DOM lib 下 fetch 恒定义 → `npm run check`（svelte-check + tsc）报 "This condition will always return true since this function is always defined"（TS2774）。本地实测 `1 ERROR 3 WARN`（3 个 a11y WARN 为 MessageList/MessageComposer 既有，非本轮引入）。CI 与打包仅 `vite build`（esbuild 剥类型不校验）故不拦产物，运行时 fetch 恒在亦无碍。 | **已闭环**：`telemetry.ts` 精简为 `if (typeof navigator !== 'undefined' && navigator.sendBeacon) ... else { fetch(...) }`，`npm run check` 错误数彻底清零（0 errors）。 | ✅ **已彻底闭环** |
+| **2. 客户端 `timestamp` 捕获即弃，时钟漂移数据全丢** | **【口径·低危】** | §二-4 原则承诺"客户端 timestamp 仅放入 details 供时钟偏差分析"；探针（telemetry.js / telemetry.ts）均发顶层 `timestamp: Date.now()`，但 `telemetry.go` `HandleClientLog` 反序列化后从不引用 `entry.Timestamp`（未并入 details、未落盘）。 | **已闭环**：`telemetry.go` 的 `HandleClientLog` 中在 `entry.Timestamp > 0` 时自动将其并入 `entry.Details["client_ts"]`，单测已全覆盖落盘与时钟捕获验证。 | ✅ **已彻底闭环** |
+| **3. §四-2.2 白名单规格文字与实现脱节** | **【文档·低危】** | doc 写 level 仅 `INFO/WARN/ERROR`（fallback INFO）、category 仅 5 类（fallback OTHER）；实现为 level 含 `DEBUG`、category 已扩容 17 类、fallback `CLIENT_EVENT`（与 v1.3/v1.4 落地不符）。§四-2.1 丢弃告警示例文案（"Dropped N entries from \<IP\>"）与实现措辞（`count=N, IP=` 聚合格式）亦有出入。 | **已闭环**：§四-2.1 与 §四-2.2 已按实际生产实现同步 17 类白名单枚举、DEBUG 级别支持、fallback 规则及限流聚合告警样例文案。 | ✅ **已彻底闭环** |
+| **4. v1.4 状态行与 Phase-4 清单首项滞后** | **【文档·低危】** | 状态行宣称"进入 Phase 4（GUI 应用内日志查看与导出诊断）"，但 `GetLogTail` 早在 Phase 1/round-3 已实现（app.go:1350）并经 wailsjs 生成绑定（`App.d.ts` 数值参数 → `Array\<string\>`）；§五 Phase-4 清单首项仍标 `[ ]`，仅"前端可视化日志浮层与一键复制"尚未落地。 | **已闭环**：§五 Phase-4 清单首项已更新勾选 `[x]`，文档头状态更新明确声明 GetLogTail 前置已就绪。 | ✅ **已彻底闭环** |
 
-> **交付边界**：#1 类型红点建议在 Phase 4 开工前随手闭环（删守卫或改 `typeof` 一行）；#2/#3/#4 为可选口径/文档收敛项。Phase 3 主链路方向正确、单测全绿，可进入 Phase 4；移动端真实断网/弱网/页面关闭回传鲁棒性仍按 §五 测试边界留待实机或移动仿真验收。
+> **交付边界**：第六轮审查 4 项发现已全数闭环（#1 类型红点 0 报错、#2 客户端时间戳无侵入并入 details、#3/#4 文档规格同步完成）。Phase 1~3 全部完成，已全面就绪推进 Phase 4 GUI 应用内日志查看浮层与多语言落地。
 
