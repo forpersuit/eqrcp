@@ -294,6 +294,10 @@ func TestGUIAgentRunTaskEnableTLSFallbackToHTTP(t *testing.T) {
 		t.Fatalf("writeSettings failed: %v", err)
 	}
 
+	agent.mu.Lock()
+	agent.current = &TaskRecord{ID: 1, Action: "share"}
+	agent.mu.Unlock()
+
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- agent.runTask(AgentTask{
@@ -319,10 +323,49 @@ func TestGUIAgentRunTaskEnableTLSFallbackToHTTP(t *testing.T) {
 	if strings.HasPrefix(srv.SendURL, "https://") {
 		t.Fatalf("expected HTTP URL after fallback, got: %s", srv.SendURL)
 	}
+	agent.mu.Lock()
+	currentTask := agent.current
+	agent.mu.Unlock()
+	if currentTask == nil || !strings.HasPrefix(currentTask.QRCode, "data:image/png;base64,") {
+		t.Fatalf("expected offline Base64 QRCode on current task, got: %v", currentTask)
+	}
 
 	go srv.Shutdown()
 	select {
 	case <-errCh:
 	case <-time.After(1 * time.Second):
+	}
+}
+
+func TestGUIAgentTaskOfflineQRCodeGeneration(t *testing.T) {
+	agent := newDesktopAgent(nil)
+	agent.current = &TaskRecord{ID: 1, Action: "share"}
+	agent.chat = &TaskRecord{ID: 2, Action: "chat"}
+
+	// 1. Test share task QR generation
+	agent.setTaskPageURL("share", "https://192-168-0-1.direct.eqt.net.im:18080/qr", "https://192-168-0-1.direct.eqt.net.im:18080/send/token123")
+	if !strings.HasPrefix(agent.current.QRCode, "data:image/png;base64,") {
+		t.Fatalf("expected data:image/png;base64, prefix for share QR code, got: %q", agent.current.QRCode)
+	}
+	if agent.current.PageURL != "https://192-168-0-1.direct.eqt.net.im:18080/qr" {
+		t.Fatalf("expected PageURL preserved, got: %s", agent.current.PageURL)
+	}
+
+	// 2. Test chat task QR generation
+	chatURL := "https://192-168-0-1.direct.eqt.net.im:18080/chat/token456"
+	agent.setTaskPageURL("chat", chatURL, chatURL)
+	if !strings.HasPrefix(agent.chat.QRCode, "data:image/png;base64,") {
+		t.Fatalf("expected data:image/png;base64, prefix for chat QR code, got: %q", agent.chat.QRCode)
+	}
+	if agent.chat.PageURL != chatURL {
+		t.Fatalf("expected chat PageURL preserved, got: %s", agent.chat.PageURL)
+	}
+
+	// 3. Test addHistoryLocked clears QRCode to keep history lean
+	agent.mu.Lock()
+	agent.addHistoryLocked(*agent.current)
+	agent.mu.Unlock()
+	if len(agent.history) == 0 || agent.history[0].QRCode != "" {
+		t.Fatalf("expected history record to have empty QRCode, got: %v", agent.history)
 	}
 }

@@ -24,6 +24,7 @@ export namespace main {
 	    chatDeviceCount?: number;
 	    chatLastActivity?: string;
 	    pageUrl?: string;
+	    qrCode?: string;
 	    error?: string;
 	    // Go type: time
 	    startedAt: any;
@@ -59,6 +60,7 @@ export namespace main {
 	        this.chatDeviceCount = source["chatDeviceCount"];
 	        this.chatLastActivity = source["chatLastActivity"];
 	        this.pageUrl = source["pageUrl"];
+	        this.qrCode = source["qrCode"];
 	        this.error = source["error"];
 	        this.startedAt = this.convertValues(source["startedAt"], null);
 	        this.finishedAt = this.convertValues(source["finishedAt"], null);

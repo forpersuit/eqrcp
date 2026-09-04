@@ -181,6 +181,7 @@ func (agent *desktopAgent) touchLocked() {
 
 func (agent *desktopAgent) addHistoryLocked(record TaskRecord) {
 	record = cloneTaskRecord(record)
+	record.QRCode = ""
 	// Force resolve all paths to absolute paths
 	for i, p := range record.Paths {
 		if !filepath.IsAbs(p) {
@@ -1013,7 +1014,6 @@ func (agent *desktopAgent) runTask(task AgentTask) error {
 	})
 	switch task.Action {
 	case "share":
-		agent.setTaskPageURL(task.Action, srv.BaseURL+"/qr")
 		payload, err := body.FromArgs(task.Paths, agentApp.Flags.Zip)
 		if err != nil {
 			agent.log.Errorf("runTask (share): failed to create payload from args: %v", err)
@@ -1026,8 +1026,8 @@ func (agent *desktopAgent) runTask(task AgentTask) error {
 			srv.Shutdown()
 			return err
 		}
+		agent.setTaskPageURL(task.Action, srv.BaseURL+"/qr", srv.SendURL)
 	case "receive":
-		agent.setTaskPageURL(task.Action, srv.BaseURL+"/qr")
 		if err := srv.ReceiveTo(cfg.Output); err != nil {
 			agent.log.Errorf("runTask (receive): failed to prepare receive path: %v", err)
 			srv.Shutdown()
@@ -1038,6 +1038,7 @@ func (agent *desktopAgent) runTask(task AgentTask) error {
 			srv.Shutdown()
 			return err
 		}
+		agent.setTaskPageURL(task.Action, srv.BaseURL+"/qr", srv.ReceiveURL)
 	case "chat":
 		agent.log.Infof("runTask: chat action started. EnableChatV2 = %v", desktopSettings.EnableChatV2)
 		srv.EnableChatV2 = desktopSettings.EnableChatV2
@@ -1062,7 +1063,7 @@ func (agent *desktopAgent) runTask(task AgentTask) error {
 		}
 		chatPageURL := chatPageURLBuilder()
 		agent.log.Infof("runTask (chat): chat server active. chatPageURL = %s", chatPageURL)
-		agent.setTaskPageURL(task.Action, chatPageURL)
+		agent.setTaskPageURL(task.Action, chatPageURL, chatPageURL)
 		srv.SetChatHostRenameHook(func(newName string) {
 			agent.handleChatHostRename(newName)
 		})
@@ -1094,16 +1095,30 @@ func (agent *desktopAgent) setTaskStop(action string, stop func(string)) {
 	}
 }
 
-func (agent *desktopAgent) setTaskPageURL(action string, pageURL string) {
+func (agent *desktopAgent) setTaskPageURL(action string, pageURL string, qrContent string) {
 	agent.mu.Lock()
 	defer agent.mu.Unlock()
+	var qrCode string
+	if qrContent != "" {
+		if dataURL, err := generateQRCodeDataURL(qrContent, 280); err == nil {
+			qrCode = dataURL
+		} else {
+			agent.log.Errorf("setTaskPageURL: failed to generate offline QR: %v", err)
+		}
+	}
 	if action == "chat" {
 		if agent.chat != nil {
 			agent.chat.PageURL = pageURL
+			if qrCode != "" {
+				agent.chat.QRCode = qrCode
+			}
 		}
 	} else {
 		if agent.current != nil {
 			agent.current.PageURL = pageURL
+			if qrCode != "" {
+				agent.current.QRCode = qrCode
+			}
 		}
 	}
 	agent.touchLocked()

@@ -85,6 +85,7 @@ type TaskRecord struct {
 	ChatDeviceCount         int                                        `json:"chatDeviceCount,omitempty"`
 	ChatLastActivity        string                                     `json:"chatLastActivity,omitempty"`
 	PageURL                 string                                     `json:"pageUrl,omitempty"`
+	QRCode                  string                                     `json:"qrCode,omitempty"`
 	Error                   string                                     `json:"error,omitempty"`
 	StartedAt               time.Time                                  `json:"startedAt"`
 	FinishedAt              *time.Time                                 `json:"finishedAt,omitempty"`
@@ -626,8 +627,8 @@ func (a *App) SaveSharePosterImage(base64Data string) (string, error) {
 	return target, nil
 }
 
-// GenerateQRCodePNG generates a high-resolution QR code PNG encoded as Base64 Data URL offline.
-func (a *App) GenerateQRCodePNG(content string, size int) (string, error) {
+// generateQRCodeDataURL generates a high-resolution QR code PNG encoded as Base64 Data URL offline.
+func generateQRCodeDataURL(content string, size int) (string, error) {
 	if content == "" {
 		content = "https://www.eqt.net.im"
 	}
@@ -639,6 +640,11 @@ func (a *App) GenerateQRCodePNG(content string, size int) (string, error) {
 		return "", fmt.Errorf("failed to generate qr code: %w", err)
 	}
 	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(pngBytes), nil
+}
+
+// GenerateQRCodePNG generates a high-resolution QR code PNG encoded as Base64 Data URL offline.
+func (a *App) GenerateQRCodePNG(content string, size int) (string, error) {
+	return generateQRCodeDataURL(content, size)
 }
 
 func chatAttachmentDownloadURL(rawURL string) (*url.URL, error) {

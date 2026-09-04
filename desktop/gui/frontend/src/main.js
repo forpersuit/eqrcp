@@ -809,7 +809,7 @@ function updateQRDOMAndButtonUI(task, wrapperId) {
 
     const qrWrapper = document.getElementById(wrapperId);
     if (qrWrapper) {
-        const qrImage = qrImageURL(task.pageUrl);
+        const qrImage = getTaskQRImage(task);
         const newQrHtml = isQRExpanded && qrImage ? `
             <div class="qr-hero">
                 <img src="${escapeAttr(qrImage)}" alt="Transfer QR code" />
@@ -824,7 +824,7 @@ function updateQRDOMAndButtonUI(task, wrapperId) {
 }
 
 function renderShareTransfer(task) {
-    const qrImage = qrImageURL(task.pageUrl);
+    const qrImage = getTaskQRImage(task);
 
     const isQRExpanded = isTaskQRExpanded(task);
     const collapseText = isQRExpanded ? t('hide_chat_qr') || 'Hide QR' : t('show_chat_qr') || 'Show QR';
@@ -1113,7 +1113,7 @@ function renderReceive() {
 }
 
 function renderReceiveTransfer(task) {
-    const qrImage = qrImageURL(task.pageUrl);
+    const qrImage = getTaskQRImage(task);
 
     const isQRExpanded = isTaskQRExpanded(task);
     const collapseText = isQRExpanded ? t('hide_chat_qr') || 'Hide QR' : t('show_chat_qr') || 'Show QR';
@@ -1853,7 +1853,7 @@ function renderChatPanel(task) {
     const messageCount = task.chatMessageCount || 0;
     const lastActivity = task.chatLastActivity ? messageTime(task.chatLastActivity) : '';
     const deviceCount = chatDeviceCount(task);
-    const qrImage = qrImageURL(chatUrl);
+    const qrImage = getTaskQRImage(task);
     const qrToggleLabel = state.chatQROpen ? t('hide_chat_qr') : t('show_chat_qr');
     const qrPulse = !state.chatQRPromptDismissed && state.chatQRPulseUntil > Date.now();
     const remoteDeviceCount = Math.max(0, deviceCount - 1);
@@ -2983,7 +2983,7 @@ function renderCurrent(task) {
         return `<div class="empty-state">${t('agent_idle')}</div>`;
     }
     const percent = task.transferPercent || 0;
-    const qrImage = qrImageURL(task.pageUrl);
+    const qrImage = getTaskQRImage(task);
     const finished = isTerminal(task);
     const actionText = (task.action === 'share' || task.action === 'send') ? t('share') : (task.action === 'receive' ? t('receive') : titleCase(task.action));
     return `
@@ -6358,6 +6358,33 @@ function renderAvatarMarkup(avatarVal, fallbackText) {
         return `<img src="${escapeAttr(val)}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" />`;
     }
     return escapeHTML(val || fallbackText);
+}
+
+const qrDataUrlCache = new Map();
+
+function getTaskQRImage(task) {
+    if (!task) {
+        return '';
+    }
+    if (task.qrCode) {
+        return task.qrCode;
+    }
+    const pageUrl = task.pageUrl || '';
+    if (!pageUrl) {
+        return '';
+    }
+    if (qrDataUrlCache.has(pageUrl)) {
+        return qrDataUrlCache.get(pageUrl);
+    }
+    if (window.go?.main?.App?.GenerateQRCodePNG) {
+        window.go.main.App.GenerateQRCodePNG(pageUrl, 280).then((dataUrl) => {
+            if (dataUrl && !qrDataUrlCache.has(pageUrl)) {
+                qrDataUrlCache.set(pageUrl, dataUrl);
+                render();
+            }
+        }).catch(() => {});
+    }
+    return qrImageURL(pageUrl);
 }
 
 function qrImageURL(pageUrl) {
