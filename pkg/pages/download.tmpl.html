@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" type="image/png" href="/favicon.png">
+    <script src="/assets/telemetry.js"></script>
     <title>Receive File - EQT</title>
     <style>
         :root {
@@ -921,6 +922,11 @@
         var totalCount = {{.Count}};
 
         function triggerDownload() {
+            if (window.__eqt_telemetry) {
+                window.__eqt_telemetry.report('INFO', 'DOWNLOAD_CLICK', 'User clicked download all', {
+                    count: totalCount
+                });
+            }
             startStatusPolling();
             if (downloadTriggered) {
                 window.location.href = window.location.pathname + '?download=1&client_id=' + getOrGenerateClientId() + '&_t=' + Date.now();
@@ -941,6 +947,14 @@
         }
   
         function triggerDownloadItem(index) {
+            var item = filesList[index];
+            var itemName = item ? item.name : ('item_' + index);
+            if (window.__eqt_telemetry) {
+                window.__eqt_telemetry.report('INFO', 'DOWNLOAD_CLICK', 'User clicked download item: ' + itemName, {
+                    item: index,
+                    name: itemName
+                });
+            }
             startStatusPolling();
             
             var iframe = document.createElement('iframe');
@@ -967,6 +981,9 @@
         var pollingStarted = false;
         var isCompleted = false;
         var isLimitUIActive = false;
+        var hasReportedWaiting = false;
+        var hasReportedFailed = false;
+        var hasReportedCompleted = false;
         function startStatusPolling() {
             if (pollingStarted) return;
             pollingStarted = true;
@@ -1026,9 +1043,25 @@
                                             var shortId = status.clientID && status.clientID.length > 4 ? status.clientID.substring(status.clientID.length - 4) : (status.clientID || '');
                                             statusText = 'ID: ' + shortId;
                                         } else if (status.state === 'waiting') {
+                                            if (!hasReportedWaiting) {
+                                                hasReportedWaiting = true;
+                                                if (window.__eqt_telemetry) {
+                                                    window.__eqt_telemetry.report('WARN', 'CHUNK_RETRY', 'Download interrupted, waiting to reconnect', {
+                                                        bytesDone: status.bytesDone || 0
+                                                    });
+                                                }
+                                            }
                                             var dict = EqtI18n.getDict();
                                             statusText = dict.waiting_status || 'Connection interrupted, waiting to reconnect...';
                                         } else if (status.state === 'failed') {
+                                            if (!hasReportedFailed) {
+                                                hasReportedFailed = true;
+                                                if (window.__eqt_telemetry) {
+                                                    window.__eqt_telemetry.report('ERROR', 'CHUNK_FAIL', 'Transfer stopped or failed', {
+                                                        bytesDone: status.bytesDone || 0
+                                                    });
+                                                }
+                                            }
                                             var dict = EqtI18n.getDict();
                                             statusText = dict.failed_status || 'Transfer stopped. You can click button to restart.';
                                         }
@@ -1077,6 +1110,14 @@
                                     if (status.downloadedItems.length >= totalCount) {
                                         if (!isCompleted) {
                                             isCompleted = true;
+                                            if (!hasReportedCompleted) {
+                                                hasReportedCompleted = true;
+                                                if (window.__eqt_telemetry) {
+                                                    window.__eqt_telemetry.report('INFO', 'TRANSFER', 'All items transferred successfully', {
+                                                        count: totalCount
+                                                    });
+                                                }
+                                            }
                                             showCompletedUI();
                                         }
                                     }
@@ -1085,11 +1126,26 @@
                                 if (status.state === 'completed') {
                                     if (!isCompleted) {
                                         isCompleted = true;
+                                        if (!hasReportedCompleted) {
+                                            hasReportedCompleted = true;
+                                            if (window.__eqt_telemetry) {
+                                                window.__eqt_telemetry.report('INFO', 'TRANSFER', 'Transfer completed successfully', {
+                                                    bytesDone: status.bytesDone || 0,
+                                                    bytesTotal: status.bytesTotal || 0
+                                                });
+                                            }
+                                        }
                                         showCompletedUI();
                                     }
                                 }
                             } catch(e) {}
                         } else if (xhr.status === 410) {
+                            if (!hasReportedCompleted) {
+                                hasReportedCompleted = true;
+                                if (window.__eqt_telemetry) {
+                                    window.__eqt_telemetry.report('INFO', 'TRANSFER', 'Download session completed (410 Done)');
+                                }
+                            }
                             clearInterval(intervalId);
                             showCompletedUI();
                         } else {
@@ -1341,6 +1397,14 @@
 
         // Auto start status polling on page load to register client activity immediately
         startStatusPolling();
+        if (window.__eqt_telemetry) {
+            window.__eqt_telemetry.report('INFO', 'PAGE_LOAD', 'Download page loaded', {
+                filesCount: totalCount,
+                secure: !!window.isSecureContext,
+                share: !!navigator.share,
+                screen: window.innerWidth + 'x' + window.innerHeight
+            });
+        }
     </script>
 </body>
 </html>

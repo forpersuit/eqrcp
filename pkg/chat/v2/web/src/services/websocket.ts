@@ -2,6 +2,7 @@ import { get } from 'svelte/store';
 import type { CommandEnvelope, EventEnvelope } from './types';
 import { chatActions, messages, historyHasMore, historyOldestSeq, historyLoading } from '../state/chatStore';
 import { resolveConnectAfterSeq } from './reconnectSeq';
+import { sendTelemetry } from './telemetry';
 import {
   isDesktopPeer,
   shouldCloseSocketOnHidden,
@@ -233,6 +234,10 @@ export class ChatWebSocketClient {
 
       this.startHeartbeat();
       this.sendLog(`[SYSTEM] WebSocket connection established. Peer: ${this.clientPeer}, Label: ${this.clientLabel}`);
+      sendTelemetry('INFO', 'CHAT_CONNECT', `Chat WebSocket connected (peer=${this.clientPeer})`, {
+        peer: this.clientPeer,
+        label: this.clientLabel
+      });
       this.flushPendingLogs();
     };
 
@@ -251,12 +256,19 @@ export class ChatWebSocketClient {
       if (shouldDiscardSupersededSocketEvent(this.ws, ws)) return;
       chatActions.addDebugNotice('WebSocket encountered an error.');
       this.sendLog(`[SYSTEM] WebSocket encountered an error.`);
+      sendTelemetry('ERROR', 'EXCEPTION', `Chat WebSocket error (peer=${this.clientPeer})`, {
+        peer: this.clientPeer
+      });
     };
 
     ws.onclose = (event) => {
       if (shouldDiscardSupersededSocketEvent(this.ws, ws)) return;
       chatActions.setConnectionState('disconnected');
       this.stopHeartbeat();
+      sendTelemetry('WARN', 'CHAT_DISCONNECT', `Chat WebSocket disconnected (code=${event.code})`, {
+        peer: this.clientPeer,
+        code: event.code
+      });
       if (this.isSuspended) {
         this.sendLog(`[SYSTEM] WebSocket closed due to suspension, omitting reconnection.`);
         return;

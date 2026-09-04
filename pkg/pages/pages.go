@@ -43,3 +43,8 @@ var Favicon []byte
 //
 //go:embed assets/tus.min.js
 var TusMinJS []byte
+
+// TelemetryJS is the mobile client telemetry probe script.
+//
+//go:embed assets/telemetry.js
+var TelemetryJS []byte

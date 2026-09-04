@@ -1,8 +1,8 @@
 # EQT 跨端全链路统一遥测与日志回传系统架构设计方案
 # (Cross-Platform Unified Telemetry & Logging Architecture Design)
 
-> **版本**: v1.3 (第四轮设计与代码审查 5 项发现已全部闭环落地)  
-> **状态**: Phase 1 统一异步汇流引擎 & Phase 2 服务端遥测/脱敏端点全绿落地，第四轮审查项全部闭环，进入 Phase 3  
+> **版本**: v1.4 (Phase 3 移动端轻量遥测探针埋点落地)  
+> **状态**: Phase 1~3 全部全绿落地完成，进入 Phase 4 (GUI 应用内日志查看与导出诊断)  
 > **作者**: EQT Core Team  
 > **日期**: 2026-09-04  
 > **目标**: 依据第一性原理（First Principle）与工业级日志最佳实践，打通桌面端调度内核、Go 服务端传输引擎、以及移动端（手机浏览器前端）的三端运行信息回传链路，实现统一异步汇流、强安全性清洗、结构化存储与 GUI 应用内快速诊断。
@@ -315,11 +315,11 @@ func (a *App) ExportDiagnosticsZip() (string, error)
   - [x] 实施远端真实 IP（`r.RemoteAddr`）令牌桶限流（≤10 req/s），维护服务端丢弃计数；
   - [x] 在 `pkg/server/server.go` 增加 Access Log 中间件，且严格调用 Token 截断脱敏函数；
   - [x] 编写 `/client-log` 单元测试与注入防护越界测试。
-- [ ] **Phase 3: 移动端页面轻量遥测探针埋点 (Mobile Client Probe)**
-  - [ ] 在 `pkg/pages/download.tmpl.html` 与 `pkg/pages/upload.tmpl.html` 中注入原生 `telemetry.js`；
-  - [ ] 在 Svelte SPA 聊天前端中增加遥测挂载（或 Go 服务端动态下发探针）；
-  - [ ] 捕获环境指纹、点击下载、分块异常与网络重试，优先走 `sendBeacon` 同源异步回传；
-  - [ ] 验证移动端在断网、弱网及页面关闭时的回传鲁棒性。
+- [x] **Phase 3: 移动端页面轻量遥测探针埋点 (Mobile Client Probe)**
+  - [x] 在 `pkg/pages/download.tmpl.html` 与 `pkg/pages/upload.tmpl.html` 中注入原生 `telemetry.js`；
+  - [x] 在 Svelte SPA 聊天前端中增加遥测挂载（`services/telemetry.ts` 全局捕获与 WebSocket 生命周期）；
+  - [x] 捕获环境指纹、点击下载、分块异常与网络重试，优先走 `sendBeacon` 同源异步回传；
+  - [x] 验证移动端在断网、弱网及页面关闭时的回传鲁棒性。
 - [ ] **Phase 4: GUI 应用内日志查看与导出诊断 (In-App Log Viewer)**
   - [ ] 在 `desktop/gui/app.go` 实现 `GetLogTail(lines int)`；
   - [ ] 在前端 Settings / About 面板构建可视化日志浮层与一键复制功能；

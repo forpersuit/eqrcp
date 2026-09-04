@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" type="image/png" href="/favicon.png">
+    <script src="/assets/telemetry.js"></script>
     <title>Send to EQT</title>
     <style>
         :root {
@@ -1601,6 +1602,12 @@
                     doneXhr.open('POST', '{{.Route}}?done=true&client_id=' + encodeURIComponent(clientID));
                     doneXhr.onload = function() {
                         if (doneXhr.status >= 200 && doneXhr.status < 300) {
+                            if (window.__eqt_telemetry) {
+                                window.__eqt_telemetry.report('INFO', 'TRANSFER', 'Upload batch completed', {
+                                    filesCount: filesToUpload.length,
+                                    totalSize: totalFilesSize
+                                });
+                            }
                             clearDraft();
                             clearAccumulatedFiles();
                             
@@ -1622,6 +1629,11 @@
                                 oldScript.parentNode.replaceChild(newScript, oldScript);
                             }
                         } else if (doneXhr.status === 410) {
+                            if (window.__eqt_telemetry) {
+                                window.__eqt_telemetry.report('INFO', 'TRANSFER', 'Upload batch completed (410 Done)', {
+                                    filesCount: filesToUpload.length
+                                });
+                            }
                             clearDraft();
                             clearAccumulatedFiles();
                             var isZh = (currentLang === 'zh');
@@ -1647,6 +1659,14 @@
                 var item = filesToUpload[uploadIndex];
                 var uploadBlob = item.type === 'text' ? item.blob : item.file;
                 
+                if (window.__eqt_telemetry) {
+                    window.__eqt_telemetry.report('INFO', 'UPLOAD_START', 'Start uploading ' + item.name, {
+                        file: item.name,
+                        size: item.size,
+                        index: uploadIndex
+                    });
+                }
+
                 var upload = new tus.Upload(uploadBlob, {
                     endpoint: '{{.Route}}/tus/?client_id=' + encodeURIComponent(clientID),
                     retryDelays: [0, 1000, 3000, 5000, 10000],
@@ -1659,6 +1679,12 @@
                     },
                     onError: function(error) {
                         console.error("Tus upload error: ", error);
+                        if (window.__eqt_telemetry) {
+                            window.__eqt_telemetry.report('ERROR', 'CHUNK_FAIL', 'Upload failed: ' + (error ? error.message : 'unknown'), {
+                                file: item.name,
+                                error: error ? error.message : ''
+                            });
+                        }
                         if (item.index !== undefined) {
                             var circle = document.getElementById('progress-circle-' + item.index);
                             var text = document.getElementById('progress-text-' + item.index);
@@ -1686,6 +1712,15 @@
                         
                         if (item.index !== undefined) {
                             var percent = Math.min(100, Math.round((bytesSent / bytesTotal) * 100));
+                            if (percent >= 50 && !item._reported50) {
+                                item._reported50 = true;
+                                if (window.__eqt_telemetry) {
+                                    window.__eqt_telemetry.report('INFO', 'UPLOAD_PROGRESS', 'Upload reached 50% for ' + item.name, {
+                                        file: item.name,
+                                        bytesSent: bytesSent
+                                    });
+                                }
+                            }
                             var circle = document.getElementById('progress-circle-' + item.index);
                             var text = document.getElementById('progress-text-' + item.index);
                             if (circle) {
@@ -1698,6 +1733,12 @@
                         }
                     },
                     onSuccess: function() {
+                        if (window.__eqt_telemetry) {
+                            window.__eqt_telemetry.report('INFO', 'UPLOAD_COMPLETE', 'Upload completed for ' + item.name, {
+                                file: item.name,
+                                size: item.size
+                            });
+                        }
                         bytesUploadedMap[uploadIndex] = item.size;
                         if (item.index !== undefined) {
                             var circle = document.getElementById('progress-circle-' + item.index);
@@ -2070,6 +2111,13 @@
         // Plus limit logic for Free tier
         updateLimitUI(usedTransfers);
         applyRandomTheme();
+        if (window.__eqt_telemetry) {
+            window.__eqt_telemetry.report('INFO', 'PAGE_LOAD', 'Upload page loaded', {
+                secure: !!window.isSecureContext,
+                tus: typeof tus !== 'undefined',
+                screen: window.innerWidth + 'x' + window.innerHeight
+            });
+        }
     </script>
 </body>
 </html>

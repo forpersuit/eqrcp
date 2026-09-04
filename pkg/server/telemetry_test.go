@@ -194,3 +194,63 @@ func TestWrapAccessLog(t *testing.T) {
 		t.Errorf("expected /status polling to be skipped from access log, but logged: %q", logBuf.String())
 	}
 }
+
+func TestTelemetryJSAssetAndCategories(t *testing.T) {
+	mux := http.NewServeMux()
+	registerBrandAssets(mux)
+
+	// 1. 验证 /assets/telemetry.js 能够正常下发且内容包含探针核心逻辑
+	req := httptest.NewRequest(http.MethodGet, "/assets/telemetry.js", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 OK for /assets/telemetry.js, got %d", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); ct != "application/javascript" {
+		t.Errorf("expected Content-Type application/javascript, got %s", ct)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "window.__eqt_telemetry") || !strings.Contains(body, "sendBeacon") {
+		t.Errorf("expected telemetry.js script to contain __eqt_telemetry and sendBeacon, got: %s", body)
+	}
+
+	// 2. 验证 Phase 3 扩展的 Category 白名单分类全部有效映射
+	expectedCategories := []string{
+		"PAGE_LOAD",
+		"DOWNLOAD_CLICK",
+		"CHUNK_RETRY",
+		"CHUNK_FAIL",
+		"UPLOAD_START",
+		"UPLOAD_PROGRESS",
+		"UPLOAD_COMPLETE",
+		"UPLOAD_FAIL",
+		"NETWORK_OFFLINE",
+		"NETWORK_ONLINE",
+		"SHARE_API",
+		"EXCEPTION",
+		"CHAT_CONNECT",
+		"CHAT_DISCONNECT",
+		"ACTION",
+		"TRANSFER",
+		"CLIENT_EVENT",
+	}
+
+	for _, cat := range expectedCategories {
+		clean := sanitizeCategory(cat)
+		if clean != cat {
+			t.Errorf("sanitizeCategory(%q) = %q, expected %q", cat, clean, cat)
+		}
+		// 验证小写输入也能正确归一为全大写
+		cleanLower := sanitizeCategory(strings.ToLower(cat))
+		if cleanLower != cat {
+			t.Errorf("sanitizeCategory(%q) = %q, expected %q", strings.ToLower(cat), cleanLower, cat)
+		}
+	}
+
+	// 3. 验证未知非法分类 fallback 到 CLIENT_EVENT
+	if sanitizeCategory("SOMETHING_TOTALLY_RANDOM") != "CLIENT_EVENT" {
+		t.Errorf("expected unknown category to fallback to CLIENT_EVENT")
+	}
+}
