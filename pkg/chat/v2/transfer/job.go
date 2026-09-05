@@ -126,11 +126,18 @@ func (j *Job) UpdateProgress(bytesDone int64) bool {
 }
 
 // SetBytesTotal safely updates the total byte size of a job.
-func (j *Job) SetBytesTotal(bytesTotal int64) {
+// Returns true if the bytesTotal was modified and the job is in a non-terminal state.
+// If the job has already reached an immutable terminal state, the update is rejected.
+func (j *Job) SetBytesTotal(bytesTotal int64) bool {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 
+	if isTerminalState(j.State) {
+		return false
+	}
+
 	j.BytesTotal = bytesTotal
+	return true
 }
 
 // GetState safely retrieves the current transfer state of a job.

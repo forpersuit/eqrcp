@@ -85,8 +85,7 @@ func (m *Manager) SetJobBytesTotal(id string, bytesTotal int64) error {
 		return fmt.Errorf("job %s not found", id)
 	}
 
-	job.SetBytesTotal(bytesTotal)
-	if cb != nil {
+	if changed := job.SetBytesTotal(bytesTotal); changed && cb != nil {
 		cb(job.Token, protocol.EventTransferProgress, job.ToEvent())
 	}
 	return nil

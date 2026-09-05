@@ -195,6 +195,7 @@ func TestTransferJobTerminalGuard(t *testing.T) {
 	_ = mgr.FailJob("job-completed", errors.New("late timeout"))
 	_ = mgr.CancelJob("job-completed")
 	_ = mgr.UpdateProgress("job-completed", 50)
+	_ = mgr.SetJobBytesTotal("job-completed", 9999)
 
 	if len(events) != eventsCountAfterComplete {
 		t.Fatalf("expected no new events on terminal Completed job, got %d events (was %d)", len(events), eventsCountAfterComplete)
@@ -206,6 +207,9 @@ func TestTransferJobTerminalGuard(t *testing.T) {
 	}
 	if jobC.Error != "" {
 		t.Fatalf("expected empty error on Completed job, got %s", jobC.Error)
+	}
+	if jobC.BytesTotal != 100 {
+		t.Fatalf("expected BytesTotal to remain 100, got %d", jobC.BytesTotal)
 	}
 
 	// 2. Terminal state: Failed
@@ -219,6 +223,7 @@ func TestTransferJobTerminalGuard(t *testing.T) {
 	_ = mgr.StartJob("job-failed")
 	_ = mgr.CancelJob("job-failed")
 	_ = mgr.UpdateProgress("job-failed", 20)
+	_ = mgr.SetJobBytesTotal("job-failed", 9999)
 
 	if len(events) != eventsCountAfterFail {
 		t.Fatalf("expected no new events on terminal Failed job, got %d events (was %d)", len(events), eventsCountAfterFail)
@@ -227,6 +232,9 @@ func TestTransferJobTerminalGuard(t *testing.T) {
 	jobF, _ := mgr.GetJob("job-failed")
 	if jobF.State != protocol.TransferFailed || jobF.Error != "first error" {
 		t.Fatalf("expected state to remain Failed with 'first error', got %s (%s)", jobF.State, jobF.Error)
+	}
+	if jobF.BytesTotal != 100 {
+		t.Fatalf("expected BytesTotal to remain 100, got %d", jobF.BytesTotal)
 	}
 
 	// 3. Terminal state: Cancelled
@@ -239,6 +247,7 @@ func TestTransferJobTerminalGuard(t *testing.T) {
 	_ = mgr.CompleteJob("job-cancelled")
 	_ = mgr.StartJob("job-cancelled")
 	_ = mgr.FailJob("job-cancelled", errors.New("timeout after cancel"))
+	_ = mgr.SetJobBytesTotal("job-cancelled", 9999)
 
 	if len(events) != eventsCountAfterCancel {
 		t.Fatalf("expected no new events on terminal Cancelled job, got %d events (was %d)", len(events), eventsCountAfterCancel)
@@ -247,5 +256,25 @@ func TestTransferJobTerminalGuard(t *testing.T) {
 	jobX, _ := mgr.GetJob("job-cancelled")
 	if jobX.State != protocol.TransferCancelled {
 		t.Fatalf("expected state to remain Cancelled, got %s", jobX.State)
+	}
+	if jobX.BytesTotal != 100 {
+		t.Fatalf("expected BytesTotal to remain 100, got %d", jobX.BytesTotal)
+	}
+
+	// 4. Non-terminal state: SetJobBytesTotal works normally
+	_ = mgr.CreateJob("token-guard", "job-active", "", "", "test.bin", 100)
+	_ = mgr.StartJob("job-active")
+	eventsCountBeforeActiveSet := len(events)
+
+	err := mgr.SetJobBytesTotal("job-active", 2048)
+	if err != nil {
+		t.Fatalf("unexpected error setting bytes total on active job: %v", err)
+	}
+	if len(events) != eventsCountBeforeActiveSet+1 {
+		t.Fatalf("expected 1 new progress event for active job, got %d (was %d)", len(events), eventsCountBeforeActiveSet)
+	}
+	jobA, _ := mgr.GetJob("job-active")
+	if jobA.BytesTotal != 2048 {
+		t.Fatalf("expected BytesTotal to be updated to 2048, got %d", jobA.BytesTotal)
 	}
 }
