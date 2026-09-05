@@ -929,10 +929,7 @@ function renderShareTransfer(task) {
                 </div>
             </div>
             
-            <div class="transfer-meta-row" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: -6px; padding-bottom: 8px; border-bottom: 1.2px solid var(--line); box-sizing: border-box; width: 100%;">
-                <div class="transfer-devices-badge" style="font-size: 13px; font-weight: 700; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;">
-                    👥 ${t('devices_count') || 'Devices'}: <span id="current-devices-count" style="color: var(--accent-strong); font-weight: 800;">${task.clientStates ? Object.keys(task.clientStates).length : 0}</span>
-                </div>
+            <div class="transfer-meta-row" style="display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: -6px; padding-bottom: 8px; border-bottom: 1.2px solid var(--line); box-sizing: border-box; width: 100%;">
                 <div style="display: flex; align-items: center; gap: 8px; position: relative;">
                     <span class="has-tooltip has-tooltip-bottom-left" data-tooltip="${escapeAttr(t('auto_stop_tooltip'))}" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); border-bottom: 1px dashed var(--text-muted); padding-bottom: 1px; cursor: help;">
                         ${t('auto_stop_label')}
@@ -1042,18 +1039,36 @@ function renderDeviceProgressHtml(task) {
 
         const scrollStyle = 'max-height: 220px; overflow-y: auto; overflow-x: hidden; border: 1.2px solid var(--line); padding: 8px; border-radius: 8px; box-sizing: border-box;';
 
+        const headerHtml = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <strong style="font-size: 12px; font-weight: 700; color: var(--text-secondary); margin: 0;">${t('devices_progress') || 'Transfer Progress'}</strong>
+                <div class="transfer-devices-badge" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;">
+                    ${t('devices_count') || 'Devices'}: <span id="current-devices-count" style="color: var(--accent-strong); font-weight: 800;">${task.clientStates ? Object.keys(task.clientStates).length : 0}</span>
+                </div>
+            </div>
+        `;
+
         deviceProgressHtml = `
             <div class="devices-progress-section" style="margin: 6px 0 14px 0; text-align: left; box-sizing: border-box; width: 100%;">
-                <strong style="display: block; font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px;">${t('devices_progress') || 'Transfer Progress'}</strong>
+                ${headerHtml}
                 <div class="devices-scroll-container" style="${scrollStyle}">
                     <ul style="list-style: none; padding: 0; margin: 0; width: 100%; overflow: hidden;">${listItems}</ul>
                 </div>
             </div>
         `;
     } else {
+        const headerHtml = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <strong style="font-size: 12px; font-weight: 700; color: var(--text-secondary); margin: 0;">${t('devices_progress') || 'Transfer Progress'}</strong>
+                <div class="transfer-devices-badge" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;">
+                    ${t('devices_count') || 'Devices'}: <span id="current-devices-count" style="color: var(--accent-strong); font-weight: 800;">${task.clientStates ? Object.keys(task.clientStates).length : 0}</span>
+                </div>
+            </div>
+        `;
+
         deviceProgressHtml = `
             <div class="devices-progress-section" style="margin: 6px 0 14px 0; text-align: left; box-sizing: border-box; width: 100%;">
-                <strong style="display: block; font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px;">${t('devices_progress') || 'Transfer Progress'}</strong>
+                ${headerHtml}
                 <div style="border: 1px dashed var(--line); border-radius: 6px; padding: 12px; text-align: center; color: var(--text-muted); font-size: 12px; font-weight: 500; box-sizing: border-box; width: 100%;">
                     ${t('no_devices_download')}
                 </div>
@@ -1235,10 +1250,7 @@ function renderReceiveTransfer(task) {
                 </div>
             </div>
 
-            <div class="transfer-meta-row" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: -6px; padding-bottom: 8px; border-bottom: 1.2px solid var(--line); box-sizing: border-box; width: 100%;">
-                <div class="transfer-devices-badge" style="font-size: 13px; font-weight: 700; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;">
-                    👥 ${t('devices_count') || 'Devices'}: <span id="current-devices-count" style="color: var(--accent-strong); font-weight: 800;">${task.clientStates ? Object.keys(task.clientStates).length : 0}</span>
-                </div>
+            <div class="transfer-meta-row" style="display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: -6px; padding-bottom: 8px; border-bottom: 1.2px solid var(--line); box-sizing: border-box; width: 100%;">
                 <div style="display: flex; align-items: center; gap: 8px; position: relative;">
                     <span class="has-tooltip has-tooltip-bottom-left" data-tooltip="${escapeAttr(t('auto_stop_tooltip'))}" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); border-bottom: 1px dashed var(--text-muted); padding-bottom: 1px; cursor: help;">
                         ${t('auto_stop_label')}
@@ -1270,11 +1282,16 @@ function renderReceiveDeviceProgressHtml(task) {
     const headerHtml = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
             <strong style="font-size: 12px; font-weight: 700; color: var(--text-secondary); margin: 0;">${t('devices_progress') || 'Transfer Progress'}</strong>
-            ${recvDir ? `
-                <button class="icon-button-mini path-link" data-open-path="${escapeAttr(recvDir)}" title="${escapeAttr(t('open_folder_title') || 'Open receive folder')}" style="padding: 4px; display: inline-flex; align-items: center; justify-content: center; height: 22px; width: 22px; min-height: unset; margin: 0;">
-                    ${openFolderIcon()}
-                </button>
-            ` : ''}
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <div class="transfer-devices-badge" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;">
+                    ${t('devices_count') || 'Devices'}: <span id="current-devices-count" style="color: var(--accent-strong); font-weight: 800;">${task.clientStates ? Object.keys(task.clientStates).length : 0}</span>
+                </div>
+                ${recvDir ? `
+                    <button class="icon-button-mini path-link" data-open-path="${escapeAttr(recvDir)}" title="${escapeAttr(t('open_folder_title') || 'Open receive folder')}" style="padding: 4px; display: inline-flex; align-items: center; justify-content: center; height: 22px; width: 22px; min-height: unset; margin: 0;">
+                        ${openFolderIcon()}
+                    </button>
+                ` : ''}
+            </div>
         </div>
     `;
     if (clients.length > 0) {
@@ -2252,9 +2269,10 @@ function renderSettingsPanel() {
                         <strong>${t('chat_download_dir')}</strong>
                         <span>${t('chat_download_dir_desc')}</span>
                     </div>
-                    <div class="setting-control-stack path-selector-wrapper" style="display: flex; gap: 8px; align-items: center; width: 220px; justify-content: flex-end;">
-                        <input type="text" id="settings-chat-download-dir" value="${escapeAttr(state.settings.chatDownloadDir || '')}" placeholder="${escapeAttr(t('choose_folder'))}" style="font-size: 12px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; width: 140px; box-sizing: border-box;" readonly />
-                        <button type="button" class="btn-mini secondary" id="btn-select-chat-download-dir" style="height: 26px; font-size: 11px; padding: 0 10px; border-radius: 6px; flex-shrink: 0;">${t('choose')}</button>
+                    <div class="setting-control-stack path-selector-wrapper" style="display: flex; gap: 6px; align-items: center; width: 240px; justify-content: flex-end;">
+                        <input type="text" id="settings-chat-download-dir" value="${escapeAttr(state.settings.chatDownloadDir || '')}" placeholder="${escapeAttr(t('choose_folder'))}" title="${escapeAttr(state.settings.chatDownloadDir || t('choose_folder'))}" style="font-size: 12px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; flex: 1; min-width: 0; box-sizing: border-box;" readonly />
+                        <button type="button" class="icon-button-mini" id="btn-select-chat-download-dir" title="${escapeAttr(t('choose'))}" aria-label="${escapeAttr(t('choose'))}" style="padding: 4px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;">${openFolderIcon()}</button>
+                        <button type="button" class="btn-mini secondary" id="btn-reset-chat-download-dir" style="height: 26px; font-size: 11px; padding: 0 8px; border-radius: 6px; flex-shrink: 0; white-space: nowrap; ${!state.settings?.chatDownloadDir ? 'opacity: 0.45; cursor: not-allowed;' : ''}" ${!state.settings?.chatDownloadDir ? 'disabled' : ''}>${t('btn_reset_default')}</button>
                     </div>
                 </div>
                 <div class="setting-row" style="display: none;">
@@ -3787,6 +3805,23 @@ function bindEvents() {
                     }
                 }).catch(err => {
                     console.error('Failed to select chat download directory:', err);
+                });
+                return;
+            }
+            if (e.target.closest('#btn-reset-chat-download-dir')) {
+                const input = document.querySelector('#settings-chat-download-dir');
+                if (input) {
+                    input.value = '';
+                }
+                if (state.settings) {
+                    state.settings.chatDownloadDir = '';
+                }
+                syncSettingsFromDOM();
+                handleAutoSaveSettings().then(() => {
+                    syncPanelSurface();
+                }).catch(err => {
+                    console.error('Failed to auto-save settings on reset:', err);
+                    syncPanelSurface();
                 });
                 return;
             }

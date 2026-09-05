@@ -1010,7 +1010,11 @@
             if (badgeEl && valEl && cid) {
                 badgeEl.style.display = 'inline-flex';
                 var shortId = cid.length > 4 ? cid.substring(cid.length - 4) : cid;
-                var devName = deviceName || 'Device';
+                var devName = (deviceName || 'Device').trim();
+                while (/\s*\([^)]*\)$/.test(devName)) {
+                    devName = devName.replace(/\s*\([^)]*\)$/, '').trim();
+                }
+                if (!devName) devName = 'Device';
                 valEl.innerText = devName + ' (' + shortId + ')';
             }
         }
