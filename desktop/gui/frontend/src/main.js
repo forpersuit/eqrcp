@@ -850,7 +850,54 @@ function updateQRDOMAndButtonUI(task, wrapperId) {
     }
 }
 
+function getLockedSummaryText(task) {
+    const paths = task.paths || [];
+    const totalFilesCount = paths.length;
+    let totalSizeBytes = 0;
+    let hasAnySize = false;
+    paths.forEach(p => {
+        const info = state.fileInfoCache?.[p];
+        if (info && typeof info.sizeBytes === 'number' && info.sizeBytes > 0) {
+            totalSizeBytes += info.sizeBytes;
+            hasAnySize = true;
+        }
+    });
+    if (!hasAnySize && task.bytesTotal > 0) {
+        totalSizeBytes = task.bytesTotal;
+        hasAnySize = true;
+    }
+    const formattedTotalSize = hasAnySize ? formatBytes(totalSizeBytes) : '';
+    return formattedTotalSize
+        ? t('share_total_summary', { count: totalFilesCount, size: formattedTotalSize })
+        : t('share_total_count_only', { count: totalFilesCount });
+}
+
+function ensureTaskFileInfoCache(task) {
+    if (!task || !task.paths || !task.paths.length) return;
+    state.fileInfoCache = state.fileInfoCache || {};
+    const missingPaths = task.paths.filter(p => !state.fileInfoCache[p]);
+    if (missingPaths.length > 0 && typeof GetFileInfos === 'function') {
+        GetFileInfos(missingPaths).then(infos => {
+            if (infos && infos.length > 0) {
+                let updated = false;
+                infos.forEach(info => {
+                    if (info && info.path) {
+                        state.fileInfoCache[info.path] = info;
+                        updated = true;
+                    }
+                });
+                if (updated) {
+                    updateShareTransferActiveUI(task);
+                }
+            }
+        }).catch(err => {
+            console.warn('[ensureTaskFileInfoCache] Failed to get file infos:', err);
+        });
+    }
+}
+
 function renderShareTransfer(task) {
+    ensureTaskFileInfoCache(task);
     const qrImage = getTaskQRImage(task);
 
     const isQRExpanded = isTaskQRExpanded(task);
@@ -906,7 +953,12 @@ function renderShareTransfer(task) {
             <div id="devices-progress-wrapper">${renderDeviceProgressHtml(task)}</div>
 
             <div class="locked-list">
-                <strong>${t('locked_list')}</strong>
+                <div class="locked-list-head" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <strong style="font-size: 13px; font-weight: 700; color: var(--text-primary);">${t('locked_list')}</strong>
+                    <span id="locked-list-summary" class="share-summary-badge" style="font-size: 12px; color: var(--text-secondary); font-weight: 600; padding: 3px 8px; background: rgba(0,0,0,0.03); border-radius: 6px; border: 1px solid var(--line); white-space: nowrap;">
+                        ${escapeHTML(getLockedSummaryText(task))}
+                    </span>
+                </div>
                 <ul class="path-list locked" id="share-locked-path-list">${renderShareLockedPathsHtml(task)}</ul>
             </div>
             ${task.error ? `<div class="notice error compact">${escapeHTML(formatErrorMessage(task.error))}</div>` : ''}
@@ -1017,6 +1069,8 @@ function renderShareLockedPathsHtml(task) {
         const statusText = shareItemStatus(task, path, index);
         const isCompleted = statusText.startsWith('✓');
         const colorStyle = isCompleted ? 'color: var(--accent, #156f5a);' : 'color: var(--text-secondary);';
+        const fileInfo = state.fileInfoCache?.[path];
+        const fileSize = fileInfo?.size || '';
         return `
         <li>
             <div style="width: 100%; box-sizing: border-box; min-width: 0;">
@@ -1027,7 +1081,8 @@ function renderShareLockedPathsHtml(task) {
                         </div>
                         <span style="display: block; font-size: 11px; color: var(--text-secondary); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHTML(path)}</span>
                     </div>
-                    <div style="flex: 0 0 auto; text-align: right; min-width: 0; margin-left: 8px;">
+                    <div style="flex: 0 0 auto; text-align: right; min-width: 0; margin-left: 8px; display: flex; align-items: center; gap: 8px;">
+                        ${fileSize ? `<span class="file-size-badge" style="font-size: 12px; color: var(--text-secondary); font-weight: 500; white-space: nowrap;">${escapeHTML(fileSize)}</span>` : ''}
                         <span class="item-status" style="font-size: 12px; font-weight: 600; ${colorStyle} white-space: nowrap;">
                             ${escapeHTML(statusText)}
                         </span>
@@ -1040,6 +1095,8 @@ function renderShareLockedPathsHtml(task) {
 }
 
 function updateShareTransferActiveUI(task) {
+    ensureTaskFileInfoCache(task);
+
     // 1. 传输状态文字
     const statusH2 = document.querySelector('.transfer-stage .transfer-head h2');
     if (statusH2) {
@@ -1074,6 +1131,10 @@ function updateShareTransferActiveUI(task) {
     const pathList = document.getElementById('share-locked-path-list');
     if (pathList) {
         pathList.innerHTML = renderShareLockedPathsHtml(task);
+    }
+    const summaryEl = document.getElementById('locked-list-summary');
+    if (summaryEl) {
+        summaryEl.textContent = getLockedSummaryText(task);
     }
 
     // 6. 更新 quota 倒计时 (如果有的话)
@@ -3271,7 +3332,9 @@ function bindEvents() {
             if (restoreBtn) {
                 const taskId = parseInt(restoreBtn.dataset.taskId, 10);
                 if (taskId) {
-                    restoreSharePaths(taskId);
+                    restoreSharePaths(taskId).catch(err => {
+                        console.error('[restoreSharePaths] Failed:', err);
+                    });
                 }
                 return;
             }
@@ -4648,6 +4711,12 @@ async function startShare() {
     await run(async () => {
         await saveSettingsData();
         const paths = state.sharePaths.map(item => typeof item === 'string' ? item : item.path);
+        state.fileInfoCache = state.fileInfoCache || {};
+        state.sharePaths.forEach(item => {
+            if (item && typeof item === 'object' && item.path) {
+                state.fileInfoCache[item.path] = item;
+            }
+        });
         state.status = await Share(paths);
         state.sharePaths = [];
         state.shareLimitNotice = '';
@@ -5073,7 +5142,7 @@ async function repeatTask(event) {
     });
 }
 
-function restoreSharePaths(taskId) {
+async function restoreSharePaths(taskId) {
     const history = state.status?.history || [];
     const task = history.find(t => t.id === taskId);
     if (!task) return;
@@ -5081,28 +5150,18 @@ function restoreSharePaths(taskId) {
     const paths = task.paths || [];
     if (!paths.length) return;
     
+    const rawPaths = paths.map(p => typeof p === 'string' ? p : p.path).filter(Boolean);
+    if (!rawPaths.length) return;
+    
     if (!state.sharePaths) {
         state.sharePaths = [];
     }
-    
-    let addedCount = 0;
-    paths.forEach(p => {
-        const pathStr = typeof p === 'string' ? p : p.path;
-        if (!pathStr) return;
-        
-        const exists = state.sharePaths.some(item => {
-            const itemPath = typeof item === 'string' ? item : item.path;
-            return itemPath === pathStr;
-        });
-        
-        if (!exists) {
-            state.sharePaths.push(pathStr);
-            addedCount++;
-        }
-    });
+    const prevCount = state.sharePaths.length;
+    await addSharePaths(rawPaths);
+    const newCount = state.sharePaths.length;
+    const addedCount = newCount - prevCount;
     
     setMode('share');
-    state.shareLimitNotice = '';
     
     if (addedCount > 0) {
         state.notice = t('share_restored_success', { count: addedCount });
@@ -5626,6 +5685,12 @@ async function addSharePaths(paths) {
     try {
         const infos = await GetFileInfos(paths.filter(Boolean));
         if (infos && infos.length > 0) {
+            state.fileInfoCache = state.fileInfoCache || {};
+            infos.forEach(item => {
+                if (item && item.path) {
+                    state.fileInfoCache[item.path] = item;
+                }
+            });
             const currentMap = new Map();
             state.sharePaths.forEach(item => {
                 const p = typeof item === 'string' ? item : item.path;

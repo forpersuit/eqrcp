@@ -1,6 +1,7 @@
 export const state = {
     mode: 'share',
     sharePaths: [],
+    fileInfoCache: {},
     shareLimitNotice: '',
     receiveDir: '',
     chatSaveDir: '',
