@@ -307,12 +307,14 @@ func TestGUIAgentRunTaskEnableTLSFallbackToHTTP(t *testing.T) {
 	}()
 
 	var srv *server.Server
-	for i := 0; i < 20; i++ {
+	var currentTask *TaskRecord
+	for i := 0; i < 30; i++ {
 		time.Sleep(50 * time.Millisecond)
 		agent.mu.Lock()
 		srv = agent.activeServer
+		currentTask = agent.current
 		agent.mu.Unlock()
-		if srv != nil {
+		if srv != nil && currentTask != nil && strings.HasPrefix(currentTask.QRCode, "data:image/png;base64,") {
 			break
 		}
 	}
@@ -324,7 +326,7 @@ func TestGUIAgentRunTaskEnableTLSFallbackToHTTP(t *testing.T) {
 		t.Fatalf("expected HTTP URL after fallback, got: %s", srv.SendURL)
 	}
 	agent.mu.Lock()
-	currentTask := agent.current
+	currentTask = agent.current
 	agent.mu.Unlock()
 	if currentTask == nil || !strings.HasPrefix(currentTask.QRCode, "data:image/png;base64,") {
 		t.Fatalf("expected offline Base64 QRCode on current task, got: %v", currentTask)

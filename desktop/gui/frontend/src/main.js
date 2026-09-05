@@ -874,6 +874,7 @@ function getLockedSummaryText(task) {
 
 function ensureTaskFileInfoCache(task) {
     if (!task || !task.paths || !task.paths.length) return;
+    const targetTaskId = task.id;
     state.fileInfoCache = state.fileInfoCache || {};
     const missingPaths = task.paths.filter(p => !state.fileInfoCache[p]);
     if (missingPaths.length > 0 && typeof GetFileInfos === 'function') {
@@ -887,7 +888,11 @@ function ensureTaskFileInfoCache(task) {
                     }
                 });
                 if (updated) {
-                    updateShareTransferActiveUI(task);
+                    const currentActive = activeShareTask();
+                    // Freshness guard: only mutate active DOM if task is still the currently visible active share task
+                    if (currentActive && targetTaskId && currentActive.id === targetTaskId) {
+                        updateShareTransferActiveUI(currentActive);
+                    }
                 }
             }
         }).catch(err => {

@@ -1011,8 +1011,15 @@
                 badgeEl.style.display = 'inline-flex';
                 var shortId = cid.length > 4 ? cid.substring(cid.length - 4) : cid;
                 var devName = (deviceName || 'Device').trim();
-                while (/\s*\([^)]*\)$/.test(devName)) {
-                    devName = devName.replace(/\s*\([^)]*\)$/, '').trim();
+                // Only strip matching shortId suffixes (e.g. " (5e77)") to preserve user custom names like "iPhone (Work)"
+                var suffixWithSpace = ' (' + shortId + ')';
+                var suffixNoSpace = '(' + shortId + ')';
+                while (devName.endsWith(suffixWithSpace) || devName.endsWith(suffixNoSpace)) {
+                    if (devName.endsWith(suffixWithSpace)) {
+                        devName = devName.slice(0, -suffixWithSpace.length).trim();
+                    } else {
+                        devName = devName.slice(0, -suffixNoSpace.length).trim();
+                    }
                 }
                 if (!devName) devName = 'Device';
                 valEl.innerText = devName + ' (' + shortId + ')';
