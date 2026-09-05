@@ -116,12 +116,13 @@ export class ChatWebSocketClient {
     this.clientToken = savedToken;
     localStorage.setItem('chat_token', savedToken);
 
-    // Page visibility: Desktop stays active continuously; Mobile actively closes socket with 1000 page_hidden
-    // on backgrounding to avoid OS timer throttling/half-open socket lag, and reconnects immediately on foreground.
+    // Page visibility: Desktop and mobile clients remain connected continuously on page hidden
+    // (preventing disconnect interruptions when picking files, browsing photos, or switching apps briefly).
+    // On foreground visible, we probe socket liveness or reconnect if the connection was dropped by the OS.
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
-          // Desktop GUI host stays active when minimized or hidden; never close connection actively.
+          // Never close connection actively on page hidden unless policy dictates.
           if (!shouldCloseSocketOnHidden(this.clientPeer)) {
             return;
           }

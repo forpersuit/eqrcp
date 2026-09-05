@@ -15,11 +15,15 @@ function assert(cond: boolean, msg: string): void {
   if (!cond) throw new Error(msg);
 }
 
-// 1. Peer-specific visibility hidden tests
+// 1. Peer-specific visibility hidden tests (all peers keep socket connected on hidden)
+assert(isDesktopPeer('desktop') === true, 'desktop peer matches');
+assert(isDesktopPeer(' Desktop ') === true, 'desktop peer case-insensitive and trimmed');
+assert(isDesktopPeer('mobile') === false, 'mobile peer is not desktop');
 assert(shouldCloseSocketOnHidden('desktop') === false, 'desktop host must NOT actively close WS on hidden');
 assert(shouldCloseSocketOnHidden('Desktop') === false, 'desktop host case-insensitive check');
-assert(shouldCloseSocketOnHidden('mobile') === true, 'mobile client must actively suspend WS on hidden');
-assert(shouldCloseSocketOnHidden('web') === true, 'web browser client must actively suspend WS on hidden');
+assert(shouldCloseSocketOnHidden('mobile') === false, 'mobile client keeps WS connected on hidden (e.g. file picker)');
+assert(shouldCloseSocketOnHidden('web') === false, 'web browser client keeps WS connected on hidden');
+assert(shouldCloseSocketOnHidden(null) === false, 'null peer keeps WS connected on hidden');
 
 // 2. Visible foreground reconnect tests
 assert(

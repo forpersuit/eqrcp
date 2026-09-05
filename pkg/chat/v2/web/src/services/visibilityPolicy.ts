@@ -7,9 +7,11 @@ export function isDesktopPeer(peer?: string | null): boolean {
   return (peer || '').trim().toLowerCase() === 'desktop';
 }
 
-/** When page becomes hidden: Desktop GUI stays connected continuously; Mobile/web actively suspends socket. */
-export function shouldCloseSocketOnHidden(peer?: string | null): boolean {
-  return !isDesktopPeer(peer);
+/** When page becomes hidden: all clients (desktop, mobile, web) remain connected without actively closing WebSocket,
+ * preventing accidental disconnects during file selection, photo album pickers, notification shade pull-downs, or brief app switching.
+ */
+export function shouldCloseSocketOnHidden(_peer?: string | null): boolean {
+  return false;
 }
 
 /** When page becomes visible again, determine whether to trigger automatic reconnect.

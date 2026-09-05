@@ -277,3 +277,16 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
   - 若外层卡片（如 `.dropzone-box:hover`）定义了背景变深或位移，轻触按钮会导致整个大卡片变色上浮，产生“阴影效果超出按钮”的严重失真；
   - 包含位移与背景色的 `:hover` 样式必须统一封装在 `@media (hover: hover) and (pointer: fine)` 媒体查询中，触控端仅保留按钮自身的 `:active { transform: translateY(1px) scale(0.98); box-shadow: ...; }` 精准微动反馈。
 
+---
+
+## 16. 移动端 Chat WebSocket 生命周期与轻量切后台保活规范 (Mobile Chat WebSocket Lifecycle & Background Keep-Alive)
+
+- **选文件与轻量切换绝不主动断开 WebSocket**：
+  - 移动端在调起系统文件管理器、相册选择器（`<input type="file">`），或用户下拉通知栏、多任务手势切出数秒时，浏览器均会触发 `visibilitychange` (`document.visibilityState === 'hidden'`)。
+  - **红线规则**：`shouldCloseSocketOnHidden` 必须对所有终端（desktop, mobile, web）恒返回 `false`，严禁在 `hidden` 时主动调用 `ws.close(1000, "page_hidden")`。否则用户每次发文件、选图片都会触发 socket 断开，向聊天室广播“已断开连接”，破坏正常会话心智。
+- **息屏断网被动恢复与探针自愈机制**：
+  - 在手机深度息屏、系统休眠或底层网络被 OS 掐断后，连接在系统级被动断开；
+  - 当用户唤醒手机返回前台时（`document.visibilityState === 'visible'`）：
+    - 若现有 Socket 处于 `OPEN` 状态，立即发出毫秒级探针 `hb-probe-${timestamp}` 验证对端存活性；
+    - 若 Socket 已被 OS 切断（`CLOSED` / `CLOSING`），`shouldReconnectOnVisible` 立即触发自愈重连，兼顾后台选文件保活体验与深度休眠后的稳定恢复。
+
