@@ -1162,32 +1162,31 @@
                 {:else if msg.type === 'file'}
                   <div class="bubble-content">
                     <div class="attachment-card file-attachment">
-                      {#if isImageFile(msg) && token && !msg.uploading && (!ulTx || ulTx.state !== 'running')}
-                        <div class="image-preview-wrapper" style="margin-bottom: 8px; width: 100%;">
+                      <div class="file-card">
+                        {#if isImageFile(msg) && token && !msg.uploading && (!ulTx || ulTx.state !== 'running')}
                           <button
                             type="button"
-                            class="image-preview-btn"
+                            class="file-icon file-icon-thumbnail"
                             on:click={(e) => handleImagePreviewClick(e, msg)}
                             title={getTranslation('viewOriginal', currentLang)}
-                            style="background: none; border: none; padding: 0; margin: 0; cursor: pointer; display: block; width: 100%; border-radius: 8px; overflow: hidden; text-align: left;"
+                            aria-label={getTranslation('viewOriginal', currentLang)}
                           >
+                            <span class="file-icon-fallback" aria-hidden="true">FILE</span>
                             <img
                               src={getImageInlineUrl(token, msg.id)}
                               alt={msg.fileName || 'image'}
-                              class="inline-image-preview"
+                              class="file-thumbnail-img"
                               loading="lazy"
-                              style="display: block; width: 100%; max-width: 280px; max-height: 220px; object-fit: cover; border-radius: 8px; border: 1px solid rgba(0, 0, 0, 0.06); transition: opacity 0.2s ease, transform 0.2s ease;"
                               on:error={(e) => {
-                                if (e.currentTarget instanceof HTMLElement && e.currentTarget.parentElement) {
-                                  e.currentTarget.parentElement.style.display = 'none';
+                                if (e.currentTarget instanceof HTMLElement) {
+                                  e.currentTarget.style.display = 'none';
                                 }
                               }}
                             />
                           </button>
-                        </div>
-                      {/if}
-                      <div class="file-card">
-                        <div class="file-icon">FILE</div>
+                        {:else}
+                          <div class="file-icon">FILE</div>
+                        {/if}
                         <div class="file-details">
                           <div class="file-name" title={msg.fileName}>{msg.fileName}</div>
                           <div class="file-subtitle">

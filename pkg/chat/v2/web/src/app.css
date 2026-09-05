@@ -1039,6 +1039,39 @@ button.file-card:hover {
     min-height: 42px;
     width: 42px;
 }
+.file-icon-thumbnail {
+    border: none;
+    cursor: pointer;
+    overflow: hidden;
+    padding: 0;
+    position: relative;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.file-icon-thumbnail:hover {
+    opacity: 0.9;
+    transform: scale(1.02);
+}
+.file-icon-fallback {
+    align-items: center;
+    color: var(--danger);
+    display: flex;
+    font-size: 11px;
+    font-weight: var(--font-weight-title, 700);
+    inset: 0;
+    justify-content: center;
+    letter-spacing: 0.04em;
+    position: absolute;
+    z-index: 1;
+}
+.file-thumbnail-img {
+    border-radius: 10px;
+    display: block;
+    height: 100%;
+    object-fit: cover;
+    position: relative;
+    width: 100%;
+    z-index: 2;
+}
 .file-name {
     color: var(--ink);
     display: -webkit-box;
