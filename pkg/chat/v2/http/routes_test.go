@@ -1595,6 +1595,22 @@ func TestInlineBandwidthThrottlingOnFreeSession(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
 	}
+
+	// Verify bandwidth scheduler actually throttled the inline request (N4)
+	var foundThrottledLog bool
+	for _, ev := range logger.Events() {
+		if ev.Message == "bandwidth rate allocated" {
+			for _, f := range ev.Fields {
+				if f.Key == "jobID" && strings.HasPrefix(fmt.Sprintf("%v", f.Value), "inline-dl-msg-large-img-") {
+					foundThrottledLog = true
+					break
+				}
+			}
+		}
+	}
+	if !foundThrottledLog {
+		t.Fatal("expected bandwidth scheduler to allocate throttled rate for inline download on free session")
+	}
 }
 
 func TestRendezvousTimeoutReturns504BeforeHeaders(t *testing.T) {
@@ -1641,5 +1657,168 @@ func TestRendezvousTimeoutReturns504BeforeHeaders(t *testing.T) {
 
 	if respInteractive.StatusCode != http.StatusGatewayTimeout {
 		t.Fatalf("expected 504 Gateway Timeout on interactive rendezvous timeout, got %d", respInteractive.StatusCode)
+	}
+
+	// Verify the interactive transfer Job reached TransferFailed terminal state (N1)
+	job, err := handler.transfer.GetJob("dl-msg-no-streamer-timeout-client")
+	if err != nil {
+		t.Fatalf("expected transfer job to exist after timeout, got error: %v", err)
+	}
+	if job.State != protocol.TransferFailed {
+		t.Fatalf("expected transfer job state to be TransferFailed after timeout, got: %s", job.State)
+	}
+}
+
+func TestRendezvousStreamingE2ESuccess(t *testing.T) {
+	logger := &diag.MemoryLogger{}
+	handler := NewHandler(Config{
+		BasePath:              "/chat-v2",
+		Logger:                logger,
+		DisableSystemMessages: true,
+	})
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	token := "token-rdv-e2e"
+	sess := handler.sessions.GetOrCreate(token)
+
+	// Register message in store
+	testPayload := []byte("Hello Duplex Rendezvous Streaming Pipeline! 0123456789")
+	msgID := "msg-duplex-stream-1"
+	sess.MessageStore.Add(protocol.EventEnvelope{
+		Type: protocol.EventMessageAdded,
+		Message: &protocol.Message{
+			ID:       msgID,
+			Type:     "file",
+			FileName: "duplex.dat",
+			Size:     int64(len(testPayload)),
+		},
+	})
+
+	// 1. Connect Bob via WebSocket to act as the web sender
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/chat-v2/" + token + "/ws"
+	connBob, _, err := websocket.Dial(ctx, wsURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer connBob.Close(websocket.StatusNormalClosure, "done")
+
+	// Read initial hello and send connect
+	var helloB protocol.EventEnvelope
+	if err := wsjson.Read(ctx, connBob, &helloB); err != nil {
+		t.Fatal(err)
+	}
+	if err := wsjson.Write(ctx, connBob, protocol.CommandEnvelope{
+		Type:      protocol.CommandConnect,
+		CommandID: "conn-bob",
+		Client:    protocol.ClientInfo{Label: "Bob", Peer: "peer-bob"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Read connect ack & flush presence
+	for i := 0; i < 2; i++ {
+		var ev protocol.EventEnvelope
+		if err := wsjson.Read(ctx, connBob, &ev); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// 2. Track transfer job events for Alice
+	var jobEvents []protocol.EventType
+	handler.transfer.RegisterCallback(func(tok string, et protocol.EventType, ev protocol.TransferEvent) {
+		if ev.ID == "dl-"+msgID+"-peer-alice" {
+			jobEvents = append(jobEvents, et)
+		}
+	})
+
+	// 3. Alice initiates interactive GET download in background
+	getURL := fmt.Sprintf("%s/chat-v2/%s/files/%s?clientId=peer-alice&messageId=%s", server.URL, token, msgID, msgID)
+	downloadResultChan := make(chan []byte, 1)
+	downloadErrChan := make(chan error, 1)
+
+	go func() {
+		resp, err := http.Get(getURL)
+		if err != nil {
+			downloadErrChan <- err
+			return
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			downloadErrChan <- fmt.Errorf("unexpected status: %d", resp.StatusCode)
+			return
+		}
+		data, err := io.ReadAll(resp.Body)
+		if err != nil {
+			downloadErrChan <- err
+			return
+		}
+		downloadResultChan <- data
+	}()
+
+	// 4. Bob receives EventRequestFileData via WebSocket
+	var reqEvent protocol.EventEnvelope
+	for {
+		if err := wsjson.Read(ctx, connBob, &reqEvent); err != nil {
+			t.Fatalf("failed reading websocket event: %v", err)
+		}
+		if reqEvent.Type == protocol.EventRequestFileData && reqEvent.Message != nil && reqEvent.Message.ID == msgID {
+			break
+		}
+	}
+
+	// 5. Bob posts stream data to /upload/stream?messageId=xxx
+	uploadURL := fmt.Sprintf("%s/chat-v2/%s/upload/stream?messageId=%s", server.URL, token, msgID)
+	postResp, err := http.Post(uploadURL, "application/octet-stream", bytes.NewReader(testPayload))
+	if err != nil {
+		t.Fatalf("failed posting upload stream: %v", err)
+	}
+	defer postResp.Body.Close()
+	if postResp.StatusCode != http.StatusOK {
+		postBody, _ := io.ReadAll(postResp.Body)
+		t.Fatalf("upload stream failed with %d: %s", postResp.StatusCode, string(postBody))
+	}
+
+	// 6. Wait for Alice to finish download
+	select {
+	case dlData := <-downloadResultChan:
+		if !bytes.Equal(dlData, testPayload) {
+			t.Fatalf("data mismatch: got %q, want %q", string(dlData), string(testPayload))
+		}
+	case dlErr := <-downloadErrChan:
+		t.Fatalf("download failed: %v", dlErr)
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for Alice download completion")
+	}
+
+	// 7. Verify Alice job state machine: queued -> started -> completed
+	job, err := handler.transfer.GetJob("dl-" + msgID + "-peer-alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job.State != protocol.TransferCompleted {
+		t.Fatalf("expected job state to be TransferCompleted, got %s", job.State)
+	}
+	if job.BytesDone != int64(len(testPayload)) {
+		t.Fatalf("expected job BytesDone %d, got %d", len(testPayload), job.BytesDone)
+	}
+
+	// Verify events sequence contains queued, started, completed
+	var hasQueued, hasStarted, hasCompleted bool
+	for _, et := range jobEvents {
+		if et == protocol.EventTransferQueued {
+			hasQueued = true
+		}
+		if et == protocol.EventTransferStarted {
+			hasStarted = true
+		}
+		if et == protocol.EventTransferCompleted {
+			hasCompleted = true
+		}
+	}
+	if !hasQueued || !hasStarted || !hasCompleted {
+		t.Fatalf("expected queued, started, completed events, got: %v", jobEvents)
 	}
 }

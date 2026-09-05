@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"eqt/pkg/chat/v2/bandwidth"
@@ -17,6 +18,8 @@ import (
 	"eqt/pkg/chat/v2/protocol"
 	"eqt/pkg/chat/v2/transfer"
 )
+
+var inlineThrottleSeq uint64
 
 // handleDownload processes native HTTP file download requests, tracking server-side write progress.
 func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request, token string, fileID string, fields ...diag.Field) {
@@ -111,6 +114,21 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request, token s
 		w.Header().Del("Expires")
 	}
 
+	// In interactive mode (!isInline), register the Job BEFORE any blocking operations (e.g. rendezvous wait).
+	// This ensures the client immediately transitions to 'queued', and guarantees deterministic terminal states
+	// (started -> completed, or failed/cancelled) across all exit paths (N1).
+	var jobID string
+	if !isInline {
+		jobID = "dl-" + fileID
+		if clientID != "" {
+			jobID = "dl-" + fileID + "-" + clientID
+		}
+		job, err := h.transfer.GetJob(jobID)
+		if err != nil || job.State == protocol.TransferCancelled || job.State == protocol.TransferFailed || job.State == protocol.TransferCompleted {
+			h.transfer.CreateJob(token, jobID, messageID, clientID, filename, size)
+		}
+	}
+
 	// 1. Evaluate stream source readiness BEFORE sending HTTP 200 OK headers (F2)
 	var (
 		sourceReader      io.Reader
@@ -175,15 +193,14 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request, token s
 			}
 		case <-r.Context().Done():
 			diag.Emit(r.Context(), h.logger, diag.LevelWarn, "Download context canceled", nil, append(fields, diag.F("messageID", fileID))...)
+			if jobID != "" {
+				_ = h.transfer.CancelJob(jobID)
+			}
 			return
 		case <-time.After(timeout):
 			diag.Emit(r.Context(), h.logger, diag.LevelWarn, "Timed out waiting for sender file stream", nil, append(fields, diag.F("messageID", fileID))...)
-			if !isInline {
-				timeoutJobID := "dl-" + fileID
-				if clientID != "" {
-					timeoutJobID = "dl-" + fileID + "-" + clientID
-				}
-				_ = h.transfer.FailJob(timeoutJobID, fmt.Errorf("timeout waiting for sender stream"))
+			if jobID != "" {
+				_ = h.transfer.FailJob(jobID, fmt.Errorf("timeout waiting for sender stream"))
 			}
 			diag.WriteError(w, r, h.logger, diag.NewError(protocol.ErrorInternal, http.StatusGatewayTimeout, "timed out waiting for sender file stream"), fields...)
 			return
@@ -195,31 +212,25 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request, token s
 	w.Header().Set("Content-Type", contentType)
 	w.WriteHeader(http.StatusOK)
 
-	// 3. Bandwidth throttling registration (F1):
+	// Transition interactive job to started state once data transfer begins
+	if jobID != "" {
+		_ = h.transfer.StartJob(jobID)
+	}
+
+	// 3. Bandwidth throttling registration (F1 & N2):
 	// Both inline and interactive downloads adhere to session bandwidth limits.
+	// Inline requests append an atomic sequence number to guarantee unique scheduler job IDs
+	// and prevent concurrent transfers from clobbering each other's rate caps.
 	throttleID := "dl-" + fileID
 	if clientID != "" {
 		throttleID = "dl-" + fileID + "-" + clientID
 	}
 	if isInline {
-		throttleID = "inline-" + throttleID
+		seq := atomic.AddUint64(&inlineThrottleSeq, 1)
+		throttleID = fmt.Sprintf("inline-%s-%d", throttleID, seq)
 	}
 	h.scheduler.RegisterJob(throttleID, h.attachmentUnrestricted())
 	defer h.scheduler.UnregisterJob(throttleID)
-
-	// 4. Transfer Job tracking: interactive downloads only, zero job jitter for inline media (F2')
-	var jobID string
-	if !isInline {
-		jobID = "dl-" + fileID
-		if clientID != "" {
-			jobID = "dl-" + fileID + "-" + clientID
-		}
-		job, err := h.transfer.GetJob(jobID)
-		if err != nil || job.State == protocol.TransferCancelled || job.State == protocol.TransferFailed || job.State == protocol.TransferCompleted {
-			h.transfer.CreateJob(token, jobID, messageID, clientID, filename, size)
-		}
-		_ = h.transfer.StartJob(jobID)
-	}
 
 	startTime := time.Now()
 	pw := &progressWriter{
