@@ -174,3 +174,78 @@ func TestTransferFailureAndCancellation(t *testing.T) {
 		t.Fatalf("cancel job mismatch: State = %s, Error = %s", job2.State, job2.Error)
 	}
 }
+
+func TestTransferJobTerminalGuard(t *testing.T) {
+	mgr := NewManager()
+
+	var events []protocol.TransferEvent
+	mgr.RegisterCallback(func(token string, et protocol.EventType, ev protocol.TransferEvent) {
+		events = append(events, ev)
+	})
+
+	// 1. Terminal state: Completed
+	_ = mgr.CreateJob("token-guard", "job-completed", "", "", "test.bin", 100)
+	_ = mgr.StartJob("job-completed")
+	_ = mgr.CompleteJob("job-completed")
+
+	eventsCountAfterComplete := len(events)
+
+	// Attempt illegal transitions on completed job
+	_ = mgr.StartJob("job-completed")
+	_ = mgr.FailJob("job-completed", errors.New("late timeout"))
+	_ = mgr.CancelJob("job-completed")
+	_ = mgr.UpdateProgress("job-completed", 50)
+
+	if len(events) != eventsCountAfterComplete {
+		t.Fatalf("expected no new events on terminal Completed job, got %d events (was %d)", len(events), eventsCountAfterComplete)
+	}
+
+	jobC, _ := mgr.GetJob("job-completed")
+	if jobC.State != protocol.TransferCompleted {
+		t.Fatalf("expected state to remain Completed, got %s", jobC.State)
+	}
+	if jobC.Error != "" {
+		t.Fatalf("expected empty error on Completed job, got %s", jobC.Error)
+	}
+
+	// 2. Terminal state: Failed
+	_ = mgr.CreateJob("token-guard", "job-failed", "", "", "test.bin", 100)
+	_ = mgr.FailJob("job-failed", errors.New("first error"))
+
+	eventsCountAfterFail := len(events)
+
+	// Attempt illegal transitions on failed job
+	_ = mgr.CompleteJob("job-failed")
+	_ = mgr.StartJob("job-failed")
+	_ = mgr.CancelJob("job-failed")
+	_ = mgr.UpdateProgress("job-failed", 20)
+
+	if len(events) != eventsCountAfterFail {
+		t.Fatalf("expected no new events on terminal Failed job, got %d events (was %d)", len(events), eventsCountAfterFail)
+	}
+
+	jobF, _ := mgr.GetJob("job-failed")
+	if jobF.State != protocol.TransferFailed || jobF.Error != "first error" {
+		t.Fatalf("expected state to remain Failed with 'first error', got %s (%s)", jobF.State, jobF.Error)
+	}
+
+	// 3. Terminal state: Cancelled
+	_ = mgr.CreateJob("token-guard", "job-cancelled", "", "", "test.bin", 100)
+	_ = mgr.CancelJob("job-cancelled")
+
+	eventsCountAfterCancel := len(events)
+
+	// Attempt illegal transitions on cancelled job
+	_ = mgr.CompleteJob("job-cancelled")
+	_ = mgr.StartJob("job-cancelled")
+	_ = mgr.FailJob("job-cancelled", errors.New("timeout after cancel"))
+
+	if len(events) != eventsCountAfterCancel {
+		t.Fatalf("expected no new events on terminal Cancelled job, got %d events (was %d)", len(events), eventsCountAfterCancel)
+	}
+
+	jobX, _ := mgr.GetJob("job-cancelled")
+	if jobX.State != protocol.TransferCancelled {
+		t.Fatalf("expected state to remain Cancelled, got %s", jobX.State)
+	}
+}

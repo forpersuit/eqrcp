@@ -1822,3 +1822,103 @@ func TestRendezvousStreamingE2ESuccess(t *testing.T) {
 		t.Fatalf("expected queued, started, completed events, got: %v", jobEvents)
 	}
 }
+
+func TestRendezvousClientCancellation(t *testing.T) {
+	logger := &diag.MemoryLogger{}
+	handler := NewHandler(Config{
+		BasePath:              "/chat-v2",
+		Logger:                logger,
+		DisableSystemMessages: true,
+		RendezvousTimeout:     5 * time.Second, // Long timeout so it won't trigger timeout failure
+	})
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	token := "token-rdv-cancel"
+	sess := handler.sessions.GetOrCreate(token)
+	msgID := "msg-cancel-stream"
+	sess.MessageStore.Add(protocol.EventEnvelope{
+		Type: protocol.EventMessageAdded,
+		Message: &protocol.Message{
+			ID:       msgID,
+			Type:     "file",
+			FileName: "cancel.dat",
+			Size:     1024,
+		},
+	})
+
+	var jobEvents []protocol.EventType
+	handler.transfer.RegisterCallback(func(tok string, et protocol.EventType, ev protocol.TransferEvent) {
+		if ev.ID == "dl-"+msgID+"-canceling-client" {
+			jobEvents = append(jobEvents, et)
+		}
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	getURL := fmt.Sprintf("%s/chat-v2/%s/files/%s?clientId=canceling-client&messageId=%s", server.URL, token, msgID, msgID)
+	req, err := http.NewRequestWithContext(ctx, "GET", getURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	reqDone := make(chan error, 1)
+	go func() {
+		resp, err := http.DefaultClient.Do(req)
+		if resp != nil {
+			resp.Body.Close()
+		}
+		reqDone <- err
+	}()
+
+	// Poll until Job exists and is in Queued state (entered rendezvous select)
+	targetJobID := "dl-" + msgID + "-canceling-client"
+	var queuedOk bool
+	for i := 0; i < 50; i++ {
+		job, err := handler.transfer.GetJob(targetJobID)
+		if err == nil && job.State == protocol.TransferQueued {
+			queuedOk = true
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !queuedOk {
+		t.Fatal("timed out waiting for transfer job to enter Queued state")
+	}
+
+	// Trigger client cancellation
+	cancel()
+
+	// Wait for request goroutine to return
+	select {
+	case <-reqDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for canceled request to terminate")
+	}
+
+	// Wait briefly for server-side cancel handling
+	var cancelledOk bool
+	for i := 0; i < 50; i++ {
+		job, err := handler.transfer.GetJob(targetJobID)
+		if err == nil && job.State == protocol.TransferCancelled {
+			cancelledOk = true
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !cancelledOk {
+		job, _ := handler.transfer.GetJob(targetJobID)
+		t.Fatalf("expected job state to become TransferCancelled, got %v", job)
+	}
+
+	// Verify EventTransferCancelled was broadcast
+	var hasCancelledEvent bool
+	for _, et := range jobEvents {
+		if et == protocol.EventTransferCancelled {
+			hasCancelledEvent = true
+			break
+		}
+	}
+	if !hasCancelledEvent {
+		t.Fatalf("expected EventTransferCancelled in events, got: %v", jobEvents)
+	}
+}

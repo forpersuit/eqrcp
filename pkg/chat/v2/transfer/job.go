@@ -65,11 +65,22 @@ func (j *Job) ToEvent() protocol.TransferEvent {
 	}
 }
 
+// isTerminalState reports whether the state is an immutable terminal state.
+func isTerminalState(s protocol.TransferState) bool {
+	return s == protocol.TransferCompleted || s == protocol.TransferFailed || s == protocol.TransferCancelled
+}
+
 // UpdateState safely changes the transfer job lifecycle state.
 // Returns true if the state or error string was actually modified.
+// If the job has already reached an immutable terminal state (Completed, Failed, or Cancelled),
+// further transitions are rejected to prevent state regression under concurrent duplicate requests.
 func (j *Job) UpdateState(state protocol.TransferState, errStr string) bool {
 	j.mu.Lock()
 	defer j.mu.Unlock()
+
+	if isTerminalState(j.State) {
+		return false
+	}
 
 	if j.State == state && j.Error == errStr {
 		return false
@@ -83,9 +94,14 @@ func (j *Job) UpdateState(state protocol.TransferState, errStr string) bool {
 
 // UpdateProgress safely updates processed bytes.
 // Returns true if the change should trigger a WebSocket broadcast (throttled by percent change or 200ms duration).
+// If the job is already in a terminal state, progress updates are ignored.
 func (j *Job) UpdateProgress(bytesDone int64) bool {
 	j.mu.Lock()
 	defer j.mu.Unlock()
+
+	if isTerminalState(j.State) {
+		return false
+	}
 
 	j.BytesDone = bytesDone
 	j.UpdatedAt = time.Now()
