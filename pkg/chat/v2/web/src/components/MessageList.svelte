@@ -586,6 +586,8 @@
 
   function handleImagePreviewClick(e: MouseEvent, msg: Message) {
     if (selectionMode) {
+      e.preventDefault();
+      e.stopPropagation();
       if (canMultiSelect(msg)) {
         toggleSelect(msg);
       }
@@ -1329,6 +1331,7 @@
     top: 8px;
     left: 8px;
     z-index: 5;
+    pointer-events: none;
     width: 20px;
     height: 20px;
     border-radius: 50%;
