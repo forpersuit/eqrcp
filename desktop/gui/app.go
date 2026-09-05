@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"eqt/cmd"
@@ -742,7 +743,12 @@ func (a *App) downloadChatAttachmentTo(rawURL string, target string) error {
 		}
 		return err
 	}
-	resp, err := (&http.Client{Timeout: 0}).Do(req)
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		Proxy:           nil,
+	}
+	httpClient := &http.Client{Transport: tr, Timeout: 0}
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		if messageID != "" {
 			wailsruntime.EventsEmit(a.ctx, "chat-download-progress", map[string]interface{}{

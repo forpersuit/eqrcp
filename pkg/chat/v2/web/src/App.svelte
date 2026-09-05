@@ -307,6 +307,7 @@
         client.sendLog(`[ACTION] Completed download for Message ID: ${messageId}, Path: ${path}`);
       }
       chatActions.updateMessageFilePath(messageId, path);
+      chatActions.markMessageDownloaded(messageId);
       chatActions.updateTransfer({
         id: 'dl-' + messageId + '-' + peer,
         state: 'completed',
@@ -1279,7 +1280,7 @@
 
   function handleBatchDownload(e: CustomEvent<{ messages: any[] }>) {
     if ($chatSessionStatus !== 'active') return;
-    const files = (e.detail?.messages || []).filter((m: any) => m && m.type === 'file' && !m.uploading);
+    const files = (e.detail?.messages || []).filter((m: any) => m && (m.type === 'file' || m.type === 'image') && !m.uploading);
     if (files.length === 0) return;
     if (!client) return;
 
@@ -1315,9 +1316,17 @@
       const link = document.createElement('a');
       link.href = zipURL;
       link.download = 'chat-attachments.zip';
+      link.style.display = 'none';
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
+      setTimeout(() => {
+        if (link.parentNode) {
+          link.parentNode.removeChild(link);
+        }
+      }, 2000);
+      if (!isEmbedded && typeof navigator !== 'undefined' && (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent))) {
+        window.location.href = zipURL;
+      }
     }
   }
 

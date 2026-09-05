@@ -48,7 +48,7 @@
   let selectedIds = new Set<string>();
 
   function canMultiSelect(msg: Message): boolean {
-    return msg.type === 'file' && !isMine(msg) && !msg.uploading && !msg.recalled && !!msg.fileName;
+    return (msg.type === 'file' || msg.type === 'image') && !isMine(msg) && !msg.uploading && !msg.recalled && !!msg.fileName;
   }
   function isSelected(msg: Message): boolean {
     return selectedIds.has(msg.id);
@@ -428,9 +428,9 @@
     
     const mine = isMine(msg);
     const localPeer = $currentDevice?.peer || 'desktop';
-    const dlTx = txState[msg.id] || Object.values(txState).find(t => t.messageId === msg.id && t.clientId === localPeer);
+    const dlTx = txState['dl-' + msg.id + '-' + localPeer] || txState[msg.id] || Object.values(txState).find(t => t.messageId === msg.id && (t.clientId === localPeer || (!mine && t.id.startsWith('dl-'))));
     const ulTx = txState['ul-' + msg.id];
-    const isTxCompleted = (dlTx && dlTx.state === 'completed') || (mine && msg.downloaded) || completedMap[msg.id];
+    const isTxCompleted = (dlTx && dlTx.state === 'completed') || msg.downloaded || completedMap[msg.id];
     const isDownloaded = isTxCompleted || (isEmbedded && !!msg.filePath);
     const tx = mine ? ulTx : (isTxCompleted ? null : dlTx);
 
@@ -993,15 +993,15 @@
       {:else}
         {@const mine = isMine(msg)}
         {@const localPeer = $currentDevice?.peer || 'desktop'}
-        {@const dlTx = txState[msg.id] || Object.values(txState).find(t => t.messageId === msg.id && t.clientId === localPeer)}
+        {@const dlTx = txState['dl-' + msg.id + '-' + localPeer] || txState[msg.id] || Object.values(txState).find(t => t.messageId === msg.id && (t.clientId === localPeer || (!mine && t.id.startsWith('dl-'))))}
         {@const ulTx = txState['ul-' + msg.id]}
-        {@const isTxCompleted = (dlTx && dlTx.state === 'completed') || (mine && msg.downloaded) || completedMap[msg.id]}
+        {@const isTxCompleted = (dlTx && dlTx.state === 'completed') || msg.downloaded || completedMap[msg.id]}
         {@const _dummy = isTxCompleted ? (completedMap[msg.id] = true) : null}
         {@const isDownloaded = isTxCompleted || (isEmbedded && !!msg.filePath)}
         {@const tx = mine ? ulTx : (isTxCompleted ? null : dlTx)}
         {@const colors = getMessageColors(msg, mine)}
         {@const identity = getSenderIdentity(msg)}
-        {@const isCancelledFile = msg.type === 'file' && ((ulTx && ulTx.state === 'cancelled') || (dlTx && dlTx.state === 'cancelled'))}
+        {@const isCancelledFile = (msg.type === 'file' || msg.type === 'image') && ((ulTx && ulTx.state === 'cancelled') || (dlTx && dlTx.state === 'cancelled'))}
         <div 
           class="message" 
           class:mine 
@@ -1033,7 +1033,7 @@
             <div
               class="bubble"
               class:selecting={selectionMode && canMultiSelect(msg)}
-              class:selected={selectionMode && canMultiSelect(msg) && isSelected(msg)}
+              class:selected={selectionMode && canMultiSelect(msg) && selectedIds.has(msg.id)}
               use:swipeable={msg}
               on:contextmenu|preventDefault={(e) => openMessageMenu(msg, e.currentTarget, { clientX: e.clientX, clientY: e.clientY })}
               on:click={(e) => {
@@ -1046,11 +1046,13 @@
               style="position: relative; overflow: hidden; transform: translateX(0px); transition: transform 0.25s ease;"
             >
               {#if selectionMode && canMultiSelect(msg)}
-                <div class="multi-select-badge" class:checked={isSelected(msg)} aria-hidden="true">
-                  {#if isSelected(msg)}<span>✓</span>{/if}
+                <div class="multi-select-badge" class:checked={selectedIds.has(msg.id)} aria-hidden="true">
+                  <svg class="check-icon" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
                 </div>
               {/if}
-              {#if msg.type === 'file' && (mine || isEmbedded) && !isCancelledFile && !msg.recalled && (msg.uploading || (ulTx && ulTx.state === 'running'))}
+              {#if (msg.type === 'file' || msg.type === 'image') && (mine || isEmbedded) && !isCancelledFile && !msg.recalled && (msg.uploading || (ulTx && ulTx.state === 'running'))}
                 <div class="upload-mask" style="
                   position: absolute;
                   top: 0;
@@ -1110,7 +1112,7 @@
                       >
                         {getTranslation('editAgain', currentLang)}
                       </button>
-                    {:else if msg.type === 'file'}
+                    {:else if msg.type === 'file' || msg.type === 'image'}
                       <button 
                         class="edit-recalled" 
                         type="button" 
@@ -1161,7 +1163,7 @@
               {:else}
                 {#if msg.type === 'text'}
                   <span class="text">{msg.text}</span>
-                {:else if msg.type === 'file'}
+                {:else if msg.type === 'file' || msg.type === 'image'}
                   <div class="bubble-content">
                     <div class="attachment-card file-attachment">
                       <div class="file-card">
@@ -1334,21 +1336,32 @@
     pointer-events: none;
     width: 20px;
     height: 20px;
+    box-sizing: border-box;
     border-radius: 50%;
     border: 2px solid var(--accent-strong, #156f5a);
-    background: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.95);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 12px;
-    font-weight: 700;
-    color: #ffffff;
-    transition: background 0.15s ease;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+
+  .multi-select-badge .check-icon {
+    display: none;
+    width: 12px;
+    height: 12px;
+    stroke: #ffffff;
+    stroke-width: 3.5;
+    fill: none;
   }
 
   .multi-select-badge.checked {
     background: var(--accent-strong, #156f5a);
     border-color: var(--accent-strong, #156f5a);
+  }
+
+  .multi-select-badge.checked .check-icon {
+    display: block;
   }
 
   .multi-select-bar {

@@ -435,12 +435,26 @@ export class ChatWebSocketClient {
           const isGuiHost = typeof window !== 'undefined' && window.parent !== window;
           const isMineOrGui = event.transfer.clientId === this.clientPeer || isGuiHost;
           
-          if ((event.transfer.clientId === this.clientPeer || (isUploadJob && isMineOrGui)) && event.transfer.messageId) {
+          if ((event.transfer.clientId === this.clientPeer || !event.transfer.clientId || (isUploadJob && isMineOrGui) || (!isUploadJob && isGuiHost)) && event.transfer.messageId) {
             // M4: only terminal completed should flip downloaded / upload-complete flags.
             // Marking on started/progress made bubbles look finished while still transferring.
             if (event.type === 'transfer_completed') {
               if (!isUploadJob) {
                 chatActions.markMessageDownloaded(event.transfer.messageId);
+                // Also synchronize seeded client-specific download job if present
+                const seededJobId = 'dl-' + event.transfer.messageId + '-' + this.clientPeer;
+                if (seededJobId !== event.transfer.id) {
+                  chatActions.updateTransfer({
+                    id: seededJobId,
+                    messageId: event.transfer.messageId,
+                    clientId: this.clientPeer,
+                    fileName: event.transfer.fileName,
+                    bytesDone: event.transfer.bytesDone || event.transfer.bytesTotal,
+                    bytesTotal: event.transfer.bytesTotal,
+                    percent: 100,
+                    state: 'completed'
+                  } as any);
+                }
               }
               chatActions.markMessageUploadComplete(event.transfer.messageId);
             }
