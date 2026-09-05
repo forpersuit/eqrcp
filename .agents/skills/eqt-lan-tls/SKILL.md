@@ -105,6 +105,12 @@ WantedBy=multi-user.target
    - **CSP 策略**：Wails `AssetServer.Middleware` 的 `Content-Security-Policy` 中 `connect-src` 必须显式包含 `https://*.direct.eqt.net.im:* ws: wss:`，防止内嵌 iframe 或外部网络通道被浏览器策略阻断。
 6. **Chat 启动状态同步机制 (Chat Ready Synchronization)**:
    - 桌面端 `pushTask(action="chat")` 必须通过专用就绪通道（`chatReadyCh`）等待底层 HTTP/HTTPS 服务监听并产生有效 `PageURL` 与 `QRCode`（超时 10s），避免异步瞬态返回空 URL 导致前端被重置为“Waiting for network URL...”或由于局部状态覆盖而陷入死循环。
+7. **移动端代理拦截与直连分流准则 (Mobile Proxy & Fake-IP Bypass)**:
+   - **现象与成因**：移动端（iOS / Android）开启代理应用（如 Clash、Shadowrocket、Surge、Quantumult X 等）时，由于 `*.direct.eqt.net.im` 后缀为曼岛顶级域名（`.im`），绝大多数公网分流规则集（如 Loyalsoldier, ACL4SSR）默认将其判定为境外域名或未知域名，导致流量被分流给境外代理节点，或在 TUN 模式下被劫持分配 Fake-IP（`198.18.0.0/16`）。境外代理节点无法路由回用户局域网私有 IP（`192.168.x.x` / `10.x.x.x`），造成扫码访问彻底超时失败。
+   - **规范指引**：在移动端代理工具中将 `*.direct.eqt.net.im` 加入直连白名单：
+     - 规则分流：`DOMAIN-SUFFIX,direct.eqt.net.im,DIRECT`（或 QX `HOST-SUFFIX,direct.eqt.net.im,direct`）；
+     - Fake-IP 过滤：在 `dns.fake-ip-filter` 中声明 `'*.direct.eqt.net.im'`，避免域名被 TUN 虚拟 IP 劫持；
+     - 功能开关：确保客户端已开启“绕过局域网 (Bypass LAN / 局域网直连)”开关。
 
 ---
 
