@@ -37,17 +37,21 @@
     handleSubmit(e);
   }
 
-  const isEmbedded = typeof window !== 'undefined' && window.parent !== window;
+  export let isEmbedded = typeof window !== 'undefined' && (window.parent !== window || document.documentElement.classList.contains('embedded-chat'));
 
-  function triggerFileInput(e: Event) {
-    e.preventDefault();
-    if ($chatSessionStatus !== 'active') return;
+  function handleFileLabelClick(e: MouseEvent) {
+    if ($chatSessionStatus !== 'active') {
+      e.preventDefault();
+      return;
+    }
     if (isEmbedded) {
+      e.preventDefault();
       const requestId = 'select-' + Math.random().toString(36).substring(2, 11);
       window.parent.postMessage({ type: 'select-files', requestId }, '*');
-    } else {
-      fileInput.click();
     }
+    // In mobile and regular web browsers (!isEmbedded):
+    // Do NOT call e.preventDefault()!
+    // The native HTML <label for="chat-file-input"> will natively and securely activate the file picker.
   }
 
   function handleFileChange(e: Event) {
@@ -143,7 +147,14 @@
     <div class="compose-row">
       <!-- svelte-ignore a11y_click_events_have_key_events -->
       <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-      <label class="file-label" class:disabled={$chatSessionStatus !== 'active'} title={getTranslation('addAttachment', currentLang)} aria-label={getTranslation('addAttachment', currentLang)} on:click={triggerFileInput}>
+      <label
+        class="file-label"
+        class:disabled={$chatSessionStatus !== 'active'}
+        title={getTranslation('addAttachment', currentLang)}
+        aria-label={getTranslation('addAttachment', currentLang)}
+        for={isEmbedded ? undefined : 'chat-file-input'}
+        on:click={handleFileLabelClick}
+      >
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12.5 14.5 6a3 3 0 0 1 4.2 4.2L10.8 18.1a5 5 0 1 1-7.1-7.1l8.7-8.7" stroke="currentColor" stroke-width="2" fill="none"/></svg>
       </label>
       <textarea 
@@ -162,7 +173,15 @@
       </div>
     </div>
   </div>
-  <input bind:this={fileInput} on:change={handleFileChange} class="hidden" type="file" multiple disabled={$chatSessionStatus !== 'active'}>
+  <input
+    id="chat-file-input"
+    bind:this={fileInput}
+    on:change={handleFileChange}
+    class="composer-file-input"
+    type="file"
+    multiple
+    disabled={$chatSessionStatus !== 'active'}
+  >
 </form>
 
 <style>

@@ -107,6 +107,11 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
     - **接收方下载**：初始接收时仅显示纯净的文件大小（如 `27 Bytes`），杜绝提前标记；下载中动态显示 `大小 · 传输中 xx%`；下载完成后变为 `大小 · 已下载`。
     - **异常与取消**：分别显示 `· 传输失败 ⚠️`（红色点状下划线提示悬停错误详情）或 `· 已取消`。
   - **接收端状态解耦 (Decoupled Client Download State)**：Go 后端 `msg.Downloaded` 语义表示服务端附件缓存已就绪，严禁前端直接将其作为接收端的“已下载到本机”依据。接收端状态必须且仅能由客户端本地的 `dlTx` 传输任务或内嵌环境真实落盘路径（`isEmbedded && msg.filePath`）驱动，避免新收到的文件被虚假标记为“已下载”而短路实际下载进度显示。
+- **移动端原生文件选择器与 Label-Input 绑定防呆规范 (Mobile File Picker & Native Label Association)**：
+  - **杜绝 `display: none` 隐藏 `<input type="file">`**：iOS Safari 与 WebKit 针对文件输入框实施严格的沙箱与渲染树保护，任何 `display: none` 的文件输入框被通过 JS `.click()` 调用时会被静默拦截拒绝弹窗。隐藏输入框必须使用屏幕外微尺寸与透明度隐藏（`position: absolute; width: 0.1px; height: 0.1px; opacity: 0; overflow: hidden; z-index: -1; pointer-events: none;`）。
+  - **原生 `<label for="...">` 绑定与免 `preventDefault()`**：移动端与 Web 端必须为 `<label>` 显式指定 `for="chat-file-input"`，对应 `<input id="chat-file-input">`。严禁在非嵌入式环境的点击事件中调用 `e.preventDefault()` 或手动 `fileInput.click()`，交由浏览器内核原生处理手势激活（User Activation），彻底防止 WebKit 判定手势被取消而拦截文件选择对话框。
+  - **图标子节点 `pointer-events: none`**：确保 `<label>` 内的 `<svg>` 与图标节点均带有 `pointer-events: none`，防止触控点落在子节点时事件捕获异常。
+  - **嵌入式环境条件代理 (Conditional Bridge)**：仅在桌面 Wails 嵌入式宿主（`isEmbedded`）下，动态移除 `for` 属性并在点击时调用 `e.preventDefault()`，代理发送 `select-files` 桥接消息调起宿主原生对话框。
 
 ---
 

@@ -1740,6 +1740,7 @@
       <MessageComposer 
         bind:text={composerText}
         currentLang={currentLang}
+        isEmbedded={isEmbedded}
         on:sendText={handleSendText}
         on:sendFile={handleSendFile}
       />
