@@ -63,6 +63,9 @@ func IsTestBuild() bool {
 	return isTestBuild
 }
 
+// ErrInvalidLicenseSignature indicates that the local license certificate signature does not match the current environment's public key.
+var ErrInvalidLicenseSignature = errors.New("license certificate signature invalid for current environment")
+
 // VerifyLicenseSignature checks the cryptographic signature of the certificate
 func VerifyLicenseSignature(cert LicenseCertificate) bool {
 	pubBytes, err := hex.DecodeString(defaultPublicKeyHex)
@@ -598,7 +601,14 @@ func doOnlineLicenseSync(force bool) error {
 		return errors.New("no local license file found")
 	}
 
-	// 2. Rate-limit checks: only check if at least 12 hours have passed since LastOnlineSyncTime (unless forced)
+	// 2. Pre-flight guard: Ensure certificate signature is valid for current environment.
+	// Never reconcile an unverified/foreign certificate with the server, as a 404 from the server
+	// would trigger an unintended ResetLicense() and wipe local storage.
+	if !VerifyLicenseSignature(cert) {
+		return ErrInvalidLicenseSignature
+	}
+
+	// 3. Rate-limit checks: only check if at least 12 hours have passed since LastOnlineSyncTime (unless forced)
 	if !force && cert.LastOnlineSyncTime != "" {
 		if lastSync, err := time.Parse(time.RFC3339, cert.LastOnlineSyncTime); err == nil {
 			if time.Since(lastSync) < 12*time.Hour {

@@ -4,6 +4,7 @@ import (
 	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -299,7 +300,7 @@ func TestIntegrationActivateAndLocalVerify(t *testing.T) {
 	// Check if file is written to local dir
 	licPath := getLicenseFilePath()
 	if _, err := os.Stat(licPath); os.IsNotExist(err) {
-		t.Fatal("expected license.lic to be created on disk")
+		t.Fatalf("expected %s to be created on disk", filepath.Base(licPath))
 	}
 
 	// 4. Force reset memory payment status by backing up lic file first
@@ -317,7 +318,7 @@ func TestIntegrationActivateAndLocalVerify(t *testing.T) {
 	// Run offline verification
 	ok := VerifyLocalLicense()
 	if !ok {
-		t.Fatal("expected offline license verification to succeed using license.lic on disk")
+		t.Fatalf("expected offline license verification to succeed using %s on disk", filepath.Base(licPath))
 	}
 
 	if !GetPaidStatus() {
@@ -466,7 +467,7 @@ func TestVerifyLocalLicenseNoFileClearsPaidStatus(t *testing.T) {
 		t.Fatal("precondition: expected paid status before verify")
 	}
 	if VerifyLocalLicense() {
-		t.Fatal("expected verify to fail when license.lic is missing")
+		t.Fatalf("expected verify to fail when %s is missing", filepath.Base(getLicenseFilePath()))
 	}
 	if GetPaidStatus() {
 		t.Fatal("expected paid status cleared when no local certificate exists")
@@ -532,6 +533,40 @@ func TestForceOnlineLicenseSyncUnboundDeviceResetsLicense(t *testing.T) {
 	}
 	if _, ok := GetLocalLicenseInfo(); ok {
 		t.Fatal("expected local certificate removed after unbind")
+	}
+}
+
+func TestForceOnlineLicenseSyncInvalidSignatureSkipsSync(t *testing.T) {
+	ResetLicense()
+	defer ResetLicense()
+
+	// Write an invalid/foreign signature certificate to disk
+	cert := LicenseCertificate{
+		LicenseCode: "EQT-FOREIGN-TEST",
+		Tier:        "PRO",
+		Signature:   "deadbeef01020304", // invalid signature for current environment
+	}
+	certBytes, _ := json.Marshal(cert)
+	path := getLicenseFilePath()
+	_ = os.MkdirAll(filepath.Dir(path), 0755)
+	if err := os.WriteFile(path, certBytes, 0644); err != nil {
+		t.Fatalf("failed to write mock invalid cert: %v", err)
+	}
+
+	// Invalidate memory cache so it re-reads from disk
+	licenseCacheMu.Lock()
+	cachedLicense = nil
+	hasCachedLicense = false
+	licenseCacheMu.Unlock()
+
+	err := ForceOnlineLicenseSync()
+	if !errors.Is(err, ErrInvalidLicenseSignature) {
+		t.Fatalf("expected ErrInvalidLicenseSignature, got %v", err)
+	}
+
+	// Verify the file was NOT deleted by ResetLicense
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("expected license file to remain on disk, but stat failed: %v", err)
 	}
 }
 

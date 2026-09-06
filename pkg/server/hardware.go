@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -218,18 +219,23 @@ func PrecomputeDeviceFingerprints() {
 		verified := VerifyLocalLicense()
 		SetLicenseReady(true)
 		log.Printf("[DRM] Background local license verification completed. Verified ok: %t, Paid Status: %t, Tier: %s", verified, GetPaidStatus(), GetLicenseTier())
-		// Process start: always force one online reconciliation when a valid local certificate exists.
+		// Process start: always force one online reconciliation when a local certificate exists.
 		// Online status is authoritative for unbind/revoke; offline 7-day lease remains fallback when network fails.
-		cert, hasLocalCert := GetLocalLicenseInfo()
-		if hasLocalCert && VerifyLicenseSignature(cert) {
+		_, hasLocalCert := GetLocalLicenseInfo()
+		if hasLocalCert {
 			log.Println("[DRM] Startup online license reconciliation (forced, online is SSOT)...")
 			if err := ForceOnlineLicenseSync(); err != nil {
-				log.Printf("[DRM] Startup online license reconciliation finished with: %v (paid=%t tier=%s)", err, GetPaidStatus(), GetLicenseTier())
+				if errors.Is(err, ErrInvalidLicenseSignature) {
+					log.Printf("[DRM] Startup online license reconciliation skipped (%v), falling back to device registration", err)
+					RegisterDeviceOnline()
+				} else {
+					log.Printf("[DRM] Startup online license reconciliation finished with: %v (paid=%t tier=%s)", err, GetPaidStatus(), GetLicenseTier())
+				}
 			} else {
 				log.Printf("[DRM] Startup online license reconciliation succeeded. Paid Status: %t, Tier: %s", GetPaidStatus(), GetLicenseTier())
 			}
 		} else {
-			// Free user, or local cert signature invalid for current environment (foreign/corrupted):
+			// Free user without local cert:
 			// Register device online (3-of-2 hardware matching) to auto-recover valid license if bound.
 			log.Println("[DRM] Free user startup online device registration...")
 			RegisterDeviceOnline()

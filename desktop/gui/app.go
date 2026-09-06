@@ -18,6 +18,7 @@ import (
 	"eqt/pkg/server"
 	"eqt/pkg/util"
 	"eqt/pkg/version"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -1577,8 +1578,13 @@ func (a *App) RefreshLicenseStatus() (AgentStatus, error) {
 	// Prefer online truth (unbind/revoke). Network errors fall back to offline lease via local verify.
 	if _, ok := server.GetLocalLicenseInfo(); ok {
 		if err := server.ForceOnlineLicenseSync(); err != nil {
-			a.logInfo(fmt.Sprintf("[GUI] RefreshLicenseStatus online sync: %v; applying local offline verify", err))
-			server.VerifyLocalLicense()
+			if errors.Is(err, server.ErrInvalidLicenseSignature) {
+				a.logInfo("[GUI] RefreshLicenseStatus: local cert signature invalid for current environment, falling back to online device registration")
+				server.RegisterDeviceOnline()
+			} else {
+				a.logInfo(fmt.Sprintf("[GUI] RefreshLicenseStatus online sync: %v; applying local offline verify", err))
+				server.VerifyLocalLicense()
+			}
 		}
 	} else {
 		// For free tier devices, execute online device sync to check for remote DevMode authorization.
@@ -1596,8 +1602,14 @@ func (a *App) DevForceOnlineLicenseSync() (AgentStatus, error) {
 		return AgentStatus{}, fmt.Errorf("agent not initialized")
 	}
 	err := server.ForceOnlineLicenseSync()
-	// Always re-verify from disk so paid memory matches certificate after revoke/unbind/network outcomes.
-	if err != nil {
+	if errors.Is(err, server.ErrInvalidLicenseSignature) {
+		a.logInfo("[GUI] DevForceOnlineLicenseSync: local cert signature invalid for current environment, falling back to online device registration")
+		server.RegisterDeviceOnline()
+		if server.GetPaidStatus() {
+			err = nil
+		}
+	} else if err != nil {
+		// Always re-verify from disk so paid memory matches certificate after revoke/unbind/network outcomes.
 		server.VerifyLocalLicense()
 	}
 	a.agent.mu.Lock()

@@ -33,8 +33,8 @@ description: Guides EQT licensing architecture, offline cryptographic activation
 - **网络故障与授权状态严格正交划分 (Network vs Auth Orthogonality)**：
   - **断网/抖动/5xx 走离线租约**：网络超时、连接被拒、DNS 失败或服务端 502/503/504 属于网络不可达，**严禁**触发 `ResetLicense()` 抹盘，必须无条件保留本地证书并进入离线 7 天租约验证；
   - **明确 403/404 确凿失效才抹盘**：只有连网成功且云端明确返回 HTTP 403（明确被退款/吊销/黑名单）或 HTTP 404（激活码已被删除/设备已解绑）时，才判定授权失效并调用 `ResetLicense()` 擦除证书。
-  - **签名合法性前置分流 (Valid Signature Guard)**：启动对账前先执行 `VerifyLicenseSignature(cert)`。只有当本地证书公钥与当前二进制匹配时，才发起针对该激活码的强对账；若签名不合法（外来/损坏证书），禁止调用带激活码的对账（防 404 误删），直接走匿名设备注册（带 3 项指纹）由当前环境服务端按「3 选 2」反查自愈。
-  - **服务端反查自愈严格执行「3 选 2 匹配」**：云端 `findBestActiveLicenseForDevice` 在按 `device_id` 检索候选记录时，必须对硬件指纹强制调用 `matchFingerprint` 校验（非空匹配数 $\ge 2$），杜绝克隆 `device_id` 越权。
+  - **签名合法性单一关卡守卫 (Centralized Valid Signature Guard in `doOnlineLicenseSync`)**：在 `doOnlineLicenseSync` 核心入口前置校验 `VerifyLicenseSignature(cert)`，若签名不合法直接返回哨兵错误 `ErrInvalidLicenseSignature`。所有调用方（启动对账、GUI `RefreshLicenseStatus`、Dev `DevForceOnlineLicenseSync` 及后台定时器）全量收敛保护，**严禁**带着未经当前环境公钥验签通过的外来/损坏证书向云端发起携带激活码的 `/api/v1/verify` 强对账（彻底杜绝云端 404 误删本地文件）。调用方捕获 `ErrInvalidLicenseSignature` 后统一分流至 `RegisterDeviceOnline()` 匿名设备登记，依托 3 选 2 硬件指纹让当前环境服务端反查自愈。
+  - **服务端反查自愈严格执行「3 选 2 匹配」**：云端 `findBestActiveLicenseForDevice` 在按 `device_id` 检索候选记录时，必须对硬件指纹强制调用 `matchFingerprint` 校验（非空匹配数 $\ge 2$），杜绝克隆 `device_id` 越权。若遇低特征设备（仅 1 项有效指纹）或早于指纹列采集的旧绑定，自动自愈失败（fail-closed 到 free）属于预期安全收敛，由用户输入购买邮件中的激活码重绑或人工客服兜底。
 - **静默对账与 7 天租约宽限**：
   - 应用拉起时（通过 `hardware.go` 后台线程）先做 `VerifyLocalLicense()`，若本地存在合规 `.lic`，**强制**执行一次 `ForceOnlineLicenseSync()`（忽略 12 小时节流）。在线状态是吊销/Portal 解绑的权威来源（SSOT）；仅当网络失败时才回退到离线 7 天租约。
   - 后续后台静默对账仍走 `StartOnlineLicenseSync()` / `doOnlineLicenseSync(false)`，保留 12 小时最低间隔，避免频繁网络交互。
