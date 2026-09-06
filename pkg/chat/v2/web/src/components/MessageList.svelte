@@ -1178,17 +1178,9 @@
                             {:else if tx && tx.state === 'cancelled'}
                               · <span style="color: var(--muted, #64748b);">{getTranslation('cancelled', currentLang)}</span>
                             {:else if mine && (msg.uploading || (ulTx && ulTx.state === 'running'))}
-                              {#if ulTx && ulTx.state === 'running'}
-                                {#if ulTx.processing || (ulTx.percent ?? 0) >= 99}
-                                  · {getTranslation('savingAttachment', currentLang)}...
-                                {:else}
-                                  · {getTranslation('uploading', currentLang)} {ulTx.percent ?? 0}%
-                                {/if}
-                              {:else}
-                                · {getTranslation('preparing', currentLang)}...
-                              {/if}
+                              · {ulTx ? ((ulTx.processing || (ulTx.percent ?? 0) >= 99) ? 99 : (ulTx.percent ?? 0)) : 0}%
                             {:else if tx && tx.state === 'running'}
-                              · {getTranslation('transferring', currentLang)} {tx.percent ?? 0}%
+                              · {tx.percent ?? 0}%
                             {:else if mine && (msg.downloaded || (ulTx && ulTx.state === 'completed'))}
                               · {getTranslation('shared', currentLang)}
                             {:else if !mine && isDownloaded}
