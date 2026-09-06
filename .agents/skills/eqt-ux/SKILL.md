@@ -62,10 +62,19 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
   - **服务端零 CPU 零延迟流式组包**：服务端 `/files/zip` 采用 `zip.Store` 纯组包流式传输，边读边推，毫秒级启动，免去 CPU Deflate 运算与移动设备大文件 OOM 风险。
 - **会话结束控件锁定**：
   - 手动退出会话（`chatSessionStatus !== 'active'`）时，所有输入控件（附件 label、textarea、提交按钮、文件输入框）显式设为 `disabled`（或 `pointer-events: none;`），占位符替换为“会话已结束”。
-- **Android 虚拟键盘布局修正**：
-  - 移除主视口 CSS 高度动画 (`transition: height`)。
-  - 注册全局 `scroll` 监听，滚动时重置 `window.scrollY` 为 `0`。
-  - 对 input/textarea 注册 `focusin` 监听，以 50ms 频率连续调用 `window.scrollTo(0, 0)`（持续 600ms），抵消浏览器异步滚动偏移。
+- **移动端虚拟键盘视口贴合、零延迟同步与手势收起规范 (Mobile Virtual Keyboard Adaptive Docking & Zero-Lag Sync)**：
+  - **视口四维矩阵同步 (4D Viewport Matrix Sync)**：
+    - 无条件将 `window.visualViewport` 的 `height`、`offsetTop`、`offsetLeft`、`width` 实时同步至 CSS 变量（`--chat-viewport-height`、`--chat-viewport-top`、`--chat-viewport-left`、`--chat-viewport-width`）。
+    - 严禁加入任何由于焦点未就位而强制将视口高度撑回全屏（`window.innerHeight`）的反向逻辑，保证物理可见高度严格由 `vv.height` 驱动。
+  - **CSS 硬件级零延迟响应 (Disable Transition on Mobile)**：
+    - 在移动端媒体查询（如 `@media (max-width: 820px)`）下，必须对 `.chat-viewport` 设置 `transition: none !important;`，彻底杜绝 CSS 属性过渡动画（如 250ms 过渡）与系统级 60fps/120fps 硬件键盘升降动画发生拉扯、滞后或回弹。
+  - **键盘展开自适应贴合 (`.keyboard-open`)**：
+    - 键盘弹出时为 `html` 增加 `.keyboard-open` 类。通过 CSS 消除外层容器多余的底部安全区填充（`main { padding-bottom: 0 !important; }`），将卡片底部圆角拉平（`border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom: none;`），并将 `.composer` 底部 Padding 重置为紧凑值（`8px !important;`）。
+    - 键盘收起时移除该类，平滑复原悬浮卡片外观及物理 Home 条安全边距（`max(11px, env(safe-area-inset-bottom))`）。
+  - **自然手势收起键盘 (Gesture Dismissal)**：
+    - 在消息列表历史流（`.messages`）上监听 `pointerdown` 与 `touchmove`。若当前正处于输入框编辑状态且触控目标为非交互元素（排除按钮、超链接、选择框），即刻主动调用 `document.activeElement.blur()`，实现微信/iMessage 般“轻点消息区或滑动聊天记录即平滑收起键盘”的原生级交互体验。
+  - **防止 Safari/Android 页面位移漂移**：
+    - 注册全局 `scroll` 监听，检测到滚动时重置 `window.scrollY` 为 `0`。对输入控件注册 `focusin`，高频运行纠正逻辑，防止移动浏览器在弹出键盘时错误将 `fixed` 视口顶出屏幕外。
 
 ---
 

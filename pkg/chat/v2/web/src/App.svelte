@@ -46,6 +46,8 @@
   let windowScrollHandler: (() => void) | null = null;
   let aggressiveScrollTimer: any = null;
   let handleGlobalFocusIn: ((e: FocusEvent) => void) | null = null;
+  let handleGlobalFocusOut: ((e: FocusEvent) => void) | null = null;
+  let handleDocumentPointerDown: ((e: PointerEvent | MouseEvent) => void) | null = null;
   const activeUploads = new Map<string, XMLHttpRequest>();
 
   // Generate a dynamic random joinToken for the lifetime of this session page
@@ -889,11 +891,36 @@
 
     handleGlobalFocusIn = (e: FocusEvent) => {
       const activeEl = e.target as HTMLElement;
-      if (activeEl && (activeEl.closest('.composer') || activeEl.closest('form.composer') || activeEl.id === 'message-textarea')) {
+      if (activeEl && (activeEl.closest('.composer') || activeEl.closest('form.composer') || activeEl.id === 'message-textarea' || activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
         runAggressiveScrollCorrection();
+        if (visualViewportHandler) {
+          visualViewportHandler();
+        }
       }
     };
     document.addEventListener('focusin', handleGlobalFocusIn);
+
+    handleGlobalFocusOut = () => {
+      setTimeout(() => {
+        if (visualViewportHandler) {
+          visualViewportHandler();
+        }
+      }, 50);
+    };
+    document.addEventListener('focusout', handleGlobalFocusOut);
+
+    handleDocumentPointerDown = (e: PointerEvent | MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest('.composer, form.composer, #message-textarea, button, a, select, [role="button"], .interactive, .modal, .menu-dropdown')) {
+        return;
+      }
+      const activeEl = document.activeElement;
+      if (activeEl instanceof HTMLTextAreaElement || activeEl instanceof HTMLInputElement) {
+        activeEl.blur();
+      }
+    };
+    document.addEventListener('pointerdown', handleDocumentPointerDown);
 
     if (typeof window !== 'undefined') {
       windowScrollHandler = () => {
@@ -904,27 +931,49 @@
       window.addEventListener('scroll', windowScrollHandler);
     }
 
+    let baseViewportHeight = typeof window !== 'undefined' ? window.innerHeight : 0;
+
     if (typeof window !== 'undefined' && window.visualViewport) {
       visualViewportHandler = () => {
         const vv = window.visualViewport;
         if (vv) {
-          const activeEl = document.activeElement;
-          const isComposerActive = activeEl && (activeEl.closest('.composer') || activeEl.closest('form.composer') || activeEl.id === 'message-textarea');
-          const isKeyboardOpen = vv.height < window.innerHeight - 80;
+          const height = Math.round(vv.height);
+          const top = Math.round(vv.offsetTop);
+          const left = Math.round(vv.offsetLeft);
+          const width = Math.round(vv.width);
 
-          if (isKeyboardOpen && !isComposerActive) {
-            // Keep height at full screen so composer stays hidden under keyboard
-            document.documentElement.style.setProperty('--chat-viewport-height', `${window.innerHeight}px`);
-          } else {
-            document.documentElement.style.setProperty('--chat-viewport-height', `${vv.height}px`);
+          document.documentElement.style.setProperty('--chat-viewport-height', `${height}px`);
+          document.documentElement.style.setProperty('--chat-viewport-top', `${top}px`);
+          document.documentElement.style.setProperty('--chat-viewport-left', `${left}px`);
+          document.documentElement.style.setProperty('--chat-viewport-width', `${width}px`);
+
+          const activeEl = document.activeElement;
+          const isComposerActive = !!(activeEl && (
+            activeEl.closest('.composer') ||
+            activeEl.closest('form.composer') ||
+            activeEl.id === 'message-textarea' ||
+            activeEl.tagName === 'INPUT' ||
+            activeEl.tagName === 'TEXTAREA'
+          ));
+
+          if (!isComposerActive && window.innerHeight > baseViewportHeight) {
+            baseViewportHeight = window.innerHeight;
           }
+
+          const isHeightShrunk = vv.height < (window.innerHeight - 60) || vv.height < (baseViewportHeight - 80);
+          const isKeyboardOpen = isComposerActive && (
+            isHeightShrunk ||
+            (typeof window.screen !== 'undefined' && vv.height < (window.screen.availHeight || window.screen.height || 9999) - 100)
+          );
+
+          document.documentElement.classList.toggle('keyboard-open', isKeyboardOpen);
 
           // Prevent mobile keyboard from scrolling the entire fixed body out of viewport
           if (window.scrollY !== 0) {
             window.scrollTo(0, 0);
           }
 
-          if (isComposerActive) {
+          if (isComposerActive || isKeyboardOpen) {
             const messagesEl = document.querySelector('.messages');
             if (messagesEl) {
               messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -974,6 +1023,12 @@
     }
     if (handleGlobalFocusIn) {
       document.removeEventListener('focusin', handleGlobalFocusIn);
+    }
+    if (handleGlobalFocusOut) {
+      document.removeEventListener('focusout', handleGlobalFocusOut);
+    }
+    if (handleDocumentPointerDown) {
+      document.removeEventListener('pointerdown', handleDocumentPointerDown);
     }
     if (aggressiveScrollTimer) {
       clearInterval(aggressiveScrollTimer);

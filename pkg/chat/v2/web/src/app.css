@@ -1583,6 +1583,7 @@ input:focus { border-color: var(--accent); outline: none; }
         top: var(--chat-viewport-top);
         width: var(--chat-viewport-width);
         z-index: 0;
+        transition: none !important;
     }
     main {
         display: grid;
@@ -1593,6 +1594,17 @@ input:focus { border-color: var(--accent); outline: none; }
         overflow: hidden;
         padding: calc(8px + env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom));
         width: 100%;
+    }
+    html.keyboard-open main {
+        padding-bottom: 0 !important;
+    }
+    html.keyboard-open .chat-shell {
+        border-bottom-left-radius: 0 !important;
+        border-bottom-right-radius: 0 !important;
+        border-bottom: none !important;
+    }
+    html.keyboard-open .composer {
+        padding-bottom: 8px !important;
     }
     .chat-shell {
         border-radius: 14px;
