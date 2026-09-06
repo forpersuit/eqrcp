@@ -430,8 +430,11 @@
     const localPeer = $currentDevice?.peer || 'desktop';
     const dlTx = txState['dl-' + msg.id + '-' + localPeer] || txState[msg.id] || Object.values(txState).find(t => t.messageId === msg.id && (t.clientId === localPeer || (!mine && t.id.startsWith('dl-'))));
     const ulTx = txState['ul-' + msg.id];
-    const isTxCompleted = (dlTx && dlTx.state === 'completed') || msg.downloaded || completedMap[msg.id];
-    const isDownloaded = isTxCompleted || (isEmbedded && !!msg.filePath);
+    const isTxRunning = !mine && dlTx && dlTx.state === 'running';
+    const isTxCompleted = mine
+      ? ((ulTx && ulTx.state === 'completed') || (msg.downloaded && !msg.uploading))
+      : (!isTxRunning && ((dlTx && dlTx.state === 'completed') || completedMap[msg.id] || (isEmbedded && !!msg.filePath)));
+    const isDownloaded = !mine && isTxCompleted;
     const tx = mine ? ulTx : (isTxCompleted ? null : dlTx);
 
     const options: any[] = [];
@@ -995,9 +998,12 @@
         {@const localPeer = $currentDevice?.peer || 'desktop'}
         {@const dlTx = txState['dl-' + msg.id + '-' + localPeer] || txState[msg.id] || Object.values(txState).find(t => t.messageId === msg.id && (t.clientId === localPeer || (!mine && t.id.startsWith('dl-'))))}
         {@const ulTx = txState['ul-' + msg.id]}
-        {@const isTxCompleted = (dlTx && dlTx.state === 'completed') || msg.downloaded || completedMap[msg.id]}
-        {@const _dummy = isTxCompleted ? (completedMap[msg.id] = true) : null}
-        {@const isDownloaded = isTxCompleted || (isEmbedded && !!msg.filePath)}
+        {@const isTxRunning = !mine && dlTx && dlTx.state === 'running'}
+        {@const isTxCompleted = mine
+          ? ((ulTx && ulTx.state === 'completed') || (msg.downloaded && !msg.uploading))
+          : (!isTxRunning && ((dlTx && dlTx.state === 'completed') || completedMap[msg.id] || (isEmbedded && !!msg.filePath)))}
+        {@const _dummy = (!mine && isTxCompleted) ? (completedMap[msg.id] = true) : null}
+        {@const isDownloaded = !mine && isTxCompleted}
         {@const tx = mine ? ulTx : (isTxCompleted ? null : dlTx)}
         {@const colors = getMessageColors(msg, mine)}
         {@const identity = getSenderIdentity(msg)}
@@ -1052,44 +1058,7 @@
                   </svg>
                 </div>
               {/if}
-              {#if (msg.type === 'file' || msg.type === 'image') && (mine || isEmbedded) && !isCancelledFile && !msg.recalled && (msg.uploading || (ulTx && ulTx.state === 'running'))}
-                <div class="upload-mask" style="
-                  position: absolute;
-                  top: 0;
-                  left: 0;
-                  right: 0;
-                  bottom: 0;
-                  background: var(--accent-wash);
-                  opacity: 0.96;
-                  backdrop-filter: blur(1.5px);
-                  display: flex;
-                  flex-direction: column;
-                  align-items: center;
-                  justify-content: center;
-                  z-index: 10;
-                  padding: 8px 12px;
-                  box-sizing: border-box;
-                  text-align: center;
-                ">
-                  <span style="font-size: 13px; font-weight: 600; color: var(--accent-strong); margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
-                    <svg class="icon-uploading-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px;">
-                      <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-dasharray="16 16" fill="none" />
-                    </svg>
-                    {#if ulTx && ulTx.state === 'running'}
-                      {#if ulTx.processing || (ulTx.percent ?? 0) >= 99}
-                        {getTranslation('savingAttachment', currentLang)}...
-                      {:else}
-                        {getTranslation('uploading', currentLang)} {ulTx.percent ?? 0}%
-                      {/if}
-                    {:else}
-                      {getTranslation('preparing', currentLang)}...
-                    {/if}
-                  </span>
-                  <div style="width: 80%; height: 5px; background: rgba(0, 0, 0, 0.08); border-radius: 3.5px; overflow: hidden; margin-top: 2px;">
-                    <div style="width: {ulTx?.percent ?? 0}%; height: 100%; background: var(--accent-strong); transition: width 0.15s ease-out; border-radius: 3.5px;"></div>
-                  </div>
-                </div>
-              {/if}
+
               {#if msg.recalled}
                 <span class="text recalled">{mine ? getTranslation('recalledMsgYou', currentLang) : (identity.sender + ' ' + getTranslation('recalledMsgOther', currentLang))}</span>
                 {#if mine}
@@ -1195,22 +1164,26 @@
                           <div class="file-name" title={msg.fileName}>{msg.fileName}</div>
                           <div class="file-subtitle">
                             {formatBytes(msg.size || 0)}
-                            {#if tx}
-                              {#if tx.state === 'running'}
-                                · {getTranslation('transferring', currentLang)} {tx.percent ?? 0}%
-                              {:else if tx.state === 'completed'}
-                                · {mine ? getTranslation('shared', currentLang) : getTranslation('downloaded', currentLang)}
-                              {:else if tx.state === 'failed'}
-                                · <span class="tx-error-text" title={tx.error || getTranslation('unknownError', currentLang)} style="color: #ef4444; cursor: help; text-decoration: underline dotted;">{getTranslation('transferFailed', currentLang)} ⚠️</span>
-                              {:else if tx.state === 'cancelled'}
-                                · <span style="color: var(--muted, #64748b);">{getTranslation('cancelled', currentLang)}</span>
+                            {#if tx && tx.state === 'failed'}
+                              · <span class="tx-error-text" title={tx.error || getTranslation('unknownError', currentLang)} style="color: #ef4444; cursor: help; text-decoration: underline dotted;">{getTranslation('transferFailed', currentLang)} ⚠️</span>
+                            {:else if tx && tx.state === 'cancelled'}
+                              · <span style="color: var(--muted, #64748b);">{getTranslation('cancelled', currentLang)}</span>
+                            {:else if mine && (msg.uploading || (ulTx && ulTx.state === 'running'))}
+                              {#if ulTx && ulTx.state === 'running'}
+                                {#if ulTx.processing || (ulTx.percent ?? 0) >= 99}
+                                  · {getTranslation('savingAttachment', currentLang)}...
+                                {:else}
+                                  · {getTranslation('uploading', currentLang)} {ulTx.percent ?? 0}%
+                                {/if}
+                              {:else}
+                                · {getTranslation('preparing', currentLang)}...
                               {/if}
-                            {:else}
-                              {#if mine && msg.downloaded}
-                                · {getTranslation('shared', currentLang)}
-                              {:else if !mine && isDownloaded}
-                                · {getTranslation('downloaded', currentLang)}
-                              {/if}
+                            {:else if tx && tx.state === 'running'}
+                              · {getTranslation('transferring', currentLang)} {tx.percent ?? 0}%
+                            {:else if mine && (msg.downloaded || (ulTx && ulTx.state === 'completed'))}
+                              · {getTranslation('shared', currentLang)}
+                            {:else if !mine && isDownloaded}
+                              · {getTranslation('downloaded', currentLang)}
                             {/if}
                           </div>
                         </div>
@@ -1314,9 +1287,6 @@
   @keyframes spin {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
-  }
-  :global(.icon-uploading-spin) {
-    animation: spin 1.5s linear infinite;
   }
 
   .bubble.selecting {
