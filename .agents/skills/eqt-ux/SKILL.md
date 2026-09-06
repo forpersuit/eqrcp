@@ -61,6 +61,7 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
     - **用户手势激活态保活 (User Activation Preservation)**：`navigator.share` 必须由瞬时用户手势触发。批量拉取文件流耗时通常超过浏览器允许的手势窗口（2~3s），直接调用会抛出 `NotAllowedError`。必须采用两阶段设计：文件全部拉取至内存后，模态框切换至就绪态展示【保存到相册/文件】按钮，由用户的第二次显式点击发起原生分享，确保 100% 成功唤起。
     - **真实文件集合支持度校验与优雅回退**：仅通过 `canShare()` 预检是不够的，必须在文件全部加载后通过 `navigator.canShare({ files: fileList })` 验证实际文件集合；若系统不支持多文件分享，必须无缝自动回退到 zip 打包流程并通知用户，严禁静默分支。
     - **状态流严格对称与取消捕获**：拉取阶段 transfer 状态维持 `running`，禁止提前置为 `completed`；仅在 OS 接管成功后标记 `completed`；用户在系统分享面板主动取消（`AbortError`）时，必须将 transfer 恢复为 `cancelled` 并推送应用内通知，绝不能残留伪 completed 状态。
+    - **独立直存语义与大内存超时自动释放 (Ready Semantics & Inactivity Release)**：就绪态文案必须采用独立的“文件已就绪/保存到相册或文件”直存表述（严禁复用 zip 打包下载措辞）；同时针对保活最高 ~200MB 的 `File[]` 阵列，配备 90 秒超时自动收起及 `onDestroy`/取消显式重置，防止用户长时间停留导致移动端（如 iOS Safari）后台内存被强行回收。
   - **HTTP 环境与超大文件状态化打包 (State-driven Zip Modal)**：
     - 坚决避免点击后无状态等待（极易被 iOS Safari 判定为无响应而静默丢弃下载意图）；
     - 服务端针对局域网附件下载采用 `zip.Store`（不压缩模式），消除大文件 Deflate 耗时；

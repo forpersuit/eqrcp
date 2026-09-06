@@ -74,6 +74,14 @@
   let batchAbortController: AbortController | null = null;
   let batchPendingItems: Array<{ messageId: string; name: string; url: string }> = [];
   let batchShareFiles: File[] = [];
+  let batchShareTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  function clearBatchShareTimeout() {
+    if (batchShareTimeoutId) {
+      clearTimeout(batchShareTimeoutId);
+      batchShareTimeoutId = null;
+    }
+  }
   let showUrl = false;
   let composerText = '';
   let licenseTier = 'FREE';
@@ -995,6 +1003,8 @@
       clearInterval(quotaPollTimer);
       quotaPollTimer = null;
     }
+    clearBatchShareTimeout();
+    batchShareFiles = [];
     if (client) {
       client.close();
     }
@@ -1298,6 +1308,7 @@
   }
 
   function handleCancelBatchDownload() {
+    clearBatchShareTimeout();
     if (batchAbortController) {
       batchAbortController.abort();
       batchAbortController = null;
@@ -1344,6 +1355,7 @@
   }
 
   async function handleTriggerShare() {
+    clearBatchShareTimeout();
     if (batchShareFiles.length === 0) return;
     const peer = client ? client['clientPeer'] : 'desktop';
     try {
@@ -1537,9 +1549,19 @@
         batchState = 'ready';
         const countStr = String(fileList.length);
         const sizeStr = formatBytes(totalBytes);
-        batchStatusText = getTranslation('batchArchiveReadyInfo', currentLang)
+        // P3-a fix: Use batchSaveReadyInfo for direct share instead of zip archive wording
+        batchStatusText = getTranslation('batchSaveReadyInfo', currentLang)
           .replace('{count}', countStr)
           .replace('{size}', sizeStr);
+
+        // P3-b fix: 90s auto-dismiss & memory release for ~200MB buffered File[]
+        clearBatchShareTimeout();
+        batchShareTimeoutId = setTimeout(() => {
+          if (batchState === 'ready' && batchIsShare) {
+            chatActions.addSystemMessage(getTranslation('batchShareTimeout', currentLang));
+            handleCancelBatchDownload();
+          }
+        }, 90000);
       } catch (err: any) {
         if (err.name === 'AbortError') {
           return;

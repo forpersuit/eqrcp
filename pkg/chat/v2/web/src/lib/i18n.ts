@@ -769,6 +769,24 @@ export const translations: Record<string, Record<Lang, string>> = {
     de: 'Archiv ist bereit ({count} Dateien, {size}). Klicken Sie unten zum Herunterladen.',
     fr: 'L’archive est prête ({count} fichiers, {size}). Cliquez ci-dessous pour télécharger.'
   },
+  batchSaveReadyInfo: {
+    zh: '文件已就绪 (共 {count} 个文件，{size})。请点击下方按钮保存到相册或文件。',
+    en: 'Files are ready ({count} files, {size}). Click below to save to Photos or Files.',
+    ja: 'ファイルの準備が完了しました (計 {count} 個、{size})。下のボタンをクリックして写真やファイルに保存してください。',
+    ko: '파일이 준비되었습니다 (총 {count}개, {size}). 아래 버튼을 클릭하여 사진 또는 파일에 저장하세요.',
+    es: 'Los archivos están listos ({count} archivos, {size}). Haga clic abajo para guardar en Fotos o Archivos.',
+    de: 'Dateien sind bereit ({count} Dateien, {size}). Klicken Sie unten, um sie in Fotos oder Dateien zu speichern.',
+    fr: 'Les fichiers sont prêts ({count} fichiers, {size}). Cliquez ci-dessous pour enregistrer dans Photos ou Fichiers.'
+  },
+  batchShareTimeout: {
+    zh: '待保存文件已超时，已自动释放内存。',
+    en: 'Pending files timed out and were released from memory.',
+    ja: '保存待機ファイルがタイムアウトしたため、メモリを解放しました。',
+    ko: '저장 대기 파일이 시간 초과되어 메모리에서 해제되었습니다.',
+    es: 'Los archivos pendientes expiraron y se liberaron de la memoria.',
+    de: 'Ausstehende Dateien sind abgelaufen und wurden aus dem Speicher freigegeben.',
+    fr: 'Les fichiers en attente ont expiré et ont été libérés de la mémoire.'
+  },
   batchArchiveFallbackReady: {
     zh: '压缩包准备完成。请点击下方按钮开始下载。',
     en: 'Archive prepared. Click below to download.',
