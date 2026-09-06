@@ -93,7 +93,7 @@ Legacy /chat/*  ──301──►  /chat-v2/*
 | :--- | :--- |
 | [`docs/payment/tier-design.md`](../payment/tier-design.md) | Free/Plus/Pro 与 Chat 体验降级产品设计 |
 | [`docs/payment/license-tier-analysis.md`](../payment/license-tier-analysis.md) | 各模式付费/免费限制（含 Chat 行） |
-| [`docs/crypto/README.md`](../crypto/README.md) | Chat 会话内容加密**现状核查**、合理性评估、E2EE 设计审查 |
+| [`docs/future/20260901-e2ee-end-to-end-encryption-architecture.md`](../future/20260901-e2ee-end-to-end-encryption-architecture.md) | 现行 E2EE 端到端加密架构设计与 Wi-Fi 防嗅探规范 |
 | [`pkg/chat/v2/README.md`](../../pkg/chat/v2/README.md) | 包内边界说明（部分「skeleton」措辞可能滞后于实现） |
 
 ---
@@ -114,7 +114,6 @@ Legacy /chat/*  ──301──►  /chat-v2/*
 **未迁入**（仅弱相关或跨主题）：
 
 - `docs/product-roadmap.md` — 含 Chat 商业化条目，但全文是产品路线图  
-- `docs/crypto/resumable-transfer.md` / `resumable-e2ee-design.md` — 通用传输/加密设计，非 Chat 专属（2026-08-02 起移入 [docs/crypto](../crypto/README.md)）
 - `docs/desktop-integration-plan.md` — 桌面总集成，Chat 仅为其中一章  
 
 **已知断链（整理前已存在）**：`docs/index.md` 曾引用不存在的 `chat-reconnection-testing.md`，已改为指向本目录。

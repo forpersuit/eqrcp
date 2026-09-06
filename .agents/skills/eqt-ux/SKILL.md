@@ -55,6 +55,12 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
   - 视口宽度 `<= 820px` 时，所有 input / textarea 字体大小不得小于 `16px`，防止 iOS Safari 等移动浏览器强行放大页面。
 - **手势居中弹窗 (Centered Mobile Modals)**：
   - 移动端视口下，二维码分享与退出确认弹窗在水平和垂直方向居中，边缘保留 16px 安全 Padding（宽度 `calc(100% - 32px)`，最大 `340px`），配合 `transform: scale(0.95) -> scale(1)` 微动画。
+- **移动端多选下载与保存体验规范 (Multi-selection Batch Download & Web Share UX)**：
+  - **TLS 安全上下文 (HTTPS)**：利用 Web Share API (`navigator.share({ files: [...] })`)，前端异步拉取独立文件流后调起 iOS / Android 系统原生分享面板（一键直存系统相册或“文件” App，免去解压 zip 的繁琐操作）；为保护移动端内存（防止 WebKit OOM 导致页面重载），上限控制在 200MB 以内。
+  - **HTTP 环境与超大文件状态化打包 (State-driven Zip Modal)**：
+    - 坚决避免点击后无状态等待（极易被 iOS Safari 判定为无响应而静默丢弃下载意图）；
+    - 服务端针对局域网附件下载采用 `zip.Store`（不压缩模式），消除大文件 Deflate 耗时；
+    - 前端弹出优雅的 In-App 模态框（检查准备中 -> 打包就绪），由用户在就绪后轻点【立即下载压缩包】产生全新的纯净用户手势（User Activation），确保 100% 顺畅唤起原生下载保存。
 - **会话结束控件锁定**：
   - 手动退出会话（`chatSessionStatus !== 'active'`）时，所有输入控件（附件 label、textarea、提交按钮、文件输入框）显式设为 `disabled`（或 `pointer-events: none;`），占位符替换为“会话已结束”。
 - **Android 虚拟键盘布局修正**：

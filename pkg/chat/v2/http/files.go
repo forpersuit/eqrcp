@@ -2,6 +2,7 @@ package chathttp
 
 import (
 	"archive/zip"
+	"encoding/json"
 	"fmt"
 	"io"
 	"mime"
@@ -407,6 +408,32 @@ func (h *Handler) handleZipDownload(w http.ResponseWriter, r *http.Request, toke
 		zipFilename += ".zip"
 	}
 
+	if query.Get("prepare") == "1" {
+		var totalSize int64
+		validFiles := 0
+		for _, fileID := range rawIDs {
+			filePath := sess.GetAttachment(fileID)
+			if msg, ok := sess.MessageStore.Find(fileID); ok && msg != nil {
+				totalSize += msg.Size
+				validFiles++
+			} else if filePath != "" {
+				if info, err := os.Stat(filePath); err == nil {
+					totalSize += info.Size()
+					validFiles++
+				}
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":    "ready",
+			"count":     validFiles,
+			"totalSize": totalSize,
+			"filename":  zipFilename,
+		})
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", zipFilename))
 	w.WriteHeader(http.StatusOK)
@@ -482,8 +509,12 @@ func (h *Handler) handleZipDownload(w http.ResponseWriter, r *http.Request, toke
 		cleanFilename := getUniqueFilename(origName)
 		header := &zip.FileHeader{
 			Name:     cleanFilename,
-			Method:   zip.Deflate,
+			Method:   zip.Store,
 			Modified: time.Now(),
+		}
+		if fileSize > 0 {
+			header.UncompressedSize64 = uint64(fileSize)
+			header.CompressedSize64 = uint64(fileSize)
 		}
 
 		fw, err := zipWriter.CreateHeader(header)

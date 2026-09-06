@@ -3,7 +3,7 @@
 > **📘 文档重构说明**：
 >
 > 本文档原有的密码学签名格式、硬件指纹算法与详细业务流程已统一收口清理至专业分类文档中，以消除重复维护与版本撕裂：
-> 1. **密码学与签名规范**：移至 [`docs/crypto/drm-crypto-spec.md`](../crypto/drm-crypto-spec.md)（Ed25519 双层签名、3选2 SHA-256 硬件指纹算法、防篡改机制）。
+> 1. **密码学与签名规范**：移至 [`docs/payment/drm-crypto-spec.md`](drm-crypto-spec.md)（Ed25519 双层签名、3选2 SHA-256 硬件指纹算法、防篡改机制）。
 > 2. **业务流程与运行时架构**：移至 [`docs/payment/drm-flow.md`](drm-flow.md)（激活、离线 7 天租约、在线对账、GUI 状态切换）。
 > 3. **云端 Secret 与部署**：移至 [`docs/admin/IMPORTANT_drm-secrets.md`](../admin/IMPORTANT_drm-secrets.md)（Cloudflare Worker `eqt-drm-api` 环境变量与私钥配置）。
 

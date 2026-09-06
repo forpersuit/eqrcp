@@ -1333,6 +1333,29 @@ func TestHandleZipDownload(t *testing.T) {
 		t.Fatalf("unexpected file names in zip archive: %v", names)
 	}
 
+	// Test prepare=1 status check
+	prepareURL := server.URL + "/chat-v2/test-token/files/zip?ids=msg-zip-1,msg-zip-2&mock_size=512&clientId=peer-alice&prepare=1"
+	respPrepare, err := http.Get(prepareURL)
+	if err != nil {
+		t.Fatalf("failed to request zip prepare: %v", err)
+	}
+	defer respPrepare.Body.Close()
+	if respPrepare.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200 OK for prepare, got %d", respPrepare.StatusCode)
+	}
+	var prepResult struct {
+		Status    string `json:"status"`
+		Count     int    `json:"count"`
+		TotalSize int64  `json:"totalSize"`
+		Filename  string `json:"filename"`
+	}
+	if err := json.NewDecoder(respPrepare.Body).Decode(&prepResult); err != nil {
+		t.Fatalf("failed to decode prepare response: %v", err)
+	}
+	if prepResult.Status != "ready" || prepResult.Count != 2 || prepResult.TotalSize != 3072 {
+		t.Fatalf("unexpected prepare result: %+v", prepResult)
+	}
+
 	// Verify uncompressed bytes content match mock size
 	for _, f := range zipReader.File {
 		rc, err := f.Open()

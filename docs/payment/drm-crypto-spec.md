@@ -4,7 +4,7 @@
 > 
 > 本文档定义了 EQT 在付费套餐（Plus/Pro）授权校验、设备绑定防护与离线对账租约中所采用的**密码学算法、签名载荷格式与摘要防伪逻辑**。
 >
-> 关联文档：业务流程与交互见 [`docs/payment/drm-flow.md`](../payment/drm-flow.md)；密钥部署见 [`docs/admin/IMPORTANT_drm-secrets.md`](../admin/IMPORTANT_drm-secrets.md)。
+> 关联文档：业务流程与交互见 [`docs/payment/drm-flow.md`](drm-flow.md)；密钥部署见 [`docs/admin/IMPORTANT_drm-secrets.md`](../admin/IMPORTANT_drm-secrets.md)。
 
 ---
 
@@ -92,6 +92,6 @@ EQT 的授权校验设计遵循**离线可验、防破解注册机（Keygen）�
 
 | 模块 | 说明 |
 | :--- | :--- |
-| [`docs/payment/drm-flow.md`](../payment/drm-flow.md) | 在线激活、对账轮询与 GUI 状态切换业务流 |
+| [`docs/payment/drm-flow.md`](drm-flow.md) | 在线激活、对账轮询与 GUI 状态切换业务流 |
 | [`docs/admin/IMPORTANT_drm-secrets.md`](../admin/IMPORTANT_drm-secrets.md) | Cloudflare Worker DRM Secret 生产环境变量表 |
 | [`pkg/server/license.go`](../../pkg/server/license.go) | 客户端 Go 离线验签与硬件指纹校验核心代码 |

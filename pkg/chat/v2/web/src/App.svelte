@@ -64,6 +64,15 @@
   let showLangPanel = false;
   let showShareModal = false;
   let showLeaveConfirm = false;
+  let showBatchModal = false;
+  let batchState: 'idle' | 'preparing' | 'ready' | 'sharing' = 'idle';
+  let batchStatusText = '';
+  let batchFileCount = 0;
+  let batchTotalSize = 0;
+  let batchZipUrl = '';
+  let batchIsShare = false;
+  let batchAbortController: AbortController | null = null;
+  let batchPendingItems: Array<{ messageId: string; name: string; url: string }> = [];
   let showUrl = false;
   let composerText = '';
   let licenseTier = 'FREE';
@@ -1278,7 +1287,94 @@
     }
   }
 
-  function handleBatchDownload(e: CustomEvent<{ messages: any[] }>) {
+  function formatBytes(bytes: number, decimals = 1) {
+    if (!bytes || bytes === 0) return '0 B';
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+  }
+
+  function handleCancelBatchDownload() {
+    if (batchAbortController) {
+      batchAbortController.abort();
+      batchAbortController = null;
+    }
+    const peer = client ? client['clientPeer'] : 'desktop';
+    batchPendingItems.forEach(item => {
+      chatActions.updateTransfer({
+        id: 'dl-' + item.messageId + '-' + peer,
+        state: 'cancelled',
+        progress: -1,
+        speed: 0,
+        error: ''
+      });
+      if (client) {
+        client.cancelTransfer('dl-' + item.messageId + '-' + peer);
+      }
+    });
+    showBatchModal = false;
+    batchState = 'idle';
+    batchStatusText = '';
+    batchZipUrl = '';
+    batchPendingItems = [];
+  }
+
+  function handleTriggerZipDownload() {
+    if (!batchZipUrl) return;
+    const link = document.createElement('a');
+    link.href = batchZipUrl;
+    link.download = 'chat-attachments.zip';
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      if (link.parentNode) link.parentNode.removeChild(link);
+    }, 2000);
+    if (typeof navigator !== 'undefined' && (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent))) {
+      window.location.href = batchZipUrl;
+    }
+    showBatchModal = false;
+    batchState = 'idle';
+    batchZipUrl = '';
+  }
+
+  async function triggerZipPrepare(batchItems: Array<{ messageId: string; name: string; url: string }>, peer: string, totalBytes: number) {
+    const ids = batchItems.map(item => encodeURIComponent(item.messageId)).join(',');
+    const zipURL = `/chat-v2/${token}/files/zip?ids=${ids}&clientId=${peer}`;
+    
+    batchState = 'preparing';
+    showBatchModal = true;
+    batchStatusText = getTranslation('batchPackaging', currentLang);
+
+    batchAbortController = new AbortController();
+    const signal = batchAbortController.signal;
+
+    try {
+      const prepRes = await fetch(zipURL + '&prepare=1', { signal });
+      if (!prepRes.ok) throw new Error(`HTTP ${prepRes.status}`);
+      const prepData = await prepRes.json();
+
+      batchState = 'ready';
+      batchZipUrl = zipURL;
+      const count = prepData.count || batchItems.length;
+      const sizeStr = formatBytes(prepData.totalSize || totalBytes);
+      batchStatusText = currentLang === 'en' 
+        ? `Archive is ready (${count} files, ${sizeStr}). Click below to download.` 
+        : `压缩包已就绪 (共 ${count} 个文件，${sizeStr})。请点击下方按钮开始下载。`;
+    } catch (err: any) {
+      if (err.name === 'AbortError') return;
+      // Fallback on prepare failure: still allow downloading the zip
+      batchState = 'ready';
+      batchZipUrl = zipURL;
+      batchStatusText = currentLang === 'en' 
+        ? 'Archive prepared. Click below to download.' 
+        : '压缩包准备完成。请点击下方按钮开始下载。';
+    }
+  }
+
+  async function handleBatchDownload(e: CustomEvent<{ messages: any[] }>) {
     if ($chatSessionStatus !== 'active') return;
     const files = (e.detail?.messages || []).filter((m: any) => m && (m.type === 'file' || m.type === 'image') && !m.uploading);
     if (files.length === 0) return;
@@ -1290,7 +1386,7 @@
       const messageId = msg.id;
       const filename = msg.fileName || 'attachment';
       const transferId = 'dl-' + messageId + '-' + peer;
-      // M4: seed running state so UI does not look idle before server events.
+      // Seed running state so UI displays activity immediately
       chatActions.updateTransfer({
         id: transferId,
         messageId,
@@ -1308,25 +1404,91 @@
     });
 
     if (isEmbedded) {
+      // Desktop GUI: Direct folder save via native Go host bridge
       window.parent.postMessage({ type: 'download-batch', files: batchItems }, '*');
-    } else {
-      // Mobile & Web browser: Trigger a single zip download to bypass multi-download restrictions
-      const ids = batchItems.map(item => encodeURIComponent(item.messageId)).join(',');
-      const zipURL = `/chat-v2/${token}/files/zip?ids=${ids}&clientId=${peer}`;
-      const link = document.createElement('a');
-      link.href = zipURL;
-      link.download = 'chat-attachments.zip';
-      link.style.display = 'none';
-      document.body.appendChild(link);
-      link.click();
-      setTimeout(() => {
-        if (link.parentNode) {
-          link.parentNode.removeChild(link);
-        }
-      }, 2000);
-      if (!isEmbedded && typeof navigator !== 'undefined' && (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent))) {
-        window.location.href = zipURL;
+      return;
+    }
+
+    // Mobile / Browser environment
+    batchPendingItems = batchItems;
+    batchFileCount = files.length;
+    const totalBytes = files.reduce((acc: number, f: any) => acc + (f.size || 0), 0);
+    batchTotalSize = totalBytes;
+
+    const isTLS = window.location.protocol === 'https:' || window.isSecureContext;
+    let canWebShare = false;
+    if (typeof navigator !== 'undefined' && !!navigator.share && !!navigator.canShare) {
+      try {
+        const dummy = new File(['x'], 'test.txt', { type: 'text/plain' });
+        canWebShare = navigator.canShare({ files: [dummy] });
+      } catch {
+        canWebShare = false;
       }
+    }
+
+    // TLS + Web Share API: direct independent multi-file share/save (no zip needed)
+    // Protect mobile Safari memory by capping at 200MB total
+    const useWebShare = isTLS && canWebShare && totalBytes <= 200 * 1024 * 1024;
+
+    if (useWebShare) {
+      batchIsShare = true;
+      batchState = 'sharing';
+      showBatchModal = true;
+      batchStatusText = currentLang === 'en' 
+        ? `Preparing 0/${files.length} files...` 
+        : `正在准备文件 0/${files.length}...`;
+
+      batchAbortController = new AbortController();
+      const signal = batchAbortController.signal;
+
+      try {
+        const fileList: File[] = [];
+        for (let i = 0; i < batchItems.length; i++) {
+          if (signal.aborted) break;
+          const item = batchItems[i];
+          batchStatusText = currentLang === 'en' 
+            ? `Fetching file ${i + 1}/${batchItems.length}: ${item.name}` 
+            : `正在拉取 (${i + 1}/${batchItems.length}): ${item.name}`;
+
+          const res = await fetch(item.url, { signal });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const blob = await res.blob();
+          fileList.push(new File([blob], item.name, { type: blob.type || 'application/octet-stream' }));
+
+          chatActions.updateTransfer({
+            id: 'dl-' + item.messageId + '-' + peer,
+            state: 'completed',
+            progress: 100,
+            percent: 100,
+            bytesDone: blob.size,
+            bytesTotal: blob.size
+          } as any);
+        }
+
+        if (signal.aborted) return;
+
+        showBatchModal = false;
+        batchState = 'idle';
+
+        if (navigator.canShare && navigator.canShare({ files: fileList })) {
+          await navigator.share({
+            files: fileList,
+            title: currentLang === 'en' ? 'EQT Attachments' : 'EQT 附件'
+          });
+          chatActions.addSystemMessage(getTranslation('batchShareSuccess', currentLang));
+        }
+      } catch (err: any) {
+        if (err.name === 'AbortError') {
+          return;
+        }
+        // Fallback on share failure to zip flow
+        batchIsShare = false;
+        triggerZipPrepare(batchItems, peer, totalBytes);
+      }
+    } else {
+      // HTTP or large file or non-share browser: State-driven archive flow
+      batchIsShare = false;
+      triggerZipPrepare(batchItems, peer, totalBytes);
     }
   }
 
@@ -1776,6 +1938,55 @@
           <button class="side-btn" style="background: var(--danger); border-color: var(--danger); color: white;" on:click={handleLeaveSessionConfirm}>
             {currentLang === 'en' ? 'Exit' : '确定退出'}
           </button>
+        </div>
+      </aside>
+    </div>
+    <!-- 批量下载/打包模态框 -->
+    <div class="session-backdrop" class:mobile-layout={isMobileLayout} class:open={showBatchModal} on:click|self={handleCancelBatchDownload}>
+      <aside class="side" style="max-width: 320px; padding: 18px;">
+        <div class="side-section-head">
+          <h1 style="font-size: 16px; font-weight: bold;">
+            {batchIsShare 
+              ? getTranslation('batchSaveModalTitle', currentLang) 
+              : getTranslation('batchDownloadModalTitle', currentLang)}
+          </h1>
+          <button class="icon-button" type="button" on:click={handleCancelBatchDownload} title="Close">
+            <svg viewBox="0 0 24 24" aria-hidden="true" stroke="currentColor" stroke-width="2" fill="none"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+
+        <div style="margin: 12px 0;">
+          <p style="font-size: 13px; color: var(--text); margin: 0 0 6px 0; font-weight: 500;">
+            {currentLang === 'en' ? `Selected ${batchFileCount} files (${formatBytes(batchTotalSize)})` : `已选择 ${batchFileCount} 个文件 (${formatBytes(batchTotalSize)})`}
+          </p>
+          <p class="side-note" style="margin: 0; font-size: 12px; line-height: 1.4; color: var(--muted);">
+            {batchStatusText}
+          </p>
+        </div>
+
+        {#if batchState === 'preparing' || batchState === 'sharing'}
+          <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin: 16px 0; color: var(--primary);">
+            <svg class="spin" style="width: 20px; height: 20px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-opacity="0.25"/>
+              <path d="M12 2a10 10 0 0 1 10 10"/>
+            </svg>
+            <span style="font-size: 13px; font-weight: 500;">
+              {batchIsShare 
+                ? getTranslation('batchSharePreparing', currentLang)
+                : getTranslation('batchPackaging', currentLang)}
+            </span>
+          </div>
+        {/if}
+
+        <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px;">
+          <button class="side-btn" style="background: transparent; border: 1px solid var(--line); color: var(--muted);" on:click={handleCancelBatchDownload}>
+            {getTranslation('batchDownloadCancel', currentLang)}
+          </button>
+          {#if batchState === 'ready'}
+            <button class="side-btn" style="background: var(--primary); border-color: var(--primary); color: white;" on:click={handleTriggerZipDownload}>
+              {getTranslation('batchDownloadBtn', currentLang)}
+            </button>
+          {/if}
         </div>
       </aside>
     </div>

@@ -679,6 +679,60 @@ export const translations: Record<string, Record<Lang, string>> = {
     de: 'Abbrechen',
     fr: 'Annuler'
   },
+  batchDownloadModalTitle: {
+    zh: '批量下载附件',
+    en: 'Batch Download Attachments',
+    ja: '添付ファイル一括ダウンロード',
+    ko: '첨부파일 일괄 다운로드',
+    es: 'Descarga masiva de archivos',
+    de: 'Anhänge stapelweise herunterladen',
+    fr: 'Téléchargement groupé de pièces jointes'
+  },
+  batchSaveModalTitle: {
+    zh: '保存文件',
+    en: 'Save Files',
+    ja: 'ファイルを保存',
+    ko: '파일 저장',
+    es: 'Guardar archivos',
+    de: 'Dateien speichern',
+    fr: 'Enregistrer les fichiers'
+  },
+  batchPackaging: {
+    zh: '正在检查附件并生成压缩包...',
+    en: 'Inspecting attachments and preparing archive...',
+    ja: '添付ファイルを確認してアーカイブを作成中...',
+    ko: '첨부파일을 확인하고 압축 파일을 생성하는 중...',
+    es: 'Comprobando archivos y preparando comprimido...',
+    de: 'Anhänge prüfen und Archiv vorbereiten...',
+    fr: 'Vérification des pièces jointes et préparation de l’archive...'
+  },
+  batchDownloadBtn: {
+    zh: '立即下载压缩包 (.zip)',
+    en: 'Download Archive (.zip)',
+    ja: 'アーカイブをダウンロード (.zip)',
+    ko: '압축 파일 다운로드 (.zip)',
+    es: 'Descargar archivo (.zip)',
+    de: 'Archiv herunterladen (.zip)',
+    fr: 'Télécharger l’archive (.zip)'
+  },
+  batchSharePreparing: {
+    zh: '正在拉取文件准备保存...',
+    en: 'Preparing files for sharing...',
+    ja: 'ファイルを準備中...',
+    ko: '공유할 파일을 준비 중...',
+    es: 'Preparando archivos para compartir...',
+    de: 'Dateien zum Teilen vorbereiten...',
+    fr: 'Préparation des fichiers pour le partage...'
+  },
+  batchShareSuccess: {
+    zh: '附件已成功拉取并调起系统保存。',
+    en: 'Attachments prepared and opened in system share.',
+    ja: 'ファイルが正常に準備され、システムの共有が開かれました。',
+    ko: '파일이 성공적으로 준비되어 시스템 공유가 열렸습니다.',
+    es: 'Archivos preparados y abiertos en compartir.',
+    de: 'Dateien vorbereitet und im Teilen-Dialog geöffnet.',
+    fr: 'Fichiers préparés et ouverts dans le partage système.'
+  },
   selectedCount: {
     zh: '已选 {count} 个文件',
     en: '{count} selected',

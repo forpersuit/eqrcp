@@ -6,7 +6,13 @@
 
 ## 📑 设计提案索引
 
-1. **[零配置端到端加密 (E2EE) 架构设计与 Wi-Fi 嗅探防御规范 (2026-09-01)](20260901-e2ee-end-to-end-encryption-architecture.md)**
+1. **[Chat 会话历史归档与持久化架构设计 (2026-09-06)](20260906-chat-session-history-and-persistence-design.md)**
+   - 现有“按需流式管道 (Rendezvous)”零临时文件落盘机制与生命周期分析
+   - 本地轻量化结构化存储设计（SQLite / JSONL）与已存/未存附件状态映射
+   - 隐私安全与自动老化保留策略（留存周期控制、一键清空）
+   - 免费版（基础文本留存）vs Plus/Pro（全文检索、无限制归档、结构化导出）商业化分级
+
+2. **[零配置端到端加密 (E2EE) 架构设计与 Wi-Fi 嗅探防御规范 (2026-09-01)](20260901-e2ee-end-to-end-encryption-architecture.md)**
    - 局域网 Wi-Fi 嗅探与抓包拦截风险第一性原理剖析
    - 破局传统自签 TLS 红色告警：URL Fragment (`#k=`) 零知识密钥协商机制
    - 浏览器原生 WebCrypto API (`AES-256-GCM`) 硬件级加密与 4MB 分块流式加密规范
