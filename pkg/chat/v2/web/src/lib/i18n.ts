@@ -679,24 +679,6 @@ export const translations: Record<string, Record<Lang, string>> = {
     de: 'Abbrechen',
     fr: 'Annuler'
   },
-  batchDownloadModalTitle: {
-    zh: '批量下载附件',
-    en: 'Batch Download Attachments',
-    ja: '添付ファイル一括ダウンロード',
-    ko: '첨부파일 일괄 다운로드',
-    es: 'Descarga masiva de archivos',
-    de: 'Anhänge stapelweise herunterladen',
-    fr: 'Téléchargement groupé de pièces jointes'
-  },
-  batchSaveModalTitle: {
-    zh: '保存文件',
-    en: 'Save Files',
-    ja: 'ファイルを保存',
-    ko: '파일 저장',
-    es: 'Guardar archivos',
-    de: 'Dateien speichern',
-    fr: 'Enregistrer les fichiers'
-  },
   batchPackaging: {
     zh: '正在打包文件并开始下载...',
     en: 'Packaging files and starting download...',
@@ -706,33 +688,6 @@ export const translations: Record<string, Record<Lang, string>> = {
     de: 'Dateien zusammenstellen und Download starten...',
     fr: 'Empaquetage des fichiers et début du téléchargement...'
   },
-  batchDownloadBtn: {
-    zh: '立即下载压缩包 (.zip)',
-    en: 'Download Archive (.zip)',
-    ja: 'アーカイブをダウンロード (.zip)',
-    ko: '압축 파일 다운로드 (.zip)',
-    es: 'Descargar archivo (.zip)',
-    de: 'Archiv herunterladen (.zip)',
-    fr: 'Télécharger l’archive (.zip)'
-  },
-  batchSharePreparing: {
-    zh: '正在拉取文件准备保存...',
-    en: 'Preparing files for sharing...',
-    ja: 'ファイルを準備中...',
-    ko: '공유할 파일을 준비 중...',
-    es: 'Preparando archivos para compartir...',
-    de: 'Dateien zum Teilen vorbereiten...',
-    fr: 'Préparation des fichiers pour le partage...'
-  },
-  batchShareSuccess: {
-    zh: '附件已成功拉取并调起系统保存。',
-    en: 'Attachments prepared and opened in system share.',
-    ja: 'ファイルが正常に準備され、システムの共有が開かれました。',
-    ko: '파일이 성공적으로 준비되어 시스템 공유가 열렸습니다.',
-    es: 'Archivos preparados y abiertos en compartir.',
-    de: 'Dateien vorbereitet und im Teilen-Dialog geöffnet.',
-    fr: 'Fichiers préparés et ouverts dans le partage système.'
-  },
   batchFilesSelected: {
     zh: '已选择 {count} 个文件 ({size})',
     en: '{count} files selected ({size})',
@@ -741,87 +696,6 @@ export const translations: Record<string, Record<Lang, string>> = {
     es: '{count} archivos seleccionados ({size})',
     de: '{count} Dateien ausgewählt ({size})',
     fr: '{count} fichiers sélectionnés ({size})'
-  },
-  batchPreparingFiles: {
-    zh: '正在拉取文件准备保存 ({current}/{total})...',
-    en: 'Preparing files for saving ({current}/{total})...',
-    ja: '保存用にファイルを準備中 ({current}/{total})...',
-    ko: '저장을 위해 파일 준비 중 ({current}/{total})...',
-    es: 'Preparando archivos para guardar ({current}/{total})...',
-    de: 'Dateien zum Speichern vorbereiten ({current}/{total})...',
-    fr: 'Préparation des fichiers pour l’enregistrement ({current}/{total})...'
-  },
-  batchFetchingProgress: {
-    zh: '正在拉取 ({current}/{total}): {name}',
-    en: 'Fetching ({current}/{total}): {name}',
-    ja: '取得中 ({current}/{total}): {name}',
-    ko: '가져오는 중 ({current}/{total}): {name}',
-    es: 'Obteniendo ({current}/{total}): {name}',
-    de: 'Abrufen ({current}/{total}): {name}',
-    fr: 'Récupération ({current}/{total}): {name}'
-  },
-  batchArchiveReadyInfo: {
-    zh: '压缩包已就绪 (共 {count} 个文件，{size})。请点击下方按钮开始下载。',
-    en: 'Archive is ready ({count} files, {size}). Click below to download.',
-    ja: 'アーカイブの準備が完了しました (計 {count} 個、{size})。下のボタンをクリックしてダウンロードしてください。',
-    ko: '압축 파일이 준비되었습니다 (총 {count}개, {size}). 아래 버튼을 클릭하여 다운로드하세요.',
-    es: 'El archivo está listo ({count} archivos, {size}). Haga clic abajo para descargar.',
-    de: 'Archiv ist bereit ({count} Dateien, {size}). Klicken Sie unten zum Herunterladen.',
-    fr: 'L’archive est prête ({count} fichiers, {size}). Cliquez ci-dessous pour télécharger.'
-  },
-  batchSaveReadyInfo: {
-    zh: '文件已就绪 (共 {count} 个文件，{size})。请点击下方按钮保存到相册或文件。',
-    en: 'Files are ready ({count} files, {size}). Click below to save to Photos or Files.',
-    ja: 'ファイルの準備が完了しました (計 {count} 個、{size})。下のボタンをクリックして写真やファイルに保存してください。',
-    ko: '파일이 준비되었습니다 (총 {count}개, {size}). 아래 버튼을 클릭하여 사진 또는 파일에 저장하세요.',
-    es: 'Los archivos están listos ({count} archivos, {size}). Haga clic abajo para guardar en Fotos o Archivos.',
-    de: 'Dateien sind bereit ({count} Dateien, {size}). Klicken Sie unten, um sie in Fotos oder Dateien zu speichern.',
-    fr: 'Les fichiers sont prêts ({count} fichiers, {size}). Cliquez ci-dessous pour enregistrer dans Photos ou Fichiers.'
-  },
-  batchShareTimeout: {
-    zh: '待保存文件已超时，已自动释放内存。',
-    en: 'Pending files timed out and were released from memory.',
-    ja: '保存待機ファイルがタイムアウトしたため、メモリを解放しました。',
-    ko: '저장 대기 파일이 시간 초과되어 메모리에서 해제되었습니다.',
-    es: 'Los archivos pendientes expiraron y se liberaron de la memoria.',
-    de: 'Ausstehende Dateien sind abgelaufen und wurden aus dem Speicher freigegeben.',
-    fr: 'Les fichiers en attente ont expiré et ont été libérés de la mémoire.'
-  },
-  batchArchiveFallbackReady: {
-    zh: '压缩包准备完成。请点击下方按钮开始下载。',
-    en: 'Archive prepared. Click below to download.',
-    ja: 'アーカイブの準備が完了しました。下のボタンをクリックしてダウンロードしてください。',
-    ko: '압축 파일이 준비되었습니다. 아래 버튼을 클릭하여 다운로드하세요.',
-    es: 'Archivo preparado. Haga clic abajo para descargar.',
-    de: 'Archiv vorbereitet. Klicken Sie unten zum Herunterladen.',
-    fr: 'Archive préparée. Cliquez ci-dessous pour télécharger.'
-  },
-  batchShareBtn: {
-    zh: '保存到相册/文件',
-    en: 'Save to Photos / Files',
-    ja: '写真/ファイルに保存',
-    ko: '사진 / 파일에 저장',
-    es: 'Guardar en Fotos / Archivos',
-    de: 'In Fotos / Dateien speichern',
-    fr: 'Enregistrer dans Photos / Fichiers'
-  },
-  batchShareCancelled: {
-    zh: '已取消保存或分享。',
-    en: 'Save or share was cancelled.',
-    ja: '保存または共有がキャンセルされました。',
-    ko: '저장 또는 공유가 취소되었습니다.',
-    es: 'Se canceló guardar o compartir.',
-    de: 'Speichern oder Teilen wurde abgebrochen.',
-    fr: 'L’enregistrement ou le partage a été annulé.'
-  },
-  batchShareUnsupported: {
-    zh: '当前环境不支持多文件系统分享，已自动切换为压缩包下载。',
-    en: 'System multi-file share not supported, switched to archive download.',
-    ja: '複数ファイルのシステム共有がサポートされていないため、アーカイブダウンロードに切り替えました。',
-    ko: '시스템 다중 파일 공유가 지원되지 않아 압축 파일 다운로드로 전환되었습니다.',
-    es: 'El sistema no admite compartir múltiples archivos; se cambió a descarga de comprimido.',
-    de: 'Systemweites Teilen mehrerer Dateien nicht unterstützt, auf Archiv-Download umgestellt.',
-    fr: 'Le partage de fichiers multiples n’est pas pris en charge, basculé vers le téléchargement de l’archive.'
   },
   selectedCount: {
     zh: '已选 {count} 个文件',

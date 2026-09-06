@@ -1284,11 +1284,6 @@
 
 <style>
   /* Rely on global app.css V1 classes */
-  @keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-  }
-
   .bubble.selecting {
     cursor: pointer;
   }
