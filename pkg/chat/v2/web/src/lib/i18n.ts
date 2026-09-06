@@ -698,13 +698,13 @@ export const translations: Record<string, Record<Lang, string>> = {
     fr: 'Enregistrer les fichiers'
   },
   batchPackaging: {
-    zh: '正在检查附件并生成压缩包...',
-    en: 'Inspecting attachments and preparing archive...',
-    ja: '添付ファイルを確認してアーカイブを作成中...',
-    ko: '첨부파일을 확인하고 압축 파일을 생성하는 중...',
-    es: 'Comprobando archivos y preparando comprimido...',
-    de: 'Anhänge prüfen und Archiv vorbereiten...',
-    fr: 'Vérification des pièces jointes et préparation de l’archive...'
+    zh: '正在打包文件并开始下载...',
+    en: 'Packaging files and starting download...',
+    ja: 'ファイルをまとめてダウンロードを開始しています...',
+    ko: '파일을 묶어 다운로드를 시작하는 중...',
+    es: 'Empaquetando archivos e iniciando descarga...',
+    de: 'Dateien zusammenstellen und Download starten...',
+    fr: 'Empaquetage des fichiers et début du téléchargement...'
   },
   batchDownloadBtn: {
     zh: '立即下载压缩包 (.zip)',

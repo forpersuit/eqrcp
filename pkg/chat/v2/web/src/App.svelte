@@ -64,24 +64,6 @@
   let showLangPanel = false;
   let showShareModal = false;
   let showLeaveConfirm = false;
-  let showBatchModal = false;
-  let batchState: 'idle' | 'preparing' | 'ready' | 'sharing' = 'idle';
-  let batchStatusText = '';
-  let batchFileCount = 0;
-  let batchTotalSize = 0;
-  let batchZipUrl = '';
-  let batchIsShare = false;
-  let batchAbortController: AbortController | null = null;
-  let batchPendingItems: Array<{ messageId: string; name: string; url: string }> = [];
-  let batchShareFiles: File[] = [];
-  let batchShareTimeoutId: ReturnType<typeof setTimeout> | null = null;
-
-  function clearBatchShareTimeout() {
-    if (batchShareTimeoutId) {
-      clearTimeout(batchShareTimeoutId);
-      batchShareTimeoutId = null;
-    }
-  }
   let showUrl = false;
   let composerText = '';
   let licenseTier = 'FREE';
@@ -1003,8 +985,6 @@
       clearInterval(quotaPollTimer);
       quotaPollTimer = null;
     }
-    clearBatchShareTimeout();
-    batchShareFiles = [];
     if (client) {
       client.close();
     }
@@ -1307,137 +1287,7 @@
     return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
   }
 
-  function handleCancelBatchDownload() {
-    clearBatchShareTimeout();
-    if (batchAbortController) {
-      batchAbortController.abort();
-      batchAbortController = null;
-    }
-    const peer = client ? client['clientPeer'] : 'desktop';
-    batchPendingItems.forEach(item => {
-      chatActions.updateTransfer({
-        id: 'dl-' + item.messageId + '-' + peer,
-        state: 'cancelled',
-        progress: -1,
-        speed: 0,
-        error: ''
-      });
-      if (client) {
-        client.cancelTransfer('dl-' + item.messageId + '-' + peer);
-      }
-    });
-    showBatchModal = false;
-    batchState = 'idle';
-    batchStatusText = '';
-    batchZipUrl = '';
-    batchShareFiles = [];
-    batchPendingItems = [];
-  }
-
-  function handleTriggerZipDownload() {
-    if (!batchZipUrl) return;
-    const link = document.createElement('a');
-    link.href = batchZipUrl;
-    link.download = 'chat-attachments.zip';
-    link.style.display = 'none';
-    document.body.appendChild(link);
-    link.click();
-    setTimeout(() => {
-      if (link.parentNode) link.parentNode.removeChild(link);
-    }, 2000);
-    if (typeof navigator !== 'undefined' && (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent))) {
-      window.location.href = batchZipUrl;
-    }
-    showBatchModal = false;
-    batchState = 'idle';
-    batchZipUrl = '';
-    batchPendingItems = [];
-  }
-
-  async function handleTriggerShare() {
-    clearBatchShareTimeout();
-    if (batchShareFiles.length === 0) return;
-    const peer = client ? client['clientPeer'] : 'desktop';
-    try {
-      await navigator.share({
-        files: batchShareFiles,
-        title: currentLang === 'en' ? 'EQT Attachments' : 'EQT 附件'
-      });
-      // P2-1 fix: Only mark completed AFTER OS share has successfully taken over
-      batchPendingItems.forEach(item => {
-        chatActions.updateTransfer({
-          id: 'dl-' + item.messageId + '-' + peer,
-          state: 'completed',
-          progress: 100,
-          percent: 100
-        } as any);
-      });
-      chatActions.addSystemMessage(getTranslation('batchShareSuccess', currentLang));
-      showBatchModal = false;
-      batchState = 'idle';
-      batchShareFiles = [];
-      batchPendingItems = [];
-    } catch (err: any) {
-      if (err.name === 'AbortError') {
-        // P2-1 fix: User cancelled share sheet - do NOT leave fake completed transfers
-        batchPendingItems.forEach(item => {
-          chatActions.updateTransfer({
-            id: 'dl-' + item.messageId + '-' + peer,
-            state: 'cancelled',
-            progress: -1,
-            speed: 0,
-            error: ''
-          });
-          if (client) {
-            client.cancelTransfer('dl-' + item.messageId + '-' + peer);
-          }
-        });
-        chatActions.addSystemMessage(getTranslation('batchShareCancelled', currentLang));
-        showBatchModal = false;
-        batchState = 'idle';
-        batchShareFiles = [];
-        batchPendingItems = [];
-        return;
-      }
-      // System share failure fallback to zip
-      batchIsShare = false;
-      triggerZipPrepare(batchPendingItems, peer, batchTotalSize);
-    }
-  }
-
-  async function triggerZipPrepare(batchItems: Array<{ messageId: string; name: string; url: string }>, peer: string, totalBytes: number) {
-    const ids = batchItems.map(item => encodeURIComponent(item.messageId)).join(',');
-    const zipURL = `/chat-v2/${token}/files/zip?ids=${ids}&clientId=${peer}`;
-    
-    batchState = 'preparing';
-    showBatchModal = true;
-    batchStatusText = getTranslation('batchPackaging', currentLang);
-
-    batchAbortController = new AbortController();
-    const signal = batchAbortController.signal;
-
-    try {
-      const prepRes = await fetch(zipURL + '&prepare=1', { signal });
-      if (!prepRes.ok) throw new Error(`HTTP ${prepRes.status}`);
-      const prepData = await prepRes.json();
-
-      batchState = 'ready';
-      batchZipUrl = zipURL;
-      const count = prepData.count || batchItems.length;
-      const sizeStr = formatBytes(prepData.totalSize || totalBytes);
-      batchStatusText = getTranslation('batchArchiveReadyInfo', currentLang)
-        .replace('{count}', String(count))
-        .replace('{size}', sizeStr);
-    } catch (err: any) {
-      if (err.name === 'AbortError') return;
-      // Fallback on prepare failure: still allow downloading the zip
-      batchState = 'ready';
-      batchZipUrl = zipURL;
-      batchStatusText = getTranslation('batchArchiveFallbackReady', currentLang);
-    }
-  }
-
-  async function handleBatchDownload(e: CustomEvent<{ messages: any[] }>) {
+  function handleBatchDownload(e: CustomEvent<{ messages: any[] }>) {
     if ($chatSessionStatus !== 'active') return;
     const files = (e.detail?.messages || []).filter((m: any) => m && (m.type === 'file' || m.type === 'image') && !m.uploading);
     if (files.length === 0) return;
@@ -1472,108 +1322,30 @@
       return;
     }
 
-    // Mobile / Browser environment
-    batchPendingItems = batchItems;
-    batchFileCount = files.length;
+    // Mobile & Web browser: 统一直接流式组包（zip.Store 无压缩零开销），单手势直出，无需二次确认弹窗
     const totalBytes = files.reduce((acc: number, f: any) => acc + (f.size || 0), 0);
-    batchTotalSize = totalBytes;
+    const countStr = String(files.length);
+    const sizeStr = formatBytes(totalBytes);
+    const tip = getTranslation('batchFilesSelected', currentLang)
+      .replace('{count}', countStr)
+      .replace('{size}', sizeStr);
+    chatActions.addSystemMessage(`${getTranslation('batchPackaging', currentLang)} (${tip})`);
 
-    const isTLS = window.location.protocol === 'https:' || window.isSecureContext;
-    let canWebShare = false;
-    if (typeof navigator !== 'undefined' && !!navigator.share && !!navigator.canShare) {
-      try {
-        const dummy = new File(['x'], 'test.txt', { type: 'text/plain' });
-        canWebShare = navigator.canShare({ files: [dummy] });
-      } catch {
-        canWebShare = false;
+    const ids = batchItems.map(item => encodeURIComponent(item.messageId)).join(',');
+    const zipURL = `/chat-v2/${token}/files/zip?ids=${ids}&clientId=${peer}`;
+    const link = document.createElement('a');
+    link.href = zipURL;
+    link.download = 'chat-attachments.zip';
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      if (link.parentNode) {
+        link.parentNode.removeChild(link);
       }
-    }
-
-    // TLS + Web Share API: direct independent multi-file share/save (no zip needed)
-    // Protect mobile Safari memory by capping at 200MB total
-    const useWebShare = isTLS && canWebShare && totalBytes <= 200 * 1024 * 1024;
-
-    if (useWebShare) {
-      batchIsShare = true;
-      batchState = 'sharing';
-      showBatchModal = true;
-      batchStatusText = getTranslation('batchPreparingFiles', currentLang)
-        .replace('{current}', '0')
-        .replace('{total}', String(files.length));
-
-      batchAbortController = new AbortController();
-      const signal = batchAbortController.signal;
-
-      try {
-        const fileList: File[] = [];
-        for (let i = 0; i < batchItems.length; i++) {
-          if (signal.aborted) break;
-          const item = batchItems[i];
-          batchStatusText = getTranslation('batchFetchingProgress', currentLang)
-            .replace('{current}', String(i + 1))
-            .replace('{total}', String(batchItems.length))
-            .replace('{name}', item.name);
-
-          const res = await fetch(item.url, { signal });
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const blob = await res.blob();
-          fileList.push(new File([blob], item.name, { type: blob.type || 'application/octet-stream' }));
-
-          // Keep in running state during in-memory buffering, NOT completed
-          const pct = Math.round(((i + 1) / batchItems.length) * 100);
-          chatActions.updateTransfer({
-            id: 'dl-' + item.messageId + '-' + peer,
-            state: 'running',
-            progress: pct,
-            percent: pct,
-            bytesDone: blob.size,
-            bytesTotal: blob.size
-          } as any);
-        }
-
-        if (signal.aborted) return;
-
-        // P2-1 fix: Validate the REAL file collection with navigator.canShare!
-        const canShareReal = typeof navigator !== 'undefined' && !!navigator.canShare && navigator.canShare({ files: fileList });
-        if (!canShareReal) {
-          // P2-1 else branch: graceful fallback to zip if real collection fails system share limit
-          chatActions.addSystemMessage(getTranslation('batchShareUnsupported', currentLang));
-          batchIsShare = false;
-          triggerZipPrepare(batchItems, peer, totalBytes);
-          return;
-        }
-
-        // P3-4 fix: Store fileList in batchShareFiles and switch modal to 'ready' state
-        // User clicks the action button with a fresh User Activation gesture!
-        batchShareFiles = fileList;
-        batchState = 'ready';
-        const countStr = String(fileList.length);
-        const sizeStr = formatBytes(totalBytes);
-        // P3-a fix: Use batchSaveReadyInfo for direct share instead of zip archive wording
-        batchStatusText = getTranslation('batchSaveReadyInfo', currentLang)
-          .replace('{count}', countStr)
-          .replace('{size}', sizeStr);
-
-        // P3-b fix: 90s auto-dismiss & memory release for ~200MB buffered File[]
-        clearBatchShareTimeout();
-        batchShareTimeoutId = setTimeout(() => {
-          if (batchState === 'ready' && batchIsShare) {
-            chatActions.addSystemMessage(getTranslation('batchShareTimeout', currentLang));
-            handleCancelBatchDownload();
-          }
-        }, 90000);
-      } catch (err: any) {
-        if (err.name === 'AbortError') {
-          return;
-        }
-        // Fallback on share preparation failure to zip flow
-        batchIsShare = false;
-        triggerZipPrepare(batchItems, peer, totalBytes);
-      }
-    } else {
-      // HTTP or large file or non-share browser: State-driven archive flow
-      batchIsShare = false;
-      triggerZipPrepare(batchItems, peer, totalBytes);
+    }, 2000);
+    if (!isEmbedded && typeof navigator !== 'undefined' && (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent))) {
+      window.location.href = zipURL;
     }
   }
 
@@ -2023,61 +1795,6 @@
           <button class="side-btn" style="background: var(--danger); border-color: var(--danger); color: white;" on:click={handleLeaveSessionConfirm}>
             {currentLang === 'en' ? 'Exit' : '确定退出'}
           </button>
-        </div>
-      </aside>
-    </div>
-    <!-- 批量下载/打包模态框 -->
-    <div class="session-backdrop" class:mobile-layout={isMobileLayout} class:open={showBatchModal} on:click|self={handleCancelBatchDownload}>
-      <aside class="side" style="max-width: 320px; padding: 18px;">
-        <div class="side-section-head">
-          <h1 style="font-size: 16px; font-weight: bold;">
-            {batchIsShare 
-              ? getTranslation('batchSaveModalTitle', currentLang) 
-              : getTranslation('batchDownloadModalTitle', currentLang)}
-          </h1>
-          <button class="icon-button" type="button" on:click={handleCancelBatchDownload} title="Close">
-            <svg viewBox="0 0 24 24" aria-hidden="true" stroke="currentColor" stroke-width="2" fill="none"><path d="M18 6 6 18M6 6l12 12"/></svg>
-          </button>
-        </div>
-
-        <div style="margin: 12px 0;">
-          <p style="font-size: 13px; color: var(--text); margin: 0 0 6px 0; font-weight: 500;">
-            {getTranslation('batchFilesSelected', currentLang).replace('{count}', String(batchFileCount)).replace('{size}', formatBytes(batchTotalSize))}
-          </p>
-          <p class="side-note" style="margin: 0; font-size: 12px; line-height: 1.4; color: var(--muted);">
-            {batchStatusText}
-          </p>
-        </div>
-
-        {#if batchState === 'preparing' || batchState === 'sharing'}
-          <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin: 16px 0; color: var(--accent, #156f5a);">
-            <svg class="spin" style="width: 20px; height: 20px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-opacity="0.25"/>
-              <path d="M12 2a10 10 0 0 1 10 10"/>
-            </svg>
-            <span style="font-size: 13px; font-weight: 500;">
-              {batchIsShare 
-                ? getTranslation('batchSharePreparing', currentLang)
-                : getTranslation('batchPackaging', currentLang)}
-            </span>
-          </div>
-        {/if}
-
-        <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px;">
-          <button class="side-btn" style="background: transparent; border: 1px solid var(--line); color: var(--muted);" on:click={handleCancelBatchDownload}>
-            {getTranslation('batchDownloadCancel', currentLang)}
-          </button>
-          {#if batchState === 'ready'}
-            {#if batchIsShare}
-              <button class="side-btn" style="background: var(--accent, #156f5a); border-color: var(--accent, #156f5a); color: white;" on:click={handleTriggerShare}>
-                {getTranslation('batchShareBtn', currentLang)}
-              </button>
-            {:else}
-              <button class="side-btn" style="background: var(--accent, #156f5a); border-color: var(--accent, #156f5a); color: white;" on:click={handleTriggerZipDownload}>
-                {getTranslation('batchDownloadBtn', currentLang)}
-              </button>
-            {/if}
-          {/if}
         </div>
       </aside>
     </div>

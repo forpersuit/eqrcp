@@ -55,18 +55,11 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
   - 视口宽度 `<= 820px` 时，所有 input / textarea 字体大小不得小于 `16px`，防止 iOS Safari 等移动浏览器强行放大页面。
 - **手势居中弹窗 (Centered Mobile Modals)**：
   - 移动端视口下，二维码分享与退出确认弹窗在水平和垂直方向居中，边缘保留 16px 安全 Padding（宽度 `calc(100% - 32px)`，最大 `340px`），配合 `transform: scale(0.95) -> scale(1)` 微动画。
-- **移动端多选下载与保存体验规范 (Multi-selection Batch Download & Web Share UX)**：
-  - **TLS 安全上下文 (HTTPS) 与 Web Share 生命周期**：
-    - **独立文件直存**：利用 Web Share API (`navigator.share({ files: [...] })`)，拉取独立文件流后调起 iOS / Android 系统原生分享面板（一键直存系统相册或“文件” App，免去解压 zip 的繁琐操作）；为保护移动端内存（防范 WebKit OOM 崩溃），上限控制在 200MB 以内。
-    - **用户手势激活态保活 (User Activation Preservation)**：`navigator.share` 必须由瞬时用户手势触发。批量拉取文件流耗时通常超过浏览器允许的手势窗口（2~3s），直接调用会抛出 `NotAllowedError`。必须采用两阶段设计：文件全部拉取至内存后，模态框切换至就绪态展示【保存到相册/文件】按钮，由用户的第二次显式点击发起原生分享，确保 100% 成功唤起。
-    - **真实文件集合支持度校验与优雅回退**：仅通过 `canShare()` 预检是不够的，必须在文件全部加载后通过 `navigator.canShare({ files: fileList })` 验证实际文件集合；若系统不支持多文件分享，必须无缝自动回退到 zip 打包流程并通知用户，严禁静默分支。
-    - **状态流严格对称与取消捕获**：拉取阶段 transfer 状态维持 `running`，禁止提前置为 `completed`；仅在 OS 接管成功后标记 `completed`；用户在系统分享面板主动取消（`AbortError`）时，必须将 transfer 恢复为 `cancelled` 并推送应用内通知，绝不能残留伪 completed 状态。
-    - **独立直存语义与大内存超时自动释放 (Ready Semantics & Inactivity Release)**：就绪态文案必须采用独立的“文件已就绪/保存到相册或文件”直存表述（严禁复用 zip 打包下载措辞）；同时针对保活最高 ~200MB 的 `File[]` 阵列，配备 90 秒超时自动收起及 `onDestroy`/取消显式重置，防止用户长时间停留导致移动端（如 iOS Safari）后台内存被强行回收。
-  - **HTTP 环境与超大文件状态化打包 (State-driven Zip Modal)**：
-    - 坚决避免点击后无状态等待（极易被 iOS Safari 判定为无响应而静默丢弃下载意图）；
-    - 服务端针对局域网附件下载采用 `zip.Store`（不压缩模式），消除大文件 Deflate 耗时；
-    - **预检与实包口径绝对对称**：`prepare=1` 预检与实际 zip 打包必须严格以磁盘物理文件 `os.Stat(filePath)` 为唯一事实源，`zip.Store` 头部尺寸严格填入 `info.Size()`，避免尺寸不一致导致流解析截断；
-    - 前端弹出优雅的 In-App 模态框（检查准备中 -> 打包就绪），由用户在就绪后轻点【立即下载压缩包】产生全新的纯净用户手势（User Activation），确保 100% 顺畅唤起原生下载保存。
+- **移动端与 Web 端多选批量下载规范 (Streamlined Batch Download UX)**：
+  - **跨平台体验统一 (Platform Alignment)**：桌面内嵌环境（`isEmbedded`）通过原生宿主 Bridge（`postMessage: download-batch`）调起宿主原生目录选择并直接批量落盘；Web 浏览器与移动端环境（`!isEmbedded`）统一采用单手势流式组包（`zip.Store` 存储模式，无压缩开销）单文件传输。
+  - **零二次确认弹窗与单手势直出 (Modal-Free & Single Activation Gesture)**：多选栏点击【批量下载】即为唯一的、有效的手势（User Activation）。点击瞬间直接发起单文件 zip 下载请求，移动端浏览器仅弹出单次系统原生保存确认（如 iOS Safari “您要下载‘chat-attachments-xxxx.zip’吗？”），完全杜绝弹窗轰炸、Web Share 内存泄露与多层确认模态框。
+  - **轻量应用内状态通知 (In-App Flow Feedback)**：触发下载的同时，在聊天流中追加一条系统消息（如 `正在打包文件并开始下载... (已选择 N 个文件 (X MB))`），提供直观的状态反馈，避免全屏或半屏遮罩阻断用户后续交互。
+  - **服务端零 CPU 零延迟流式组包**：服务端 `/files/zip` 采用 `zip.Store` 纯组包流式传输，边读边推，毫秒级启动，免去 CPU Deflate 运算与移动设备大文件 OOM 风险。
 - **会话结束控件锁定**：
   - 手动退出会话（`chatSessionStatus !== 'active'`）时，所有输入控件（附件 label、textarea、提交按钮、文件输入框）显式设为 `disabled`（或 `pointer-events: none;`），占位符替换为“会话已结束”。
 - **Android 虚拟键盘布局修正**：
