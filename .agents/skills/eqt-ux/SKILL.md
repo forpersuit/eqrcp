@@ -68,9 +68,13 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
     - 严禁加入任何由于焦点未就位而强制将视口高度撑回全屏（`window.innerHeight`）的反向逻辑，保证物理可见高度严格由 `vv.height` 驱动。
   - **CSS 硬件级零延迟响应 (Disable Transition on Mobile)**：
     - 在移动端媒体查询（如 `@media (max-width: 820px)`）下，必须对 `.chat-viewport` 设置 `transition: none !important;`，彻底杜绝 CSS 属性过渡动画（如 250ms 过渡）与系统级 60fps/120fps 硬件键盘升降动画发生拉扯、滞后或回弹。
-  - **键盘展开自适应贴合 (`.keyboard-open`)**：
-    - 键盘弹出时为 `html` 增加 `.keyboard-open` 类。通过 CSS 消除外层容器多余的底部安全区填充（`main { padding-bottom: 0 !important; }`），将卡片底部圆角拉平（`border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom: none;`），并将 `.composer` 底部 Padding 重置为紧凑值（`8px !important;`）。
-    - 键盘收起时移除该类，平滑复原悬浮卡片外观及物理 Home 条安全边距（`max(11px, env(safe-area-inset-bottom))`）。
+  - **键盘展开聊天卡片整体抬起规范 (Whole Chat Card Raised on Keyboard Open)**：
+    - **严禁切断卡片底边框**：聊天界面是完整的实体卡片容器（`.chat-shell`），软键盘弹出时严禁通过 `border-bottom: none` 或去除底部圆角粗暴抹平底边，否则会导致左右两条纵向边框延伸到底部突兀截断。
+    - **随视口整体抬起与呼吸边距**：视口由 `window.visualViewport` 压缩时，整个 `.chat-shell` 作为一个完整封闭的 UI 实体悬浮在软键盘之上，完整保留 4 边 1px 细边框与 14px 全圆角；外层容器维持与四周协调的底部安全呼吸边距（`main { padding-bottom: 8px !important; }`），内部 `.composer` 底部设为紧凑内边距（`padding-bottom: 8px !important;`）。
+    - **键盘收起平滑复原**：键盘收起时恢复物理 Home 条安全边距（`max(11px, env(safe-area-inset-bottom))`）。
+  - **附件按钮曲别针图标几何与光学双重居中 (Attachment Button Paperclip Centering)**：
+    - 36px 圆形附件按钮内部的曲别针图形必须使用完整的三回转轮廓线，避免残缺单边路径造成的重心偏离。
+    - 结合光学与几何中心校准，通过 `viewBox="0.6 -0.6 24 24"` 消除对角线 45° 旋转产生的微小重心右移，使曲别针交叉与回转中心精准对齐圆形按钮的物理正中心。
   - **自然手势收起键盘与桌面/内嵌模式隔离 (Gesture Dismissal & Desktop Isolation)**：
     - **平台隔离门控**：点击失焦逻辑仅在移动端独立页面（`isMobileLayout && !isEmbedded`）生效；严禁在桌面浏览器或 Wails 内嵌 GUI 中生效，防止打断桌面用户“点开消息查看后继续输入”的常规交互。
     - **统一入口与完整排除名单**：收敛至 Document 级单点监听，合并排除所有可交互元素（`.composer, form.composer, #message-textarea, button, a, select, [role="button"], .interactive, .modal, .menu-dropdown, .file-card, .bubble-actions, .bubble-action-btn, .action-btn`），彻底避免多层监听器导致文件卡片/气泡操作按钮点击被意外失焦或架空。

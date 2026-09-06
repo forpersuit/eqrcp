@@ -1596,12 +1596,7 @@ input:focus { border-color: var(--accent); outline: none; }
         width: 100%;
     }
     html.keyboard-open main {
-        padding-bottom: 0 !important;
-    }
-    html.keyboard-open .chat-shell {
-        border-bottom-left-radius: 0 !important;
-        border-bottom-right-radius: 0 !important;
-        border-bottom: none !important;
+        padding-bottom: 8px !important;
     }
     html.keyboard-open .composer {
         padding-bottom: 8px !important;

@@ -155,7 +155,7 @@
         for={isEmbedded ? undefined : 'chat-file-input'}
         on:click={handleFileLabelClick}
       >
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12.5 14.5 6a3 3 0 0 1 4.2 4.2L10.8 18.1a5 5 0 1 1-7.1-7.1l8.7-8.7" stroke="currentColor" stroke-width="2" fill="none"/></svg>
+        <svg viewBox="0.6 -0.6 24 24" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
       </label>
       <textarea 
         bind:this={textareaEl}
