@@ -71,8 +71,12 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
   - **键盘展开自适应贴合 (`.keyboard-open`)**：
     - 键盘弹出时为 `html` 增加 `.keyboard-open` 类。通过 CSS 消除外层容器多余的底部安全区填充（`main { padding-bottom: 0 !important; }`），将卡片底部圆角拉平（`border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom: none;`），并将 `.composer` 底部 Padding 重置为紧凑值（`8px !important;`）。
     - 键盘收起时移除该类，平滑复原悬浮卡片外观及物理 Home 条安全边距（`max(11px, env(safe-area-inset-bottom))`）。
-  - **自然手势收起键盘 (Gesture Dismissal)**：
-    - 在消息列表历史流（`.messages`）上监听 `pointerdown` 与 `touchmove`。若当前正处于输入框编辑状态且触控目标为非交互元素（排除按钮、超链接、选择框），即刻主动调用 `document.activeElement.blur()`，实现微信/iMessage 般“轻点消息区或滑动聊天记录即平滑收起键盘”的原生级交互体验。
+  - **自然手势收起键盘与桌面/内嵌模式隔离 (Gesture Dismissal & Desktop Isolation)**：
+    - **平台隔离门控**：点击失焦逻辑仅在移动端独立页面（`isMobileLayout && !isEmbedded`）生效；严禁在桌面浏览器或 Wails 内嵌 GUI 中生效，防止打断桌面用户“点开消息查看后继续输入”的常规交互。
+    - **统一入口与完整排除名单**：收敛至 Document 级单点监听，合并排除所有可交互元素（`.composer, form.composer, #message-textarea, button, a, select, [role="button"], .interactive, .modal, .menu-dropdown, .file-card, .bubble-actions, .bubble-action-btn, .action-btn`），彻底避免多层监听器导致文件卡片/气泡操作按钮点击被意外失焦或架空。
+    - **移动端触控滑动收起**：在消息列表（`.messages`）上监听 `touchmove`，移动端手势滑动浏览历史记录时自动调用 `document.activeElement.blur()` 收起软键盘。
+  - **屏幕旋转与基准视口自适应 (Orientation & Base Viewport Sync)**：
+    - 监听 `resize` 与 `orientationchange`。在非编辑态（`!isComposerActive`）下，无条件将 `baseViewportHeight` 实时更新为当前 `window.innerHeight`，防止手机横竖屏翻转时基准高度陈旧而导致键盘展开态误判。
   - **防止 Safari/Android 页面位移漂移**：
     - 注册全局 `scroll` 监听，检测到滚动时重置 `window.scrollY` 为 `0`。对输入控件注册 `focusin`，高频运行纠正逻辑，防止移动浏览器在弹出键盘时错误将 `fixed` 视口顶出屏幕外。
 

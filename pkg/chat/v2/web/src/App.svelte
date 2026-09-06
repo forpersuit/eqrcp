@@ -90,8 +90,22 @@
   let currentLang = rawLang.toLowerCase().split('-')[0];
 
   let isMobileLayout = false;
+  let baseViewportHeight = typeof window !== 'undefined' ? window.innerHeight : 0;
   function checkScreenSize() {
     isMobileLayout = typeof window !== 'undefined' && window.innerWidth <= 820;
+    if (typeof window !== 'undefined') {
+      const activeEl = document.activeElement;
+      const isComposerActive = !!(activeEl && (
+        activeEl.closest('.composer') ||
+        activeEl.closest('form.composer') ||
+        activeEl.id === 'message-textarea' ||
+        activeEl.tagName === 'INPUT' ||
+        activeEl.tagName === 'TEXTAREA'
+      ));
+      if (!isComposerActive) {
+        baseViewportHeight = window.innerHeight;
+      }
+    }
   }
 
   // 联网判定:免费额度/套餐 badge 只在联网时展示(离线为默认 free 降级态,额度无意义)。
@@ -830,6 +844,7 @@
     updateOnlineStatus();
     if (typeof window !== 'undefined') {
       window.addEventListener('resize', checkScreenSize);
+      window.addEventListener('orientationchange', checkScreenSize);
       window.addEventListener('online', updateOnlineStatus);
       window.addEventListener('offline', updateOnlineStatus);
     }
@@ -910,9 +925,12 @@
     document.addEventListener('focusout', handleGlobalFocusOut);
 
     handleDocumentPointerDown = (e: PointerEvent | MouseEvent) => {
+      // 移动端非内嵌模式门控：仅在移动视口且非 Wails 内嵌 GUI 下生效，避免打断桌面端常规交互
+      if (!isMobileLayout || isEmbedded) return;
+
       const target = e.target as HTMLElement | null;
       if (!target) return;
-      if (target.closest('.composer, form.composer, #message-textarea, button, a, select, [role="button"], .interactive, .modal, .menu-dropdown')) {
+      if (target.closest('.composer, form.composer, #message-textarea, button, a, select, [role="button"], .interactive, .modal, .menu-dropdown, .file-card, .bubble-actions, .bubble-action-btn, .action-btn')) {
         return;
       }
       const activeEl = document.activeElement;
@@ -930,8 +948,6 @@
       };
       window.addEventListener('scroll', windowScrollHandler);
     }
-
-    let baseViewportHeight = typeof window !== 'undefined' ? window.innerHeight : 0;
 
     if (typeof window !== 'undefined' && window.visualViewport) {
       visualViewportHandler = () => {
@@ -956,7 +972,7 @@
             activeEl.tagName === 'TEXTAREA'
           ));
 
-          if (!isComposerActive && window.innerHeight > baseViewportHeight) {
+          if (!isComposerActive) {
             baseViewportHeight = window.innerHeight;
           }
 
@@ -1005,6 +1021,7 @@
   onDestroy(() => {
     if (typeof window !== 'undefined') {
       window.removeEventListener('resize', checkScreenSize);
+      window.removeEventListener('orientationchange', checkScreenSize);
       window.removeEventListener('online', updateOnlineStatus);
       window.removeEventListener('offline', updateOnlineStatus);
     }
