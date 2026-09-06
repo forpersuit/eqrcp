@@ -56,10 +56,15 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
 - **手势居中弹窗 (Centered Mobile Modals)**：
   - 移动端视口下，二维码分享与退出确认弹窗在水平和垂直方向居中，边缘保留 16px 安全 Padding（宽度 `calc(100% - 32px)`，最大 `340px`），配合 `transform: scale(0.95) -> scale(1)` 微动画。
 - **移动端多选下载与保存体验规范 (Multi-selection Batch Download & Web Share UX)**：
-  - **TLS 安全上下文 (HTTPS)**：利用 Web Share API (`navigator.share({ files: [...] })`)，前端异步拉取独立文件流后调起 iOS / Android 系统原生分享面板（一键直存系统相册或“文件” App，免去解压 zip 的繁琐操作）；为保护移动端内存（防止 WebKit OOM 导致页面重载），上限控制在 200MB 以内。
+  - **TLS 安全上下文 (HTTPS) 与 Web Share 生命周期**：
+    - **独立文件直存**：利用 Web Share API (`navigator.share({ files: [...] })`)，拉取独立文件流后调起 iOS / Android 系统原生分享面板（一键直存系统相册或“文件” App，免去解压 zip 的繁琐操作）；为保护移动端内存（防范 WebKit OOM 崩溃），上限控制在 200MB 以内。
+    - **用户手势激活态保活 (User Activation Preservation)**：`navigator.share` 必须由瞬时用户手势触发。批量拉取文件流耗时通常超过浏览器允许的手势窗口（2~3s），直接调用会抛出 `NotAllowedError`。必须采用两阶段设计：文件全部拉取至内存后，模态框切换至就绪态展示【保存到相册/文件】按钮，由用户的第二次显式点击发起原生分享，确保 100% 成功唤起。
+    - **真实文件集合支持度校验与优雅回退**：仅通过 `canShare()` 预检是不够的，必须在文件全部加载后通过 `navigator.canShare({ files: fileList })` 验证实际文件集合；若系统不支持多文件分享，必须无缝自动回退到 zip 打包流程并通知用户，严禁静默分支。
+    - **状态流严格对称与取消捕获**：拉取阶段 transfer 状态维持 `running`，禁止提前置为 `completed`；仅在 OS 接管成功后标记 `completed`；用户在系统分享面板主动取消（`AbortError`）时，必须将 transfer 恢复为 `cancelled` 并推送应用内通知，绝不能残留伪 completed 状态。
   - **HTTP 环境与超大文件状态化打包 (State-driven Zip Modal)**：
     - 坚决避免点击后无状态等待（极易被 iOS Safari 判定为无响应而静默丢弃下载意图）；
     - 服务端针对局域网附件下载采用 `zip.Store`（不压缩模式），消除大文件 Deflate 耗时；
+    - **预检与实包口径绝对对称**：`prepare=1` 预检与实际 zip 打包必须严格以磁盘物理文件 `os.Stat(filePath)` 为唯一事实源，`zip.Store` 头部尺寸严格填入 `info.Size()`，避免尺寸不一致导致流解析截断；
     - 前端弹出优雅的 In-App 模态框（检查准备中 -> 打包就绪），由用户在就绪后轻点【立即下载压缩包】产生全新的纯净用户手势（User Activation），确保 100% 顺畅唤起原生下载保存。
 - **会话结束控件锁定**：
   - 手动退出会话（`chatSessionStatus !== 'active'`）时，所有输入控件（附件 label、textarea、提交按钮、文件输入框）显式设为 `disabled`（或 `pointer-events: none;`），占位符替换为“会话已结束”。
