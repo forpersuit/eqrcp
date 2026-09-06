@@ -2050,7 +2050,7 @@
         </div>
 
         {#if batchState === 'preparing' || batchState === 'sharing'}
-          <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin: 16px 0; color: var(--primary);">
+          <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin: 16px 0; color: var(--accent, #156f5a);">
             <svg class="spin" style="width: 20px; height: 20px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-opacity="0.25"/>
               <path d="M12 2a10 10 0 0 1 10 10"/>
@@ -2069,11 +2069,11 @@
           </button>
           {#if batchState === 'ready'}
             {#if batchIsShare}
-              <button class="side-btn" style="background: var(--primary); border-color: var(--primary); color: white;" on:click={handleTriggerShare}>
+              <button class="side-btn" style="background: var(--accent, #156f5a); border-color: var(--accent, #156f5a); color: white;" on:click={handleTriggerShare}>
                 {getTranslation('batchShareBtn', currentLang)}
               </button>
             {:else}
-              <button class="side-btn" style="background: var(--primary); border-color: var(--primary); color: white;" on:click={handleTriggerZipDownload}>
+              <button class="side-btn" style="background: var(--accent, #156f5a); border-color: var(--accent, #156f5a); color: white;" on:click={handleTriggerZipDownload}>
                 {getTranslation('batchDownloadBtn', currentLang)}
               </button>
             {/if}

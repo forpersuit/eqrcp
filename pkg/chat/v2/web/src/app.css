@@ -4,6 +4,7 @@
     --line: #d7ded7;
     --panel: #ffffff;
     --accent: #156f5a;
+    --primary: var(--accent);
     --accent-strong: #0d4e42;
     --accent-rgb: 21,111,90;
     --danger: #a63232;
