@@ -408,17 +408,25 @@ func (h *Handler) handleZipDownload(w http.ResponseWriter, r *http.Request, toke
 		zipFilename += ".zip"
 	}
 
+	mockSizeStr := query.Get("mock_size")
+
 	if query.Get("prepare") == "1" {
 		var totalSize int64
 		validFiles := 0
 		for _, fileID := range rawIDs {
 			filePath := sess.GetAttachment(fileID)
-			if msg, ok := sess.MessageStore.Find(fileID); ok && msg != nil {
-				totalSize += msg.Size
-				validFiles++
-			} else if filePath != "" {
-				if info, err := os.Stat(filePath); err == nil {
+			_, msgExists := sess.MessageStore.Find(fileID)
+			hasDiskFile := false
+			if filePath != "" {
+				if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
 					totalSize += info.Size()
+					validFiles++
+					hasDiskFile = true
+				}
+			}
+			if !hasDiskFile && mockSizeStr != "" && (msgExists || filePath != "") {
+				if mSize, err := strconv.ParseInt(mockSizeStr, 10, 64); err == nil && mSize > 0 {
+					totalSize += mSize
 					validFiles++
 				}
 			}
@@ -457,8 +465,6 @@ func (h *Handler) handleZipDownload(w http.ResponseWriter, r *http.Request, toke
 		return fmt.Sprintf("%s (%d)%s", base, count, ext)
 	}
 
-	mockSizeStr := query.Get("mock_size")
-
 	for _, fileID := range rawIDs {
 		filePath := sess.GetAttachment(fileID)
 		var origName string
@@ -472,15 +478,18 @@ func (h *Handler) handleZipDownload(w http.ResponseWriter, r *http.Request, toke
 		var fileReader io.ReadCloser
 		if filePath != "" {
 			if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
-				if fileSize == 0 {
-					fileSize = info.Size()
-				}
+				// Disk size is the authoritative source of truth for Store header and io.Copy
+				fileSize = info.Size()
 				if origName == "" {
 					origName = filepath.Base(filePath)
 				}
 				if f, err := os.Open(filePath); err == nil {
 					fileReader = f
 				}
+			}
+		} else if mockSizeStr != "" {
+			if mSize, err := strconv.ParseInt(mockSizeStr, 10, 64); err == nil && mSize > 0 && fileSize == 0 {
+				fileSize = mSize
 			}
 		}
 

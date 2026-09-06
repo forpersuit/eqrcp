@@ -1352,7 +1352,7 @@ func TestHandleZipDownload(t *testing.T) {
 	if err := json.NewDecoder(respPrepare.Body).Decode(&prepResult); err != nil {
 		t.Fatalf("failed to decode prepare response: %v", err)
 	}
-	if prepResult.Status != "ready" || prepResult.Count != 2 || prepResult.TotalSize != 3072 {
+	if prepResult.Status != "ready" || prepResult.Count != 2 || prepResult.TotalSize != 1024 {
 		t.Fatalf("unexpected prepare result: %+v", prepResult)
 	}
 

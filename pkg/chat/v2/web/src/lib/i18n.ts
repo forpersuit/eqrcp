@@ -733,6 +733,78 @@ export const translations: Record<string, Record<Lang, string>> = {
     de: 'Dateien vorbereitet und im Teilen-Dialog geöffnet.',
     fr: 'Fichiers préparés et ouverts dans le partage système.'
   },
+  batchFilesSelected: {
+    zh: '已选择 {count} 个文件 ({size})',
+    en: '{count} files selected ({size})',
+    ja: '{count} 個のファイルを選択中 ({size})',
+    ko: '{count}개 파일 선택됨 ({size})',
+    es: '{count} archivos seleccionados ({size})',
+    de: '{count} Dateien ausgewählt ({size})',
+    fr: '{count} fichiers sélectionnés ({size})'
+  },
+  batchPreparingFiles: {
+    zh: '正在拉取文件准备保存 ({current}/{total})...',
+    en: 'Preparing files for saving ({current}/{total})...',
+    ja: '保存用にファイルを準備中 ({current}/{total})...',
+    ko: '저장을 위해 파일 준비 중 ({current}/{total})...',
+    es: 'Preparando archivos para guardar ({current}/{total})...',
+    de: 'Dateien zum Speichern vorbereiten ({current}/{total})...',
+    fr: 'Préparation des fichiers pour l’enregistrement ({current}/{total})...'
+  },
+  batchFetchingProgress: {
+    zh: '正在拉取 ({current}/{total}): {name}',
+    en: 'Fetching ({current}/{total}): {name}',
+    ja: '取得中 ({current}/{total}): {name}',
+    ko: '가져오는 중 ({current}/{total}): {name}',
+    es: 'Obteniendo ({current}/{total}): {name}',
+    de: 'Abrufen ({current}/{total}): {name}',
+    fr: 'Récupération ({current}/{total}): {name}'
+  },
+  batchArchiveReadyInfo: {
+    zh: '压缩包已就绪 (共 {count} 个文件，{size})。请点击下方按钮开始下载。',
+    en: 'Archive is ready ({count} files, {size}). Click below to download.',
+    ja: 'アーカイブの準備が完了しました (計 {count} 個、{size})。下のボタンをクリックしてダウンロードしてください。',
+    ko: '압축 파일이 준비되었습니다 (총 {count}개, {size}). 아래 버튼을 클릭하여 다운로드하세요.',
+    es: 'El archivo está listo ({count} archivos, {size}). Haga clic abajo para descargar.',
+    de: 'Archiv ist bereit ({count} Dateien, {size}). Klicken Sie unten zum Herunterladen.',
+    fr: 'L’archive est prête ({count} fichiers, {size}). Cliquez ci-dessous pour télécharger.'
+  },
+  batchArchiveFallbackReady: {
+    zh: '压缩包准备完成。请点击下方按钮开始下载。',
+    en: 'Archive prepared. Click below to download.',
+    ja: 'アーカイブの準備が完了しました。下のボタンをクリックしてダウンロードしてください。',
+    ko: '압축 파일이 준비되었습니다. 아래 버튼을 클릭하여 다운로드하세요.',
+    es: 'Archivo preparado. Haga clic abajo para descargar.',
+    de: 'Archiv vorbereitet. Klicken Sie unten zum Herunterladen.',
+    fr: 'Archive préparée. Cliquez ci-dessous pour télécharger.'
+  },
+  batchShareBtn: {
+    zh: '保存到相册/文件',
+    en: 'Save to Photos / Files',
+    ja: '写真/ファイルに保存',
+    ko: '사진 / 파일에 저장',
+    es: 'Guardar en Fotos / Archivos',
+    de: 'In Fotos / Dateien speichern',
+    fr: 'Enregistrer dans Photos / Fichiers'
+  },
+  batchShareCancelled: {
+    zh: '已取消保存或分享。',
+    en: 'Save or share was cancelled.',
+    ja: '保存または共有がキャンセルされました。',
+    ko: '저장 또는 공유가 취소되었습니다.',
+    es: 'Se canceló guardar o compartir.',
+    de: 'Speichern oder Teilen wurde abgebrochen.',
+    fr: 'L’enregistrement ou le partage a été annulé.'
+  },
+  batchShareUnsupported: {
+    zh: '当前环境不支持多文件系统分享，已自动切换为压缩包下载。',
+    en: 'System multi-file share not supported, switched to archive download.',
+    ja: '複数ファイルのシステム共有がサポートされていないため、アーカイブダウンロードに切り替えました。',
+    ko: '시스템 다중 파일 공유가 지원되지 않아 압축 파일 다운로드로 전환되었습니다.',
+    es: 'El sistema no admite compartir múltiples archivos; se cambió a descarga de comprimido.',
+    de: 'Systemweites Teilen mehrerer Dateien nicht unterstützt, auf Archiv-Download umgestellt.',
+    fr: 'Le partage de fichiers multiples n’est pas pris en charge, basculé vers le téléchargement de l’archive.'
+  },
   selectedCount: {
     zh: '已选 {count} 个文件',
     en: '{count} selected',
