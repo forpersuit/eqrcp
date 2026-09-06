@@ -23,13 +23,20 @@ description: Guides EQT licensing architecture, offline cryptographic activation
 
 ## 2. 离线 `.lic` 数字证书单一可信源 (SSOT) 与时钟防篡改
 
-- **单一可信源 (SSOT)**：`license.lic` 数字证书缓存为全局授权、对账及防时钟回拨的**唯一可信源 (SSOT)**。
+- **单一可信源 (SSOT) 与测试/生产证书物理隔离**：
+  - `license.lic` 数字证书缓存为全局授权、对账及防时钟回拨的**唯一可信源 (SSOT)**。
+  - **环境命名空间隔离 (Namespace Isolation)**：生产构建默认读写 `license.lic`；测试构建（`//go:build eqtdev`）读写 `license-test.lic`。双环境存储物理解耦，彻底避免测试构建覆盖或抹除用户的正式生产证书。
 - **Ed25519 签名与双重密码学保护**：
   - **主证书签名 (`Signature`)**：签名载荷必须与 Workers 生成时严格对称（`license_code|tier|uuid_hash|cpu_hash|disk_hash|expires_at|max_devices`）。
   - **对账确认签名 (`VerifySignature`)**：云端通过 `/api/v1/verify` 接口使用私钥签发带有服务器最新时间的对账载荷（`OK|license_code|uuid_hash|cpu_hash|disk_hash|last_online_sync_time`）。
   - **抗手动修改机制**：为防止用户本地用文本编辑器手动修改 `.lic` 里的对账时间 `LastOnlineSyncTime`，客户端每次校验必须使用内置公钥校验 `VerifySignature` 对应的载荷合法性。任何非云端私钥签发的修改均会在微秒级被识破并降级。
+- **网络故障与授权状态严格正交划分 (Network vs Auth Orthogonality)**：
+  - **断网/抖动/5xx 走离线租约**：网络超时、连接被拒、DNS 失败或服务端 502/503/504 属于网络不可达，**严禁**触发 `ResetLicense()` 抹盘，必须无条件保留本地证书并进入离线 7 天租约验证；
+  - **明确 403/404 确凿失效才抹盘**：只有连网成功且云端明确返回 HTTP 403（明确被退款/吊销/黑名单）或 HTTP 404（激活码已被删除/设备已解绑）时，才判定授权失效并调用 `ResetLicense()` 擦除证书。
+  - **签名合法性前置分流 (Valid Signature Guard)**：启动对账前先执行 `VerifyLicenseSignature(cert)`。只有当本地证书公钥与当前二进制匹配时，才发起针对该激活码的强对账；若签名不合法（外来/损坏证书），禁止调用带激活码的对账（防 404 误删），直接走匿名设备注册（带 3 项指纹）由当前环境服务端按「3 选 2」反查自愈。
+  - **服务端反查自愈严格执行「3 选 2 匹配」**：云端 `findBestActiveLicenseForDevice` 在按 `device_id` 检索候选记录时，必须对硬件指纹强制调用 `matchFingerprint` 校验（非空匹配数 $\ge 2$），杜绝克隆 `device_id` 越权。
 - **静默对账与 7 天租约宽限**：
-  - 应用拉起时（通过 `hardware.go` 后台线程）先做 `VerifyLocalLicense()`，若本地存在 `.lic`，**强制**执行一次 `ForceOnlineLicenseSync()`（忽略 12 小时节流）。在线状态是吊销/Portal 解绑的权威来源（SSOT）；仅当网络失败时才回退到离线 7 天租约。
+  - 应用拉起时（通过 `hardware.go` 后台线程）先做 `VerifyLocalLicense()`，若本地存在合规 `.lic`，**强制**执行一次 `ForceOnlineLicenseSync()`（忽略 12 小时节流）。在线状态是吊销/Portal 解绑的权威来源（SSOT）；仅当网络失败时才回退到离线 7 天租约。
   - 后续后台静默对账仍走 `StartOnlineLicenseSync()` / `doOnlineLicenseSync(false)`，保留 12 小时最低间隔，避免频繁网络交互。
   - About 面板标题旁「刷新」按钮调用 `RefreshLicenseStatus()`：优先在线强制对账，失败再 `VerifyLocalLicense()` 离线校验。Dev「在线对账」同样走 `ForceOnlineLicenseSync()`。
   - 对账网络超时失败不影响使用。客户端支持 7 天内静默免网脱机运行：`time.Now() - LastOnlineSyncTime <= 7 * 24 * time.Hour`。若超时则自动强行降级。

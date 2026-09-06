@@ -218,10 +218,10 @@ func PrecomputeDeviceFingerprints() {
 		verified := VerifyLocalLicense()
 		SetLicenseReady(true)
 		log.Printf("[DRM] Background local license verification completed. Verified ok: %t, Paid Status: %t, Tier: %s", verified, GetPaidStatus(), GetLicenseTier())
-		// Process start: always force one online reconciliation when a local certificate exists.
-		// Online status is authoritative for unbind/revoke; the 12h throttle only applies to later background syncs.
-		// Offline 7-day lease remains the fallback only when the network call fails.
-		if _, ok := GetLocalLicenseInfo(); ok {
+		// Process start: always force one online reconciliation when a valid local certificate exists.
+		// Online status is authoritative for unbind/revoke; offline 7-day lease remains fallback when network fails.
+		cert, hasLocalCert := GetLocalLicenseInfo()
+		if hasLocalCert && VerifyLicenseSignature(cert) {
 			log.Println("[DRM] Startup online license reconciliation (forced, online is SSOT)...")
 			if err := ForceOnlineLicenseSync(); err != nil {
 				log.Printf("[DRM] Startup online license reconciliation finished with: %v (paid=%t tier=%s)", err, GetPaidStatus(), GetLicenseTier())
@@ -229,7 +229,8 @@ func PrecomputeDeviceFingerprints() {
 				log.Printf("[DRM] Startup online license reconciliation succeeded. Paid Status: %t, Tier: %s", GetPaidStatus(), GetLicenseTier())
 			}
 		} else {
-			// Free user startup registration (1 request, fail-open)
+			// Free user, or local cert signature invalid for current environment (foreign/corrupted):
+			// Register device online (3-of-2 hardware matching) to auto-recover valid license if bound.
 			log.Println("[DRM] Free user startup online device registration...")
 			RegisterDeviceOnline()
 		}

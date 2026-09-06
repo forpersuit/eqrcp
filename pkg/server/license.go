@@ -44,7 +44,10 @@ type LicenseCertificate struct {
 }
 
 func getLicenseFilePath() string {
-	return filepath.Join(config.DefaultConfigDir(), "license.lic")
+	if envPath := os.Getenv("EQT_LICENSE_FILE"); envPath != "" {
+		return envPath
+	}
+	return filepath.Join(config.DefaultConfigDir(), defaultLicenseFilename)
 }
 
 func getLicenseServer() string {

@@ -21,3 +21,6 @@ var isTestBuild = false
 // 因此测试激活码/测试更新包只能被测试构建验证,release 恒验证生产。
 var defaultPublicKeyHex = "08443678fe8bd16e3bc306db8a08b6ea1dcf3e8edeb413f655e106374bed43ac"
 var defaultUpdatePublicKeyHex = "08443678fe8bd16e3bc306db8a08b6ea1dcf3e8edeb413f655e106374bed43ac"
+
+// defaultLicenseFilename 是生产环境的本地证书文件名。
+var defaultLicenseFilename = "license.lic"

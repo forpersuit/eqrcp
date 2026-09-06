@@ -15,3 +15,6 @@ var isTestBuild = true
 // 测试激活码只能被测试构建验证,漏配方向永远安全。
 var defaultPublicKeyHex = "ce07f02c21cb898bf9d84c9af843dc23e830937f939d8b0a042df7210f74fe58"
 var defaultUpdatePublicKeyHex = "ce07f02c21cb898bf9d84c9af843dc23e830937f939d8b0a042df7210f74fe58"
+
+// defaultLicenseFilename 在 eqtdev 构建下覆盖为测试专用证书文件,与生产证书物理隔离。
+var defaultLicenseFilename = "license-test.lic"

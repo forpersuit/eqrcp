@@ -319,12 +319,20 @@ async function findBestActiveLicenseForDevice(
   const dev = (deviceId || "").trim();
   if (dev) {
     const byDevice = await env.DB.prepare(`
-      SELECT l.license_code, l.expires_at, l.tier, l.duration_days, l.max_devices, l.buyer_email, l.source, l.paddle_transaction_id, l.status, a.id as activation_id
+      SELECT l.license_code, l.expires_at, l.tier, l.duration_days, l.max_devices, l.buyer_email, l.source, l.paddle_transaction_id, l.status, a.id as activation_id,
+             a.uuid_hash, a.cpu_hash, a.disk_hash
       FROM activations a
       JOIN licenses l ON a.license_code = l.license_code
       WHERE a.device_id = ? AND l.status = 'active'
     `).bind(dev).all<any>();
-    pushUnique(byDevice.results);
+    for (const row of byDevice.results || []) {
+      if (matchFingerprint(
+        uuidHash || "", cpuHash || "", diskHash || "",
+        row.uuid_hash || "", row.cpu_hash || "", row.disk_hash || ""
+      )) {
+        pushUnique([row]);
+      }
+    }
   }
 
   const clauses: string[] = [];
