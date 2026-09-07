@@ -11,6 +11,7 @@
 3. [社交媒体与短文案矩阵（即刻 / 朋友圈 / X / 技术交流群）](#3-社交媒体与短文案矩阵)
 4. [第一性原理：核心方案硬核横向对比表](#4-第一性原理核心方案硬核横向对比表)
 5. [冷启动发布与社区互动执行 SOP](#5-冷启动发布与社区互动执行-sop)
+6. [全球英文官方发布文案 (English Global Launch Pitch)](#6-全球英文官方发布文案-english-global-launch-pitch)
 
 ---
 
@@ -201,3 +202,50 @@ EQT 是一款专注于**桌面端与移动端之间极速传输与即时轻量�
   - 第 4~7 秒：镜头/分屏切至手机，原生相机对准屏幕一扫，弹窗轻点即打开网页；
   - 第 8~10 秒：手机网页进度条以几十兆每秒的速度飞速拉满，提示文件接收完成。
 * **冲击力**：直观向所有潜在用户展示“原来跨设备传文件真的可以不用下 App、不用加好友、不用等上传”。
+
+---
+
+## 6. 全球英文官方发布文案 (English Global Launch Pitch)
+
+> **适用场景**: Product Hunt, Hacker News (Show HN), Reddit (r/golang, r/selfhosted, r/privacy, r/software), GitHub README / Discussions, X (Twitter).  
+> **设计基调**: 纯粹第一性原理、极客、诚恳务实、直击痛点。
+
+### Full English Pitch Copy
+
+Hello everyone! I am super thrilled to introduce my very first digital product: **EQT (Easy QR Transfer)**.
+
+EQT is a lightweight desktop utility designed to radically simplify and speed up data transfer between computers and mobile devices. The core magic? **The receiver or sender on mobile only needs to scan a dynamic QR code—zero mobile app installation required.** It transfers data fast, privately, and securely over your local network.
+
+Launch the app, and you get 3 straightforward modes:
+- **Share Mode (Desktop ➔ Mobile)**: Send single files, multiple files, or whole directories (auto-streamed as a zip archive).
+- **Receive Mode (Mobile ➔ Desktop)**: Scan from your phone and upload photos, 4K videos, or large files directly into a designated PC folder.
+- **Chat Mode (Ephemeral LAN Chat & Clipboard Sync)**: An instant, encrypted local room to exchange texts, passwords, links, API tokens, and images. One-tap copy to clipboard, self-destructs upon close.
+
+Mobile devices simply connect using their native camera scanner or any web browser.
+
+#### Key Highlights:
+- **Zero Mobile App Install**: Scan and connect. Modern mobile browsers are already powerful enough—why clutter your phone with another background app?
+- **Raw Speed**: "No middleman taking a cut." It unleashes your physical local network bandwidth (10~100MB/s+).
+- **Privacy-First**: Pure local LAN transfer with zero remote relay servers. Your private data never touches the cloud.
+- **Rock-Solid Security**: Zero-Config LAN-TLS HTTPS encryption with trusted green padlock. More than enough for a distraction-free transfer tool.
+- **100% Lossless**: Pure byte-for-byte transfer with zero compression. 4K ProRes videos and RAW photos arrive exactly as shot.
+- **Instant Clipboard Bridge**: Sync passwords, tokens, addresses, and code snippets between PC and phone with one-tap copy. No lingering cloud chat history.
+- **Multilingual**: Built-in support for 7 languages (English, Chinese, Japanese, Korean, Spanish, German, French). Feedback on more languages is welcome!
+- **Universal**: Works smoothly across Windows, macOS, Linux, iOS, and Android.
+
+#### Limitation & Our Philosophy:
+- **Limitation**: Devices must be on the same local network / Wi-Fi. It is strictly a local network tool for now.  
+  *(💡 Pro Tip: When traveling or outdoors with no Wi-Fi router, just turn on your phone's personal hotspot and connect your laptop. It forms a legitimate local network and transfers at full physical speed!)*
+- **Our Philosophy**: "Do the local LAN experience right first. Building something people genuinely love and find delightful to use is my ultimate goal."
+
+#### Sweet Spot Scenarios:
+Specifically engineered for those awkward "not too small, not too huge" files (e.g., 1GB ~ 3GB):
+1. **1GB ~ 3GB file transfer**: Messaging apps reject or heavily compress them; cloud drives force painful upload-then-download loops. EQT blows through gigabytes in 10~30 seconds over local Wi-Fi.
+2. **Multiple phones dumping files to one PC**: Post-event photo dumping, meeting materials collection. Multiple devices scan the same screen code and upload simultaneously.
+3. **One PC broadcasting files to multiple phones**: Meeting slides, design assets, or APKs. Display the QR code on your monitor, and everyone in the room downloads in parallel.
+4. **Local ephemeral chat**: Share passwords, API keys, and sensitive tokens securely over LAN. Close the window and leave zero trace anywhere in the cloud.
+
+More effortless features are on the way—designed to be a lazy person's gospel.
+
+- **Website**: https://www.eqt.net.im
+- **GitHub**: https://github.com/forpersuit/eqt

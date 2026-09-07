@@ -33,6 +33,11 @@
    - 社交媒体与短文案矩阵（即刻、X/Twitter、朋友圈、技术社群/微信群）
    - 第一性原理硬核横向对比表（vs 微信传输助手 vs AirDrop vs LocalSend vs 百度/网盘）
    - 冷启动发布与社区互动执行 SOP（发帖黄金时段、回帖心态、零外链防降权、演示动图制作）
+   - 全球英文官方发布文案（English Global Launch Pitch for Product Hunt / Show HN / Reddit / X）
+
+5. **[创始人推介笔记与核心场景原稿 (中英双语)](me)**
+   - 创始人第一人称直抒胸臆（纯局域网无中间商赚差价、数据无损、手机热点小提示、1~3G 痛点、懒人福音）
+   - 地道纯正的 English Global Pitch 全文对照
 
 ---
 
