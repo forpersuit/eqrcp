@@ -26,6 +26,9 @@ description: Guides EQT licensing architecture, offline cryptographic activation
 - **单一可信源 (SSOT) 与测试/生产证书物理隔离**：
   - `license.lic` 数字证书缓存为全局授权、对账及防时钟回拨的**唯一可信源 (SSOT)**。
   - **环境命名空间隔离 (Namespace Isolation)**：生产构建默认读写 `license.lic`；测试构建（`//go:build eqtdev`）读写 `license-test.lic`。双环境存储物理解耦，彻底避免测试构建覆盖或抹除用户的正式生产证书。
+  - **安装包分发环境物理隔离 (Distribution Package Segregation)**：
+    - **测试环境 (`test.eqt.net.im` / `eqt-test.pages.dev`)**：必须且仅下载测试版二进制压缩包（`https://download.eqt.net.im/downloads/test/EQT-test-windows-amd64.zip`），内置测试专用公钥与测试 Worker 端点。
+    - **生产环境 (`www.eqt.net.im`)**：必须且仅分发经过正式签名的正式生产版客户端（`https://download.eqt.net.im/downloads/latest/EQT-latest-windows-amd64.zip` 或对应版本路径），严禁在生产页面与分发渠道出现任何测试版 exe、测试链接或测试标识。
 - **Ed25519 签名与双重密码学保护**：
   - **主证书签名 (`Signature`)**：签名载荷必须与 Workers 生成时严格对称（`license_code|tier|uuid_hash|cpu_hash|disk_hash|expires_at|max_devices`）。
   - **对账确认签名 (`VerifySignature`)**：云端通过 `/api/v1/verify` 接口使用私钥签发带有服务器最新时间的对账载荷（`OK|license_code|uuid_hash|cpu_hash|disk_hash|last_online_sync_time`）。
