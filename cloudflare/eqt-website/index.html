@@ -1035,10 +1035,13 @@
         });
 
         // Append version number to download button if available
-        if (window.latestVersion) {
-            const btnTextEl = document.getElementById('download-btn-text');
-            if (btnTextEl) {
-                btnTextEl.innerHTML = btnTextEl.innerHTML + ` (${window.latestVersion})`;
+        const btnTextEl = document.getElementById('download-btn-text');
+        if (btnTextEl) {
+            if (window.latestVersion) {
+                const verSuffix = window.EQT_IS_TEST ? ` (${window.latestVersion}-test)` : ` (${window.latestVersion})`;
+                btnTextEl.innerHTML = btnTextEl.innerHTML + verSuffix;
+            } else if (window.EQT_IS_TEST) {
+                btnTextEl.innerHTML = btnTextEl.innerHTML + ' (Test)';
             }
         }
 
@@ -1251,23 +1254,39 @@
     window.latestVersion = "";
 
     async function fetchLatestVersion() {
+        const downloadLinkEl = document.getElementById('download-link');
+        if (window.EQT_IS_TEST && downloadLinkEl) {
+            downloadLinkEl.href = 'https://download.eqt.net.im/downloads/test/EQT-test-windows-amd64.zip';
+        }
         try {
             const res = await fetch(`${window.EQT_API_BASE}/update-metadata.json`);
             if (res.ok) {
                 const data = await res.json();
                 if (data && data.version) {
                     window.latestVersion = data.version;
-                    // Find target zip asset from assets array, or fallback to auto-assembled zip version
-                    let downloadUrl = `https://download.eqt.net.im/downloads/${data.version}/EQT-${data.version}-windows-amd64.zip`;
-                    if (data.assets && Array.isArray(data.assets)) {
-                        const targetAsset = data.assets.find(a => a.name && a.name.endsWith('.zip') && a.name.toLowerCase().includes('windows'));
-                        if (targetAsset && targetAsset.download_url) {
-                            downloadUrl = targetAsset.download_url;
+                    if (window.EQT_IS_TEST) {
+                        let downloadUrl = 'https://download.eqt.net.im/downloads/test/EQT-test-windows-amd64.zip';
+                        if (data.assets && Array.isArray(data.assets)) {
+                            const targetAsset = data.assets.find(a => a.name && (a.name.includes('test') || a.name.endsWith('.zip')));
+                            if (targetAsset && targetAsset.download_url) {
+                                downloadUrl = targetAsset.download_url;
+                            }
                         }
-                    }
-                    const downloadLinkEl = document.getElementById('download-link');
-                    if (downloadLinkEl) {
-                        downloadLinkEl.href = downloadUrl;
+                        if (downloadLinkEl) {
+                            downloadLinkEl.href = downloadUrl;
+                        }
+                    } else {
+                        // Find target zip asset from assets array, or fallback to auto-assembled zip version
+                        let downloadUrl = `https://download.eqt.net.im/downloads/${data.version}/EQT-${data.version}-windows-amd64.zip`;
+                        if (data.assets && Array.isArray(data.assets)) {
+                            const targetAsset = data.assets.find(a => a.name && a.name.endsWith('.zip') && a.name.toLowerCase().includes('windows'));
+                            if (targetAsset && targetAsset.download_url) {
+                                downloadUrl = targetAsset.download_url;
+                            }
+                        }
+                        if (downloadLinkEl) {
+                            downloadLinkEl.href = downloadUrl;
+                        }
                     }
                     // Apply language again to force refreshing the download button text with version
                     let lang = localStorage.getItem('eqt-lang') || getCookie('eqt-lang') || 'en';
@@ -1340,6 +1359,12 @@
 
     // Run on load
     window.addEventListener('DOMContentLoaded', () => {
+        if (window.EQT_IS_TEST) {
+            const downloadLinkEl = document.getElementById('download-link');
+            if (downloadLinkEl) {
+                downloadLinkEl.href = 'https://download.eqt.net.im/downloads/test/EQT-test-windows-amd64.zip';
+            }
+        }
         initLang();
         initGallery();
         initDownloadTracking();

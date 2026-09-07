@@ -16,7 +16,7 @@
     var base;
     if (host === 'localhost' || host.indexOf('127.0.0.1') === 0) {
         base = 'http://localhost:8787';
-    } else if (host === 'test.eqt.net.im') {
+    } else if (host === 'test.eqt.net.im' || host.indexOf('eqt-test.pages.dev') !== -1) {
         base = TEST_API;
     } else {
         base = 'https://lic.eqt.net.im';
