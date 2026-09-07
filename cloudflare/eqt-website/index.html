@@ -216,6 +216,10 @@
 <!-- Hero Section -->
 <section class="flex flex-col md:flex-row items-center justify-between gap-xl min-h-[60vh]">
 <div class="flex-1 space-y-lg relative z-10">
+<div class="inline-flex items-center gap-xs px-sm py-1 rounded-full bg-primary/10 border border-primary/30 text-primary text-xs font-semibold backdrop-blur-md">
+<span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+<span data-i18n="hero_badge_new">v1.36 Released: Zero-Config LAN-TLS &amp; Native Mobile Chat</span>
+</div>
 <h1 class="font-display-lg text-display-lg-mobile md:text-display-lg text-on-surface" data-i18n="hero_title">
                     Instant Local File Transfer &amp; <br/><span class="text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">Secure Chat</span>, via QR Code
                 </h1>
@@ -243,7 +247,7 @@
 <h2 class="font-headline-lg text-headline-lg text-on-surface" data-i18n="features_title">Engineered for Speed &amp; Security</h2>
 <p class="font-body-md text-body-md text-on-surface-variant" data-i18n="features_subtitle">Core capabilities that redefine local data exchange.</p>
 </div>
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-lg">
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-lg">
 <!-- Feature Card 1 -->
 <div class="glass-panel p-lg rounded-xl space-y-md hover:border-primary/50 transition-colors group">
 <div class="w-12 h-12 rounded-lg bg-surface-container flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
@@ -263,18 +267,34 @@
 <!-- Feature Card 3 -->
 <div class="glass-panel p-lg rounded-xl space-y-md hover:border-primary/50 transition-colors group">
 <div class="w-12 h-12 rounded-lg bg-surface-container flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
-<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">lock</span>
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">enhanced_encryption</span>
 </div>
-<h3 class="font-headline-md text-headline-md text-on-surface" data-i18n="feat3_title">LAN Secure Chat</h3>
-<p class="font-body-md text-body-md text-on-surface-variant" data-i18n="feat3_desc">Send files and messages directly to connected local clients with zero cloud storage and absolute privacy.</p>
+<h3 class="font-headline-md text-headline-md text-on-surface" data-i18n="feat3_title">Zero-Config LAN-TLS HTTPS</h3>
+<p class="font-body-md text-body-md text-on-surface-variant" data-i18n="feat3_desc">Authoritative local TLS loopback provides green padlock security without installing root certificates. Eliminates eavesdropping and unlocks native mobile web share.</p>
 </div>
 <!-- Feature Card 4 -->
 <div class="glass-panel p-lg rounded-xl space-y-md hover:border-secondary/50 transition-colors group">
 <div class="w-12 h-12 rounded-lg bg-surface-container flex items-center justify-center text-secondary group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">smartphone</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-on-surface" data-i18n="feat4_title">Native-Like Mobile Chat</h3>
+<p class="font-body-md text-body-md text-on-surface-variant" data-i18n="feat4_desc">Adaptive virtual keyboard docking seamlessly raises chat borders. Tap anywhere to dismiss keyboard with compact thumbnail previews for a native messaging feel.</p>
+</div>
+<!-- Feature Card 5 -->
+<div class="glass-panel p-lg rounded-xl space-y-md hover:border-primary/50 transition-colors group">
+<div class="w-12 h-12 rounded-lg bg-surface-container flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">download_for_offline</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-on-surface" data-i18n="feat5_title">Direct Streaming &amp; Wake Lock</h3>
+<p class="font-body-md text-body-md text-on-surface-variant" data-i18n="feat5_desc">Batch download multiple files via instant zero-wait zip streaming. Automatic screen wake lock keeps mobile transfers alive without sleep interruptions.</p>
+</div>
+<!-- Feature Card 6 -->
+<div class="glass-panel p-lg rounded-xl space-y-md hover:border-secondary/50 transition-colors group">
+<div class="w-12 h-12 rounded-lg bg-surface-container flex items-center justify-center text-secondary group-hover:scale-110 transition-transform">
 <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">devices</span>
 </div>
-<h3 class="font-headline-md text-headline-md text-on-surface" data-i18n="feat4_title">Cross-Platform</h3>
-<p class="font-body-md text-body-md text-on-surface-variant" data-i18n="feat4_desc">Seamless operation across operating systems. No dedicated mobile app installation required for receivers.</p>
+<h3 class="font-headline-md text-headline-md text-on-surface" data-i18n="feat6_title">Cross-Platform &amp; Diagnostics</h3>
+<p class="font-body-md text-body-md text-on-surface-variant" data-i18n="feat6_desc">Zero-install experience on mobile and desktop browsers. Built-in desktop log viewer and 1-click diagnostic export make network troubleshooting effortless.</p>
 </div>
 </div>
 </section>
@@ -420,6 +440,7 @@
         "nav_support": "Support",
         "nav_portal": "License Portal",
         "nav_download": "Download Client",
+        "hero_badge_new": "v1.36 Released: Zero-Config LAN-TLS &amp; Native Mobile Chat",
         "hero_version": "Version 2.0 Live",
         "hero_title": "Instant Local File Transfer &amp; <br/><span class=\"text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary\">Secure Chat</span>, via QR Code",
         "hero_desc": "Super fast local-network direct transfer tool between PC and Mobile. No cloud, no lag, just scan and send. Experience seamless local integration and network-isolated local data transfer.",
@@ -431,10 +452,14 @@
         "feat1_desc": "Generate once-off QR codes instantly. Scan from any device to initiate send/receive protocols without pairing.",
         "feat2_title": "Local Speed Limitless",
         "feat2_desc": "Utilize local area network (LAN) potential. Transfer files at full hardware limits (10MB/s - 100MB/s+), completely independent of your ISP internet speed.",
-        "feat3_title": "LAN Secure Chat",
-        "feat3_desc": "Send files and messages directly to connected local clients with zero cloud storage and absolute privacy.",
-        "feat4_title": "Cross-Platform",
-        "feat4_desc": "Seamless operation across operating systems. No dedicated mobile app installation required for receivers.",
+        "feat3_title": "Zero-Config LAN-TLS HTTPS",
+        "feat3_desc": "Authoritative local TLS loopback provides green padlock security without installing root certificates. Eliminates eavesdropping and unlocks native mobile web share.",
+        "feat4_title": "Native-Like Mobile Chat",
+        "feat4_desc": "Adaptive virtual keyboard docking seamlessly raises chat borders. Tap anywhere to dismiss keyboard with compact thumbnail previews for a native messaging feel.",
+        "feat5_title": "Direct Streaming &amp; Wake Lock",
+        "feat5_desc": "Batch download multiple files via instant zero-wait zip streaming. Automatic screen wake lock keeps mobile transfers alive without sleep interruptions.",
+        "feat6_title": "Cross-Platform &amp; Diagnostics",
+        "feat6_desc": "Zero-install experience on mobile and desktop browsers. Built-in desktop log viewer and 1-click diagnostic export make network troubleshooting effortless.",
         "pricing_title": "Transparent Licensing",
         "pricing_subtitle": "We believe in software ownership and clear, upfront terms.",
         "pillar1_title": "No Auto-Renewal Traps",
@@ -491,9 +516,9 @@
         "tab_app_share": "5. File Sharing",
         "tab_app_receive": "6. Received Files",
         "desc_chat_start": "Initialize EQT as a desktop sender or setup local receiver node.",
-        "desc_chat_live": "Send and receive files/text seamlessly over your local network with absolute privacy.",
+        "desc_chat_live": "Send and receive files and messages with zero-config LAN-TLS HTTPS encryption and zero cloud storage.",
         "desc_chat_qr": "Easily scan the generated QR code with mobile camera to connect to the session.",
-        "desc_mobile_ui": "Responsive, zero-install mobile web page to upload files and download shares.",
+        "desc_mobile_ui": "Zero-install mobile chat with adaptive virtual keyboard docking, touch-to-dismiss, and native web share support.",
         "desc_app_share": "Share multiple files with physical storage size controls and DRM limitations.",
         "desc_app_receive": "Manage received files and monitor transfer history dynamically.",
         "paddle_disclosure_title": "Payment Reseller &amp; MoR",
@@ -506,6 +531,7 @@
         "nav_support": "技术支持",
         "nav_portal": "授权管理/退款",
         "nav_download": "下载客户端",
+        "hero_badge_new": "v1.36 正式发布：独创局域网免装证书 HTTPS 加密与原生级移动端交互",
         "hero_version": "版本 2.0 已发布",
         "hero_title": "通过二维码实现<br/>极速局域网文件传输 &amp; <span class=\"text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary\">安全聊天</span>",
         "hero_desc": "电脑与手机之间极速局域网直传工具。无需云端，无延迟，扫码即送。在您的本地网络物理隔离下，体验无缝的本地集成与安全局域网传输。",
@@ -517,10 +543,14 @@
         "feat1_desc": "即时生成一次性二维码。任何设备扫码即可开启发送/接收协议，无需配对。",
         "feat2_title": "极速局域网",
         "feat2_desc": "充分释放本地局域网（LAN）物理带宽。文件传输速度完全取决于您的硬件极限（可达 10MB/s - 100MB/s+），彻底脱离运营商外网宽带的速度限制。",
-        "feat3_title": "安全局域网聊天",
-        "feat3_desc": "直接在本地连接的客户端之间收发文件和消息，零云端留痕，绝对私密。",
-        "feat4_title": "跨平台支持",
-        "feat4_desc": "在各种操作系统之间无缝传输。接收端无需安装任何专用的 App，扫码即在浏览器中收发。",
+        "feat3_title": "免装证书 LAN-TLS 加密",
+        "feat3_desc": "独创局域网权威泛域名 TLS 闭环，扫码直接呈现受信任绿锁，无需手动安装任何自签根证书。全链路防窃听，并解锁移动端系统级原生分享。",
+        "feat4_title": "移动端原生交互适配",
+        "feat4_desc": "软键盘自适应吸底顶起，卡片边框无缝贴合；轻点空白区域自然收起键盘；聊天气泡轻量缩略图卡片，带来如同原生 App 的顺滑聊天体验。",
+        "feat5_title": "即时流式打包与防休眠",
+        "feat5_desc": "多文件批量下载直接采用即时流式打包（Direct Streamed Zip），无需等待与二次确认；传输全程自动保持手机屏幕常亮，告别锁屏中断。",
+        "feat6_title": "跨平台免装与内置诊断",
+        "feat6_desc": "手机与电脑端无需安装专用 App，主流浏览器扫码即用；桌面端内置实时日志查看器与 7 天自动轮转，一键导出网络诊断包，排障无忧。",
         "pricing_title": "透明授权",
         "pricing_subtitle": "我们坚信软件所有权，并提供清晰、无套路的授权条款。",
         "pillar1_title": "无自动续费陷阱",
@@ -577,9 +607,9 @@
         "tab_app_share": "5. 分享控制",
         "tab_app_receive": "6. 接收管理",
         "desc_chat_start": "在桌面端启动 EQT 会话并创建本地文件收发节点。",
-        "desc_chat_live": "在本地局域网内安全收发文本和文件，无云端留痕，顺畅自如。",
+        "desc_chat_live": "通过独创的局域网 LAN-TLS 权威加密与免装证书绿锁，在本地局域网内安全收发文本和文件，无云端留痕。",
         "desc_chat_qr": "移动端摄像头轻松扫描自动生成的二维码，瞬间加入局域网会话。",
-        "desc_mobile_ui": "响应式移动端网页，免去安装 App 烦恼，快速上传文件与接收分享。",
+        "desc_mobile_ui": "免安装移动端聊天界面，支持软键盘自适应吸底顶起、触击空白收起、息屏防休眠与原生系统分享。",
         "desc_app_share": "支持多文件分享、物理体积限制，以及完善的专业版 DRM 额度验证。",
         "desc_app_receive": "动态管理接收的文件目录，并实时掌控所有历史传输明细。",
         "paddle_disclosure_title": "官方授权支付代理",
@@ -592,6 +622,7 @@
         "nav_support": "サポート",
         "nav_portal": "ライセンス管理",
         "nav_download": "ダウンロード",
+        "hero_badge_new": "v1.36 リリース：設定不要のLAN-TLS暗号化＆モバイルネイティブ操作対応",
         "hero_version": "バージョン 2.0 リリース",
         "hero_title": "QRコードによる<br/>高速ローカルファイル転送 &amp; <span class=\"text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary\">安全なチャット</span>",
         "hero_desc": "PCとモバイル間の超高速ローカルネットワークP2P転送ツール。クラウドなし、遅延なし、スキャンして送るだけ。",
@@ -646,10 +677,14 @@
         "feat1_desc": "使い捨てのQRコードを即座に生成。どのデバイスからでもスキャンするだけで, ペアリングなしで送受信プロトコルを開始できます。",
         "feat2_title": "ローカル速度は無制限",
         "feat2_desc": "ローカルエリアネットワーク（LAN）の可能性を最大限に引き出します。ISPのインターネット速度とは完全に独立して, フルハードウェア制限（10MB/s - 100MB/s+）でファイルを転送します。",
-        "feat3_title": "安全なローカルLANチャット",
-        "feat3_desc": "クラウドストレージを一切使用せず, 絶対的なプライバシーを保ちながら, 接続されたローカルクライアントにファイルやメッセージを直接送信します。",
-        "feat4_title": "クロスプラットフォーム",
-        "feat4_desc": "異なるオペレーティングシステム間でシームレスに動作。受信側は専用のモバイルアプリのインストールが不要です。",
+        "feat3_title": "証明書不要のLAN-TLS HTTPS",
+        "feat3_desc": "独自のLAN-TLSループバックにより、ルート証明書の手動インストール不要でブラウザの安全な緑色南京錠を実現。盗聴を防ぎ、モバイルのネイティブ共有を解放します。",
+        "feat4_title": "モバイルネイティブ操作体験",
+        "feat4_desc": "仮想キーボードの連動持ち上げ機能で枠線がぴったりフィット。余白タップで自然にキーボードを閉じ、軽量サムネイルでネイティブアプリのような快適さを提供します。",
+        "feat5_title": "即時ストリーミングZIP＆画面常時表示",
+        "feat5_desc": "複数ファイルの直接ストリーミングZIPダウンロードで待ち時間ゼロ。画面ウェイクロックにより、スマホの画面消灯による転送中断を防ぎます。",
+        "feat6_title": "マルチプラットフォーム＆診断機能",
+        "feat6_desc": "受信側の専用アプリインストールは不要。デスクトップ内蔵ログビューアとワンクリック診断エクスポートで、ネットワークのトラブルシューティングも簡単です。",
         "tab_chat_start": "1. セッション開始",
         "tab_chat_live": "2. 安全なチャットと転送",
         "tab_chat_qr": "3. QR接続",
@@ -657,6 +692,8 @@
         "tab_app_share": "5. ファイル共有コントロール",
         "tab_app_receive": "6. 受信ファイル管理",
         "desc_chat_start": "EQTをデスクトップ送信機として初期化するか, ローカル受信ノードをセットアップします。",
+        "desc_chat_live": "設定不要のLAN-TLS HTTPS暗号化とゼロクラウドストレージにより、安全にファイルやメッセージを送受信。",
+        "desc_mobile_ui": "キーボード連動持ち上げ、タップで閉じる機能、画面常時表示、ネイティブWeb共有に対応したモバイル画面。",
         "comp_feat1_title": "製品の納品と履行",
         "comp_feat1_desc": "デジタルライセンスキーは, 支払いの確認が成功すると, 電子メールですぐに納品されます。",
         "comp_feat2_title": "払い戻しとキャンセル",
@@ -671,6 +708,7 @@
         "nav_support": "지원",
         "nav_portal": "라이선스 관리",
         "nav_download": "클라이언트 다운로드",
+        "hero_badge_new": "v1.36 출시: 인증서 설치 없는 LAN-TLS 암호화 및 모바일 네이티브 UX",
         "hero_version": "버전 2.0 출시",
         "hero_title": "QR 코드를 통한<br/>빠른 로컬 파일 전송 및 <span class=\"text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary\">안전한 채팅</span>",
         "hero_desc": "PC와 모바일 간의 초고속 로컬 네트워크 P2P 전송 도구입니다. 클라우드도 지연도 없이 스캔하여 전송하세요.",
@@ -725,10 +763,14 @@
         "feat1_desc": "일회성 QR 코드를 즉시 생성합니다. 페어링 없이 어떤 기기에서든 스캔하여 송수신 프로토콜을 시작할 수 있습니다.",
         "feat2_title": "로컬 속도 무제한",
         "feat2_desc": "로컬 영역 네트워크(LAN) 잠재력을 최대한 활용합니다. ISP 인터넷 속도와 완전히 독립적으로 하드웨어 최대 제한(10MB/s - 100MB/s+) 속도로 파일을 전송합니다.",
-        "feat3_title": "안전한 로컬 LAN 채팅",
-        "feat3_desc": "클라우드 저장소를 전혀 사용하지 않고 절대적인 프라이버시를 유지하면서 연결된 로컬 클라이언트에 파일과 메시지를 직접 전송합니다.",
-        "feat4_title": "크로스 플랫폼 지원",
-        "feat4_desc": "서로 다른 운영 체제 간에 원활하게 작동합니다. 수신 측은 전용 모바일 앱을 설치할 필요가 없습니다.",
+        "feat3_title": "인증서 설치 없는 LAN-TLS HTTPS",
+        "feat3_desc": "독자적인 로컬 TLS 루프백으로 루트 인증서 설치 없이 브라우저의 안전한 녹색 자물쇠를 지원합니다. 도청을 방지하고 모바일 네이티브 공유 기능을 활성화합니다.",
+        "feat4_title": "모바일 네이티브 채팅 경험",
+        "feat4_desc": "가상 키보드가 올라올 때 채팅 입력창이 매끄럽게 고정되어 잘림이 없습니다. 빈 공간 터치로 키보드를 닫고, 가벼운 썸네일로 네이티브 앱처럼 부드럽게 작동합니다.",
+        "feat5_title": "즉시 스트리밍 다운로드 &amp; 화면 켜짐 유지",
+        "feat5_desc": "대기 시간 없이 즉각적인 스트리밍 ZIP으로 여러 파일을 다운로드합니다. 화면 켜짐 유지(Wake Lock)로 화면이 꺼져 전송이 끊기는 현상을 방지합니다.",
+        "feat6_title": "크로스 플랫폼 &amp; 내장 진단 도구",
+        "feat6_desc": "모바일과 PC 브라우저에서 전용 앱 설치 없이 즉시 사용 가능합니다. 데스크톱 내장 로그 뷰어와 원클릭 진단 내보내기로 네트워크 문제 해결이 간편합니다.",
         "tab_chat_start": "1. 세션 시작",
         "tab_chat_live": "2. 안전한 채팅 및 전송",
         "tab_chat_qr": "3. QR 연결",
@@ -736,6 +778,8 @@
         "tab_app_share": "5. 공유 설정 제어",
         "tab_app_receive": "6. 수신 파일 관리",
         "desc_chat_start": "EQT를 데스크톱 송신기로 초기화하거나 로컬 수신 노드를 설정합니다.",
+        "desc_chat_live": "설정 없는 LAN-TLS HTTPS 암호화와 무클라우드 저장으로 로컬 네트워크에서 안전하게 파일과 메시지를 송수신합니다.",
+        "desc_mobile_ui": "가상 키보드 자동 도킹, 터치로 닫기, 화면 꺼짐 방지 및 네이티브 공유를 지원하는 모바일 웹 인터페이스.",
         "comp_feat1_title": "제품 제공 및 이행",
         "comp_feat1_desc": "디지털 라이센스 키는 결제 확인이 완료되는 즉시 이메일로 발송됩니다.",
         "comp_feat2_title": "환불 및 취소 규정",
@@ -750,6 +794,7 @@
         "nav_support": "Soporte",
         "nav_portal": "Portal de Licencias",
         "nav_download": "Descargar cliente",
+        "hero_badge_new": "Lanzamiento v1.36: LAN-TLS HTTPS sin configuración y chat móvil adaptativo",
         "hero_version": "Versión 2.0 activa",
         "hero_title": "Transferencia instantánea de archivos locales y <br/><span class=\"text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary\">chat seguro</span> mediante código QR",
         "hero_desc": "Herramienta de transferencia P2P rápida en red local entre PC y móvil. Sin nube, sin retrasos, escanee y envíe.",
@@ -768,6 +813,9 @@
         "pillar4_title": "Garantía del distribuidor",
         "pillar4_desc": "Nuestro distribuidor autorizado Paddle gestiona el pago, la facturación y los impuestos locales. Política de reembolso de 14 días.",
         "view_pricing_btn": "Ver planes y precios detallados",
+        "price_badge_free": "Gratis / $0 para siempre",
+        "price_badge_lifetime": "Plus Vitalicio / $29.99 pago único",
+        "price_badge_yearly": "Plus Anual / $11.99/año",
         "price_free_title": "Gratis",
         "price_free_period": "/para siempre",
         "price_free_feat1": "Transferencia local básica",
@@ -801,10 +849,14 @@
         "feat1_desc": "Genere códigos QR de un solo uso al instante. Escanee desde cualquier dispositivo para iniciar protocolos de envío/recepción sin emparejamiento.",
         "feat2_title": "Velocidad local ilimitada",
         "feat2_desc": "Aproveche el potencial de la red de área local (LAN). Transfiera archivos al límite del hardware (10MB/s - 100MB/s+), de forma totalmente independiente de la velocidad de Internet de su ISP.",
-        "feat3_title": "Chat seguro en LAN",
-        "feat3_desc": "Envíe archivos y mensajes directamente a los clientes locales conectados con almacenamiento en la nube cero y absoluta privacidad.",
-        "feat4_title": "Soporte Multiplataforma",
-        "feat4_desc": "Funcionamiento sin problemas en diferentes sistemas operativos. No se requiere la instalación de una aplicación móvil dedicada en el receptor.",
+        "feat3_title": "LAN-TLS HTTPS Sin Configuración",
+        "feat3_desc": "El bucle invertido TLS local autorizado brinda candado verde sin instalar certificados raíz. Elimina intercepciones y habilita el uso compartido nativo del sistema móvil.",
+        "feat4_title": "Chat Móvil de Nivel Nativo",
+        "feat4_desc": "El acoplamiento adaptativo del teclado virtual eleva los bordes del chat a la perfección. Toque en cualquier lugar para ocultar el teclado y disfrute de miniaturas ligeras.",
+        "feat5_title": "Descarga Directa en Streaming &amp; Wake Lock",
+        "feat5_desc": "Descarga de múltiples archivos en zip en streaming sin esperas. El bloqueo de suspensión mantiene la pantalla activa para evitar cortes de transferencia.",
+        "feat6_title": "Multiplataforma &amp; Diagnóstico Integrado",
+        "feat6_desc": "Experiencia sin instalación en móviles y ordenadores. El visor de registros integrado y la exportación de diagnóstico con un clic facilitan la resolución de problemas de red.",
         "tab_chat_start": "1. Iniciar sesión",
         "tab_chat_live": "2. Chat seguro y envío",
         "tab_chat_qr": "3. Conexión QR",
@@ -812,6 +864,8 @@
         "tab_app_share": "5. Control de compartición",
         "tab_app_receive": "6. Archivos recibidos",
         "desc_chat_start": "Inicialice EQT como emisor de escritorio o configure un nodo receptor local.",
+        "desc_chat_live": "Envíe y reciba archivos y mensajes con cifrado LAN-TLS HTTPS sin configuración y sin almacenamiento en la nube.",
+        "desc_mobile_ui": "Chat móvil sin instalación con elevación adaptativa del teclado, toque para ocultar, prevención de suspensión y compartir nativo.",
         "comp_feat1_title": "Entrega y Cumplimiento",
         "comp_feat1_desc": "Las licencias digitales se entregan instantáneamente por correo electrónico tras la confirmación exitosa del pago.",
         "comp_feat2_title": "Reembolso y Cancelación",
@@ -826,6 +880,7 @@
         "nav_support": "Support",
         "nav_portal": "Lizenz-Portal",
         "nav_download": "Client herunterladen",
+        "hero_badge_new": "v1.36 Veröffentlicht: Konfigurationsfreies LAN-TLS HTTPS &amp; adaptiver Mobil-Chat",
         "hero_version": "Version 2.0 Live",
         "hero_title": "Sofortige lokale Dateiübertragung &amp; <br/><span class=\"text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary\">sicherer Chat</span> per QR-Code",
         "hero_desc": "Superschnelles lokales P2P-Übertragungstool zwischen PC und Mobilgerät. Keine Cloud, keine Verzögerung.",
@@ -844,6 +899,9 @@
         "pillar4_title": "Garantierte Händler-Compliance",
         "pillar4_desc": "Unser autorisierter Wiederverkäufer Paddle kümmert sich um Zahlungen, Rechnungsstellung und Steuerkonformität. 14 Tage Rückgaberecht.",
         "view_pricing_btn": "Detaillierte Tarife und Preise ansehen",
+        "price_badge_free": "Kostenlos / $0 dauerhaft",
+        "price_badge_lifetime": "Plus Lebenslang / $29.99 einmalig",
+        "price_badge_yearly": "Plus Jährlich / $11.99/Jahr",
         "price_free_title": "Kostenlos",
         "price_free_period": "/dauerhaft",
         "price_free_feat1": "Basis-Lokalübertragung",
@@ -877,10 +935,14 @@
         "feat1_desc": "Erstellen Sie sofort einmalige QR-Codes. Scannen Sie mit einem beliebigen Gerät, um Sende-/Empfangsprotokolle ohne Kopplung zu starten.",
         "feat2_title": "Lokale Geschwindigkeit unbegrenzt",
         "feat2_desc": "Nutzen Sie das Potenzial Ihres lokalen Netzwerks (LAN). Übertragen Sie Dateien mit vollen Hardware-Limits (10 MB/s - 100 MB/s+), völlig unabhängig von der Internetgeschwindigkeit Ihres ISP.",
-        "feat3_title": "Sicherer LAN-Chat",
-        "feat3_desc": "Senden Sie Dateien und Nachrichten direkt an verbundene lokale Clients – ohne Cloud-Speicher und mit absoluter Privatsphäre.",
-        "feat4_title": "Plattformübergreifend",
-        "feat4_desc": "Nahtloser Betrieb auf verschiedenen Betriebssystemen. Keine Installation einer dedizierten mobilen App auf der Empfängerseite erforderlich.",
+        "feat3_title": "Konfigurationsfreies LAN-TLS HTTPS",
+        "feat3_desc": "Autoritatives lokales TLS-Loopback bietet grüne Schloss-Sicherheit ohne Root-Zertifikate. Schützt vor Abhören und schaltet natives mobiles Teilen frei.",
+        "feat4_title": "Natives Mobil-Chat-Erlebnis",
+        "feat4_desc": "Adaptive Tastatur-Andockung hebt den Chat-Rahmen nahtlos an. Antippen zum Schließen der Tastatur und kompakte Miniaturansichten für ein natives App-Gefühl.",
+        "feat5_title": "Direktes Streaming &amp; Bildschirmsperrschutz",
+        "feat5_desc": "Batch-Download mehrerer Dateien über sofortiges Zip-Streaming ohne Wartezeit. Automatischer Wake-Lock verhindert Übertragungsabbrüche durch Ruhezustand.",
+        "feat6_title": "Plattformübergreifend &amp; Diagnose",
+        "feat6_desc": "Keine App-Installation auf Mobilgeräten oder PCs erforderlich. Integrierter Desktop-Protokollbetrachter und 1-Klick-Diagnoseexport für einfache Fehlerbehebung.",
         "tab_chat_start": "1. Sitzung starten",
         "tab_chat_live": "2. Sicherer Chat &amp; Transfer",
         "tab_chat_qr": "3. QR-Verbindung",
@@ -888,6 +950,8 @@
         "tab_app_share": "5. Freigabesteuerung",
         "tab_app_receive": "6. Empfangene Dateien",
         "desc_chat_start": "Initialisieren Sie EQT als Desktop-Sender oder richten Sie einen lokalen Empfängerknoten ein.",
+        "desc_chat_live": "Senden und empfangen Sie Dateien und Nachrichten mit konfigurationsfreier LAN-TLS HTTPS-Verschlüsselung ohne Cloud-Speicherung.",
+        "desc_mobile_ui": "Installationsfreier Mobil-Chat mit adaptiver Tastatur-Andockung, Touch-Schließen, Ruhezustandsschutz und nativer Web-Share-Unterstützung.",
         "comp_feat1_title": "Bereitstellung &amp; Lieferung",
         "comp_feat1_desc": "Digitale Lizenzen werden nach erfolgreicher Zahlungsbestätigung sofort per E-Mail zugestellt.",
         "comp_feat2_title": "Rückerstattung &amp; Stornierung",
@@ -902,6 +966,7 @@
         "nav_support": "Support",
         "nav_portal": "Portail Client",
         "nav_download": "Télécharger le client",
+        "hero_badge_new": "Sortie v1.36 : HTTPS LAN-TLS sans configuration &amp; chat mobile adaptatif",
         "hero_version": "Version 2.0 disponible",
         "hero_title": "Transfert instantané de fichiers locaux &amp; <br/><span class=\"text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary\">chat sécurisé</span> via QR code",
         "hero_desc": "Outil de transfert P2P ultra-rapide en réseau local entre PC et mobile. Pas de cloud, pas de latence.",
@@ -920,6 +985,9 @@
         "pillar4_title": "Garantie du revendeur agréé",
         "pillar4_desc": "Notre revendeur agréé Paddle gère le paiement, la facturation et la conformité fiscale locale. Politique de remboursement de 14 jours.",
         "view_pricing_btn": "Voir les forfaits et tarifs détaillés",
+        "price_badge_free": "Gratuit / 0 $ pour toujours",
+        "price_badge_lifetime": "Plus À vie / 29,99 $ paiement unique",
+        "price_badge_yearly": "Plus Annuel / 11,99 $/an",
         "price_free_title": "Gratuit",
         "price_free_period": "/toujours",
         "price_free_btn": "Démarrer",
@@ -942,10 +1010,14 @@
         "feat1_desc": "Générez instantanément des codes QR à usage unique. Scannez depuis n'importe quel appareil pour lancer les protocoles d'envoi/réception sans couplage.",
         "feat2_title": "Vitesse locale illimitée",
         "feat2_desc": "Exploitez le potentiel du réseau local (LAN). Transférez des fichiers aux limites du matériel (10 Mo/s - 100 Mo/s+), de manière totalement indépendante de la vitesse Internet de votre FAI.",
-        "feat3_title": "Chat sécurisé en LAN",
-        "feat3_desc": "Envoyez des fichiers et des messages directement aux clients locaux connectés avec zéro stockage cloud et une confidentialité absolue.",
-        "feat4_title": "Support Multiplateforme",
-        "feat4_desc": "Fonctionnement fluide sur différents systèmes d'exploitation. Aucune installation d'application mobile dédiée n'est requise pour le récepteur.",
+        "feat3_title": "HTTPS LAN-TLS Sans Configuration",
+        "feat3_desc": "Boucle locale TLS faisant autorité avec cadenas vert sans installer de certificat racine. Élimine l'interception et débloque le partage système natif sur mobile.",
+        "feat4_title": "Expérience de Chat Mobile Native",
+        "feat4_desc": "Ancrage adaptatif du clavier virtuel soulevant parfaitement le chat. Touchez pour fermer le clavier et profitez d'aperçus miniatures pour un ressenti d'application native.",
+        "feat5_title": "Téléchargement en Streaming &amp; Maintien d'Éveil",
+        "feat5_desc": "Téléchargement groupé par streaming zip instantané sans attente. Le verrouillage d'éveil garde l'écran allumé pour éviter toute coupure de transfert.",
+        "feat6_title": "Multiplateforme &amp; Diagnostics Intégrés",
+        "feat6_desc": "Zéro installation sur mobile et ordinateur. Visionneuse de journaux intégrée et export de diagnostics en un clic pour un dépannage réseau sans effort.",
         "tab_chat_start": "1. Démarrer la session",
         "tab_chat_live": "2. Chat sécurisé et envoi",
         "tab_chat_qr": "3. Connexion QR",
@@ -953,6 +1025,8 @@
         "tab_app_share": "5. Contrôle de partage",
         "tab_app_receive": "6. Fichiers reçus",
         "desc_chat_start": "Initialisez EQT en tant qu'émetteur de bureau ou configurez un nœud de réception local.",
+        "desc_chat_live": "Envoyez et recevez fichiers et messages avec chiffrement HTTPS LAN-TLS sans configuration ni stockage cloud.",
+        "desc_mobile_ui": "Chat mobile sans installation avec élévation adaptative du clavier, toucher pour masquer, maintien d'éveil et partage système natif.",
         "price_free_feat1": "Transfert local de base",
         "price_free_feat2": "Limite de session de 10 minutes par jour",
         "price_free_feat3": "Max 5 fichiers et 50 Mo par fichier",
