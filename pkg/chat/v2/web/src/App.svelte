@@ -1560,7 +1560,14 @@
             <h1 id="chat-title-text">
               <span class="chat-title-brand">EQT</span>
               {#if licenseTier}
-                <span class="license-badge">{licenseTier}</span>
+                <button
+                  type="button"
+                  class="license-badge-btn"
+                  title={isPaid ? t.viewSubscription : getTranslation('freeTier', currentLang)}
+                  on:click|stopPropagation={() => { showLicensePanel = !showLicensePanel; showDevicePanel = false; showLangPanel = false; }}
+                >
+                  <span class="license-badge">{licenseTier}</span>
+                </button>
               {/if}
             </h1>
           </div>
@@ -1595,7 +1602,7 @@
               {/if}
               <span>{licenseTier || (isPaid ? 'PLUS' : 'FREE')}</span>
             </button>
-          {:else if !isEmbedded && licenseTier}
+          {:else if !isEmbedded && licenseTier && !isMobileLayout}
             <!-- Paid: keep compact tier pill (non-embedded only) -->
             <button
               class="quota-pill"

@@ -152,6 +152,17 @@ html.embedded-chat .chat-head-title h1 {
     align-items: center;
     max-width: 100%;
 }
+.license-badge-btn {
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    font: inherit;
+    color: inherit;
+}
 .license-badge {
     background: var(--accent);
     color: #ffffff;
