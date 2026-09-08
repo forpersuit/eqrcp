@@ -2,6 +2,7 @@
 
 > 状态：📝 审计归档（Open / Review）
 > 审计日期：2026-09-08
+> 审查修正：2026-09-08（归因勘误 + 结论精确化，见文内 ⚠️ 标注）
 > 涉及模块：`pkg/server/server.go`、`pkg/server/chat.go`、`pkg/pages/download.tmpl.html`、`pkg/pages/upload.tmpl.html`、`desktop/gui/frontend/src/main.js`
 > 对应版本：v1.36.64
 
@@ -16,19 +17,26 @@
 
 ### 2. 根因深度溯源（为何以前正常，现在不正常？）
 
-#### (1) 引入变更与历史动机
-该问题是在 **2026-09-04** 的提交 **`b05e2ac5`**（*Add 7-day log retention and fix Safari download progress reporting*）中被引入的。
+#### (1) 引入变更与历史动机（含 commit 归因勘误）
+> **勘误（2026-09-08 审查）**：经 `git log -L 2087:...` 与 `git show` 溯源，`len(progress) == 1` 判定**并非** b05e2ac5 引入，而是当天下半场的 **`fddf19c4`**（*Isolate dual-channel zip download progress, fix log dump retention, and resolve 410 polling*, 09-04 21:07）引入的。两个 commit 同一天、相隔约 2.5 小时，此前的归因把它误记到了 b05e2ac5 名下。修复时**不应尝试回滚任何 commit**，只需改动判定逻辑本身。
 
-**当时的修复动机**：
-- 在更早的版本中，服务端将 ZIP 打包数据流写入客户端时，每写入一个数据块（chunk），会遍历当前所有单文件索引并将写入量累加到每个文件的 `progress[idx]` 中；
-- 导致了一个严重的副作用（**假完成**）：若分享内容包含一个 10KB 的小文件和一个 500MB 的大文件，ZIP 刚传输了 100KB，小文件对应的字节统计就已提前达标，前端或服务端判定该子项“已完成”，导致 UI 进度条乱跳或提前触发 100% 假完成；
-- 为解决小文件被 ZIP 流污染的问题，开发者试图将 **“整包 ZIP 下载”** 与 **“逐项单文件下载”** 在服务端做严格的数据通道隔离。
+- **b05e2ac5**（09-04 18:40，*Add 7-day log retention and fix Safari download progress reporting*）的真实改动：
+  - 给 `hasZip` ZIP 分支补充 `&& zipProgress > 0` 守卫（`isClientFinished` / `getClientDownloadedItems`）；
+  - 页面渲染时新增 `resetClientDownloadedBytes(clientID, -1)` 预置 ZIP 键。
+  - 它**没有**引入 `len(progress) == 1`。
+
+  **当时的修复动机**：
+  - 在更早的版本中，服务端将 ZIP 打包数据流写入客户端时，每写入一个数据块（chunk），会遍历当前所有单文件索引并将写入量累加到每个文件的 `progress[idx]` 中；
+  - 导致了一个严重的副作用（**假完成**）：若分享内容包含一个 10KB 的小文件和一个 500MB 的大文件，ZIP 刚传输了 100KB，小文件对应的字节统计就已提前达标，前端或服务端判定该子项“已完成”，导致 UI 进度条乱跳或提前触发 100% 假完成；
+  - 为解决小文件被 ZIP 流污染的问题，开发者试图将 **“整包 ZIP 下载”** 与 **“逐项单文件下载”** 在服务端做严格的数据通道隔离。
+
+- **fddf19c4**（09-04 21:07）才是死锁的**直接引入点**：它把 `getClientDownloadedAndTotal` 里的”进行中 ZIP 进度“分支从 `hasZip` 改造成 `hasZip && len(progress) == 1 && zipTotal > 0`，同时把完成判定分支收紧为 `zipProgress >= zipTotal && zipProgress > 0`。
 
 #### (2) 致命暗礁：苛刻判定与页面初始化的冲突
 在 [`pkg/server/server.go:2087`](file:///home/yelon/develop/me/eqrcp/pkg/server/server.go#L2087) 的 `getClientDownloadedAndTotal` 函数中，引入了如下守卫逻辑：
 
 ```go
-// server.go:2087 (commit b05e2ac5 引入)
+// server.go:2087 (commit fddf19c4 引入，非 b05e2ac5)
 if zipProgress, hasZip := progress[-1]; hasZip && len(progress) == 1 && zipTotal > 0 {
     return zipProgress, zipTotal, true
 }
@@ -53,7 +61,12 @@ if zipProgress, hasZip := progress[-1]; hasZip && len(progress) == 1 && zipTotal
 5. 前端与 GUI 轮询 `/status`，进入 `getClientDownloadedAndTotal`，判定条件 `len(progress) == 1` **恒为 false**；
 6. 代码直接跳过 ZIP 分支，掉入下方的单文件逐项累加循环；
 7. 但由于客户端走的是 ZIP 下载，单文件 `0` 和 `1` 的下载请求从未触发，`progress[0]` 与 `progress[1]` 全是 `0`；
-8. 函数最终返回已下载字节 `clientDone = 0`，**两端进度条被彻底死锁在 0%**。
+8. 函数最终返回已下载字节 `clientDone = 0`，**进行中的百分比死锁在 0%**。
+
+> **精确化（2026-09-08 审查）**：“死锁”一词需限定为**进行中百分比的显示死锁**，而非“传输永远无法完成”：
+> - 被 `len==1` 拦截的仅是用 2087 行的**“进行中 ZIP 进度”分支**；
+> - 而**完成判定**分支走的是 `server.go:2079`（`zipProgress >= zipTotal && zipProgress > 0`，**不含 `len==1`**），`isClientFinished`（1954 行）与 `getClientDownloadedItems`（2010 行）也同理不含 `len==1`；
+> - 因此实际形态是：**客户端会在物理传输完成后被判定为“完成”，但整个传程中的进度条始终显示 0%，直到最后一瞬间跳满**。“完成但显示 0%”的撕裂才是该 bug 的完整危害。修复时务必让 2079（完成）与 2087（进行中）对“何为 ZIP 模式”使用**同一判据**，否则二者会继续撕裂。
 
 #### (4) 单目录分享的叠加隐患
 当用户分享单个文件夹时（`len(Paths) == 1` 且目标是目录），服务端同样走 ZIP 打包传输（`itemIndex = -1`）。若 `app.body.TotalBytes` 未在启动时完成全量递归计算（或为 0），会导致 `zipTotal <= 0`，即便没有 `len(progress) == 1` 限制，也会因总字节数为 0 而无法计算百分比。
@@ -73,6 +86,11 @@ if zipProgress, hasZip := progress[-1]; hasZip && len(progress) == 1 && zipTotal
 | :--- | :--- | :--- | :--- | :--- |
 | **方案 A：去除 `len==1`，基于活跃性优先** | 检查 `hasZip && zipProgress > 0 && zipTotal > 0`，只要存在有效的 ZIP 传输即走 ZIP 统计；单文件下载开始时清理或显式区分 | 改动行数极少，立即解除死锁，向下兼容度最高 | 若客户端先下 ZIP 后又下单文件，需注意 `-1` 残留 | ⭐⭐⭐⭐ |
 | **方案 B：显式会话下载模式（Active Transfer Mode）** | 在 `ClientTransferStateInfo` 增加内部 `ActiveMode: "zip" \| "item"`。ZIP 请求激活时设为 `"zip"`，单文件请求激活时设为 `"item"` | 语义最清晰，状态流转无歧义，彻底消灭 map 猜想 | 需要在请求入口更新状态字段 | ⭐⭐⭐⭐⭐（最佳实践） |
+
+> **审查补充（2026-09-08）**：
+> 1. **修复与回滚无关，只改判定**：不要尝试回滚 b05e2ac5 或 fddf19c4——回滚会失去 ZIP 双通道隔离的有益设计。直接改 `getClientDownloadedAndTotal` 的 2087 分支即可。
+> 2. **仅去掉 `len==1` 不够**：方案 A 若客户端“先下单项后下 ZIP”或“ZIP 与单项交替”，`-1` 键与单项键会同时存在，凭 map 内容无法区分当前活跃通道——这正是必须引入显式 mode（方案 B）而非“猜 map 大小”的根本原因。可参考 `getClientDownloadedItems`（`server.go:2010`）已采用的、**只依赖传输动作留下的进度值、不依赖集合基数**的判定思路。
+> 3. **完成/进行中分支必须共用同一判据**：修复时要保证 `server.go:2079`（完成判定）与 `server.go:2087`（进行中判定）对“何为 ZIP 模式”使用同一标准，否则会出现“完成态与进度显示撕裂”（见第一节精确化）。
 
 ### 3. 高效性与性能评估 (Efficiency)
 - **CPU 时间复杂度**：$O(1)$。判定仅涉及哈希表单次寻址或布尔/枚举比对，耗时在 10~30 纳秒级别；
@@ -123,9 +141,11 @@ Receive 模式采用了完全独立的架构：
       }
   }
   ```
-  在批量上传场景下，前端 Tus 客户端是串行依次发起单个文件的上传。如果前端上传前调用的 `?init=true` 请求因移动端弱网抖动失败或晚于第 1 个文件到达，`cs.Files` 在第 1 个文件上传时只有当前单项（`len(cs.Files) == 1`）。
-- **后果**：
-  第 1 个文件一传完，`len(cs.SavedFiles) == len(cs.Files) == 1` 判定直接满足！服务端误以为所有文件已全部传输完成，将客户端置为 `completed`。若用户未开启 `KeepAlive`（单次传输模式）或启用了 `autoStop`，**服务端会直接触发 15 秒倒计时并杀死进程，导致排队中的后续文件上传直接被强行掐断**！
+  在批量上传场景下，前端 Tus 客户端是串行依次发起单个文件的上传，`cs.Files` 通过 Tus `MetaData["clientid"]` + `Upload.ID` 在 `server.go:457-489` 中按需动态 append。
+- **后果（边界场景，需前端验证）**：
+  - **前置条件**：若前端上传前调用的 `?init=true` 请求因弱网抖动**失败或晚于第 1 个文件到达**，且未预置 `cs.Files` 完整列表，则第 1 个文件上传时 `cs.Files` 只有当前单项（`len(cs.Files) == 1`）；
+  - 此时第 1 个文件一传完，`len(cs.SavedFiles) == len(cs.Files) == 1` 判定直接满足，服务端误以为全部完成，将客户端置为 `completed`；若未开启 `KeepAlive` 或启用了 `autoStop`，**会触发倒计时杀死进程，掐断排队中的后续文件上传**；
+  - **审查确认（2026-09-08）**：`643` 行的判定逻辑缺陷真实存在且推理自洽，但它是**强断言**——若前端 init 正常先到、`cs.Files` 已含完整列表，则该缺陷不会触发。此项应定性为**“init 迟到/失败或前端不预置 `Files` 时的高危边界”，需前端联调复现确认**，而非无条件必然发生。
 
 #### 缺陷 (4)：`r.ContentLength` 盲信与 Chunked 传输失效
 - **代码位置**：[`pkg/server/server.go:3300`](file:///home/yelon/develop/me/eqrcp/pkg/server/server.go#L3300)
@@ -182,8 +202,10 @@ Chat 模式是基于“消息总线 + 独立附件服务”构建的，其状态
 ## 五、 治理总结与后续改进建议
 
 1. **Share 模式修复优先级：P0（紧急）**
-   - 立即移除 `getClientDownloadedAndTotal` 中脆弱的 `len(progress) == 1` 判定；
-   - 引入显式的客户端传输模式标记，或以 `progress[-1] > 0` 且处于 ZIP 请求上下文为准，彻底打通 ZIP 模式下的进度实时管道。
+   - **不要回滚** b05e2ac5 / fddf19c4——回滚会丢失 ZIP 双通道隔离的有益设计；只改判定逻辑本身；
+   - 立即移除 `getClientDownloadedAndTotal` 中脆弱的 `len(progress) == 1` 判定（`server.go:2087`）；
+   - 推荐采用**显式会话下载模式**（`ActiveMode: "zip" | "item"`）在请求入口标记活跃通道，彻底消灭 map 长度猜想——因为仅去掉 `len==1` 无法区分“先下单项后下 ZIP / ZIP 与单项交替”时 `-1` 键与单项键共存的场景；
+   - 务必让完成判定分支（`server.go:2079`）与进行中分支（`server.go:2087`）对“何为 ZIP 模式”共用同一判据，避免“完成态与进度显示撕裂”。
 2. **Receive 模式修复优先级：P1（高）**
    - 修复普通 Multipart 上传循环中的流式进度上报，避免“0% 瞬间跳 100%”；
    - 增强 Tus 批量上传完成判据：严禁仅依据单项完成即触发 `autoStop`，必须校验全局预声明的文件总量或等待前端明确的 `done=true` 信号。
