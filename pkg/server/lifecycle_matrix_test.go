@@ -195,9 +195,16 @@ func TestLifecycleStateMatrix_ReceiveMultipart(t *testing.T) {
 
 	bodyBuf := &bytes.Buffer{}
 	writer := multipart.NewWriter(bodyBuf)
-	part, _ := writer.CreateFormFile("files[]", "testfile.txt")
-	part.Write([]byte("hello world multipart test"))
-	writer.Close()
+	part, err := writer.CreateFormFile("files[]", "testfile.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := part.Write([]byte("hello world multipart test")); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
 
 	req := httptest.NewRequest("POST", srv.ReceiveURL+"?client_id=cli-multipart-1", bodyBuf)
 	req.Header.Set("Content-Type", writer.FormDataContentType())

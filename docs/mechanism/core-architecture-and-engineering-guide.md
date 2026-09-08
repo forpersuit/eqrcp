@@ -110,6 +110,7 @@ EQT 作为一款跨平台局域网自组织传输与即时通讯系统，深度�
 > **✅ 落地审计（commit `f2dccc7e`，`pkg/server/lifecycle_matrix_test.go`）**：本反模式已获首批契约测试正面回应，但仍有一处自我矛盾值得如实记录：
 > - **真正落地**：`TestLifecycleStateMatrix_ReceiveTus`（5 用例）与 `TestLifecycleStateMatrix_ReceiveMultipart` 均通过 `srv.mux.ServeHTTP` + `?done=true` / Multipart 表单真实驱动，断言落在全局不变量（`status.State` 与 `stopChannel` 无信号），完全符合原则一；Multipart 用例还固化了“动态 `SetAutoStop(true)` 不误杀已上传客户端（`autoStopIgnoredClients`）”这一曾引发离线残留死锁的边界。
 > - **仍带镜像味（可接受现状，列入后续治理）**：`TestLifecycleStateMatrix_Send` 未走真实 HTTP 下载完成路径，而是手动 `updateClientStatus(State="completed")` 塞装状态，并**手写复刻门禁判定** `if !srv.KeepAlive || (autoStop && isAll)`（对应生产 `server.go` 的 `markItemDownloaded` → `isAllActiveClientsFinished` 收敛）。它虽调用了真实的 `isAllActiveClientsFinished()`，但外层门禁分支由测试自身复制，若生产门禁将来被改判，此用例会继续全绿——即成“自证预言”；这恰是本反模式批判的核心缺陷在新增代码中的复现。根源是 Send 完成须先真实下载文件字节，难用新分配 clientID 的 `httptest` 轻量触发，属于契约测试在 Send 方向的现实成本缺口，建议后续通过假 `io.Writer`/预建下载状态夹具收敛到真实入口。
+> - **Lint 追认（本次审查一并修正）**：f2dccc7e 中 `TestLifecycleStateMatrix_ReceiveMultipart` 的 `part.Write(...)` 返回值未检查，触发 `errcheck` 警告，已在本次审查提交中补齐错误判定（`writer.Close()` 一并处理），并跑通全量 `go test ./pkg/server`。
 
 #### ❌ 反模式 2：黑盒盲区与路径失衡（Asymmetric Coverage）
 - **表现**：重点测试路径（如 Send 模式）写了数十个用例，而新演进路径（如 Receive Tus）只测了底层的流写入，漏掉了最关键的状态流转和收敛门禁。
