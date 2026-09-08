@@ -218,6 +218,11 @@ Chat 模式是基于“消息总线 + 独立附件服务”构建的，其状态
 > 2. **Receive 模式**：Tus 假完成安全门禁（引入 `FilesDeclared` 严密门禁，并在 `?done=true` 处规范触发批次完成与 `autoStop`）与 Multipart 回退流式进度上报（读取循环增量累加、节流上报、修复单文件跳 100% 误判）已修复并增加专项回归测试。P1 项已达成。
 > 3. **Chat 模式**：第 3 条 Chat 优化（降级限速 Range 缺陷修复与附件进度快照集成）属后续开放改进项。
 
+> **提交审查（2026-09-08，针对 `bfda3362` 的代码复核）**：
+> - **门禁收益核实通过**：Tus 常驻路径 `ReceiveTo`（`server.go:646-661`）的门禁使未调 `?init=true` 的客户端在首个文件后进入 `State="waiting"` 而非 `completed`；而 `isAllActiveClientsFinished`（`server.go:1538/1577`）只认 `completed/failed`，故 `waiting` 态**不会触发 `signalStopAfterStatusGrace` 强杀**——洞察 1 的防掐断目标成立。正则前端（`?init=true` → `FilesDeclared=true` → Tus → `?done=true`）全程不触发门禁，行为不变。
+> - **一项「通道门禁不对称」备忘（非当前 bug）**：`FilesDeclared` 门禁**只存在于 `ReceiveTo`（Tus 常驻 goroutine 通道）**；而 `New()` 内联 Multipart 段（`server.go:3356-3658`，`srv.mux` 直接到达，测试 `TestReceiveMultipartProgress_MultiFileStreaming` 所走路径）**不含该门禁**，仍无条件 `completed`。当前 Multipart 流量正好走这条无门禁通道，故**不存在"普通 Multipart 被卡 waiting"回归**；但两条通道行为不对称——若未来把 Multipart 迁入 `ReceiveTo` 常驻路径，将突然获得 waiting 语义。鉴于此门禁以 `waiting` 兜底无 init 客户端本身是设计意图（宁停 waiting 不误杀），此备忘仅提示将来统一通道时需同步门禁。
+> - **测试质量确认**：`receive_progress_gate_test.go` 覆盖门禁正反例（init 后 2 文件仅完成 1 不误标、全部完成才 completed、无 init 经 `?done=true` 显式完成）与 Multipart 连续进度、单文件跳 100% 修复，断言的是"不误杀、连续上报"的语义而非表面值，符合测试意图校验原则。
+
 ---
 
 ## 六、 三模式传输与状态显示方案 · 横向工程实践对标
