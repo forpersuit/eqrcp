@@ -109,15 +109,15 @@ Receive 模式采用了完全独立的架构：
 
 ### 2. Receive 模式深入审计发现的 4 项传输与状态显示缺陷
 
-#### 缺陷 (1)：普通 Multipart 上传流式进度“黑洞”（0% 瞬间跳 100%）
+#### 缺陷 (1)：普通 Multipart 上传流式进度“黑洞”（回退通道完全不接报）
 - **代码位置**：[`pkg/server/server.go:3376-3450`](file:///home/yelon/develop/me/eqrcp/pkg/server/server.go#L3376-L3450)
 - **缺陷表现**：
   在 `part.Read(buf)` 读写上传文件的数据流循环中，虽然累加了局部变量 `currentFileWritten += int64(n)`，**但循环内部完全没有调用 `updateClientStatus` 或更新全局 `status.BytesDone`**！
 - **后果**：
-  当用户通过非 Tus 通道（如脚本 curl、禁用 JS 的浏览器或特定设备）上传一个 2GB 的大文件时，整个上传过程中服务端和 GUI 的进度条始终保持在 `0%`（或停留在上一个文件的状态），直到整个文件读完、`out.Close()` 之后，才在行 3422 处瞬间写死 `cs.BytesDone = cs.BytesTotal, cs.Percent = 100`。完全丢失了传输过程中的进度反馈。
+  当用户通过非 Tus 通道（如脚本 curl、禁用 JS 的浏览器或特定设备）上传大文件时，普通 Multipart 上传全程根本没有接入任何实时进度上报管线；整个上传过程中服务端和 GUI 的进度条始终冻结在 `0%`（或停留在上一个文件的状态），直到文件全部读完写入完成、`out.Close()` 之后，才在行 3457-3458 处瞬间写死 `cs.BytesDone = cs.BytesTotal, cs.Percent = 100`。完全丢失了传输过程中的物理进度反馈。
 
 #### 缺陷 (2)：多文件普通上传的进度篡改与状态覆盖
-- **代码位置**：[`pkg/server/server.go:3422-3423`](file:///home/yelon/develop/me/eqrcp/pkg/server/server.go#L3422-L3423)
+- **代码位置**：[`pkg/server/server.go:3457-3458`](file:///home/yelon/develop/me/eqrcp/pkg/server/server.go#L3457-L3458)
 - **缺陷表现**：
   当用户上传多个文件时，每完成一个单文件的写入，代码执行了：
   ```go
@@ -226,14 +226,14 @@ Chat 模式是基于“消息总线 + 独立附件服务”构建的，其状态
 `Server` 结构体（`pkg/server/server.go:97-145`）是**多锁 + 多状态集**的混合体：
 
 - **锁**：`statusMu` / `downloadedItemsMu` / `downloadedBytesMu` / `clientMutex` / `clientStatesMu` / `expectedBytesMu` / `tusMu` / `clientSpeedTrackersMu` / `clientSubDirsMu` / `lastHookTimeMu`，合计 **10 把互斥锁**；
-- **状态集**：`status/transferStatus`（全局单例）、`clientStates`（每设备）、`clientProgress`（每设备每项字节）、`downloadedItems/Bytes`、`tusUploadsDone/Total`、`ChatStatusSnapshot` —— 合计 **6 套并行记账模型**。
+- **状态集**：`status/transferStatus`（全局单例）、`clientStates`（每设备）、`clientProgress`（每设备每项字节）、`downloadedItems/Bytes`、`tusUploadsDone/Total`、`ChatStatusSnapshot`（经 hook 回调与 chatSession 产出） —— 合计 **6 套并行记账模型**。
 
 **判断**：这不是"符合领域建模的单一真相源"设计，而是**逐需求堆叠生长**的结果。好处是各通道隔离、故障面小；代价是三套状态互相独立，当前暴露的"Share 有进度、Receive 黑洞、Chat 无进度"三级落差**正源于此**。当前优先级（修复 bug、不重构）下可接受，但应在 roadmap 单列"统一状态接口"，**不应继续新增第 7 套模型**。
 
 ### 1. Share（下载）—— ✅ 最符合实践，最匹配场景
 
-- **传输协议**：HTTP Range + 并行 chunk + 断点续传（`server.go:2773` 解析 Range；`expectParallelRequests` 于 `server.go:109,743`；`isAlreadyTransferring` 于 `server.go:2782` 保护并发 Range 请求不重置进度）。下载以吞吐为第一诉求、浏览器原生能力强，Range+并行分片**贴合 HTTP 语义、天然断点、支持 Safari Range 探测 `bytes=0-1`** —— 协议选型正确。
-- **状态显示**：`clientProgress map[client]map[item]bytes` 按设备/按单项记账 + `clientActiveItem` 活跃通道；经逐步修复后，进行中/完成判定统一以 `isClientZipModeLocked`（`server.go:1947`）为准，O(1) 判定、零分配、`/status` 高频轮询微秒级返回——**完全符合本项目后端规范第 1/2 条**（非阻塞、内存缓存优先）。
+- **传输协议**：HTTP Range + 并行 chunk + 断点续传（`server.go:2773` 解析 Range；`expectParallelRequests` 于 `server.go:109,743`；`isAlreadyTransferring` 于 `server.go:2778` 保护并发 Range 请求不重置进度）。下载以吞吐为第一诉求、浏览器原生能力强，Range+并行分片**贴合 HTTP 语义、天然断点、支持 Safari Range 探测 `bytes=0-1`** —— 协议选型正确。
+- **状态显示**：`clientProgress map[client]map[item]bytes` 按设备/按单项记账 + `clientActiveItem` 活跃通道；经逐步修复后，进行中/完成判定统一以 `isClientZipModeLocked`（`server.go:1945`）为准，O(1) 判定、零分配、`/status` 高频轮询微秒级返回——**完全符合本项目后端规范第 1/2 条**（非阻塞、内存缓存优先）。
 - **遗留**：`statusHandler`（`server.go:2182`）采用**客户端轮询 `/status` 而非服务端推送**。对 Share（单设备、低刷新率、LAN 内）轮询足够且更简单，**适配当前场景**，无需强上 SSE/WebSocket；若将来设备数激增再评估。
 
 **结论**：Share 协议与状态显示**双达标，是三模式参考范本**。
@@ -242,7 +242,7 @@ Chat 模式是基于“消息总线 + 独立附件服务”构建的，其状态
 
 - **传输协议**：现代浏览器走 **Tus 分块断点上传**（`server.go:3623` `handleTusUpload`），弱网/回退走 **Multipart**（`server.go:3360`）。Tus 是大文件上传的**正确答案**（断点续传、可恢复、抗弱网抖动），协议层符合最佳实践。
 - **状态显示（两个断层，三模式中最薄弱）**：
-  1. **Multipart 回退是"0% 突跳 100%"黑洞**（`server.go:3391-3414`）：读取循环只累加局部 `currentFileWritten`，**不刷新全局进度**，直到 `server.go:3422` 才写死 `BytesDone=BytesTotal, Percent=100`。大文件传程 UI 无反馈——与 Share 逐块记账形成鲜明反差。
+  1. **Multipart 回退是"完全不接报"的流式黑洞**（`server.go:3391-3414`）：读取循环只累加局部 `currentFileWritten`，**全程不刷新任何进度字段**，直到 `server.go:3457-3458` 才在写入完成后瞬间写死 `BytesDone=BytesTotal, Percent=100`。大文件传输全程 UI 零反馈——与 Share 逐块记账形成鲜明反差。
   2. **两套记账源并存**：Tus 用 `tusUploadsDone/Total`（`server.go:429-451, 576-598`），Multipart 用 `currentFileWritten`+客户端状态覆盖。同一个"接收进度"被拆在两套模型里，`/status` 无法给出统一、连续的百分比。
 
 **判断**：协议选型正确，但状态显示**明显偏离"传输中应有连续进度反馈"的实践**，与其场景（大文件、拖拽多文件、弱网）的期望最不匹配。**最值得优先补强**：在 Multipart 读取循环按块增量上报（复用 `updateClientStatus` 的 `BytesDone`），即可缝合两处断层；Tus 侧无需动协议。
