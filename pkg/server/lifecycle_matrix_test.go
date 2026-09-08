@@ -304,23 +304,13 @@ func TestLifecycleStateMatrix_Send(t *testing.T) {
 			srv.statusMu.Unlock()
 
 			clientID := "client-send-1"
-			srv.registerClientActivityWithID(clientID, httptest.NewRequest("GET", "/test", nil))
+			// 1. 发起真实 HTTP GET 请求下载文件（纯黑盒驱动，完全不手写任何内部状态或门禁判定）
+			reqDown := httptest.NewRequest(http.MethodGet, srv.SendURL+"?download=1&client_id="+clientID, nil)
+			recDown := httptest.NewRecorder()
+			srv.mux.ServeHTTP(recDown, reqDown)
 
-			// 标记客户端完成下载
-			srv.updateClientStatus(clientID, nil, func(state *ClientTransferStateInfo) {
-				state.State = "completed"
-			})
-
-			// 触发完成门禁评估 (与真实流程一致)
-			srv.statusMu.Lock()
-			autoStop := srv.autoStop
-			srv.statusMu.Unlock()
-
-			isAll := srv.isAllActiveClientsFinished()
-			if !srv.KeepAlive || (autoStop && isAll) {
-				srv.setStatus("completed", "Transfer completed.")
-			} else {
-				srv.setStatus("waiting", "Transfer completed. Waiting for more files.")
+			if recDown.Code != http.StatusOK {
+				t.Fatalf("unexpected download status: %d, body: %s", recDown.Code, recDown.Body.String())
 			}
 
 			// 验证系统不变量

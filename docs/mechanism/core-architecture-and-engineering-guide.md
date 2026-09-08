@@ -107,10 +107,10 @@ EQT 作为一款跨平台局域网自组织传输与即时通讯系统，深度�
   - 针对 `isAllActiveClientsFinished()` 这类核心收敛算法内部逻辑的单元测试是**合理且必需的**；
   - 但**算法测试不能替代外层状态机契约测试**：若缺乏从最外层 HTTP Handler（如 Tus 收到 `?done=true`）驱动全局生命周期联动的集成用例，一旦外层 Handler 内部出现直接将全局状态置为 `"completed"` 的违规改动，内部算法单测依然全绿，从而产生“测试全通但真实功能失效”的防御真空。
 
-> **✅ 落地审计（commit `f2dccc7e`，`pkg/server/lifecycle_matrix_test.go`）**：本反模式已获首批契约测试正面回应，但仍有一处自我矛盾值得如实记录：
-> - **真正落地**：`TestLifecycleStateMatrix_ReceiveTus`（5 用例）与 `TestLifecycleStateMatrix_ReceiveMultipart` 均通过 `srv.mux.ServeHTTP` + `?done=true` / Multipart 表单真实驱动，断言落在全局不变量（`status.State` 与 `stopChannel` 无信号），完全符合原则一；Multipart 用例还固化了“动态 `SetAutoStop(true)` 不误杀已上传客户端（`autoStopIgnoredClients`）”这一曾引发离线残留死锁的边界。
-> - **仍带镜像味（可接受现状，列入后续治理）**：`TestLifecycleStateMatrix_Send` 未走真实 HTTP 下载完成路径，而是手动 `updateClientStatus(State="completed")` 塞装状态，并**手写复刻门禁判定** `if !srv.KeepAlive || (autoStop && isAll)`（对应生产 `server.go` 的 `markItemDownloaded` → `isAllActiveClientsFinished` 收敛）。它虽调用了真实的 `isAllActiveClientsFinished()`，但外层门禁分支由测试自身复制，若生产门禁将来被改判，此用例会继续全绿——即成“自证预言”；这恰是本反模式批判的核心缺陷在新增代码中的复现。根源是 Send 完成须先真实下载文件字节，难用新分配 clientID 的 `httptest` 轻量触发，属于契约测试在 Send 方向的现实成本缺口，建议后续通过假 `io.Writer`/预建下载状态夹具收敛到真实入口。
-> - **Lint 追认（本次审查一并修正）**：f2dccc7e 中 `TestLifecycleStateMatrix_ReceiveMultipart` 的 `part.Write(...)` 返回值未检查，触发 `errcheck` 警告，已在本次审查提交中补齐错误判定（`writer.Close()` 一并处理），并跑通全量 `go test ./pkg/server`。
+> **✅ 落地审计与全链路闭环（commit `f2dccc7e` 及后续重构，`pkg/server/lifecycle_matrix_test.go`）**：
+> - **Receive 方向**：`TestLifecycleStateMatrix_ReceiveTus`（5 用例）与 `TestLifecycleStateMatrix_ReceiveMultipart` 均通过 `srv.mux.ServeHTTP` + `?done=true` / Multipart 表单真实驱动，断言直接落在全局不变量（`status.State` 与 `stopChannel` 无信号），完全符合原则一；同时固化了“动态 `SetAutoStop(true)` 不误杀已上传客户端（`autoStopIgnoredClients`）”的边界；
+> - **Send 方向彻底消除镜像味**：此前 `TestLifecycleStateMatrix_Send` 曾暂时残留“手写复刻门禁分支”的过渡形态；现已**彻底重构为发起真实的 HTTP GET 路由请求（`srv.SendURL+"?download=1&client_id=..."`）下载文件**，由服务端的生产代码流式传输、触发 `markItemDownloaded` 并自动由生产 Handler 执行收敛门禁。测试中零手工篡改状态、零手写 if 门禁，实现 100% 真实黑盒驱动；
+> - **Lint 严谨性**：针对 `TestLifecycleStateMatrix_ReceiveMultipart` 的 `part.Write(...)` 与 `writer.Close()` 补齐严格的错误处理检查，消除 `errcheck` 告警，全量单测保持 100% 绿灯。
 
 #### ❌ 反模式 2：黑盒盲区与路径失衡（Asymmetric Coverage）
 - **表现**：重点测试路径（如 Send 模式）写了数十个用例，而新演进路径（如 Receive Tus）只测了底层的流写入，漏掉了最关键的状态流转和收敛门禁。
