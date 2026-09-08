@@ -48,6 +48,8 @@ Environment variables use the `EQT_` prefix.
 
 ## Planning & Docs
 
+- **[核心工程技术体系、设计全景与测试理论指导指南](mechanism/core-architecture-and-engineering-guide.md)** — 第一性原理、核心技术全景（P2P/双通道ZIP/Tus/Range/Wails/DRM/LAN-TLS）、状态机生命周期不变量测试理论
+- **[传输生命周期与状态机不变量契约测试重构方案](test/state-machine-contract-testing-plan.md)** — 消除镜像伪测试、表驱动矩阵测试框架与分阶段落地路线
 - **[正式发布清单 (Product Launch Checklist)](IMPORTANT_product-release.md)** — 上线前配置/口径/验收；下一版范围
 - **[Paddle 商家 KYB 与合规开通指南](IMPORTANT_paddle-kyb-company-guide.md)** — 公司注册优势、KYB 认证、域名审核及出口结汇
 - [Payment & Licensing System Docs (支付与授权系统文档)](payment/README.md)
