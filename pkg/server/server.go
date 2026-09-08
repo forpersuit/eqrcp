@@ -119,6 +119,7 @@ type Server struct {
 	clientMutex            sync.Mutex
 	clientLastSeen         map[string]time.Time
 	clientProgress         map[string]map[int]int64
+	clientActiveItem       map[string]int
 	clientStates           map[string]*ClientTransferStateInfo
 	clientReceiveCounted   map[string]bool
 	clientStatesMu         sync.Mutex
@@ -342,6 +343,7 @@ func (s *Server) ReceiveTo(dir string) error {
 	s.receiveQuotaCounted = false
 	s.clientLastSeen = make(map[string]time.Time)
 	s.clientProgress = make(map[string]map[int]int64)
+	s.clientActiveItem = make(map[string]int)
 	s.clientReceiveCounted = make(map[string]bool)
 	s.clientMutex.Unlock()
 
@@ -725,6 +727,7 @@ func (s *Server) Send(p body.Body) {
 	s.clientMutex.Lock()
 	s.clientLastSeen = make(map[string]time.Time)
 	s.clientProgress = make(map[string]map[int]int64)
+	s.clientActiveItem = make(map[string]int)
 	s.clientReceiveCounted = make(map[string]bool)
 	s.clientMutex.Unlock()
 
@@ -1925,6 +1928,25 @@ func (s *Server) setClientDownloadedBytes(clientID string, itemIndex int, val in
 	s.clientProgress[clientID][itemIndex] = val
 }
 
+func (s *Server) setClientActiveItem(clientID string, itemIndex int) {
+	s.clientMutex.Lock()
+	defer s.clientMutex.Unlock()
+	if s.clientActiveItem == nil {
+		s.clientActiveItem = make(map[string]int)
+	}
+	s.clientActiveItem[clientID] = itemIndex
+}
+
+func (s *Server) getClientActiveItem(clientID string) (int, bool) {
+	s.clientMutex.Lock()
+	defer s.clientMutex.Unlock()
+	if s.clientActiveItem == nil {
+		return 0, false
+	}
+	item, ok := s.clientActiveItem[clientID]
+	return item, ok
+}
+
 func (s *Server) isClientFinished(clientID string) bool {
 	s.clientMutex.Lock()
 	defer s.clientMutex.Unlock()
@@ -2075,6 +2097,12 @@ func (s *Server) getClientDownloadedAndTotal(clientID string) (int64, int64) {
 
 	s.clientMutex.Lock()
 	progress, ok := s.clientProgress[clientID]
+	var activeItem int
+	var hasActive bool
+	if s.clientActiveItem != nil {
+		activeItem, hasActive = s.clientActiveItem[clientID]
+	}
+
 	if zipTotal > 0 && ok && progress != nil {
 		if zipProgress, hasZip := progress[-1]; hasZip && zipProgress >= zipTotal && zipProgress > 0 {
 			s.clientMutex.Unlock()
@@ -2082,14 +2110,30 @@ func (s *Server) getClientDownloadedAndTotal(clientID string) (int64, int64) {
 		}
 	}
 
-	// 2. 若客户端仅进行纯 ZIP 下载且尚未传完，返回当前 ZIP 进度
-	if ok && progress != nil {
-		if zipProgress, hasZip := progress[-1]; hasZip && len(progress) == 1 && zipTotal > 0 {
-			s.clientMutex.Unlock()
-			if zipProgress > zipTotal {
-				zipProgress = zipTotal
+	// 2. 若客户端当前处于 ZIP 下载通道且尚未传完，返回当前 ZIP 进度
+	if ok && progress != nil && zipTotal > 0 {
+		if zipProgress, hasZip := progress[-1]; hasZip && zipProgress > 0 {
+			isZipMode := (hasActive && activeItem == -1)
+			if !hasActive {
+				// 兜底：若尚未记录显式 activeItem（如独立轮询或离线测试），但除了 -1 外其它单项全为 0（页面初始化预置值），判定为 ZIP 模式
+				allSingleItemsZero := true
+				for k, v := range progress {
+					if k >= 0 && v > 0 {
+						allSingleItemsZero = false
+						break
+					}
+				}
+				if allSingleItemsZero {
+					isZipMode = true
+				}
 			}
-			return zipProgress, zipTotal
+			if isZipMode {
+				s.clientMutex.Unlock()
+				if zipProgress > zipTotal {
+					zipProgress = zipTotal
+				}
+				return zipProgress, zipTotal
+			}
 		}
 	}
 
@@ -2365,6 +2409,7 @@ func New(cfg *config.Config) (*Server, error) {
 	app.clientLastSeen = make(map[string]time.Time)
 	app.autoStopIgnoredClients = make(map[string]bool)
 	app.clientProgress = make(map[string]map[int]int64)
+	app.clientActiveItem = make(map[string]int)
 	app.clientStates = make(map[string]*ClientTransferStateInfo)
 	app.clientReceiveCounted = make(map[string]bool)
 	app.expectedBytes = make(map[int]int64)
@@ -2744,9 +2789,14 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 		app.clientStatesMu.Unlock()
 
-		// Output dynamic device-identified tracking log
 		log.Printf("[EQT Server] [Download Start] clientID=%s, IP=%s, File=%s, Range=%s, UA=%s, isZip=%t, isAlreadyTransferring=%t",
 			clientID, r.RemoteAddr, downloadName, r.Header.Get("Range"), r.UserAgent(), isZipDownload, isAlreadyTransferring)
+
+		if isZipDownload {
+			app.setClientActiveItem(clientID, -1)
+		} else {
+			app.setClientActiveItem(clientID, currentIndex)
+		}
 
 		if !isAlreadyTransferring {
 			if isZipDownload {

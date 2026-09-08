@@ -541,9 +541,18 @@ func TestZipDownloadProgressAndFinishedIntegrity(t *testing.T) {
 	zipSize := int64(2048)
 	s.expectedBytes[-1] = zipSize
 
-	// 1. 模拟 ZIP 下载中途部分传输 (500 / 2048 字节)
-	s.clientProgress[clientID] = map[int]int64{
-		-1: 500,
+	// 1. 模拟真实访问场景：用户打开页面时，服务端预埋了所有单项的初始进度 {0: 0, 1: 0}
+	s.resetClientDownloadedBytes(clientID, 0)
+	s.resetClientDownloadedBytes(clientID, 1)
+
+	// 用户点击“下载全部”，激活 ZIP 模式，传输了 500 / 2048 字节
+	s.setClientActiveItem(clientID, -1)
+	s.setClientDownloadedBytes(clientID, -1, 500)
+
+	// 关键验证：即使 progress map 中含有 {0: 0, 1: 0, -1: 500}（len > 1），也能准确返回进行中的 ZIP 进度！
+	done, total := s.getClientDownloadedAndTotal(clientID)
+	if done != 500 || total != 2048 {
+		t.Errorf("getClientDownloadedAndTotal with pre-initialized single items = (%d, %d); want (500, 2048)", done, total)
 	}
 
 	// ZIP 未传完，且单项未下载，客户端判定未完成
@@ -556,8 +565,9 @@ func TestZipDownloadProgressAndFinishedIntegrity(t *testing.T) {
 		t.Errorf("getClientDownloadedItems returned %v when zip is incomplete; want empty", items)
 	}
 
-	// 2. 模拟该客户端中途放弃 ZIP，转而逐项下载单文件：先下载 item 0
-	s.clientProgress[clientID][0] = int64(len(f1Data))
+	// 2. 模拟该客户端中途放弃 ZIP，转而逐项下载单文件：激活 item 0
+	s.setClientActiveItem(clientID, 0)
+	s.setClientDownloadedBytes(clientID, 0, int64(len(f1Data)))
 	items = s.getClientDownloadedItems(clientID)
 	if len(items) != 1 || items[0] != 0 {
 		t.Errorf("getClientDownloadedItems after item 0 downloaded = %v; want [0]", items)
@@ -567,7 +577,8 @@ func TestZipDownloadProgressAndFinishedIntegrity(t *testing.T) {
 	}
 
 	// 接着下载 item 1
-	s.clientProgress[clientID][1] = int64(len(f2Data))
+	s.setClientActiveItem(clientID, 1)
+	s.setClientDownloadedBytes(clientID, 1, int64(len(f2Data)))
 	items = s.getClientDownloadedItems(clientID)
 	if len(items) != 2 {
 		t.Errorf("getClientDownloadedItems after all items downloaded = %v; want [0, 1]", items)
@@ -576,11 +587,30 @@ func TestZipDownloadProgressAndFinishedIntegrity(t *testing.T) {
 		t.Errorf("isClientFinished = false when all individual items are completed; want true")
 	}
 
-	// 3. 模拟另一个纯 ZIP 客户端成功下载完整 ZIP (2048/2048)
-	zipClient := "test_full_zip_client"
-	s.clientProgress[zipClient] = map[int]int64{
-		-1: 2048,
+	// 3. 模拟另一个客户端：先下载了单项 0（部分字节），然后切换点击“下载全部 (ZIP)”
+	altClient := "test_alternate_client"
+	s.resetClientDownloadedBytes(altClient, 0)
+	s.resetClientDownloadedBytes(altClient, 1)
+	s.setClientActiveItem(altClient, 0)
+	s.setClientDownloadedBytes(altClient, 0, 5) // item 0 传了 5 字节
+
+	// 切换到 ZIP
+	s.setClientActiveItem(altClient, -1)
+	s.setClientDownloadedBytes(altClient, -1, 800) // ZIP 传了 800 字节
+
+	// 必须反映当前活跃模式（ZIP）的 800 字节，而非单项的 5 字节
+	altDone, altTotal := s.getClientDownloadedAndTotal(altClient)
+	if altDone != 800 || altTotal != 2048 {
+		t.Errorf("getClientDownloadedAndTotal after switching to ZIP = (%d, %d); want (800, 2048)", altDone, altTotal)
 	}
+
+	// 4. 模拟纯 ZIP 客户端成功下载完整 ZIP (2048/2048)
+	zipClient := "test_full_zip_client"
+	s.resetClientDownloadedBytes(zipClient, 0)
+	s.resetClientDownloadedBytes(zipClient, 1)
+	s.setClientActiveItem(zipClient, -1)
+	s.setClientDownloadedBytes(zipClient, -1, 2048)
+
 	if !s.isClientFinished(zipClient) {
 		t.Errorf("isClientFinished = false when zip progress reached 2048/2048; want true")
 	}
@@ -590,7 +620,7 @@ func TestZipDownloadProgressAndFinishedIntegrity(t *testing.T) {
 		t.Errorf("getClientDownloadedItems returned %v when zip completed; want 2 items", items)
 	}
 
-	done, total := s.getClientDownloadedAndTotal(zipClient)
+	done, total = s.getClientDownloadedAndTotal(zipClient)
 	if done != 2048 || total != 2048 {
 		t.Errorf("getClientDownloadedAndTotal for zipClient = (%d, %d); want (2048, 2048)", done, total)
 	}
