@@ -12,27 +12,15 @@
 ### 1. 痛点：假绿灯与被动的人肉测试
 在以往的功能迭代中（例如 Tus 进度上报改造、ZIP 双通道隔离），多次出现**“新修改导致原有的 AutoStop 或进度条功能失效，但本地运行 `go test ./pkg/server ./cmd` 全绿通过，最终只能由用户在实际使用中手动测试才发现”**的严重被动局面。
 
-### 2. 根因：既有单测的“镜像复刻反模式”
-经对 [`pkg/server/client_state_test.go`](../../pkg/server/client_state_test.go) 的深度审计，发现既有的测试用例存在严重的**镜像手写伪测试**：
+### 2. 根因：内部算法白盒单测与外层 HTTP 契约测试的断层
+经对测试体系的深度审计，定位到过去测试未报警的结构性根因：
 
-```go
-// 典型反模式案例：client_state_test.go:153-165
-// 开发者并未让真实的 HTTP 请求走入服务器路由，而是在测试用例内部“手工抄写”了被测代码：
-if s.isClientFinished(clientID) {
-    s.updateClientStatus(clientID, req, func(state *ClientTransferStateInfo) {
-        state.State = "completed"
-    })
-    if autoStop {
-        s.setStatus("completed", "Transfer completed.")
-        go s.signalStop()
-    }
-}
-```
-
-- **危害机制**：
-  1. 真实 Handler 逻辑被肆意修改（例如在 `handleTusUpload` 中无视 `autoStop` 直接调用 `updateStatus(State = "completed")`）；
-  2. 测试文件运行时压根没走 `handleTusUpload`，而是继续跑自己在测试里手写的那几行 `if autoStop { ... }`；
-  3. **自动化测试 100% 给出绿灯假象，测试形同虚设**。
+1. **`client_state_test.go` 的定位与边界**：
+   - 该文件专注于验证 `isAllActiveClientsFinished()` 内部多设备心跳超时、已完成忽略算法，直接调用生产方法断言其布尔返回值，是合法有效的**算法单元测试**；
+   - 但在验证 AutoStop 触发时，部分早期用例直接在测试内部手动组织了触发代码（模拟 `ServeFile` 尾部动作），而非经由外层 HTTP 路由分发。
+2. **致命断层（The Missing E2E Contract）**：
+   - 当我们在 `handleTusUpload`（外层 HTTP Handler）中增加完成处理时，缺少一条从**“真实 HTTP POST `?done=true` -> Handler 内部门禁评估 -> 全局状态流转”**的端到端契约测试；
+   - 结果：外层 Handler 内部即便出现了直接将全局状态置为 `"completed"` 的违例，底层的 `isAllActiveClientsFinished()` 内部算法依然运行良好，导致所有既有单元测试一路绿灯通行，形成了测试防御的真空地带。
 
 ---
 
@@ -114,17 +102,10 @@ if s.isClientFinished(clientID) {
 - **交付内容**：在 [`pkg/server/receive_progress_gate_test.go`](../../pkg/server/receive_progress_gate_test.go) 中编写并合入 `TestReceiveTusDoneAutoStopBehavior`；
 - **防护效果**：首次引入真实 `srv.mux.ServeHTTP` 请求 Tus `?done=true`，锁定 `autoStop=false` 时全局状态保持 `waiting` 的铁律，0.3 秒内阻断违规提交。
 
-### 第二阶段（Phase 2）：清理历史“镜像手写伪测试”（技术债消解）
-- **改造目标**：对 [`pkg/server/client_state_test.go`](../../pkg/server/client_state_test.go) 中的以下 5 个伪测试实施外科手术式重构：
-  1. `TestSingleDeviceAutoStopTrigger`
-  2. `TestSingleDeviceAutoStopIgnoredOnToggle`
-  3. `TestMultiDeviceAutoStopTrigger`
-  4. `TestDeviceTimeoutDuringTransfer`
-  5. `TestAutoStopIgnoredClientsReset`
-- **重构原则**：
-  - 彻底删除测试用例内部手写的 `if s.isClientFinished(...) { ... }` 逻辑；
-  - 统一改写为初始化真实 `Server`，通过 HTTP Client 或 `ServeHTTP` 发送 GET / POST 请求；
-  - 直接断言 `srv.status.State` 与 `<-srv.stopChannel`。
+### 第二阶段（Phase 2）：历史用例分层治理与外层 HTTP 契约补齐
+- **改造目标**：对 [`pkg/server/client_state_test.go`](../../pkg/server/client_state_test.go) 中的核心用例进行分层治理：
+  - **保留并巩固算法层测试**：保留针对 `isAllActiveClientsFinished` 内部心跳、忽略列表重置等底层算法的断言；
+  - **外层契约补齐**：对早期直接在用例内部手工模拟退出的片段，升级为统一基于 `srv.mux.ServeHTTP` 的真实 HTTP 请求驱动，直接验证外部请求触发状态机变迁与 `<-srv.stopChannel` 的全链路闭环。
 
 ### 第三阶段（Phase 3）：全量矩阵自动化测试用例落地
 - **新建测试文件**：`pkg/server/lifecycle_matrix_test.go`
