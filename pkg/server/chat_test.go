@@ -703,3 +703,84 @@ func TestChatActiveTransfersLifecycle(t *testing.T) {
 		t.Fatalf("expected active transfers to be cleared on completion, got %d", len(latestSnapshot.ActiveTransfers))
 	}
 }
+
+func TestChatActiveTransfersDownloadLifecycle(t *testing.T) {
+	var latestSnapshot ChatStatusSnapshot
+	session := &chatSession{
+		attachments:     map[string]chatAttachment{},
+		subscribers:     map[chan struct{}]struct{}{},
+		clients:         map[string]chatClient{},
+		dir:             t.TempDir(),
+		attachmentRoute: "/attachments",
+		startedAt:       time.Now(),
+		lastActivity:    time.Now(),
+		state:           "waiting",
+		statusHook: func(snapshot ChatStatusSnapshot) {
+			latestSnapshot = snapshot
+		},
+	}
+
+	// 1. Initially a file exists in chat
+	fileName := "report_archive.zip"
+	fileSize := int64(50 * 1024 * 1024) // 50MB
+	msg, err := session.saveAttachment("MacBook-User", "token-mac", fileName, "application/zip", fileSize, strings.NewReader("dummy-zip-data"))
+	if err != nil {
+		t.Fatalf("saveAttachment failed: %v", err)
+	}
+
+	// Initial check: not receiving yet, ActiveTransfers should be empty
+	if len(latestSnapshot.ActiveTransfers) != 0 {
+		t.Fatalf("expected 0 active transfers initially, got %d", len(latestSnapshot.ActiveTransfers))
+	}
+	initialSeq := session.statusSeq
+	initialState := session.state
+
+	// 2. Client initiates download (receiving=true, progress=0)
+	session.lastProgressHookTime = time.Time{} // reset throttle
+	session.updateDownloadProgressMessage(msg.ID, true, 0)
+
+	if len(latestSnapshot.ActiveTransfers) != 1 {
+		t.Fatalf("expected 1 active transfer after download start, got %d", len(latestSnapshot.ActiveTransfers))
+	}
+	active := latestSnapshot.ActiveTransfers[0]
+	if active.ID != msg.ID || active.FileName != fileName || active.Percent != 0 {
+		t.Fatalf("active transfer download start mismatch: %#v", active)
+	}
+	// Assert no state machine side effects: state remains waiting, statusSeq remains initial
+	if latestSnapshot.State != initialState {
+		t.Fatalf("expected session state to remain %q, got %q (side effect leaked)", initialState, latestSnapshot.State)
+	}
+	if session.statusSeq != initialSeq {
+		t.Fatalf("expected statusSeq to remain %d, got %d (side effect leaked)", initialSeq, session.statusSeq)
+	}
+
+	// 3. Streaming download progress updates (receiving=true, progress=65)
+	session.lastProgressHookTime = time.Time{} // reset throttle
+	session.updateDownloadProgressMessage(msg.ID, true, 65)
+
+	if len(latestSnapshot.ActiveTransfers) != 1 {
+		t.Fatalf("expected 1 active transfer during download progress, got %d", len(latestSnapshot.ActiveTransfers))
+	}
+	active = latestSnapshot.ActiveTransfers[0]
+	if active.Percent != 65 {
+		t.Fatalf("expected percent 65, got %d", active.Percent)
+	}
+	expectedBytes := (fileSize * 65) / 100
+	if active.BytesDone != expectedBytes {
+		t.Fatalf("expected bytesDone %d, got %d", expectedBytes, active.BytesDone)
+	}
+
+	// 4. Download completes (receiving=false, progress=100)
+	session.lastProgressHookTime = time.Time{} // reset throttle
+	session.updateDownloadProgressMessage(msg.ID, false, 100)
+
+	// ActiveTransfers must be cleared when receiving=false
+	if len(latestSnapshot.ActiveTransfers) != 0 {
+		t.Fatalf("expected active transfers to be cleared when receiving=false, got %d", len(latestSnapshot.ActiveTransfers))
+	}
+
+	// Final verification: statusSeq was never bumped by pure progress updates
+	if session.statusSeq != initialSeq {
+		t.Fatalf("expected statusSeq unchanged across progress lifecycle, got %d vs initial %d", session.statusSeq, initialSeq)
+	}
+}

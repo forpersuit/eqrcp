@@ -1569,7 +1569,7 @@ func (session *chatSession) updateUploadProgressMessage(tempID string, progress 
 	var snapshot ChatStatusSnapshot
 	if now.Sub(session.lastProgressHookTime) >= 150*time.Millisecond || progress == 100 {
 		session.lastProgressHookTime = now
-		hook, snapshot = session.statusSnapshotLocked("active")
+		hook, snapshot = session.readStatusSnapshotLocked()
 	}
 	session.mu.Unlock()
 
@@ -1603,7 +1603,7 @@ func (session *chatSession) updateDownloadProgressMessage(messageID string, rece
 	var snapshot ChatStatusSnapshot
 	if now.Sub(session.lastProgressHookTime) >= 150*time.Millisecond || progress == 100 {
 		session.lastProgressHookTime = now
-		hook, snapshot = session.statusSnapshotLocked("active")
+		hook, snapshot = session.readStatusSnapshotLocked()
 	}
 	session.mu.Unlock()
 
@@ -2048,6 +2048,12 @@ func (session *chatSession) notifyStatus(state string) {
 	hook, snapshot := session.statusSnapshotLocked(state)
 	session.mu.Unlock()
 	notifyChatStatusHook(hook, snapshot)
+}
+
+// readStatusSnapshotLocked constructs a pure, read-only snapshot without advancing
+// the session state or incrementing statusSeq. Used by progress throttles.
+func (session *chatSession) readStatusSnapshotLocked() (func(ChatStatusSnapshot), ChatStatusSnapshot) {
+	return session.statusSnapshotLocked("")
 }
 
 func (session *chatSession) statusSnapshotLocked(state string) (func(ChatStatusSnapshot), ChatStatusSnapshot) {

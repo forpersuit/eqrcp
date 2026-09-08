@@ -144,7 +144,7 @@ type TransferEngine interface {
 ### Phase 2：三模式逐项投影对接（Progressive Integration）
 1. **Share 模式**：将已稳定的 `clientActiveItem` 与 `clientProgress` 转换为 `ShareSnapshot` 投影；
 2. **Receive 模式**：基于已落地的 `FilesDeclared` 门禁与 Multipart 流式 Reader，实现统一的 `ReceiveSnapshot` 投影；
-3. **Chat 模式**：将大附件传输任务以子资源维度并入 `ChatSnapshot`，解决桌面端盲区。
+3. **Chat 模式**：将大附件传输任务以子资源维度并入 `ChatSnapshot`；将当前的 150ms 节流锁内 O(N) 消息全表扫描重构为**增量维护哈希表（`activeTransfers map[string]ChatActiveTransfer`）**，在附件上传/下载创建时 O(1) 注册、进度时就地更新、完成时 O(1) 移除，使锁持有时间彻底与历史总消息量 N 解耦，保持 O(k)（k 为并发在传数）常数级开销。
 
 ### Phase 3：API 入口收敛与底层锁精简（Consolidation）
 - 将 `/status` 与 Wails 桌面端数据源全面重构为由 `ToSnapshot()` 驱动；

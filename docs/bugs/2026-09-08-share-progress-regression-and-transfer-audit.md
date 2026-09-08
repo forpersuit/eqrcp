@@ -231,6 +231,10 @@ Chat 模式是基于“消息总线 + 独立附件服务”构建的，其状态
 >   1. **无感与非阻塞**：`updateUploadProgressMessage` / `updateDownloadProgressMessage` 采用 150ms 节流触发 `notifyChatStatusHook`，既保证了传输进度的及时反馈，又避免高频刷新拖慢底层 I/O；`statusSnapshotLocked` 遍历内存只读消息生成 `ActiveTransfers`，微秒级返回；
 >   2. **抗并发竞态**：前端组件 `desktop/gui/frontend/src/components/chat_tray.js` 采用多项列表结构（List）而非单行副标题，从根本上消除了多文件并发上传时标题抢占覆盖的竞态；
 >   3. **E2E 真实仿真验证**：经 Chrome 9222 实测单文件传输、多文件并发在传、动态完成自动收起及真实 Chat 页面协同，符合前端模块化、无内联事件、无原生弹窗等工程规范。
+> - **第二轮深化审查与加固落地（针对三条实质审查意见）**：
+>   1. **解耦状态机副作用（意见 1）**：原节流分支调用 `statusSnapshotLocked("active")` 会使进度刷新副作用推进 `session.state="active"` 并自增 `statusSeq`。已重构为纯只读快照函数 `readStatusSnapshotLocked()`（传入空字符串 `""`），彻底杜绝纯进度刷新对会话状态机和序列号的污染；
+>   2. **补齐下载方向对称测试（意见 2）**：新增 `TestChatActiveTransfersDownloadLifecycle` 专项单测，覆盖下载开始（`receiving=true`）、流式更新到完成清空（`receiving=false`）的完整生命周期，断言 `receiving=false` 能够立即清空托盘并保持 `statusSeq` 零副作用；
+>   3. **锁内 O(N) 遍历演进规划（意见 3）**：当前在 150ms 节流下内存遍历数百条消息耗时约几微秒，但在数千条消息长会话下存在锁持有线性增长的张力。已在 Roadmap 文档 `docs/future/20260908-transfer-status-projection-architecture.md` 中立项，规划为**增量维护哈希表（`activeTransfers map[string]ChatActiveTransfer`）**，在附件收发时 O(1) 维护，彻底与消息总量 N 解耦。
 
 ---
 
