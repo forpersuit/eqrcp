@@ -1078,15 +1078,16 @@ func (session *chatSession) handleAttachmentDownload(w http.ResponseWriter, r *h
 		}
 		defer file.Close()
 
-		// Attachment data plane only: 100 KB/s after free chat quota.
-		throttled := &ThrottledReader{
-			r:      file,
-			limit:  FreeChatDegradedBytesPerSec,
-			active: true,
+		stat, err := file.Stat()
+		if err != nil {
+			http.NotFound(w, r)
+			return
 		}
 
-		w.Header().Set("Content-Length", strconv.FormatInt(attachment.Size, 10))
-		_, _ = io.Copy(w, throttled)
+		// Attachment data plane only: 100 KB/s after free chat quota.
+		// Uses ThrottledReadSeeker + http.ServeContent to fully support HTTP RFC 7233 / RFC 9110 (Range requests, 206 Partial Content, Seek).
+		throttled := NewThrottledReadSeeker(file, FreeChatDegradedBytesPerSec, true)
+		http.ServeContent(w, r, attachment.FileName, stat.ModTime(), throttled)
 		return
 	}
 
@@ -2212,6 +2213,28 @@ func (tr *ThrottledReader) Read(p []byte) (n int, err error) {
 type ThrottledReadCloser struct {
 	io.Reader
 	io.Closer
+}
+
+// ThrottledReadSeeker wraps an io.ReadSeeker (e.g. *os.File) to provide rate-limited reading with full seeking support.
+type ThrottledReadSeeker struct {
+	rs io.ReadSeeker
+	tr *ThrottledReader
+}
+
+// NewThrottledReadSeeker creates a new ThrottledReadSeeker with rate limiting.
+func NewThrottledReadSeeker(rs io.ReadSeeker, limit int, active bool) *ThrottledReadSeeker {
+	return &ThrottledReadSeeker{
+		rs: rs,
+		tr: &ThrottledReader{r: rs, limit: limit, active: active},
+	}
+}
+
+func (trs *ThrottledReadSeeker) Read(p []byte) (int, error) {
+	return trs.tr.Read(p)
+}
+
+func (trs *ThrottledReadSeeker) Seek(offset int64, whence int) (int64, error) {
+	return trs.rs.Seek(offset, whence)
 }
 
 func (session *chatSession) handleLocalAttachmentRegister(w http.ResponseWriter, r *http.Request) {
