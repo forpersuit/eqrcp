@@ -213,15 +213,24 @@ Chat 模式是基于“消息总线 + 独立附件服务”构建的，其状态
    - 修复降级限速模式下的 HTTP Range 协议缺陷（高危），包装 `ThrottledReadSeeker` 交由 `http.ServeContent` 恢复标准 206 状态码与断点续传；
    - 将 Chat 附件的大文件上传进度与状态通过 `ChatStatusSnapshot` 扩展映射到桌面 GUI，消除桌面端在大文件传输时的“静默感”。
 
-> **进展（2026-09-08 已落地）**：
+> **进展（2026-09-08 已全部闭环落地）**：
 > 1. **Share 模式**：缺陷已随提交 `43375368`（解进行中 ZIP 死锁，引入 `clientActiveItem` 显式活跃通道）与 `26f2b366`（统一完成判定与活跃通道判据，补齐交替测试）闭环修复。P0 项已达成。
-> 2. **Receive 模式**：Tus 假完成安全门禁（引入 `FilesDeclared` 严密门禁，并在 `?done=true` 处规范触发批次完成与 `autoStop`）与 Multipart 回退流式进度上报（读取循环增量累加、节流上报、修复单文件跳 100% 误判）已修复并增加专项回归测试。P1 项已达成。
-> 3. **Chat 模式**：降级限速模式下的 HTTP Range 破坏缺陷已闭环修复（封装 `ThrottledReadSeeker` 并接入标准库 `http.ServeContent`，彻底恢复 RFC 7233 / RFC 9110 语义及 206 Partial Content 支持，覆盖 Safari 探测与拖动 Seek 专项回归测试）。第 2 条（大附件传输桌面端轻量任务托盘）作为后续体验增强项。
+> 2. **Receive 模式**：Tus 假完成安全门禁（引入 `FilesDeclared` 严密门禁，并在 `?done=true` 处规范触发批次完成与 `autoStop`）与 Multipart 回退流式进度上报（读取循环增量累加、节流上报、修复单文件跳 100% 误判）已随提交 `bfda3362` 修复并增加专项回归测试。P1 项已达成。
+> 3. **Chat 模式**：
+>    - **HTTP Range 缺陷修复**：随提交 `1eba61c6` 闭环修复（封装 `ThrottledReadSeeker` 并接入标准库 `http.ServeContent`，彻底恢复 RFC 7233 / RFC 9110 语义及 206 Partial Content 支持，覆盖 Safari 探测与拖动 Seek 专项回归测试）；
+>    - **桌面端任务托盘与在传感知**：随提交 `7f191033` 闭环落地（新建模块化组件 `chat_tray.js`、150ms 节流触发 `notifyChatStatusHook` 消除静默黑盒、桌面端只读微秒级快照、Chrome 9222 E2E 仿真多场景验证、版本号递增至 `v1.36.66`）。P2 项已全部达成。
 
 > **提交审查（2026-09-08，针对 `bfda3362` 的代码复核）**：
 > - **门禁收益核实通过**：Tus 常驻路径 `ReceiveTo`（`server.go:646-661`）的门禁使未调 `?init=true` 的客户端在首个文件后进入 `State="waiting"` 而非 `completed`；而 `isAllActiveClientsFinished`（`server.go:1538/1577`）只认 `completed/failed`，故 `waiting` 态**不会触发 `signalStopAfterStatusGrace` 强杀**——洞察 1 的防掐断目标成立。正则前端（`?init=true` → `FilesDeclared=true` → Tus → `?done=true`）全程不触发门禁，行为不变。
 > - **一项「通道门禁不对称」备忘（非当前 bug）**：`FilesDeclared` 门禁**只存在于 `ReceiveTo`（Tus 常驻 goroutine 通道）**；而 `New()` 内联 Multipart 段（`server.go:3356-3658`，`srv.mux` 直接到达，测试 `TestReceiveMultipartProgress_MultiFileStreaming` 所走路径）**不含该门禁**，仍无条件 `completed`。当前 Multipart 流量正好走这条无门禁通道，故**不存在"普通 Multipart 被卡 waiting"回归**；但两条通道行为不对称——若未来把 Multipart 迁入 `ReceiveTo` 常驻路径，将突然获得 waiting 语义。鉴于此门禁以 `waiting` 兜底无 init 客户端本身是设计意图（宁停 waiting 不误杀），此备忘仅提示将来统一通道时需同步门禁。
 > - **测试质量确认**：`receive_progress_gate_test.go` 覆盖门禁正反例（init 后 2 文件仅完成 1 不误标、全部完成才 completed、无 init 经 `?done=true` 显式完成）与 Multipart 连续进度、单文件跳 100% 修复，断言的是"不误杀、连续上报"的语义而非表面值，符合测试意图校验原则。
+
+> **提交审查（2026-09-08，针对 `1eba61c6` 与 `7f191033` 的代码复核）**：
+> - **Range 契约核实通过（`1eba61c6`）**：`ThrottledReadSeeker` 将底层限速与文件 Seek 能力解耦，移交标准库 `http.ServeContent` 后，响应状态码从错误的 `200 OK` 恢复为合规的 `206 Partial Content`，响应头附带 `Content-Range: bytes 0-1/xxxx` 与 `Accept-Ranges: bytes`。Safari 媒体嗅探与断点续传恢复正常，且带宽限速（100KB/s）持续生效。
+> - **任务托盘架构与防竞态核实通过（`7f191033`）**：
+>   1. **无感与非阻塞**：`updateUploadProgressMessage` / `updateDownloadProgressMessage` 采用 150ms 节流触发 `notifyChatStatusHook`，既保证了传输进度的及时反馈，又避免高频刷新拖慢底层 I/O；`statusSnapshotLocked` 遍历内存只读消息生成 `ActiveTransfers`，微秒级返回；
+>   2. **抗并发竞态**：前端组件 `desktop/gui/frontend/src/components/chat_tray.js` 采用多项列表结构（List）而非单行副标题，从根本上消除了多文件并发上传时标题抢占覆盖的竞态；
+>   3. **E2E 真实仿真验证**：经 Chrome 9222 实测单文件传输、多文件并发在传、动态完成自动收起及真实 Chat 页面协同，符合前端模块化、无内联事件、无原生弹窗等工程规范。
 
 ---
 
