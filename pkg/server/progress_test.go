@@ -624,4 +624,56 @@ func TestZipDownloadProgressAndFinishedIntegrity(t *testing.T) {
 	if done != 2048 || total != 2048 {
 		t.Errorf("getClientDownloadedAndTotal for zipClient = (%d, %d); want (2048, 2048)", done, total)
 	}
+
+	// 5. 反向交替测试：客户端先完整下载了 ZIP (2048/2048)，随后又发起单项 0 的下载请求
+	// 验证：isClientFinished、getClientDownloadedItems 与 getClientDownloadedAndTotal 均感知 activeItem，不被满值 -1 键误导
+	reverseClient := "test_reverse_zip_to_item_client"
+	s.resetClientDownloadedBytes(reverseClient, 0)
+	s.resetClientDownloadedBytes(reverseClient, 1)
+	s.setClientActiveItem(reverseClient, -1)
+	s.setClientDownloadedBytes(reverseClient, -1, 2048)
+
+	// ZIP 刚传完时，确为完成状态
+	if !s.isClientFinished(reverseClient) {
+		t.Fatalf("reverseClient should be finished after full zip download")
+	}
+
+	// 此时用户又发起了单项 0 的独立下载（模拟真实 handler 逻辑：设置 activeItem=0 并清理残留 -1 键）
+	s.setClientActiveItem(reverseClient, 0)
+	s.clientMutex.Lock()
+	delete(s.clientProgress[reverseClient], -1)
+	s.clientMutex.Unlock()
+	s.setClientDownloadedBytes(reverseClient, 0, 3) // 单项 0 仅传输了 3 字节
+
+	// (a) 进度必须回落到单项当前已传的 3 字节，绝不能误返回 (2048, 2048) 100%
+	revDone, revTotal := s.getClientDownloadedAndTotal(reverseClient)
+	expectedItem0Size := int64(len(f1Data))
+	if revDone != 3 {
+		t.Errorf("getClientDownloadedAndTotal after switching from full ZIP to item 0 = %d; want 3 (got total=%d)", revDone, revTotal)
+	}
+
+	// (b) 单项未全部传完，isClientFinished 必须为 false
+	if s.isClientFinished(reverseClient) {
+		t.Errorf("isClientFinished = true when item 0 is only 3/%d and item 1 is 0; want false", expectedItem0Size)
+	}
+
+	// (c) 已下载项列表必须为空，不能误认为所有项已完成
+	revItems := s.getClientDownloadedItems(reverseClient)
+	if len(revItems) != 0 {
+		t.Errorf("getClientDownloadedItems when item 0 is in-progress = %v; want []", revItems)
+	}
+
+	// (d) 额外强化验证：即使未清理 -1 键（残留 -1: 2048 满值），仅凭 activeItem=0 也必须拒采 ZIP 完成分支！
+	s.setClientDownloadedBytes(reverseClient, -1, 2048)
+	if s.isClientFinished(reverseClient) {
+		t.Errorf("isClientFinished = true despite activeItem=0 when -1=2048 is present; want false")
+	}
+	revItemsWithStaleZip := s.getClientDownloadedItems(reverseClient)
+	if len(revItemsWithStaleZip) != 0 {
+		t.Errorf("getClientDownloadedItems with stale -1=2048 and activeItem=0 = %v; want []", revItemsWithStaleZip)
+	}
+	revDoneWithStaleZip, _ := s.getClientDownloadedAndTotal(reverseClient)
+	if revDoneWithStaleZip != 3 {
+		t.Errorf("getClientDownloadedAndTotal with stale -1=2048 and activeItem=0 = %d; want 3", revDoneWithStaleZip)
+	}
 }

@@ -1937,14 +1937,28 @@ func (s *Server) setClientActiveItem(clientID string, itemIndex int) {
 	s.clientActiveItem[clientID] = itemIndex
 }
 
-func (s *Server) getClientActiveItem(clientID string) (int, bool) {
-	s.clientMutex.Lock()
-	defer s.clientMutex.Unlock()
-	if s.clientActiveItem == nil {
-		return 0, false
+// isClientZipModeLocked 判定当前客户端是否处于 ZIP 下载上下文。
+// 前置条件：调用方必须持有 s.clientMutex。
+// 规则：
+// 1. 若显式记录了 activeItem，以 activeItem == -1 为准（单项模式 activeItem >= 0 必为 false）；
+// 2. 兜底安全网：若无 activeItem 记录（如单元测试直接注入 map 或离线客户端），但除 -1 外所有单项下载量全为 0（页面打开预置态），判定为 ZIP 模式。
+func (s *Server) isClientZipModeLocked(clientID string, progress map[int]int64) bool {
+	if s.clientActiveItem != nil {
+		if activeItem, ok := s.clientActiveItem[clientID]; ok {
+			return activeItem == -1
+		}
 	}
-	item, ok := s.clientActiveItem[clientID]
-	return item, ok
+	if progress == nil {
+		return false
+	}
+	allSingleItemsZero := true
+	for k, v := range progress {
+		if k >= 0 && v > 0 {
+			allSingleItemsZero = false
+			break
+		}
+	}
+	return allSingleItemsZero
 }
 
 func (s *Server) isClientFinished(clientID string) bool {
@@ -1964,7 +1978,7 @@ func (s *Server) isClientFinished(clientID string) bool {
 		return false
 	}
 
-	// 途径 A: 客户端是否完整下载了整个 ZIP 压缩包
+	// 途径 A: 客户端是否处于 ZIP 模式且完整下载了整个 ZIP 压缩包
 	s.expectedBytesMu.Lock()
 	zipTotal := int64(0)
 	if s.expectedBytes != nil {
@@ -1972,7 +1986,7 @@ func (s *Server) isClientFinished(clientID string) bool {
 	}
 	s.expectedBytesMu.Unlock()
 
-	if zipTotal > 0 {
+	if zipTotal > 0 && s.isClientZipModeLocked(clientID, progress) {
 		if zipProgress, hasZip := progress[-1]; hasZip && zipProgress >= zipTotal && zipProgress > 0 {
 			return true
 		}
@@ -2028,7 +2042,7 @@ func (s *Server) getClientDownloadedItems(clientID string) []int {
 	}
 	s.expectedBytesMu.Unlock()
 
-	if zipTotal > 0 {
+	if zipTotal > 0 && s.isClientZipModeLocked(clientID, progress) {
 		if zipProgress, hasZip := progress[-1]; hasZip && zipProgress >= zipTotal && zipProgress > 0 {
 			var items []int
 			for i := 0; i < totalItems; i++ {
@@ -2097,43 +2111,24 @@ func (s *Server) getClientDownloadedAndTotal(clientID string) (int64, int64) {
 
 	s.clientMutex.Lock()
 	progress, ok := s.clientProgress[clientID]
-	var activeItem int
-	var hasActive bool
-	if s.clientActiveItem != nil {
-		activeItem, hasActive = s.clientActiveItem[clientID]
-	}
+	isZipMode := s.isClientZipModeLocked(clientID, progress)
 
-	if zipTotal > 0 && ok && progress != nil {
+	// 1. 若客户端处于 ZIP 模式且完整下载了 ZIP 压缩包，返回整个 zip 大小
+	if zipTotal > 0 && ok && progress != nil && isZipMode {
 		if zipProgress, hasZip := progress[-1]; hasZip && zipProgress >= zipTotal && zipProgress > 0 {
 			s.clientMutex.Unlock()
 			return zipTotal, zipTotal
 		}
 	}
 
-	// 2. 若客户端当前处于 ZIP 下载通道且尚未传完，返回当前 ZIP 进度
-	if ok && progress != nil && zipTotal > 0 {
+	// 2. 若客户端处于 ZIP 模式且尚未传完，返回当前 ZIP 进度
+	if ok && progress != nil && zipTotal > 0 && isZipMode {
 		if zipProgress, hasZip := progress[-1]; hasZip && zipProgress > 0 {
-			isZipMode := (hasActive && activeItem == -1)
-			if !hasActive {
-				// 兜底：若尚未记录显式 activeItem（如独立轮询或离线测试），但除了 -1 外其它单项全为 0（页面初始化预置值），判定为 ZIP 模式
-				allSingleItemsZero := true
-				for k, v := range progress {
-					if k >= 0 && v > 0 {
-						allSingleItemsZero = false
-						break
-					}
-				}
-				if allSingleItemsZero {
-					isZipMode = true
-				}
+			s.clientMutex.Unlock()
+			if zipProgress > zipTotal {
+				zipProgress = zipTotal
 			}
-			if isZipMode {
-				s.clientMutex.Unlock()
-				if zipProgress > zipTotal {
-					zipProgress = zipTotal
-				}
-				return zipProgress, zipTotal
-			}
+			return zipProgress, zipTotal
 		}
 	}
 
@@ -2804,17 +2799,7 @@ func New(cfg *config.Config) (*Server, error) {
 			} else {
 				app.clientMutex.Lock()
 				if p, ok := app.clientProgress[clientID]; ok && p != nil {
-					if zipProgress, hasZip := p[-1]; hasZip {
-						app.expectedBytesMu.Lock()
-						zipTotal := int64(0)
-						if app.expectedBytes != nil {
-							zipTotal = app.expectedBytes[-1]
-						}
-						app.expectedBytesMu.Unlock()
-						if zipTotal <= 0 || zipProgress < zipTotal {
-							delete(p, -1)
-						}
-					}
+					delete(p, -1)
 				}
 				app.clientMutex.Unlock()
 				app.setClientDownloadedBytes(clientID, currentIndex, rangeInfo.StartByte)
