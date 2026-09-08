@@ -260,3 +260,94 @@ func TestReceiveMultipartProgress_MultiFileStreaming(t *testing.T) {
 		}
 	}
 }
+
+func TestReceiveTusDoneAutoStopBehavior(t *testing.T) {
+	outputDir := t.TempDir()
+	cfg := config.Config{
+		Interface: "lo",
+		Bind:      "127.0.0.1",
+		Port:      18099,
+		Path:      "test-autostop",
+		KeepAlive: true,
+		Output:    outputDir,
+	}
+	srv, err := New(&cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	clientID := "client-autostop-test"
+	req := httptest.NewRequest("GET", "/test", nil)
+	srv.registerClientActivityWithID(clientID, req)
+
+	// 1. Initial state: autoStop is false, KeepAlive is true
+	srv.statusMu.Lock()
+	srv.autoStop = false
+	srv.status.AutoStop = false
+	srv.status.State = "waiting"
+	srv.statusMu.Unlock()
+
+	// 2. Simulate Tus client finished and sending ?done=true
+	doneReq := httptest.NewRequest("POST", srv.ReceiveURL+"?done=true&client_id="+clientID, nil)
+	doneRec := httptest.NewRecorder()
+	srv.mux.ServeHTTP(doneRec, doneReq)
+
+	if doneRec.Code != http.StatusOK {
+		t.Fatalf("expected status OK for ?done=true, got %d", doneRec.Code)
+	}
+
+	// Assert: client state is completed
+	cs := srv.getClientStatus(clientID)
+	if cs.State != "completed" {
+		t.Fatalf("expected client state completed, got %q", cs.State)
+	}
+
+	// Critical Assert: Global server status must NOT be 'completed' when autoStop is false!
+	// It must stay 'waiting' so desktop GUI does not exit prematurely.
+	srv.statusMu.Lock()
+	globalState := srv.status.State
+	globalMsg := srv.status.Message
+	srv.statusMu.Unlock()
+
+	if globalState != "waiting" {
+		t.Fatalf("expected global status to remain 'waiting' when autoStop is false, got %q", globalState)
+	}
+	if globalMsg != "Transfer completed. Waiting for more files." {
+		t.Fatalf("expected global message 'Transfer completed. Waiting for more files.', got %q", globalMsg)
+	}
+
+	// Verify stopChannel did not receive any signal
+	select {
+	case <-srv.stopChannel:
+		t.Fatal("server stopChannel fired even though autoStop was false!")
+	default:
+		// OK
+	}
+
+	// 3. Test scenario with autoStop = true:
+	// When autoStop is enabled before/during transfer, sending ?done=true should trigger completed state.
+	clientID2 := "client-autostop-true"
+	req2 := httptest.NewRequest("GET", "/test2", nil)
+	srv.registerClientActivityWithID(clientID2, req2)
+
+	srv.statusMu.Lock()
+	srv.autoStop = true
+	srv.status.AutoStop = true
+	srv.statusMu.Unlock()
+
+	doneReq2 := httptest.NewRequest("POST", srv.ReceiveURL+"?done=true&client_id="+clientID2, nil)
+	doneRec2 := httptest.NewRecorder()
+	srv.mux.ServeHTTP(doneRec2, doneReq2)
+
+	if doneRec2.Code != http.StatusOK {
+		t.Fatalf("expected status OK for ?done=true, got %d", doneRec2.Code)
+	}
+
+	srv.statusMu.Lock()
+	newGlobalState := srv.status.State
+	srv.statusMu.Unlock()
+
+	if newGlobalState != "completed" {
+		t.Fatalf("expected global status 'completed' when autoStop is true, got %q", newGlobalState)
+	}
+}

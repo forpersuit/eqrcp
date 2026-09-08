@@ -4,7 +4,7 @@
 > 审计日期：2026-09-08
 > 审查修正：2026-09-08（归因勘误 + 结论精确化，见文内 ⚠️ 标注）
 > 涉及模块：`pkg/server/server.go`、`pkg/server/chat.go`、`pkg/pages/download.tmpl.html`、`pkg/pages/upload.tmpl.html`、`desktop/gui/frontend/src/main.js`
-> 对应版本：v1.36.64
+> 对应版本：v1.36.67
 
 ---
 
@@ -314,3 +314,28 @@ Chat 模式是基于“消息总线 + 独立附件服务”构建的，其状态
 - **双重实施约束（红线声明）**：
   1. **范围红线**：此模式属于**长期架构演进方向（Roadmap 级），明确超出本次紧急缺陷修复范围**。严禁在当前阶段大动干戈重构状态模型，避免稀释聚焦或引入新的并发死锁风险；
   2. **能力边界**：**投影层解决的是外部读取视图与展现语义的一致性，绝无法凭空变出底层缺失的物理数据**。例如，Multipart 回退若底层 reader 持续不累加不汇报，上层无论如何抽象投影也只能投射出 0。底层数据补齐（如 Reader 逐块上报）始终是不可逾越的前置条件。短期应集中精力按上表优先补齐 Tus 门禁与 Receive 回退进度上报。
+
+---
+
+## 五、 本轮迭代增强与缺陷修复记录 (v1.36.67)
+
+### 1. Share 模式移动端结束页超长文件名显示截断与折行修复
+- **现象**：在移动端 H5 接收完成界面，当分享打包 ZIP 包或单文件名过长时，文件名区域右侧的复制按钮（`.btn-copy-filename`）存在，但文件名被单行省略截断（`text-overflow: ellipsis; white-space: nowrap`），导致用户无法查看完整文件名。
+- **修复**：
+  - 文件：[`pkg/pages/download.tmpl.html`](../../pkg/pages/download.tmpl.html)；
+  - 样式调整：移除 `.package-name-content` 的硬性 `overflow: hidden`，解除单行宽度截断约束；
+  - 文本属性：`.package-name-text` 移除 `white-space: nowrap` 与 `text-overflow: ellipsis`，将字号调整为微缩精致的 `13px`（`font-weight: 600; line-height: 1.35;`），并注入 `white-space: normal; word-break: break-all; overflow-wrap: anywhere;`；
+  - 布局保护：保持 `.package-name-card` 外层容器尺寸、左右弹性布局与边距不变，右侧复制按钮尺寸（34px）、图标对齐与轻触反馈完全不受多行文本折行影响。
+- **验证**：在 Chrome DevTools (Port 9222) 模拟 390x844 移动视口下，加载 70+ 字符超长文件名（`very-long-archive-filename-packaged-by-eqt-with-multiple-items-20260908-test-run.zip`），文本自适应折行为两行展示，右侧复制按钮平齐居中，点击正常唤起 `Copied` 状态反馈。
+
+### 2. Receive 模式 Tus 传输完成门禁与 AutoStop 开关控制失效修复
+- **现象**：Receive 模式单文件或多文件传输结束后，桌面端的 AutoStop 开关失效，即便关闭了 AutoStop，服务仍然默认自动触发完成并退出。
+- **根因**：
+  - 在此前对 Tus 进度上报的改造中，`handleTusUpload` 处理客户端 `?done=true` 显式结束请求时，无条件直接调用 `app.updateStatus(status.State = "completed")` 并向全局广播 `recordStatus()`；
+  - 桌面端 Agent（`observeTransferStatus`）监听到全局进入终结态 `"completed"` 后，直接判定任务完成并执行状态归档与进程终止逻辑（`agent.current = nil`），绕过了 AutoStop 门禁判定。
+- **修复**：
+  - 文件：[`pkg/server/server.go:3248-3285`](../../pkg/server/server.go)；
+  - 将 `?done=true` 分支重构为与 Multipart 和 `ReceiveTo` 的退出门禁严格统一：仅在 `!app.KeepAlive || (autoStop && app.isAllActiveClientsFinished())` 成立时，才将全局状态置为 `"completed"` 并触发 `signalStopAfterStatusGrace`；
+  - 在 `KeepAlive` 为真且未开启 `autoStop` 时，全局状态保持为 `"waiting"`（`Transfer completed. Waiting for more files.`），桌面端持续常驻等待后续客户端上传。
+- **测试**：在 [`pkg/server/receive_progress_gate_test.go`](../../pkg/server/receive_progress_gate_test.go) 中新增 `TestReceiveTusDoneAutoStopBehavior` 专项测试，验证客户端上报 `?done=true` 后全局状态在 `autoStop=false` 下安全维持在 `waiting`，仅在 `autoStop=true` 时收敛至 `completed`。全套测试 `go test ./pkg/server ./cmd` 100% 通过。
+

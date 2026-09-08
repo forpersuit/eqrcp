@@ -3245,26 +3245,37 @@ func New(cfg *config.Config) (*Server, error) {
 					transferredFiles = append([]string(nil), cs.SavedFiles...)
 				})
 
-				app.updateStatus(func(status *transferStatus) {
-					status.State = "completed"
-					status.Percent = 100
-					if status.BytesTotal > 0 {
-						status.BytesDone = status.BytesTotal
-					}
-					status.SavedFiles = append([]string(nil), transferredFiles...)
-					if len(transferredFiles) == 1 {
-						status.Message = "Received 1 file."
-					} else {
-						status.Message = fmt.Sprintf("Received %d files.", len(transferredFiles))
-					}
-				})
-				app.recordStatus()
-
 				app.statusMu.Lock()
 				autoStop := app.autoStop
 				app.statusMu.Unlock()
+
 				if !app.KeepAlive || (autoStop && app.isAllActiveClientsFinished()) {
+					app.setStatus("completed", "Transfer completed.")
+					app.updateStatus(func(status *transferStatus) {
+						status.State = "completed"
+						status.Percent = 100
+						if status.BytesTotal > 0 {
+							status.BytesDone = status.BytesTotal
+						}
+						status.SavedFiles = append([]string(nil), transferredFiles...)
+						if len(transferredFiles) == 1 {
+							status.Message = "Received 1 file."
+						} else {
+							status.Message = fmt.Sprintf("Received %d files.", len(transferredFiles))
+						}
+					})
+					app.recordStatus()
 					go app.signalStopAfterStatusGrace()
+				} else {
+					app.setStatus("waiting", "Transfer completed. Waiting for more files.")
+					app.updateStatus(func(status *transferStatus) {
+						status.Percent = 100
+						if status.BytesTotal > 0 {
+							status.BytesDone = status.BytesTotal
+						}
+						status.SavedFiles = append([]string(nil), transferredFiles...)
+					})
+					app.recordStatus()
 				}
 
 				displayFiles := make([]string, len(transferredFiles))
