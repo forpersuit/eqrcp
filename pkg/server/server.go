@@ -66,6 +66,7 @@ type ClientTransferStateInfo struct {
 	DeviceName        string                    `json:"deviceName,omitempty"`
 	SavedFiles        []string                  `json:"savedFiles,omitempty"`
 	Files             []ClientFileTransferState `json:"files,omitempty"`
+	FilesDeclared     bool                      `json:"filesDeclared,omitempty"`
 	ActiveConnections int                       `json:"-"`
 	Speed             int64                     `json:"speed,omitempty"`
 	SpeedFormatted    string                    `json:"speedFormatted,omitempty"`
@@ -642,7 +643,7 @@ func (s *Server) ReceiveTo(dir string) error {
 						Percent:    100,
 					})
 				}
-				if len(cs.SavedFiles) == len(cs.Files) || (cs.BytesTotal > 0 && cs.BytesDone >= cs.BytesTotal) {
+				if cs.FilesDeclared && len(cs.Files) > 0 && (len(cs.SavedFiles) >= len(cs.Files) || (cs.BytesTotal > 0 && cs.BytesDone >= cs.BytesTotal)) {
 					cs.BytesDone = cs.BytesTotal
 					cs.Percent = 100
 					cs.State = "completed"
@@ -654,6 +655,9 @@ func (s *Server) ReceiveTo(dir string) error {
 							cs.Files[i].Path = cs.SavedFiles[i]
 						}
 					}
+				} else if !cs.FilesDeclared {
+					cs.State = "waiting"
+					cs.Message = fmt.Sprintf("Received %s. Waiting for more files.", fileName)
 				}
 			})
 			s.clientMutex.Lock()
@@ -1374,6 +1378,7 @@ func cloneTransferStatus(status transferStatus) transferStatus {
 					DeviceName:     v.DeviceName,
 					SavedFiles:     savedFiles,
 					Files:          files,
+					FilesDeclared:  v.FilesDeclared,
 					Speed:          v.Speed,
 					SpeedFormatted: v.SpeedFormatted,
 				}
@@ -1410,6 +1415,7 @@ func snapshotTransferStatus(status transferStatus) TransferStatusSnapshot {
 					DeviceName:     v.DeviceName,
 					SavedFiles:     savedFiles,
 					Files:          files,
+					FilesDeclared:  v.FilesDeclared,
 					Speed:          v.Speed,
 					SpeedFormatted: v.SpeedFormatted,
 				}
@@ -1884,6 +1890,7 @@ func (s *Server) copyClientStates() map[string]*ClientTransferStateInfo {
 				DeviceName:     v.DeviceName,
 				SavedFiles:     savedFiles,
 				Files:          files,
+				FilesDeclared:  v.FilesDeclared,
 				Speed:          v.Speed,
 				SpeedFormatted: v.SpeedFormatted,
 			}
@@ -3222,11 +3229,43 @@ func New(cfg *config.Config) (*Server, error) {
 		case "POST":
 			if r.URL.Query().Get("done") != "" {
 				var transferredFiles []string
-				app.clientStatesMu.Lock()
-				if cs, ok := app.clientStates[clientID]; ok && cs != nil {
-					transferredFiles = cs.SavedFiles
+				app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
+					cs.State = "completed"
+					cs.Percent = 100
+					if cs.BytesTotal > 0 {
+						cs.BytesDone = cs.BytesTotal
+					}
+					cs.Current = ""
+					cs.Message = "Transfer completed."
+					for idx := range cs.Files {
+						cs.Files[idx].State = "completed"
+						cs.Files[idx].Percent = 100
+						cs.Files[idx].BytesDone = cs.Files[idx].BytesTotal
+					}
+					transferredFiles = append([]string(nil), cs.SavedFiles...)
+				})
+
+				app.updateStatus(func(status *transferStatus) {
+					status.State = "completed"
+					status.Percent = 100
+					if status.BytesTotal > 0 {
+						status.BytesDone = status.BytesTotal
+					}
+					status.SavedFiles = append([]string(nil), transferredFiles...)
+					if len(transferredFiles) == 1 {
+						status.Message = "Received 1 file."
+					} else {
+						status.Message = fmt.Sprintf("Received %d files.", len(transferredFiles))
+					}
+				})
+				app.recordStatus()
+
+				app.statusMu.Lock()
+				autoStop := app.autoStop
+				app.statusMu.Unlock()
+				if !app.KeepAlive || (autoStop && app.isAllActiveClientsFinished()) {
+					go app.signalStopAfterStatusGrace()
 				}
-				app.clientStatesMu.Unlock()
 
 				displayFiles := make([]string, len(transferredFiles))
 				for i, f := range transferredFiles {
@@ -3260,6 +3299,9 @@ func New(cfg *config.Config) (*Server, error) {
 						cs.State = "transferring"
 						if cs.Files == nil {
 							cs.Files = []ClientFileTransferState{}
+						}
+						if len(reqData.Files) > 0 {
+							cs.FilesDeclared = true
 						}
 
 						var oldDone int64
@@ -3329,21 +3371,26 @@ func New(cfg *config.Config) (*Server, error) {
 			}
 			app.clientMutex.Unlock()
 
+			initialTotalBytes := r.ContentLength
+			if initialTotalBytes < 0 {
+				initialTotalBytes = 0
+			}
 			app.setStatus("transferring", "Receiving files from connected device.")
 			app.updateStatus(func(status *transferStatus) {
 				status.BytesDone = 0
-				status.BytesTotal = r.ContentLength
+				status.BytesTotal = initialTotalBytes
 				status.Percent = 0
 				status.SavedFiles = nil
 			})
 			app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
 				cs.State = "transferring"
 				cs.BytesDone = 0
-				cs.BytesTotal = r.ContentLength
+				cs.BytesTotal = initialTotalBytes
 				cs.Percent = 0
 				cs.Current = ""
 				cs.SavedFiles = nil
 				cs.Files = nil
+				cs.FilesDeclared = false
 			})
 			app.triggerStatusHookThrottled()
 			deviceOutputDir, err := app.getDeviceOutputDir(clientID)
@@ -3364,6 +3411,9 @@ func New(cfg *config.Config) (*Server, error) {
 			}
 			transferredFiles := []string{}
 			fileSizes := make(map[string]int64)
+			var totalBytesWritten int64
+			var lastReportedBytes int64
+			lastReportedTime := time.Now()
 			for {
 				part, err := reader.NextPart()
 				if err == io.EOF {
@@ -3389,6 +3439,18 @@ func New(cfg *config.Config) (*Server, error) {
 								}
 							}
 						}
+					}
+					var declaredTotal int64
+					for _, sz := range fileSizes {
+						declaredTotal += sz
+					}
+					if declaredTotal > 0 {
+						app.updateStatus(func(status *transferStatus) {
+							status.BytesTotal = declaredTotal
+						})
+						app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
+							cs.BytesTotal = declaredTotal
+						})
 					}
 					continue
 				}
@@ -3431,11 +3493,47 @@ func New(cfg *config.Config) (*Server, error) {
 							return
 						}
 						currentFileWritten += int64(n)
+						totalBytesWritten += int64(n)
 						if quotaExceededAtStart && currentFileWritten > 50*1024*1024 {
 							out.Close()
 							http.Error(w, "File size exceeds 50MB free limit after 5 free transfers. Upgrade to Plus to unlock this limit.", http.StatusRequestEntityTooLarge)
 							app.setStatus("failed", "File size exceeds 50MB limit.")
 							return
+						}
+
+						// Throttled progress report during streaming upload: every 256KB or every 100ms
+						now := time.Now()
+						if totalBytesWritten-lastReportedBytes >= 256*1024 || now.Sub(lastReportedTime) >= 100*time.Millisecond {
+							lastReportedBytes = totalBytesWritten
+							lastReportedTime = now
+							app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
+								cs.State = "transferring"
+								cs.Current = fileName
+								cs.BytesDone = totalBytesWritten
+								if cs.BytesTotal > 0 && cs.BytesDone > cs.BytesTotal {
+									cs.BytesDone = cs.BytesTotal
+								}
+								cs.Percent = transferPercent(cs.BytesDone, cs.BytesTotal)
+								sp, spStr := app.calcClientSpeed(clientID, cs.BytesDone)
+								cs.Speed = sp
+								cs.SpeedFormatted = spStr
+								for idx, f := range cs.Files {
+									if f.Name == fileName {
+										cs.Files[idx].BytesDone = currentFileWritten
+										cs.Files[idx].Percent = transferPercent(currentFileWritten, cs.Files[idx].BytesTotal)
+										break
+									}
+								}
+							})
+							app.updateStatus(func(status *transferStatus) {
+								status.BytesDone = totalBytesWritten
+								if status.BytesTotal > 0 && status.BytesDone > status.BytesTotal {
+									status.BytesDone = status.BytesTotal
+								}
+								status.Percent = transferPercent(status.BytesDone, status.BytesTotal)
+								status.Message = fmt.Sprintf("Receiving %s", fileName)
+							})
+							app.triggerStatusHookThrottled()
 						}
 					}
 					if err == io.EOF {
@@ -3451,19 +3549,32 @@ func New(cfg *config.Config) (*Server, error) {
 				transferredFiles = append(transferredFiles, out.Name())
 				app.updateStatus(func(status *transferStatus) {
 					status.SavedFiles = append([]string(nil), transferredFiles...)
+					status.BytesDone = totalBytesWritten
+					if status.BytesTotal > 0 && status.BytesDone > status.BytesTotal {
+						status.BytesDone = status.BytesTotal
+					}
+					status.Percent = transferPercent(status.BytesDone, status.BytesTotal)
+					status.Message = fmt.Sprintf("Received %s", fileName)
 				})
 				app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
 					cs.SavedFiles = append(cs.SavedFiles, out.Name())
-					cs.BytesDone = cs.BytesTotal
-					cs.Percent = 100
+					cs.BytesDone = totalBytesWritten
+					if cs.BytesTotal > 0 && cs.BytesDone > cs.BytesTotal {
+						cs.BytesDone = cs.BytesTotal
+					}
+					cs.Percent = transferPercent(cs.BytesDone, cs.BytesTotal)
+					cs.Message = fmt.Sprintf("Received %s", fileName)
 
-					fileName := filepath.Base(out.Name())
+					expectedSize := currentFileWritten
+					if sz, ok := fileSizes[fileName]; ok && sz > 0 {
+						expectedSize = sz
+					}
 					found := false
 					for idx, fileState := range cs.Files {
 						if fileState.Name == fileName || fileState.FileID == fileName {
 							cs.Files[idx].State = "completed"
 							cs.Files[idx].BytesDone = currentFileWritten
-							cs.Files[idx].BytesTotal = currentFileWritten
+							cs.Files[idx].BytesTotal = expectedSize
 							cs.Files[idx].Percent = 100
 							cs.Files[idx].Path = out.Name()
 							found = true
@@ -3477,7 +3588,7 @@ func New(cfg *config.Config) (*Server, error) {
 							Path:       out.Name(),
 							State:      "completed",
 							BytesDone:  currentFileWritten,
-							BytesTotal: currentFileWritten,
+							BytesTotal: expectedSize,
 							Percent:    100,
 						})
 					}
@@ -3498,7 +3609,12 @@ func New(cfg *config.Config) (*Server, error) {
 			app.updateClientStatus(clientID, r, func(cs *ClientTransferStateInfo) {
 				cs.State = "completed"
 				cs.Percent = 100
-				cs.BytesDone = cs.BytesTotal
+				if cs.BytesTotal > 0 {
+					cs.BytesDone = cs.BytesTotal
+				} else {
+					cs.BytesDone = totalBytesWritten
+					cs.BytesTotal = totalBytesWritten
+				}
 				cs.Current = ""
 				cs.Message = "Transfer completed."
 				for idx := range cs.Files {
@@ -3515,6 +3631,14 @@ func New(cfg *config.Config) (*Server, error) {
 			if !cfg.KeepAlive || (autoStop && app.isAllActiveClientsFinished()) {
 				app.setStatus("completed", "Transfer completed.")
 				app.updateStatus(func(status *transferStatus) {
+					status.State = "completed"
+					status.Percent = 100
+					if status.BytesTotal > 0 {
+						status.BytesDone = status.BytesTotal
+					} else {
+						status.BytesDone = totalBytesWritten
+						status.BytesTotal = totalBytesWritten
+					}
 					status.SavedFiles = append([]string(nil), transferredFiles...)
 					if len(transferredFiles) == 1 {
 						status.Message = "Received 1 file."
@@ -3528,11 +3652,6 @@ func New(cfg *config.Config) (*Server, error) {
 				app.setStatus("waiting", "Transfer completed. Waiting for more files.")
 				app.updateStatus(func(status *transferStatus) {
 					status.SavedFiles = append([]string(nil), transferredFiles...)
-					if len(transferredFiles) == 1 {
-						status.Message = "Received 1 file."
-					} else {
-						status.Message = fmt.Sprintf("Received %d files.", len(transferredFiles))
-					}
 				})
 				app.recordStatus()
 			}

@@ -213,7 +213,10 @@ Chat 模式是基于“消息总线 + 独立附件服务”构建的，其状态
    - 修复降级限速模式下的 HTTP Range 协议缺陷（高危），包装 `ThrottledReadSeeker` 交由 `http.ServeContent` 恢复标准 206 状态码与断点续传；
    - 将 Chat 附件的大文件上传进度与状态通过 `ChatStatusSnapshot` 扩展映射到桌面 GUI，消除桌面端在大文件传输时的“静默感”。
 
-> **进展（2026-09-08 已落地）**：Share 缺陷已随提交 `43375368`（解进行中 ZIP 死锁，引入 `clientActiveItem` 显式活跃通道）与 `26f2b366`（统一 `isClientFinished`/`getClientDownloadedItems`/`getClientDownloadedAndTotal` 三个完成判据为同一活跃通道判定，并补反向交替测试）闭环修复。本治理总结第 1 条 P0 项已达成。第 2、3 条 Receive/Chat 优化仍未落地，属开放改进项。
+> **进展（2026-09-08 已落地）**：
+> 1. **Share 模式**：缺陷已随提交 `43375368`（解进行中 ZIP 死锁，引入 `clientActiveItem` 显式活跃通道）与 `26f2b366`（统一完成判定与活跃通道判据，补齐交替测试）闭环修复。P0 项已达成。
+> 2. **Receive 模式**：Tus 假完成安全门禁（引入 `FilesDeclared` 严密门禁，并在 `?done=true` 处规范触发批次完成与 `autoStop`）与 Multipart 回退流式进度上报（读取循环增量累加、节流上报、修复单文件跳 100% 误判）已修复并增加专项回归测试。P1 项已达成。
+> 3. **Chat 模式**：第 3 条 Chat 优化（降级限速 Range 缺陷修复与附件进度快照集成）属后续开放改进项。
 
 ---
 
