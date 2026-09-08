@@ -212,3 +212,63 @@ Chat 模式是基于“消息总线 + 独立附件服务”构建的，其状态
 3. **Chat 模式优化优先级：P2（中）**
    - 修复降级限速模式下的 HTTP Range 协议支持，包装 `ThrottledReadSeeker` 以支持断点续传；
    - 将 Chat 附件的大文件上传进度与状态通过 `ChatStatusSnapshot` 扩展映射到桌面 GUI，消除桌面端在大文件传输时的“静默感”。
+
+> **进展（2026-09-08 已落地）**：Share 缺陷已随提交 `43375368`（解进行中 ZIP 死锁，引入 `clientActiveItem` 显式活跃通道）与 `26f2b366`（统一 `isClientFinished`/`getClientDownloadedItems`/`getClientDownloadedAndTotal` 三个完成判据为同一活跃通道判定，并补反向交替测试）闭环修复。本治理总结第 1 条 P0 项已达成。第 2、3 条 Receive/Chat 优化仍未落地，属开放改进项。
+
+---
+
+## 六、 三模式传输与状态显示方案 · 横向工程实践对标
+
+> 附注：对标基于 HEAD `26f2b366` 的当前实现。目的是评估三套模式各自的「传输协议选型」与「状态显示方案」是否符合工程最佳实践、是否适配各自场景。
+
+### 0. 宏观状态模型：横切问题（结构债）
+
+`Server` 结构体（`pkg/server/server.go:97-145`）是**多锁 + 多状态集**的混合体：
+
+- **锁**：`statusMu` / `downloadedItemsMu` / `downloadedBytesMu` / `clientMutex` / `clientStatesMu` / `expectedBytesMu` / `tusMu` / `clientSpeedTrackersMu` / `clientSubDirsMu` / `lastHookTimeMu`，合计 **10 把互斥锁**；
+- **状态集**：`status/transferStatus`（全局单例）、`clientStates`（每设备）、`clientProgress`（每设备每项字节）、`downloadedItems/Bytes`、`tusUploadsDone/Total`、`ChatStatusSnapshot` —— 合计 **6 套并行记账模型**。
+
+**判断**：这不是"符合领域建模的单一真相源"设计，而是**逐需求堆叠生长**的结果。好处是各通道隔离、故障面小；代价是三套状态互相独立，当前暴露的"Share 有进度、Receive 黑洞、Chat 无进度"三级落差**正源于此**。当前优先级（修复 bug、不重构）下可接受，但应在 roadmap 单列"统一状态接口"，**不应继续新增第 7 套模型**。
+
+### 1. Share（下载）—— ✅ 最符合实践，最匹配场景
+
+- **传输协议**：HTTP Range + 并行 chunk + 断点续传（`server.go:2773` 解析 Range；`expectParallelRequests` 于 `server.go:109,743`；`isAlreadyTransferring` 于 `server.go:2782` 保护并发 Range 请求不重置进度）。下载以吞吐为第一诉求、浏览器原生能力强，Range+并行分片**贴合 HTTP 语义、天然断点、支持 Safari Range 探测 `bytes=0-1`** —— 协议选型正确。
+- **状态显示**：`clientProgress map[client]map[item]bytes` 按设备/按单项记账 + `clientActiveItem` 活跃通道；经逐步修复后，进行中/完成判定统一以 `isClientZipModeLocked`（`server.go:1947`）为准，O(1) 判定、零分配、`/status` 高频轮询微秒级返回——**完全符合本项目后端规范第 1/2 条**（非阻塞、内存缓存优先）。
+- **遗留**：`statusHandler`（`server.go:2182`）采用**客户端轮询 `/status` 而非服务端推送**。对 Share（单设备、低刷新率、LAN 内）轮询足够且更简单，**适配当前场景**，无需强上 SSE/WebSocket；若将来设备数激增再评估。
+
+**结论**：Share 协议与状态显示**双达标，是三模式参考范本**。
+
+### 2. Receive（上传）—— ⚠️ 协议优秀，状态显示未跟上
+
+- **传输协议**：现代浏览器走 **Tus 分块断点上传**（`server.go:3623` `handleTusUpload`），弱网/回退走 **Multipart**（`server.go:3360`）。Tus 是大文件上传的**正确答案**（断点续传、可恢复、抗弱网抖动），协议层符合最佳实践。
+- **状态显示（两个断层，三模式中最薄弱）**：
+  1. **Multipart 回退是"0% 突跳 100%"黑洞**（`server.go:3391-3414`）：读取循环只累加局部 `currentFileWritten`，**不刷新全局进度**，直到 `server.go:3422` 才写死 `BytesDone=BytesTotal, Percent=100`。大文件传程 UI 无反馈——与 Share 逐块记账形成鲜明反差。
+  2. **两套记账源并存**：Tus 用 `tusUploadsDone/Total`（`server.go:429-451, 576-598`），Multipart 用 `currentFileWritten`+客户端状态覆盖。同一个"接收进度"被拆在两套模型里，`/status` 无法给出统一、连续的百分比。
+
+**判断**：协议选型正确，但状态显示**明显偏离"传输中应有连续进度反馈"的实践**，与其场景（大文件、拖拽多文件、弱网）的期望最不匹配。**最值得优先补强**：在 Multipart 读取循环按块增量上报（复用 `updateClientStatus` 的 `BytesDone`），即可缝合两处断层；Tus 侧无需动协议。
+
+### 3. Chat（附件）—— 🔸 模型匹配，但两个"旁路"是坏味道
+
+- **传输协议**：附件上传走 Tus；正常态下载走 `http.ServeFile`（标准库自带 Range 支持）。Chat 是"消息实时 + 附件低频偶发"，附件非主路径，Tus 上传 + ServeFile 下载是**合理的轻量选择，不过度设计**。
+- **状态显示**：用 `ChatStatusSnapshot`（消息数/设备数/State）而非字节进度——**与 Chat 场景正确匹配**（Chat 的"传输状态"本质是"消息是否送达/设备是否在线"，非文件吞吐）；用摘要而非大进度条，是**恰当的场景化建模**，不应照搬 Share 的进度条。
+- **两个旁路（耦合泄漏信号）**：
+  1. **附件上传**时桌面 GUI 只见摘要、不见附件进度 → 大文件期间"静默黑盒"；
+  2. **附件下载**（`chat.go:1093` `http.ServeFile`）完全脱离统计管线；降级限速时（`chat.go:1073-1090`）连 Range 都无视、被迫重拉全量。
+
+**判断**：核心状态模型（摘要）**适配**，但附件字节流被设计成"状态旁路"，这种旁路在工程上是**耦合泄漏的信号**——附件是 Chat 的子资源，却被当成与消息不相干的外部文件。若 Chat 将承载较多大附件，应让附件进度**以附件维度并入 `ChatStatusSnapshot`**（体现"某附件传输中 x% / 速率"），而非继续留在 UI 盲区。
+
+### 4. 横向对比总结
+
+| 维度 | Share | Receive | Chat |
+| :--- | :--- | :--- | :--- |
+| 传输协议选型 | ✅ Range+并行 | ✅ Tus | ✅ Tus/HTTP |
+| 状态显示连续性 | ✅ 逐块记账、O(1) | ❌ 回退黑洞、两套源 | 🔸 摘要匹配但附件旁路 |
+| 与场景匹配度 | ✅ 高度匹配 | ⚠️ 最不匹配 | 🔸 大体匹配 |
+| 最需改进 | 无（已达标） | **回退路径进度上报** | 附件进度并入快照 / 修 Range |
+
+**一句话结论**：
+- **Share 是标杆**，协议与状态双优，证明本项目完全有能力做好方案；
+- **Receive 差距不在协议而在反馈**——Tus 已好，只差把 Multipart 回退也接到连续进度上，即可与 Share 看齐；
+- **Chat 核心建模是对的**（不该套总进度），要补的是**把附件字节流从"状态旁路"变成快照内的一等公民**，并顺手修掉降级限速下 Range 失效的协议错误。
+
+**治本建议（roadmap 级，非本次范围）**：三套状态模型各为其政，造就"Share 有进度、Receive 黑洞、Chat 无进度"的三级落差。长远应抽象统一 `TransferState`（类型、目标维度、已/总字节、速率、活跃通道），三模式各自投影到子集；既消除落差，也让 10 把锁 / 6 套表收敛。短期则按上表优先补 Receive 回退进度上报。
