@@ -638,3 +638,68 @@ func TestChatLocalAttachmentRegister(t *testing.T) {
 		t.Fatalf("expected path to be %s, got: %s (non-zero-copy bypass broke)", tempFile.Name(), attachment.Path)
 	}
 }
+
+func TestChatActiveTransfersLifecycle(t *testing.T) {
+	var latestSnapshot ChatStatusSnapshot
+	session := &chatSession{
+		attachments:     map[string]chatAttachment{},
+		subscribers:     map[chan struct{}]struct{}{},
+		clients:         map[string]chatClient{},
+		dir:             t.TempDir(),
+		attachmentRoute: "/attachments",
+		startedAt:       time.Now(),
+		lastActivity:    time.Now(),
+		statusHook: func(snapshot ChatStatusSnapshot) {
+			latestSnapshot = snapshot
+		},
+	}
+
+	// 1. Initially no active transfers
+	session.notifyStatus("active")
+	if len(latestSnapshot.ActiveTransfers) != 0 {
+		t.Fatalf("expected 0 active transfers initially, got %d", len(latestSnapshot.ActiveTransfers))
+	}
+
+	// 2. Client starts uploading large video: adds upload placeholder
+	tempID := "temp-upload-100"
+	fileName := "holiday_video.mp4"
+	fileSize := int64(100 * 1024 * 1024) // 100MB
+	session.addUploadPlaceholderMessage("iPhone-User", "", "token-iphone", "video", fileName, fileSize, tempID, 60, 1920, 1080)
+
+	if len(latestSnapshot.ActiveTransfers) != 1 {
+		t.Fatalf("expected 1 active transfer after placeholder, got %d", len(latestSnapshot.ActiveTransfers))
+	}
+	active := latestSnapshot.ActiveTransfers[0]
+	if active.ID != tempID || active.FileName != fileName || active.Size != fileSize || active.Percent != 0 {
+		t.Fatalf("active transfer mismatch: %#v", active)
+	}
+
+	// 3. Progress updates during Tus streaming
+	session.lastProgressHookTime = time.Time{} // reset throttle
+	session.updateUploadProgressMessage(tempID, 45)
+
+	if len(latestSnapshot.ActiveTransfers) != 1 {
+		t.Fatalf("expected 1 active transfer during progress, got %d", len(latestSnapshot.ActiveTransfers))
+	}
+	active = latestSnapshot.ActiveTransfers[0]
+	if active.Percent != 45 {
+		t.Fatalf("expected percent 45, got %d", active.Percent)
+	}
+	expectedBytes := (fileSize * 45) / 100
+	if active.BytesDone != expectedBytes {
+		t.Fatalf("expected bytesDone %d, got %d", expectedBytes, active.BytesDone)
+	}
+
+	// 4. Tus upload completes: registerTusAttachment marks message as finished
+	fakePath := filepath.Join(session.dir, "final.mp4")
+	_ = os.WriteFile(fakePath, []byte("final-content"), 0644)
+	_, err := session.registerTusAttachment("iPhone-User", "", "token-iphone", fileName, "video/mp4", fileSize, fakePath, tempID, 60, 1920, 1080)
+	if err != nil {
+		t.Fatalf("registerTusAttachment failed: %v", err)
+	}
+
+	// ActiveTransfers should now be cleared
+	if len(latestSnapshot.ActiveTransfers) != 0 {
+		t.Fatalf("expected active transfers to be cleared on completion, got %d", len(latestSnapshot.ActiveTransfers))
+	}
+}

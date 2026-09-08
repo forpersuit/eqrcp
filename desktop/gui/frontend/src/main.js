@@ -14,6 +14,7 @@ import { renderSide, toggleSearchInput, updateSearchQuery, searchQuery, showSear
 import { initDragDrop, sendDebugMessageToChat } from './dragdrop.js';
 import { renderShareOverlay, closeShareOverlay, prepareMergedQRCode, downloadSharePosterImage } from './components/share.js';
 import { renderLogViewerOverlay, openLogViewer, closeLogViewer, refreshLogTail, setLogFilter, setLogSearch, toggleAutoRefresh, copyAllLogs, exportDiagnostics, logViewerState } from './components/log_viewer.js';
+import { renderChatTransfersTray } from './components/chat_tray.js';
 
 import {ClipboardGetText, ClipboardSetText, EventsOn, LogInfo, LogError} from '../wailsjs/runtime/runtime';
 import {
@@ -1995,6 +1996,7 @@ function renderChatPanel(task) {
                 </div>
                 <div class="chat-count">${escapeHTML(t('chat_message_count', { count: messageCount }))}</div>
                 ${lastActivity ? `<p class="side-note">${t('last_activity')}: ${escapeHTML(lastActivity)}</p>` : ''}
+                ${renderChatTransfersTray(task)}
             </div>
             <div class="panel chat-session-panel chat-qr-panel ${state.chatQROpen ? 'expanded' : ''}">
                 <div class="panel-head">

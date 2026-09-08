@@ -24,6 +24,7 @@ export namespace main {
 	    chatMessageCount?: number;
 	    chatDeviceCount?: number;
 	    chatLastActivity?: string;
+	    chatActiveTransfers?: server.ChatActiveTransfer[];
 	    pageUrl?: string;
 	    qrCode?: string;
 	    error?: string;
@@ -61,6 +62,7 @@ export namespace main {
 	        this.chatMessageCount = source["chatMessageCount"];
 	        this.chatDeviceCount = source["chatDeviceCount"];
 	        this.chatLastActivity = source["chatLastActivity"];
+	        this.chatActiveTransfers = this.convertValues(source["chatActiveTransfers"], server.ChatActiveTransfer);
 	        this.pageUrl = source["pageUrl"];
 	        this.qrCode = source["qrCode"];
 	        this.error = source["error"];
@@ -439,6 +441,28 @@ export namespace main {
 
 export namespace server {
 	
+	export class ChatActiveTransfer {
+	    id: string;
+	    fileName: string;
+	    sender: string;
+	    size: number;
+	    bytesDone: number;
+	    percent: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ChatActiveTransfer(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.fileName = source["fileName"];
+	        this.sender = source["sender"];
+	        this.size = source["size"];
+	        this.bytesDone = source["bytesDone"];
+	        this.percent = source["percent"];
+	    }
+	}
 	export class ClientFileTransferState {
 	    fileID: string;
 	    name: string;

@@ -87,6 +87,7 @@ type TaskRecord struct {
 	ChatMessageCount        int                                        `json:"chatMessageCount,omitempty"`
 	ChatDeviceCount         int                                        `json:"chatDeviceCount,omitempty"`
 	ChatLastActivity        string                                     `json:"chatLastActivity,omitempty"`
+	ChatActiveTransfers     []server.ChatActiveTransfer                `json:"chatActiveTransfers,omitempty"`
 	PageURL                 string                                     `json:"pageUrl,omitempty"`
 	QRCode                  string                                     `json:"qrCode,omitempty"`
 	Error                   string                                     `json:"error,omitempty"`

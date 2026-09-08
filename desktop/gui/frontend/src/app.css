@@ -3641,4 +3641,113 @@ dd {
     font-weight: 600;
 }
 
+/* ── Chat Active Transfers Tray ── */
+.chat-transfers-tray {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+    animation: fadeIn 0.2s ease;
+}
+
+.chat-transfers-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--text-muted, #9ca3af);
+}
+
+.chat-transfers-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.chat-transfers-indicator {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: var(--accent, #10b981);
+    box-shadow: 0 0 6px var(--accent, #10b981);
+    animation: pulse 1.5s infinite;
+}
+
+.chat-transfers-badge {
+    background: var(--bg-hover, rgba(255, 255, 255, 0.1));
+    color: var(--text, #f3f4f6);
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 10px;
+}
+
+.chat-transfers-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.chat-transfer-item {
+    background: var(--bg-card-subtle, rgba(255, 255, 255, 0.04));
+    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+    border-radius: 6px;
+    padding: 8px 10px;
+}
+
+.chat-transfer-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--text, #e5e7eb);
+    margin-bottom: 4px;
+}
+
+.chat-transfer-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 140px;
+}
+
+.chat-transfer-percent {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--accent, #10b981);
+    font-variant-numeric: tabular-nums;
+}
+
+.chat-transfer-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-muted, #9ca3af);
+    margin-bottom: 6px;
+}
+
+.chat-transfer-sender {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 90px;
+}
+
+.chat-transfer-bar {
+    width: 100%;
+    height: 4px;
+    background: var(--bg-hover, rgba(255, 255, 255, 0.1));
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.chat-transfer-bar-fill {
+    height: 100%;
+    background: var(--accent, #10b981);
+    border-radius: 2px;
+    transition: width 0.2s ease;
+}
+
 

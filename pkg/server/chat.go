@@ -61,21 +61,33 @@ type chatSession struct {
 	statusHook       func(ChatStatusSnapshot)
 	hostRenameHook   func(string)
 
-	tusHandler       *tusd.Handler
-	tusComposer      *tusd.StoreComposer
-	tusUploadsDone   map[string]int64
-	tusUploadsTotal  map[string]int64
-	tusUploadClients map[string]string
+	tusHandler           *tusd.Handler
+	tusComposer          *tusd.StoreComposer
+	tusUploadsDone       map[string]int64
+	tusUploadsTotal      map[string]int64
+	tusUploadClients     map[string]string
+	lastProgressHookTime time.Time
+}
+
+// ChatActiveTransfer represents an in-flight attachment upload or transfer within a chat session.
+type ChatActiveTransfer struct {
+	ID        string `json:"id"`
+	FileName  string `json:"fileName"`
+	Sender    string `json:"sender"`
+	Size      int64  `json:"size"`
+	BytesDone int64  `json:"bytesDone"`
+	Percent   int    `json:"percent"`
 }
 
 // ChatStatusSnapshot represents the current state of a chat session.
 type ChatStatusSnapshot struct {
-	State        string    `json:"state"` // "waiting", "active", "ended", "stopped", "failed", "replaced"
-	MessageCount int       `json:"messageCount"`
-	DeviceCount  int       `json:"deviceCount"`
-	StartedAt    time.Time `json:"startedAt"`
-	LastActivity time.Time `json:"lastActivity"`
-	Seq          int64     `json:"seq"`
+	State           string               `json:"state"` // "waiting", "active", "ended", "stopped", "failed", "replaced"
+	MessageCount    int                  `json:"messageCount"`
+	DeviceCount     int                  `json:"deviceCount"`
+	StartedAt       time.Time            `json:"startedAt"`
+	LastActivity    time.Time            `json:"lastActivity"`
+	Seq             int64                `json:"seq"`
+	ActiveTransfers []ChatActiveTransfer `json:"activeTransfers,omitempty"`
 }
 
 type chatMessage struct {
@@ -1534,22 +1546,41 @@ func (session *chatSession) addUploadPlaceholderMessage(sender string, avatar st
 
 func (session *chatSession) updateUploadProgressMessage(tempID string, progress int) (chatMessage, bool) {
 	session.mu.Lock()
-	defer session.mu.Unlock()
+	var updatedMsg chatMessage
+	found := false
 	for index := range session.messages {
 		if session.messages[index].ID == tempID {
 			session.messages[index].Progress = progress
 			session.messages[index].Seq = session.nextEventSeqLocked()
 			session.lastActivity = time.Now()
 			session.notifyLocked()
-			return session.messages[index], true
+			updatedMsg = session.messages[index]
+			found = true
+			break
 		}
 	}
-	return chatMessage{}, false
+	if !found {
+		session.mu.Unlock()
+		return chatMessage{}, false
+	}
+
+	now := time.Now()
+	var hook func(ChatStatusSnapshot)
+	var snapshot ChatStatusSnapshot
+	if now.Sub(session.lastProgressHookTime) >= 150*time.Millisecond || progress == 100 {
+		session.lastProgressHookTime = now
+		hook, snapshot = session.statusSnapshotLocked("active")
+	}
+	session.mu.Unlock()
+
+	notifyChatStatusHook(hook, snapshot)
+	return updatedMsg, true
 }
 
 func (session *chatSession) updateDownloadProgressMessage(messageID string, receiving bool, progress int) (chatMessage, bool) {
 	session.mu.Lock()
-	defer session.mu.Unlock()
+	var updatedMsg chatMessage
+	found := false
 	for index := range session.messages {
 		if session.messages[index].ID == messageID {
 			session.messages[index].Receiving = receiving
@@ -1557,10 +1588,27 @@ func (session *chatSession) updateDownloadProgressMessage(messageID string, rece
 			session.messages[index].Seq = session.nextEventSeqLocked()
 			session.lastActivity = time.Now()
 			session.notifyLocked()
-			return session.messages[index], true
+			updatedMsg = session.messages[index]
+			found = true
+			break
 		}
 	}
-	return chatMessage{}, false
+	if !found {
+		session.mu.Unlock()
+		return chatMessage{}, false
+	}
+
+	now := time.Now()
+	var hook func(ChatStatusSnapshot)
+	var snapshot ChatStatusSnapshot
+	if now.Sub(session.lastProgressHookTime) >= 150*time.Millisecond || progress == 100 {
+		session.lastProgressHookTime = now
+		hook, snapshot = session.statusSnapshotLocked("active")
+	}
+	session.mu.Unlock()
+
+	notifyChatStatusHook(hook, snapshot)
+	return updatedMsg, true
 }
 
 func (session *chatSession) addSystemMessage(text string) chatMessage {
@@ -2009,13 +2057,33 @@ func (session *chatSession) statusSnapshotLocked(state string) (func(ChatStatusS
 	if state != "" {
 		session.statusSeq++
 	}
+
+	var activeTransfers []ChatActiveTransfer
+	for _, msg := range session.messages {
+		if (msg.Sending || msg.Receiving) && msg.FileName != "" {
+			bytesDone := int64(0)
+			if msg.Size > 0 && msg.Progress > 0 {
+				bytesDone = (msg.Size * int64(msg.Progress)) / 100
+			}
+			activeTransfers = append(activeTransfers, ChatActiveTransfer{
+				ID:        msg.ID,
+				FileName:  msg.FileName,
+				Sender:    msg.Sender,
+				Size:      msg.Size,
+				BytesDone: bytesDone,
+				Percent:   msg.Progress,
+			})
+		}
+	}
+
 	snapshot := ChatStatusSnapshot{
-		State:        session.state,
-		MessageCount: len(session.messages),
-		DeviceCount:  len(session.clients),
-		StartedAt:    session.startedAt,
-		LastActivity: session.lastActivity,
-		Seq:          session.statusSeq,
+		State:           session.state,
+		MessageCount:    len(session.messages),
+		DeviceCount:     len(session.clients),
+		StartedAt:       session.startedAt,
+		LastActivity:    session.lastActivity,
+		Seq:             session.statusSeq,
+		ActiveTransfers: activeTransfers,
 	}
 	return session.statusHook, snapshot
 }

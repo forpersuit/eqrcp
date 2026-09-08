@@ -55,31 +55,32 @@ type desktopAgentTask struct {
 }
 
 type desktopAgentTaskRecord struct {
-	ID                  int        `json:"id"`
-	Action              string     `json:"action"`
-	Paths               []string   `json:"paths"`
-	State               string     `json:"state"`
-	TransferState       string     `json:"transferState,omitempty"`
-	TransferMessage     string     `json:"transferMessage,omitempty"`
-	TransferMode        string     `json:"transferMode,omitempty"`
-	TransferTarget      string     `json:"transferTarget,omitempty"`
-	TransferArchive     bool       `json:"transferArchive,omitempty"`
-	TransferArchiveName string     `json:"transferArchiveName,omitempty"`
-	TransferItems       []string   `json:"transferItems,omitempty"`
-	TransferCurrent     string     `json:"transferCurrent,omitempty"`
-	TransferPercent     int        `json:"transferPercent,omitempty"`
-	BytesDone           int64      `json:"bytesDone,omitempty"`
-	BytesTotal          int64      `json:"bytesTotal,omitempty"`
-	SavedFiles          []string   `json:"savedFiles,omitempty"`
-	TransferDeviceCount int        `json:"transferDeviceCount,omitempty"`
-	ChatState           string     `json:"chatState,omitempty"`
-	ChatMessageCount    int        `json:"chatMessageCount,omitempty"`
-	ChatDeviceCount     int        `json:"chatDeviceCount,omitempty"`
-	ChatLastActivity    string     `json:"chatLastActivity,omitempty"`
-	PageURL             string     `json:"pageUrl,omitempty"`
-	Error               string     `json:"error,omitempty"`
-	StartedAt           time.Time  `json:"startedAt"`
-	FinishedAt          *time.Time `json:"finishedAt,omitempty"`
+	ID                  int                         `json:"id"`
+	Action              string                      `json:"action"`
+	Paths               []string                    `json:"paths"`
+	State               string                      `json:"state"`
+	TransferState       string                      `json:"transferState,omitempty"`
+	TransferMessage     string                      `json:"transferMessage,omitempty"`
+	TransferMode        string                      `json:"transferMode,omitempty"`
+	TransferTarget      string                      `json:"transferTarget,omitempty"`
+	TransferArchive     bool                        `json:"transferArchive,omitempty"`
+	TransferArchiveName string                      `json:"transferArchiveName,omitempty"`
+	TransferItems       []string                    `json:"transferItems,omitempty"`
+	TransferCurrent     string                      `json:"transferCurrent,omitempty"`
+	TransferPercent     int                         `json:"transferPercent,omitempty"`
+	BytesDone           int64                       `json:"bytesDone,omitempty"`
+	BytesTotal          int64                       `json:"bytesTotal,omitempty"`
+	SavedFiles          []string                    `json:"savedFiles,omitempty"`
+	TransferDeviceCount int                         `json:"transferDeviceCount,omitempty"`
+	ChatState           string                      `json:"chatState,omitempty"`
+	ChatMessageCount    int                         `json:"chatMessageCount,omitempty"`
+	ChatDeviceCount     int                         `json:"chatDeviceCount,omitempty"`
+	ChatLastActivity    string                      `json:"chatLastActivity,omitempty"`
+	ChatActiveTransfers []server.ChatActiveTransfer `json:"chatActiveTransfers,omitempty"`
+	PageURL             string                      `json:"pageUrl,omitempty"`
+	Error               string                      `json:"error,omitempty"`
+	StartedAt           time.Time                   `json:"startedAt"`
+	FinishedAt          *time.Time                  `json:"finishedAt,omitempty"`
 }
 
 type desktopAgentResponse struct {
@@ -1422,6 +1423,7 @@ func (agent *desktopAgent) observeChatStatus(taskID int, status server.ChatStatu
 	agent.chat.ChatState = status.State
 	agent.chat.ChatMessageCount = status.MessageCount
 	agent.chat.ChatDeviceCount = status.DeviceCount
+	agent.chat.ChatActiveTransfers = status.ActiveTransfers
 	if !status.LastActivity.IsZero() {
 		agent.chat.ChatLastActivity = status.LastActivity.Format(time.RFC3339)
 	}

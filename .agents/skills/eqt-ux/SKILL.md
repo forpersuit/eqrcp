@@ -324,3 +324,17 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
     - 若现有 Socket 处于 `OPEN` 状态，立即发出毫秒级探针 `hb-probe-${timestamp}` 验证对端存活性；
     - 若 Socket 已被 OS 切断（`CLOSED` / `CLOSING`），`shouldReconnectOnVisible` 立即触发自愈重连，兼顾后台选文件保活体验与深度休眠后的稳定恢复。
 
+---
+
+## 17. Chat 模式流式传输状态感知与桌面端轻量任务托盘规范 (Chat Active Transfers & Desktop Task Tray)
+
+- **消除桌面端附件传输“静默黑盒”**：
+  - 移动端通过 Tus 断点续传或分块上传大附件时，服务端在流式更新消息进度（`updateUploadProgressMessage` / `updateDownloadProgressMessage`）时，必须通过 150ms 节流触发 `notifyChatStatusHook`，使桌面端 GUI 主线程能够实时感知进行中的传输。
+  - 后端在 `statusSnapshotLocked` 中通过遍历只读扫描带有未完成进度的消息，提取并生成 `ChatActiveTransfer[]` 结构体切片，微秒级注入 `ChatStatusSnapshot`。
+- **UI 任务托盘（Active Transfers Tray）设计规范**：
+  - **模块化剥离**：遵循前端工程规范，将托盘渲染逻辑封装在独立文件 `desktop/gui/frontend/src/components/chat_tray.js` 中，严禁在 `main.js` 中直接拼装大块 HTML。
+  - **抗并发与无竞态覆盖**：采用独立任务列表（List）展示所有在传附件（文件名、上传者、格式化尺寸、百分比、平滑进度条），彻底避免单行副标题在多文件并发时的相互覆盖与抢占。
+  - **自适应收起与极简心智**：在无活跃传输时，托盘组件返回空字符串，DOM 节点平滑隐藏，不侵占聊天消息主区域的空间。
+  - **合规标准**：自包含纯函数转义（`escapeHTML`/`escapeAttr`），严禁内联 `onclick`，多语言在 `i18n.js` 中统一注册。
+
+

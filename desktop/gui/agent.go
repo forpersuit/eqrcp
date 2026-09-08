@@ -936,6 +936,7 @@ func (agent *desktopAgent) observeChatStatus(taskID int, status server.ChatStatu
 	agent.chat.ChatState = status.State
 	agent.chat.ChatMessageCount = status.MessageCount
 	agent.chat.ChatDeviceCount = status.DeviceCount
+	agent.chat.ChatActiveTransfers = status.ActiveTransfers
 	if !status.LastActivity.IsZero() {
 		agent.chat.ChatLastActivity = status.LastActivity.Format(time.RFC3339)
 	}
