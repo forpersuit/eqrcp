@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -233,13 +234,23 @@ func TestRequestDeviceCertificate_SuccessAndReuse(t *testing.T) {
 		if r.Header.Get("X-EQT-Device-ID") != "dev_test_id" {
 			t.Errorf("unexpected device ID: %s", r.Header.Get("X-EQT-Device-ID"))
 		}
-		if r.Header.Get("X-EQT-Hardware-Signature") != "sig_mock" {
-			t.Errorf("unexpected signature: %s", r.Header.Get("X-EQT-Hardware-Signature"))
+		if r.Header.Get("X-EQT-Hardware-Signature") == "" {
+			t.Errorf("missing X-EQT-Hardware-Signature header")
+		}
+		if r.Header.Get("X-EQT-Device-Signature") != r.Header.Get("X-EQT-Hardware-Signature") {
+			t.Errorf("expected Device-Signature and Hardware-Signature to match")
+		}
+
+		if r.Header.Get("X-EQT-Device-Signature") == "" {
+			t.Errorf("missing X-EQT-Device-Signature header")
+		}
+		if r.Header.Get("X-EQT-Timestamp") == "" {
+			t.Errorf("missing X-EQT-Timestamp header")
 		}
 
 		var payload provisionRequestPayload
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			t.Fatalf("failed to decode request body: %v", err)
+			t.Fatalf("invalid json body: %v", err)
 		}
 		if payload.NodeID != nodeID {
 			t.Errorf("expected nodeID %s, got %s", nodeID, payload.NodeID)
@@ -253,6 +264,19 @@ func TestRequestDeviceCertificate_SuccessAndReuse(t *testing.T) {
 		csr, err := x509.ParseCertificateRequest(block.Bytes)
 		if err != nil {
 			t.Fatalf("failed to parse CSR: %v", err)
+		}
+
+		// Verify Proof of Possession using client's public key from CSR
+		pubKey, ok := csr.PublicKey.(*ecdsa.PublicKey)
+		if !ok {
+			t.Fatalf("expected ECDSA public key in CSR")
+		}
+		sigHeader := r.Header.Get("X-EQT-Device-Signature")
+		tsHeader := r.Header.Get("X-EQT-Timestamp")
+		var tsVal int64
+		_, _ = fmt.Sscanf(tsHeader, "%d", &tsVal)
+		if !VerifyProvisionPayload(pubKey, payload.NodeID, tsVal, sigHeader) {
+			t.Errorf("POPO signature verification failed in mock server")
 		}
 
 		// Self-sign a CA/leaf cert with the public key from the CSR
@@ -282,11 +306,10 @@ func TestRequestDeviceCertificate_SuccessAndReuse(t *testing.T) {
 	ctx := context.Background()
 	var loggedMessages []string
 	opts := ProvisionOptions{
-		Endpoint:  server.URL,
-		NodeID:    nodeID,
-		DeviceID:  "dev_test_id",
-		Signature: "sig_mock",
-		Timeout:   5 * time.Second,
+		Endpoint: server.URL,
+		NodeID:   nodeID,
+		DeviceID: "dev_test_id",
+		Timeout:  5 * time.Second,
 		LogFunc: func(format string, args ...any) {
 			loggedMessages = append(loggedMessages, format)
 		},
@@ -440,5 +463,55 @@ func TestRequestDeviceCertificate_GatewayError(t *testing.T) {
 	}
 	if !errors.Is(err, ErrGatewayFailed) {
 		t.Errorf("expected error to wrap ErrGatewayFailed, got: %v", err)
+	}
+}
+
+func TestSignAndVerifyProvisionPayload(t *testing.T) {
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("failed to generate P-256 key: %v", err)
+	}
+
+	nodeID := "a1b2c3d4e5f6"
+	timestamp := time.Now().Unix()
+
+	// 1. Successful sign & verify
+	sigB64, err := SignProvisionPayload(priv, nodeID, timestamp)
+	if err != nil {
+		t.Fatalf("SignProvisionPayload failed: %v", err)
+	}
+	if sigB64 == "" {
+		t.Fatalf("expected non-empty signature string")
+	}
+
+	if !VerifyProvisionPayload(&priv.PublicKey, nodeID, timestamp, sigB64) {
+		t.Errorf("expected signature verification to pass")
+	}
+
+	// 2. Tampered nodeID fails
+	if VerifyProvisionPayload(&priv.PublicKey, "differentnode", timestamp, sigB64) {
+		t.Errorf("expected verification to fail for tampered nodeID")
+	}
+
+	// 3. Tampered timestamp fails
+	if VerifyProvisionPayload(&priv.PublicKey, nodeID, timestamp+1, sigB64) {
+		t.Errorf("expected verification to fail for tampered timestamp")
+	}
+
+	// 4. Different public key fails
+	otherPriv, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if VerifyProvisionPayload(&otherPriv.PublicKey, nodeID, timestamp, sigB64) {
+		t.Errorf("expected verification to fail for different public key")
+	}
+
+	// 5. Invalid arguments to SignProvisionPayload
+	if _, err := SignProvisionPayload(nil, nodeID, timestamp); err == nil {
+		t.Errorf("expected error for nil private key")
+	}
+	if _, err := SignProvisionPayload(priv, "", timestamp); err == nil {
+		t.Errorf("expected error for empty nodeID")
+	}
+	if _, err := SignProvisionPayload(priv, nodeID, 0); err == nil {
+		t.Errorf("expected error for zero timestamp")
 	}
 }

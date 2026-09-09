@@ -6,15 +6,18 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
 	"log"
+	"math/big"
 	"net"
 	"net/http"
 	"os"
@@ -164,6 +167,61 @@ func GenerateDeviceCSR(priv *ecdsa.PrivateKey, nodeID string) ([]byte, error) {
 	})
 
 	return csrPEM, nil
+}
+
+// SignProvisionPayload generates an IEEE P1363 ECDSA P-256 signature (64 bytes raw: 32-byte r || 32-byte s, Base64-encoded)
+// over the canonical message "<nodeID>:<timestamp>", serving as a cryptographic proof-of-possession (POPO).
+func SignProvisionPayload(priv *ecdsa.PrivateKey, nodeID string, timestamp int64) (string, error) {
+	if priv == nil {
+		return "", errors.New("private key cannot be nil")
+	}
+	cleanNode := strings.ToLower(strings.TrimSpace(nodeID))
+	if cleanNode == "" {
+		return "", errors.New("node ID cannot be empty")
+	}
+	if timestamp <= 0 {
+		return "", errors.New("timestamp must be positive")
+	}
+
+	msg := fmt.Sprintf("%s:%d", cleanNode, timestamp)
+	hash := sha256.Sum256([]byte(msg))
+	r, s, err := ecdsa.Sign(rand.Reader, priv, hash[:])
+	if err != nil {
+		return "", fmt.Errorf("ecdsa sign failed: %w", err)
+	}
+
+	rBytes := r.Bytes()
+	sBytes := s.Bytes()
+	if len(rBytes) > 32 || len(sBytes) > 32 {
+		return "", errors.New("invalid signature component length for P-256")
+	}
+
+	rawSig := make([]byte, 64)
+	copy(rawSig[32-len(rBytes):32], rBytes)
+	copy(rawSig[64-len(sBytes):64], sBytes)
+
+	return base64.StdEncoding.EncodeToString(rawSig), nil
+}
+
+// VerifyProvisionPayload verifies an IEEE P1363 ECDSA P-256 signature against nodeID, timestamp, and public key.
+func VerifyProvisionPayload(pub *ecdsa.PublicKey, nodeID string, timestamp int64, sigB64 string) bool {
+	if pub == nil {
+		return false
+	}
+	cleanNode := strings.ToLower(strings.TrimSpace(nodeID))
+	if cleanNode == "" || timestamp <= 0 || sigB64 == "" {
+		return false
+	}
+	rawSig, err := base64.StdEncoding.DecodeString(sigB64)
+	if err != nil || len(rawSig) != 64 {
+		return false
+	}
+	r := new(big.Int).SetBytes(rawSig[:32])
+	s := new(big.Int).SetBytes(rawSig[32:])
+
+	msg := fmt.Sprintf("%s:%d", cleanNode, timestamp)
+	hash := sha256.Sum256([]byte(msg))
+	return ecdsa.Verify(pub, hash[:], r, s)
 }
 
 // VerifyCertificateMatchesPrivateKey checks whether the public key in the given x509 certificate
@@ -433,19 +491,29 @@ func RequestDeviceCertificate(ctx context.Context, client *http.Client, opts Pro
 		return nil, fmt.Errorf("failed to build http request: %w", err)
 	}
 
+	// Compute anti-replay timestamp and proof-of-possession signature
+	ts := opts.Timestamp
+	if ts <= 0 {
+		ts = time.Now().Unix()
+	}
+	sig := opts.Signature
+	if sig == "" {
+		var err error
+		sig, err = SignProvisionPayload(priv, cleanNode, ts)
+		if err != nil {
+			logger("[LAN-TLS-PROVISION] [ERROR] Phase=SIGN_PAYLOAD nodeID=%s error=%v", cleanNode, err)
+			return nil, fmt.Errorf("failed to sign provision payload: %w", err)
+		}
+	}
+
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("User-Agent", "EQT-Provisioner/1.0")
 	if opts.DeviceID != "" {
 		httpReq.Header.Set("X-EQT-Device-ID", opts.DeviceID)
 	}
-	if opts.Signature != "" {
-		httpReq.Header.Set("X-EQT-Hardware-Signature", opts.Signature)
-	}
-	if opts.Timestamp > 0 {
-		httpReq.Header.Set("X-EQT-Timestamp", fmt.Sprintf("%d", opts.Timestamp))
-	} else {
-		httpReq.Header.Set("X-EQT-Timestamp", fmt.Sprintf("%d", time.Now().Unix()))
-	}
+	httpReq.Header.Set("X-EQT-Device-Signature", sig)
+	httpReq.Header.Set("X-EQT-Hardware-Signature", sig)
+	httpReq.Header.Set("X-EQT-Timestamp", fmt.Sprintf("%d", ts))
 
 	httpClient := client
 	if httpClient == nil {

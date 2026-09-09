@@ -2,6 +2,7 @@ import { Env } from '../types';
 import { logSystemError } from '../utils/error-logger';
 import { isD1RateLimited, logRateLimitHit, clientIpFromRequest } from '../utils/rate-limit';
 import { checkManualBlacklist } from '../utils/blacklist';
+import { AcmeClient, computeDns01ChallengeValue } from '../utils/acme';
 
 const CERT_TABLE_ENSURED = new WeakSet<object>();
 
@@ -115,6 +116,7 @@ export interface ParsedCSR {
   dnsNames: string[];
   subjectDER: Uint8Array;
   spkiDER: Uint8Array;
+  rawDER: Uint8Array;
 }
 
 export function parseCSR(pemStr: string): ParsedCSR {
@@ -204,7 +206,8 @@ export function parseCSR(pemStr: string): ParsedCSR {
     commonName,
     dnsNames,
     subjectDER: subject.raw,
-    spkiDER: spki.raw
+    spkiDER: spki.raw,
+    rawDER: der
   };
 }
 
@@ -392,6 +395,58 @@ export async function issueCertificateFromCSR(
   };
 }
 
+export async function setDns01Challenge(
+  endpoints: string[],
+  token: string,
+  record: string,
+  value: string,
+  ttl = 300
+): Promise<void> {
+  const errors: string[] = [];
+  for (const ep of endpoints) {
+    try {
+      const url = `${ep.replace(/\/+$/, '')}/acme/challenge`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ record, value, ttl })
+      });
+      if (!res.ok) {
+        errors.push(`${ep}: HTTP ${res.status}`);
+      }
+    } catch (e: any) {
+      errors.push(`${ep}: ${e?.message}`);
+    }
+  }
+  if (errors.length === endpoints.length) {
+    throw new Error(`failed to set DNS challenge on all endpoints: ${errors.join(', ')}`);
+  }
+}
+
+export async function clearDns01Challenge(
+  endpoints: string[],
+  token: string,
+  record: string,
+  value: string
+): Promise<void> {
+  for (const ep of endpoints) {
+    try {
+      const url = `${ep.replace(/\/+$/, '')}/acme/challenge?record=${encodeURIComponent(record)}&value=${encodeURIComponent(value)}`;
+      await fetch(url, {
+        method: 'DELETE',
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
+      });
+    } catch (e: any) {
+      console.warn(`[ACME] Failed to delete DNS challenge on ${ep}:`, e?.message);
+    }
+  }
+}
+
 /**
  * Primary HTTP router for Certificate operations (/api/v1/cert/*)
  */
@@ -458,20 +513,41 @@ export async function handleCertRoutes(
     });
   }
 
-  // 3. Timestamp anti-replay check (within +/- 300 seconds if provided)
-  if (timestampHeader) {
-    const clientTs = parseInt(timestampHeader, 10);
-    const nowSec = Math.floor(Date.now() / 1000);
-    if (isNaN(clientTs) || Math.abs(nowSec - clientTs) > 300) {
-      console.warn(`[LAN-TLS-PROVISION] [WARN] Timestamp skew rejected: nodeID=${cleanNode} clientTs=${clientTs} nowSec=${nowSec}`);
-      return new Response(JSON.stringify({
-        error: 'Request timestamp is outside the allowed tolerance (+/- 300s)',
-        reason_key: 'timestamp_skew'
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
+  // 3. Timestamp anti-replay check (strict +/- 60 seconds tolerance)
+  if (!timestampHeader) {
+    return new Response(JSON.stringify({
+      error: 'Missing required timestamp header (X-EQT-Timestamp)',
+      reason_key: 'missing_timestamp'
+    }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+
+  const clientTs = parseInt(timestampHeader, 10);
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (isNaN(clientTs) || Math.abs(nowSec - clientTs) > 60) {
+    console.warn(`[LAN-TLS-PROVISION] [WARN] Timestamp skew rejected: nodeID=${cleanNode} clientTs=${clientTs} nowSec=${nowSec}`);
+    return new Response(JSON.stringify({
+      error: 'Request timestamp is outside the allowed tolerance (+/- 60s)',
+      reason_key: 'timestamp_skew'
+    }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+
+  // 3.1 Device Signature Proof-of-Possession Header Check
+  const sigHeader = request.headers.get('X-EQT-Device-Signature') || request.headers.get('X-EQT-Hardware-Signature');
+  if (!sigHeader) {
+    console.warn(`[LAN-TLS-PROVISION] [REJECT] Missing signature header for nodeID=${cleanNode}`);
+    return new Response(JSON.stringify({
+      error: 'Missing required device signature header (X-EQT-Device-Signature)',
+      reason_key: 'missing_signature'
+    }), {
+      status: 401,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
   }
 
   console.log(`[LAN-TLS-PROVISION] [START] Provision request received for nodeID=${cleanNode}, deviceID=${deviceIdHeader}, ip=${clientIp}, traceId=${traceId}`);
@@ -559,10 +635,117 @@ export async function handleCertRoutes(
     });
   }
 
-  // 7. Certificate Issuance Engine
+  // 6.1 Cryptographic Proof of Possession (POPO) Verification
   try {
-    console.log(`[LAN-TLS-PROVISION] [ISSUE] Issuing certificate for nodeID=${cleanNode}...`);
-    const { certPEM, expiresAt } = await issueCertificateFromCSR(parsedCSR, 90);
+    const clientPubKey = await crypto.subtle.importKey(
+      'spki',
+      parsedCSR.spkiDER,
+      { name: 'ECDSA', namedCurve: 'P-256' },
+      false,
+      ['verify']
+    );
+
+    let sigBinary: string;
+    if (typeof Buffer !== 'undefined') {
+      sigBinary = Buffer.from(sigHeader, 'base64').toString('binary');
+    } else {
+      sigBinary = atob(sigHeader);
+    }
+    const rawSig = new Uint8Array(sigBinary.length);
+    for (let i = 0; i < sigBinary.length; i++) {
+      rawSig[i] = sigBinary.charCodeAt(i);
+    }
+
+    if (rawSig.length !== 64) {
+      throw new Error(`invalid signature length: expected 64 bytes IEEE P1363, got ${rawSig.length}`);
+    }
+
+    const canonicalMsg = new TextEncoder().encode(`${cleanNode}:${clientTs}`);
+    const valid = await crypto.subtle.verify(
+      { name: 'ECDSA', hash: 'SHA-256' },
+      clientPubKey,
+      rawSig,
+      canonicalMsg
+    );
+
+    if (!valid) {
+      console.warn(`[LAN-TLS-PROVISION] [REJECT] Signature mismatch for nodeID=${cleanNode}, clientTs=${clientTs}`);
+      return new Response(JSON.stringify({
+        error: 'Invalid device signature: proof-of-possession verification failed',
+        reason_key: 'invalid_signature'
+      }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+  } catch (err: any) {
+    console.warn(`[LAN-TLS-PROVISION] [REJECT] Signature verification error nodeID=${cleanNode}: ${err?.message}`);
+    return new Response(JSON.stringify({
+      error: `Device signature verification error: ${err?.message}`,
+      reason_key: 'invalid_signature'
+    }), {
+      status: 401,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+
+  // 7. Certificate Issuance Engine (RFC 8555 ACME DNS-01 or Fallback Signer)
+  try {
+    let certPEM: string;
+    let expiresAt: string;
+
+    const useAcme = Boolean(env.ACME_DIRECTORY_URL || (env.ENVIRONMENT === 'test' && env.ACME_DNS_API_ENDPOINTS));
+
+    if (useAcme && env.ACME_DNS_API_ENDPOINTS) {
+      console.log(`[LAN-TLS-PROVISION] [ACME] Starting RFC 8555 Let's Encrypt DNS-01 issuance for nodeID=${cleanNode}...`);
+      const endpoints = env.ACME_DNS_API_ENDPOINTS.split(',').map(s => s.trim()).filter(Boolean);
+      const dnsToken = env.ACME_DNS_API_TOKEN || '';
+
+      const acmeClient = await AcmeClient.create({
+        directoryUrl: env.ACME_DIRECTORY_URL || 'https://acme-staging-v02.api.letsencrypt.org/directory',
+        accountKeyJWK: env.ACME_ACCOUNT_KEY
+      });
+
+      const { orderUrl, order } = await acmeClient.newOrder([expectedCommonName, expectedWildcard]);
+      const thumbprint = await acmeClient.getThumbprint();
+
+      const cleanupTasks: Array<() => Promise<void>> = [];
+      try {
+        for (const authzUrl of order.authorizations) {
+          const authz = await acmeClient.getAuthorization(authzUrl);
+          if (authz.status === 'valid') continue;
+
+          const dnsChall = authz.challenges.find(c => c.type === 'dns-01');
+          if (!dnsChall) {
+            throw new Error(`no dns-01 challenge found in authorization for ${authz.identifier.value}`);
+          }
+
+          const challengeVal = await computeDns01ChallengeValue(dnsChall.token, thumbprint);
+          const recordName = `_acme-challenge.${cleanNode}.direct.eqt.net.im.`;
+
+          await setDns01Challenge(endpoints, dnsToken, recordName, challengeVal);
+          cleanupTasks.push(() => clearDns01Challenge(endpoints, dnsToken, recordName, challengeVal));
+
+          await acmeClient.triggerChallenge(dnsChall.url);
+        }
+
+        await acmeClient.finalizeOrder(order.finalize, parsedCSR.rawDER);
+        const validOrder = await acmeClient.pollOrder(orderUrl, 90000, 2500);
+        if (!validOrder.certificate) {
+          throw new Error('ACME order finalized but no certificate URL was returned');
+        }
+
+        certPEM = await acmeClient.downloadCertificate(validOrder.certificate);
+        expiresAt = new Date(Date.now() + 90 * 24 * 3600 * 1000).toISOString();
+      } finally {
+        ctx.waitUntil(Promise.all(cleanupTasks.map(fn => fn().catch(err => console.warn('[ACME] DNS cleanup warning:', err)))));
+      }
+    } else {
+      console.log(`[LAN-TLS-PROVISION] [ISSUE] Issuing certificate via standalone CA for nodeID=${cleanNode}...`);
+      const issued = await issueCertificateFromCSR(parsedCSR, 90);
+      certPEM = issued.certPEM;
+      expiresAt = issued.expiresAt;
+    }
 
     // 8. Record audit log into D1 asynchronously
     ctx.waitUntil((async () => {

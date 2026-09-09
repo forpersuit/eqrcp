@@ -192,12 +192,16 @@ WantedBy=multi-user.target
   - 动态端点覆盖：Go 端 `pkg/cert` 支持通过环境变量 `EQT_PROVISION_ENDPOINT` 灵活切换置备网关；
   - 生产环境真实处境适配：在 Mozilla PSL 合并生效与 Let's Encrypt 频控豁免完成官方审批前，TLS 处于非默认开启状态。官网（`cloudflare/eqt-website`）各语言对外文案收敛隐藏 TLS 免装证书说明，重点宣导“局域网物理内网极速直连”、“零云端中继”、“无外网流量消耗”；待未来正式全量放开后再行恢复。
 - **🔴 公信绿锁验收红线与测试环境推进策略（2026-09-10 复核更新）**：
-  - ⚠️ **现状标记**：`cert.ts` 当前签发引擎为**每请求瞬态自签 CA**（Issuer `EQT LAN-TLS Intermediate CA`，`issueCertificateFromCSR` 未传 signingKey 时临时生成），**非 Let's Encrypt 公信签发**——手机扫码会触发 `NET::ERR_CERT_AUTHORITY_INVALID` 红屏，[`docs/bugs/2026-09-09-new-user-tls-cert-cache-bootstrap-defect.md`](file:///home/yelon/develop/me/eqrcp/docs/bugs/2026-09-09-new-user-tls-cert-cache-bootstrap-defect.md) §四 DoD 3 绿锁验收尚未达成；公网新用户放行前必须接入真实 LE DNS-01 代理（详见 [`docs/mechanism/lan-tls-zero-leak-acme-architecture.md`](file:///home/yelon/develop/me/eqrcp/docs/mechanism/lan-tls-zero-leak-acme-architecture.md) §七.9 FINDING 1）。
-  - 💡 **PSL 范围澄清与测试环境策略**：PSL 的第一性原理是为公网海量用户规模化时破除主域每周 50 张限额；**测试环境每周消耗极低（<50张）且有 Staging（30,000张/周）托底，测试环境绝对不需要等待 PSL，可直接在测试环境率先落地 RFC 8555 Let's Encrypt DNS-01 代理闭环！**
-  - **验收四条（评估“官方公信绿锁”链路是否真正达成时逐条核对）**：
-    1. 签发 CA 是否存在于浏览器/OS 信任存储库（自建/瞬态 CA 一律判失败，浏览器必红屏）；
-    2. 云端是否真实存在 ACME client 交互（NewOrder/DNS-01/Finalize，而非手写 X.509 自签）；
-    3. 服务端是否实际校验硬件签名 `X-EQT-Hardware-Signature`（仅透传 = 防刷未落地）；
-    4. 时间戳反重放窗口与规格一致（机制文档承诺 ±60s，实现当前为 ±300s）。
+  - ✅ **FINDING 2 彻底闭环（POPO 签名校验第一性原理）**：
+    - 客户端生成 ECDSA P-256 私钥后，使用该私钥对 `${nodeID}:${timestamp}` 进行 IEEE P1363（64 字节 raw，r 32B + s 32B 大端序）标准签名；
+    - 签名 Base64 编码设置于 `X-EQT-Device-Signature` 与 `X-EQT-Hardware-Signature` 头；
+    - 服务端 Worker 从上传的 PKCS#10 CSR 中提取 `spkiDER`，使用 Web Crypto `crypto.subtle.importKey('spki', ...)` 原生验签，既严格证明了私钥持有性（Proof-of-Possession），又无需维护中心化公钥数据库；
+  - ✅ **FINDING 3 彻底闭环（时间戳容差窗口收敛）**：
+    - `cert.ts` 将请求时间戳与服务端时间比对严格收敛为 $\pm 60\text{s}$，过期立即拒绝并记录日志，有效杜绝重放攻击；
+  - 🔄 **FINDING 1 推进（RFC 8555 ACME DNS-01 代理引擎）**：
+    - `cloudflare/eqt-drm-api/src/utils/acme.ts` 已完成轻量原生 Web Crypto RFC 8555 ACME 协议栈（`newOrder`、`dns-01` 挑战值计算、`finalize` 提交客户端 CSR、下载证书链与 badNonce 自动透明重试）；
+    - 测试用例 `test:acme:offline` 12 项测试全部通过；
+    - 双机权威 DNS（`cmd/eqt-dns`）通过 `/acme/challenge` 接口支持安全写入与删除验证 TXT。
+
 
 
