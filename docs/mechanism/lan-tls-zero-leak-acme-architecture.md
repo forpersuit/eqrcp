@@ -5,6 +5,7 @@
 > **面向对象**：核心开发团队、系统架构师、安全与密码学审计人员  
 > **基线分支**：`master`（设计演进预演）  
 > **关联技术**：[`pkg/cert`](file:///home/yelon/develop/me/eqrcp/pkg/cert/cert.go), [`cmd/eqt-dns`](file:///home/yelon/develop/me/eqrcp/cmd/eqt-dns/main.go), [`pkg/server/hardware.go`](file:///home/yelon/develop/me/eqrcp/pkg/server/hardware.go), [`.agents/skills/eqt-lan-tls/SKILL.md`](file:///home/yelon/develop/me/eqrcp/.agents/skills/eqt-lan-tls/SKILL.md)  
+> **代码事实核实**（审查于 2026-09-09，锚定真实符号与行号）：本文为**设计蓝图**，“设备专属子域 + 单机单私钥 + Ed25519 硬件 CSR”一条全链路**尚未落地**（代码零实现）。仅以下基线已实现：`cert.BaseDomain = "direct.eqt.net.im"`（`pkg/cert/cert.go:16`）、`cert.FormatDirectDomain`（同文件 :22，仅单级）、`cmd/eqt-dns` 的回环 IPv4 解析（真实为未导出 `parseIP`，`main.go:135`）、`desktop/gui/agent.go:1031-1034` 的 Fail-Soft 降级、`scripts/sync-certs-from-vps.sh`（旧通配符私钥同步，待 Phase 4 下线）。下文 §3 中 `ParseLoopbackIP`、`hardware.GetDeviceNodeID()`、`pkg/cert/provisioner.go` 均为**蓝图内的拟定符号名，当前代码中尚不存在**（详见各节脚注）。
 
 ---
 
@@ -153,6 +154,8 @@ sequenceDiagram
 
 ### 1. 设备端密钥与 CSR 组装模块（`pkg/cert/provisioner.go`）
 
+> ⚠️ **蓝图待实现**：`provisioner.go` 当前不存在（`pkg/cert/` 下仅有 `cert.go`、`cert_test.go`）。本节为拟定实现规格。
+
 #### 1.1 密钥生成规格
 - **算法选型**：ECDSA P-256（`elliptic.P256()`）。
   - *第一性原理依据*：相较于古老的 RSA 2048/4096，P-256 私钥尺寸极小（仅 32 字节）、生成速度快上百倍、TLS 握手签名计算极低消耗，且在 iOS Safari、Android Chrome、PC 浏览器上拥有 100% 原生支持。
@@ -172,7 +175,7 @@ sequenceDiagram
 ```go
 // NodeDomain = <node-id>.direct.eqt.net.im
 // node-id 由硬件不可变特征哈希生成（如 SHA256(UUID + CPUID)[0:12] 的 hex 编码）
-nodeID := hardware.GetDeviceNodeID() // 例如 "a1b2c3d4e5f6"
+nodeID := hardware.GetDeviceNodeID() // 例如 "a1b2c3d4e5f6"  ⚠️ 拟名，当前不存在（真实为 GetDeviceStableID / GetAuthorityDeviceID，见 pkg/server/hardware.go:392/366）
 domain := fmt.Sprintf("%s.%s", nodeID, cert.BaseDomain)
 ```
 
@@ -221,7 +224,7 @@ func GenerateDeviceCSR(priv *ecdsa.PrivateKey, nodeDomain string) ([]byte, error
 // 支持解析格式：
 // 1. 旧版全局回环: 192-168-1-100.direct.eqt.net.im
 // 2. 专属节点回环: 192-168-1-100.<node-id>.direct.eqt.net.im
-func ParseLoopbackIP(fqdn string, baseDomain string) net.IP {
+func ParseLoopbackIP(fqdn string, baseDomain string) net.IP { // ⚠️ 拟名未实现；现有实现为 cmd/eqt-dns/main.go:135 的未导出 parseIP(domain string) net.IP
     clean := strings.TrimSuffix(strings.ToLower(fqdn), ".")
     // 提取最左侧的主机名 Label
     labels := strings.Split(clean, ".")
@@ -237,6 +240,7 @@ func ParseLoopbackIP(fqdn string, baseDomain string) net.IP {
     ...
 }
 ```
+> 📌 **兼容性说明**：现有 `parseIP`（`cmd/eqt-dns/main.go:135`）采用「逐 label 扫描」而非固定取 `labels[0]`——它遍历每个 label 尝试连字符 IP 或连续四段数字，因此对蓝图中的两级域名 `192-168-1-100.<node-id>.direct.eqt.net.im` **行为上已恰好兼容**（首 label 命中即可解析 IP，`<node-id>` 被跳过）。换言之，无状态解析在接入 node-id 子域时**无需改造解析器本身**，只需保障证书 SAN 与 DNS 应答层的适配；本节拟名 `ParseLoopbackIP` 与「仅取 labels[0]」的实现片段是对现状的简化表述，需与真实 `parseIP` 对齐。
 **性能特征**：纯内存算法字符串切分与字节转换，单核可支撑 **200,000+ QPS**，不需要任何数据库存储设备与 IP 的映射关系，抗并发能力极其强悍。
 
 ---
