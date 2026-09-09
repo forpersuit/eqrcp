@@ -362,4 +362,3 @@ func TestPSLTXTRecord(t *testing.T) {
 		t.Fatalf("Expected dynamically overridden PSL URL, got %s", dynAnswer.Txt[0])
 	}
 }
-
