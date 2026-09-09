@@ -299,4 +299,3 @@ func TestLanTLSWithDedicatedNodeCertificate(t *testing.T) {
 		t.Fatalf("Expected TLS connection, got nil")
 	}
 }
-
