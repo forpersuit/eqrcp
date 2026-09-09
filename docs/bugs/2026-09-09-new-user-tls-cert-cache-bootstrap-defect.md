@@ -108,6 +108,8 @@
 
 #### (1) 云端 Worker 分发端点（`lic.eqt.net.im`）
 > ⚠️ **审查红线（2026-09-09，实现前必读）**：下述「把 `*.direct.eqt.net.im` 通配符**私钥**（`privkey.pem`）随包分发给每一台新用户设备」的落点，**与该架构的主线安全目标直接冲突**——它正是在复刻并**放大** [`docs/mechanism/lan-tls-zero-leak-acme-architecture.md`](file:///home/yelon/develop/me/eqrcp/docs/mechanism/lan-tls-zero-leak-acme-architecture.md) 中已明确列为**待消除隐患**的「私钥共享」模式（见 §1 三隐患与 §2 模式 A）。**禁止按原样实现「全网共享同一把通配私钥」**。若仅将本阶段当作**受控小范围（开发/内部设备）**同步的自动化，需明确限定鉴权白名单并作为过渡态在 Phase 4 随 `sync-certs-from-vps.sh` 一起下线；若要服务**真实公网新用户**，须改走零泄漏架构的「本地生钥 + 云端代理 ACME 单机单证书」路线（详见文末 §五 审查决议）。
+>
+> 🚫 **已被 §六 正式取代（归档 2026-09-09）**：开发团队已于 §六 明确**废弃**「公网通配符私钥下发」设计并选定路线 B。本节 §三(1) 中的 `GET /api/v1/cert/wildcard-bundle` 云端分发端点**不应再被实现**；通配符证书仅保留给开发/内部白名单，随 Phase 4 彻底下线。若后续实现需参考"受控下拉证书"模式，仅限白名单场景并从 §六.3 的护栏约束。
 
 在已有的 Cloudflare Worker 服务中增加受控的通配符证书分发路由：
 - **路由路径**：`GET /api/v1/cert/wildcard-bundle`
@@ -179,7 +181,9 @@ window.runtime.EventsOn("eqt:tls-cert-ready", () => {
 2. **零配置绿锁就绪**：
    启动后 1~3 秒内（视网络状况），设置界面未出现或自动消除了黄色感叹号提示；
 3. **首发 HTTPS 验证**：
-   在设置保持默认开启 TLS 的情况下，直接创建 send 任务，生成的二维码与直连链接为 `https://192-168-x-x.direct.eqt.net.im:<port>/<token>`，手机扫码进入后直接呈现官方公信绿锁，且无任何浏览器安全警告。
+   在设置保持默认开启 TLS 的情况下，直接创建 send 任务，生成的二维码与直连链接为 `https://192-168-x-x.<node-id>.direct.eqt.net.im:<port>/<token>`（设备专属子域，`<node-id>` 为本机基于硬件指纹级联哈希派生的 12 位十六进制标识），手机扫码进入后直接呈现官方公信绿锁，且无任何浏览器安全警告。
+
+> 📌 **审查校准（2026-09-09）**：原验收写 `https://192-168-x-x.direct.eqt.net.im`（单级 IP 子域，对应旧的共享通配符证书）。既然本方案已收敛为路线 B「设备专属子域 + 单机单证书」，验收 URL 必须同步升级为两级 `192-168-x-x.<node-id>.direct` 形态（与 [`lan-tls-zero-leak-acme-architecture.md`](file:///home/yelon/develop/me/eqrcp/docs/mechanism/lan-tls-zero-leak-acme-architecture.md) §3/§4 定义一致）。否则验收行为与实现的域名模型脱节，会让"绿锁验证"验到错误的域模型上。
 
 ---
 
@@ -231,6 +235,11 @@ window.runtime.EventsOn("eqt:tls-cert-ready", () => {
 1. **私钥绝对不出机**：新设备首次启动时，由本地 `crypto/ecdsa` 生成专属 ECDSA P-256 私钥，云端与其他设备物理上不可能接触到私钥；
 2. **专属子域与公信证书**：基于硬件指纹哈希（`hardware.GetDeviceFingerprintHashes()`）计算唯一的 12 位 Node-ID，生成专属 CSR，由云端 Worker 代理 DNS-01 质询并从 Let's Encrypt 签发正规公信证书；
 3. **彻底根除安全反噬**：不再向任何客户端扩散通配符私钥，从源头上消除了全体连坐吊销与局域网内恶意伪造的系统性风险。
+
+> 📌 **代码事实校准（审查补充 2026-09-09）**：路线 B 的可行性描述中，「12 位 Node-ID」与「生成专属 CSR」在**当前代码库尚未落地**，属蓝图符号，勿误读为现成可调用 API：
+> - `hardware.GetDeviceFingerprintHashes()`（`pkg/server/hardware.go:247`）**真实存在** ✅；
+> - 但基于其派生的 12 字符十六进制 Node-ID（机制文档拟名 `deriveNodeID` / `hardware.GetDeviceNodeID()`）、客户端本地 CSR 生成模块（拟名 `pkg/cert/provisioner.go`）、云端代理 ACME 通道，均为**蓝图拟定符号，当前代码零实现**（与 [`lan-tls-zero-leak-acme-architecture.md`](file:///home/yelon/develop/me/eqrcp/docs/mechanism/lan-tls-zero-leak-acme-architecture.md) 顶部「代码事实核实」声明一致）；
+> - 因此 §六.2 应读作「**路线 B 的目标能力**」而非「已具备的 API」；落地路线 B 前需先补齐：Node-ID 派生算法、本地 ECDSA P-256 生钥与 CSR 生成、云端 ACME DNS-01 代理，以及前端 URL 从单级 IP 域名切换到 `192-168-x-x.<node-id>.direct` 两级域名（**无需动态 DNS 上报**——设备当前 IP 直接编码在主机名前缀中，由 `cmd/eqt-dns` 的 `parseIP` 无状态解析，机制文档 §3 已兼容）。
 
 ### 3. 过渡期破局与 UI 体验去恐慌化配套工程
 
