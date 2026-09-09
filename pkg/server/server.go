@@ -2445,6 +2445,17 @@ func New(cfg *config.Config) (*Server, error) {
 	}
 	// Determine hostname and URLs
 	var hostname string
+	var activeNode string
+	var tlsCert tls.Certificate
+	if cfg.Secure {
+		nodeID := GetDeviceNodeID()
+		var err error
+		tlsCert, activeNode, err = cert.GetActiveCertificate(cfg.TlsCert, cfg.TlsKey, nodeID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load TLS certificate: %w", err)
+		}
+	}
+
 	if cfg.FQDN != "" {
 		hostname = fmt.Sprintf("%s:%d", cfg.FQDN, port)
 	} else if cfg.Secure {
@@ -2456,7 +2467,7 @@ func New(cfg *config.Config) (*Server, error) {
 				targetIP = extIP.String()
 			}
 		}
-		directDomain := cert.FormatDirectDomain(targetIP)
+		directDomain := cert.FormatDirectDomainWithNode(targetIP, activeNode)
 		if directDomain != targetIP && !strings.HasPrefix(directDomain, "0-0-0-0") {
 			hostname = fmt.Sprintf("%s:%d", directDomain, port)
 		} else {
@@ -2504,10 +2515,6 @@ func New(cfg *config.Config) (*Server, error) {
 		MinVersion: tls.VersionTLS12,
 	}
 	if cfg.Secure {
-		tlsCert, err := cert.GetCertificate(cfg.TlsCert, cfg.TlsKey)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load TLS certificate: %w", err)
-		}
 		tlsCfg.Certificates = []tls.Certificate{tlsCert}
 	}
 

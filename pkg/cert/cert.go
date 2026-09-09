@@ -37,26 +37,19 @@ func FormatDirectDomain(ipStr string) string {
 // If customCert and customKey are specified, they are read from disk.
 // Otherwise, it checks the local cache (~/.config/eqt/certs).
 func GetCertificate(customCert, customKey string) (tls.Certificate, error) {
-	// 1. Explicit custom paths
-	if customCert != "" && customKey != "" {
-		return tls.LoadX509KeyPair(customCert, customKey)
-	}
-
-	// 2. Check cached certs on disk (~/.config/eqt/certs)
-	if cacheCert, cacheKey, ok := getCachedCertPaths(); ok {
-		if cert, err := tls.LoadX509KeyPair(cacheCert, cacheKey); err == nil {
-			if !isCertExpired(cert) {
-				return cert, nil
-			}
-		}
-	}
-
-	return tls.Certificate{}, fmt.Errorf("no valid TLS certificate available in ~/.config/eqt/certs or specified flags")
+	cert, _, err := GetActiveCertificate(customCert, customKey, "")
+	return cert, err
 }
 
 // HasValidCertificate returns true if a valid, unexpired TLS certificate is available.
 func HasValidCertificate(customCert, customKey string) bool {
-	_, err := GetCertificate(customCert, customKey)
+	return HasValidCertificateForNode(customCert, customKey, "")
+}
+
+// HasValidCertificateForNode returns true if a valid, unexpired TLS certificate is available,
+// prioritizing the device-specific certificate for nodeID before falling back to legacy wildcard.
+func HasValidCertificateForNode(customCert, customKey, nodeID string) bool {
+	_, _, err := GetActiveCertificate(customCert, customKey, nodeID)
 	return err == nil
 }
 

@@ -1258,7 +1258,7 @@ func (a *App) AppInfo() AppInfo {
 		Arch:            runtime.GOARCH,
 		LogPath:         logPath,
 		IsTest:          server.IsTestBuild(),
-		HasValidTLSCert: cert.HasValidCertificate("", ""),
+		HasValidTLSCert: cert.HasValidCertificateForNode("", "", server.GetDeviceNodeID()),
 	}
 	if cli, err := findEqtCLI(); err == nil {
 		info.CLIPath = cli
