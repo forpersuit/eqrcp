@@ -1,19 +1,26 @@
 package cert
 
 import (
+	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
+	"log"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // GetNodeDomain returns the canonical apex domain for the given node ID.
@@ -292,4 +299,218 @@ func GetActiveCertificate(customCert, customKey, nodeID string) (tls.Certificate
 	}
 
 	return tls.Certificate{}, "", fmt.Errorf("no valid TLS certificate available (device nodeID: %q)", nodeID)
+}
+
+const (
+	// DefaultProvisionEndpoint is the production Cloudflare Gateway endpoint for certificate provisioning.
+	DefaultProvisionEndpoint = "https://lic.eqt.net.im/api/v1/cert/provision"
+)
+
+var (
+	ErrInvalidCSR      = errors.New("invalid certificate signing request")
+	ErrRateLimited     = errors.New("certificate issuance rate limit exceeded")
+	ErrGatewayFailed   = errors.New("remote certification gateway request failed")
+	ErrCertKeyMismatch = errors.New("certificate public key does not match local device private key")
+)
+
+// ProvisionOptions configures the client parameters for provisioning a device certificate.
+type ProvisionOptions struct {
+	Endpoint  string                           // Target Gateway URL (defaults to DefaultProvisionEndpoint if empty)
+	NodeID    string                           // Deterministic 12-char hex node ID
+	DeviceID  string                           // DRM Authority Device ID
+	Signature string                           // Base64-encoded hardware signature
+	Timestamp int64                            // Unix timestamp in seconds
+	Timeout   time.Duration                    // Request timeout (defaults to 30s if <= 0)
+	LogFunc   func(format string, args ...any) // Optional structured logger callback
+}
+
+// ProvisionResult represents the outcome of a device certificate provisioning operation.
+type ProvisionResult struct {
+	Certificate tls.Certificate
+	NodeID      string
+	ExpiresAt   time.Time
+	IsNew       bool
+}
+
+type provisionRequestPayload struct {
+	CSRPEM string `json:"csr_pem"`
+	NodeID string `json:"node_id"`
+}
+
+type provisionResponsePayload struct {
+	CertPEM    string `json:"cert_pem,omitempty"`
+	ExpiresAt  string `json:"expires_at,omitempty"`
+	Error      string `json:"error,omitempty"`
+	ReasonKey  string `json:"reason_key,omitempty"`
+	RetryAfter int    `json:"retry_after,omitempty"`
+}
+
+// RequestDeviceCertificate orchestrates the local P-256 key generation, CSR construction,
+// remote Gateway communication, and cryptographic verification/storage of the leaf certificate.
+// It provides comprehensive structured logging and strict error classification.
+func RequestDeviceCertificate(ctx context.Context, client *http.Client, opts ProvisionOptions) (*ProvisionResult, error) {
+	startTime := time.Now()
+	cleanNode := strings.ToLower(strings.TrimSpace(opts.NodeID))
+	if cleanNode == "" {
+		return nil, errors.New("node ID cannot be empty")
+	}
+
+	logger := opts.LogFunc
+	if logger == nil {
+		logger = func(format string, args ...any) {
+			log.Printf(format, args...)
+		}
+	}
+
+	endpoint := opts.Endpoint
+	if endpoint == "" {
+		endpoint = DefaultProvisionEndpoint
+	}
+
+	timeout := opts.Timeout
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+
+	logger("[LAN-TLS-PROVISION] [START] Initiating certificate provisioning for nodeID=%s, endpoint=%s", cleanNode, endpoint)
+
+	// Step 1: Check existing certificate validity to avoid unnecessary issuance
+	if devCert, err := GetDeviceCertificate(cleanNode); err == nil {
+		if expiry, err := GetCertificateExpiry(devCert); err == nil {
+			// If remaining validity > 15 days, reuse existing certificate
+			if time.Until(expiry) > 15*24*time.Hour {
+				logger("[LAN-TLS-PROVISION] [REUSE] Existing valid certificate found for nodeID=%s, expiresAt=%s (remaining=%s)",
+					cleanNode, expiry.Format(time.RFC3339), time.Until(expiry).Round(time.Minute))
+				return &ProvisionResult{
+					Certificate: devCert,
+					NodeID:      cleanNode,
+					ExpiresAt:   expiry,
+					IsNew:       false,
+				}, nil
+			}
+			logger("[LAN-TLS-PROVISION] [RENEW] Certificate near expiration for nodeID=%s, expiresAt=%s (remaining=%s). Renewing...",
+				cleanNode, expiry.Format(time.RFC3339), time.Until(expiry).Round(time.Minute))
+		}
+	}
+
+	// Step 2: Load or generate local private key (Private key never leaves the device)
+	keyStart := time.Now()
+	priv, err := LoadOrGenerateDeviceKey(cleanNode)
+	if err != nil {
+		logger("[LAN-TLS-PROVISION] [ERROR] Phase=KEY_INIT nodeID=%s error=%v", cleanNode, err)
+		return nil, fmt.Errorf("failed to initialize device private key: %w", err)
+	}
+	logger("[LAN-TLS-PROVISION] [KEY-INIT] Private key ready for nodeID=%s in %s (strictly offline, zero-leak)", cleanNode, time.Since(keyStart))
+
+	// Step 3: Construct PKCS#10 Certificate Signing Request (CSR)
+	csrStart := time.Now()
+	csrPEM, err := GenerateDeviceCSR(priv, cleanNode)
+	if err != nil {
+		logger("[LAN-TLS-PROVISION] [ERROR] Phase=CSR_GEN nodeID=%s error=%v", cleanNode, err)
+		return nil, fmt.Errorf("failed to generate device CSR: %w", err)
+	}
+	logger("[LAN-TLS-PROVISION] [CSR-GEN] Self-signed CSR constructed for nodeID=%s in %s (domains: %s, *.%s)",
+		cleanNode, time.Since(csrStart), GetNodeDomain(cleanNode), GetNodeDomain(cleanNode))
+
+	// Step 4: Dispatch HTTP request to Cloudflare Gateway
+	reqBody, err := json.Marshal(provisionRequestPayload{
+		CSRPEM: string(csrPEM),
+		NodeID: cleanNode,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request payload: %w", err)
+	}
+
+	reqCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	httpReq, err := http.NewRequestWithContext(reqCtx, http.MethodPost, endpoint, bytes.NewReader(reqBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to build http request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("User-Agent", "EQT-Provisioner/1.0")
+	if opts.DeviceID != "" {
+		httpReq.Header.Set("X-EQT-Device-ID", opts.DeviceID)
+	}
+	if opts.Signature != "" {
+		httpReq.Header.Set("X-EQT-Hardware-Signature", opts.Signature)
+	}
+	if opts.Timestamp > 0 {
+		httpReq.Header.Set("X-EQT-Timestamp", fmt.Sprintf("%d", opts.Timestamp))
+	} else {
+		httpReq.Header.Set("X-EQT-Timestamp", fmt.Sprintf("%d", time.Now().Unix()))
+	}
+
+	httpClient := client
+	if httpClient == nil {
+		httpClient = http.DefaultClient
+	}
+
+	reqStart := time.Now()
+	logger("[LAN-TLS-PROVISION] [GATEWAY-REQ] Sending CSR to %s for nodeID=%s...", endpoint, cleanNode)
+	resp, err := httpClient.Do(httpReq)
+	if err != nil {
+		logger("[LAN-TLS-PROVISION] [ERROR] Phase=GATEWAY_NETWORK nodeID=%s error=%v", cleanNode, err)
+		return nil, fmt.Errorf("%w: network transport error: %v", ErrGatewayFailed, err)
+	}
+	defer resp.Body.Close()
+
+	respBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read gateway response: %w", err)
+	}
+
+	logger("[LAN-TLS-PROVISION] [GATEWAY-RESP] Gateway returned HTTP %d in %s (bytes=%d)",
+		resp.StatusCode, time.Since(reqStart), len(respBytes))
+
+	var respPayload provisionResponsePayload
+	_ = json.Unmarshal(respBytes, &respPayload)
+
+	if resp.StatusCode != http.StatusOK {
+		logger("[LAN-TLS-PROVISION] [ERROR] Phase=GATEWAY_HTTP_STATUS status=%d nodeID=%s reason=%s error=%s",
+			resp.StatusCode, cleanNode, respPayload.ReasonKey, respPayload.Error)
+		if resp.StatusCode == http.StatusTooManyRequests {
+			return nil, fmt.Errorf("%w: %s (retry after %ds)", ErrRateLimited, respPayload.Error, respPayload.RetryAfter)
+		}
+		if resp.StatusCode == http.StatusBadRequest && respPayload.ReasonKey == "invalid_csr" {
+			return nil, fmt.Errorf("%w: %s", ErrInvalidCSR, respPayload.Error)
+		}
+		return nil, fmt.Errorf("%w: HTTP %d: %s", ErrGatewayFailed, resp.StatusCode, respPayload.Error)
+	}
+
+	if strings.TrimSpace(respPayload.CertPEM) == "" {
+		logger("[LAN-TLS-PROVISION] [ERROR] Phase=EMPTY_CERT nodeID=%s empty cert_pem in 200 OK response", cleanNode)
+		return nil, fmt.Errorf("%w: gateway returned empty certificate payload", ErrGatewayFailed)
+	}
+
+	// Step 5: Verify cryptographic match and atomically save to disk
+	saveStart := time.Now()
+	if err := SaveDeviceCertificate(cleanNode, []byte(respPayload.CertPEM)); err != nil {
+		logger("[LAN-TLS-PROVISION] [ERROR] Phase=VERIFY_SAVE nodeID=%s error=%v", cleanNode, err)
+		if errors.Is(err, ErrCertKeyMismatch) || strings.Contains(err.Error(), "does not match") {
+			return nil, fmt.Errorf("%w: %v", ErrCertKeyMismatch, err)
+		}
+		return nil, fmt.Errorf("failed to persist verified certificate: %w", err)
+	}
+
+	// Step 6: Load active certificate and return validated result
+	finalCert, err := GetDeviceCertificate(cleanNode)
+	if err != nil {
+		return nil, fmt.Errorf("failed to reload newly provisioned certificate: %w", err)
+	}
+	expiry, _ := GetCertificateExpiry(finalCert)
+
+	logger("[LAN-TLS-PROVISION] [SUCCESS] Dedicated certificate successfully provisioned and committed for nodeID=%s in %s (expiresAt=%s)",
+		cleanNode, time.Since(startTime), expiry.Format(time.RFC3339))
+
+	_ = saveStart // used for timing documentation
+
+	return &ProvisionResult{
+		Certificate: finalCert,
+		NodeID:      cleanNode,
+		ExpiresAt:   expiry,
+		IsNew:       true,
+	}, nil
 }

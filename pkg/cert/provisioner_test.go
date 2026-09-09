@@ -1,15 +1,21 @@
 package cert
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"math/big"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -207,5 +213,232 @@ func TestSaveAndGetDeviceCertificate(t *testing.T) {
 	}
 	if len(activeCert.Certificate) == 0 {
 		t.Errorf("active certificate is empty")
+	}
+}
+
+func TestRequestDeviceCertificate_SuccessAndReuse(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+
+	nodeID := "nodebeef1234"
+	var requestCount int
+
+	// Set up mock Gateway server
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+
+		if r.Method != http.MethodPost {
+			t.Errorf("unexpected method: %s", r.Method)
+		}
+		if r.Header.Get("X-EQT-Device-ID") != "dev_test_id" {
+			t.Errorf("unexpected device ID: %s", r.Header.Get("X-EQT-Device-ID"))
+		}
+		if r.Header.Get("X-EQT-Hardware-Signature") != "sig_mock" {
+			t.Errorf("unexpected signature: %s", r.Header.Get("X-EQT-Hardware-Signature"))
+		}
+
+		var payload provisionRequestPayload
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("failed to decode request body: %v", err)
+		}
+		if payload.NodeID != nodeID {
+			t.Errorf("expected nodeID %s, got %s", nodeID, payload.NodeID)
+		}
+
+		// Decode CSR to get the client's public key
+		block, _ := pem.Decode([]byte(payload.CSRPEM))
+		if block == nil {
+			t.Fatalf("invalid CSR PEM block received by mock server")
+		}
+		csr, err := x509.ParseCertificateRequest(block.Bytes)
+		if err != nil {
+			t.Fatalf("failed to parse CSR: %v", err)
+		}
+
+		// Self-sign a CA/leaf cert with the public key from the CSR
+		caPriv, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		template := x509.Certificate{
+			SerialNumber: big.NewInt(777),
+			Subject:      csr.Subject,
+			NotBefore:    time.Now().Add(-1 * time.Hour),
+			NotAfter:     time.Now().Add(90 * 24 * time.Hour),
+			DNSNames:     csr.DNSNames,
+		}
+		certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, csr.PublicKey, caPriv)
+		if err != nil {
+			t.Fatalf("failed to create certificate: %v", err)
+		}
+		certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(provisionResponsePayload{
+			CertPEM:   string(certPEM),
+			ExpiresAt: template.NotAfter.Format(time.RFC3339),
+		})
+	}))
+	defer server.Close()
+
+	ctx := context.Background()
+	var loggedMessages []string
+	opts := ProvisionOptions{
+		Endpoint:  server.URL,
+		NodeID:    nodeID,
+		DeviceID:  "dev_test_id",
+		Signature: "sig_mock",
+		Timeout:   5 * time.Second,
+		LogFunc: func(format string, args ...any) {
+			loggedMessages = append(loggedMessages, format)
+		},
+	}
+
+	// 1. First execution: should invoke Gateway, verify key, and commit to disk
+	res1, err := RequestDeviceCertificate(ctx, server.Client(), opts)
+	if err != nil {
+		t.Fatalf("RequestDeviceCertificate failed: %v", err)
+	}
+	if !res1.IsNew {
+		t.Errorf("expected IsNew=true on initial provision")
+	}
+	if res1.NodeID != nodeID {
+		t.Errorf("expected nodeID %q, got %q", nodeID, res1.NodeID)
+	}
+	if requestCount != 1 {
+		t.Errorf("expected 1 gateway request, got %d", requestCount)
+	}
+
+	// Verify structured log points
+	hasStart := false
+	hasSuccess := false
+	for _, msg := range loggedMessages {
+		if strings.Contains(msg, "[START]") {
+			hasStart = true
+		}
+		if strings.Contains(msg, "[SUCCESS]") {
+			hasSuccess = true
+		}
+	}
+	if !hasStart || !hasSuccess {
+		t.Errorf("expected structured log markers [START] and [SUCCESS]")
+	}
+
+	// 2. Second execution: should REUSE existing certificate without hitting the Gateway
+	loggedMessages = nil
+	res2, err := RequestDeviceCertificate(ctx, server.Client(), opts)
+	if err != nil {
+		t.Fatalf("second RequestDeviceCertificate failed: %v", err)
+	}
+	if res2.IsNew {
+		t.Errorf("expected IsNew=false on reused certificate")
+	}
+	if requestCount != 1 {
+		t.Errorf("expected requestCount to remain 1 (no network call on reuse), got %d", requestCount)
+	}
+	hasReuse := false
+	for _, msg := range loggedMessages {
+		if strings.Contains(msg, "[REUSE]") {
+			hasReuse = true
+		}
+	}
+	if !hasReuse {
+		t.Errorf("expected structured log marker [REUSE]")
+	}
+}
+
+func TestRequestDeviceCertificate_RateLimited(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_ = json.NewEncoder(w).Encode(provisionResponsePayload{
+			Error:      "Daily quota exceeded for device",
+			ReasonKey:  "rate_limited",
+			RetryAfter: 86400,
+		})
+	}))
+	defer server.Close()
+
+	opts := ProvisionOptions{
+		Endpoint: server.URL,
+		NodeID:   "ratelimited12",
+	}
+
+	_, err := RequestDeviceCertificate(context.Background(), server.Client(), opts)
+	if err == nil {
+		t.Fatalf("expected rate limit error, got nil")
+	}
+	if !errors.Is(err, ErrRateLimited) {
+		t.Errorf("expected error to wrap ErrRateLimited, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "retry after 86400s") {
+		t.Errorf("expected error to include retry after hint, got: %v", err)
+	}
+}
+
+func TestRequestDeviceCertificate_MismatchedKey(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Intentionally sign certificate with a rogue/different public key
+		roguePriv, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		template := x509.Certificate{
+			SerialNumber: big.NewInt(999),
+			Subject:      pkix.Name{CommonName: "mismatch.direct.eqt.net.im"},
+			NotBefore:    time.Now().Add(-1 * time.Hour),
+			NotAfter:     time.Now().Add(90 * 24 * time.Hour),
+		}
+		certDER, _ := x509.CreateCertificate(rand.Reader, &template, &template, &roguePriv.PublicKey, roguePriv)
+		certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(provisionResponsePayload{
+			CertPEM: string(certPEM),
+		})
+	}))
+	defer server.Close()
+
+	opts := ProvisionOptions{
+		Endpoint: server.URL,
+		NodeID:   "mismatchnode1",
+	}
+
+	_, err := RequestDeviceCertificate(context.Background(), server.Client(), opts)
+	if err == nil {
+		t.Fatalf("expected ErrCertKeyMismatch, got nil error")
+	}
+	if !errors.Is(err, ErrCertKeyMismatch) {
+		t.Errorf("expected error to wrap ErrCertKeyMismatch, got: %v", err)
+	}
+}
+
+func TestRequestDeviceCertificate_GatewayError(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(provisionResponsePayload{
+			Error:     "Internal database error",
+			ReasonKey: "db_failure",
+		})
+	}))
+	defer server.Close()
+
+	opts := ProvisionOptions{
+		Endpoint: server.URL,
+		NodeID:   "servererror01",
+	}
+
+	_, err := RequestDeviceCertificate(context.Background(), server.Client(), opts)
+	if err == nil {
+		t.Fatalf("expected gateway error, got nil")
+	}
+	if !errors.Is(err, ErrGatewayFailed) {
+		t.Errorf("expected error to wrap ErrGatewayFailed, got: %v", err)
 	}
 }

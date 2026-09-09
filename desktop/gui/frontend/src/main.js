@@ -2396,7 +2396,9 @@ function renderSettingsPanel() {
                         <div class="setting-copy">
                             <strong>${t('enable_tls')}</strong>
                             <span>${t('enable_tls_desc')}</span>
-                            ${!state.appInfo?.hasValidTLSCert ? `<span style="display: block; font-size: 11px; color: var(--accent-warn, #e6a23c); margin-top: 3px;">⚠️ ${escapeHTML(t('tls_cert_not_detected') || '未检测到本地有效证书缓存，无证书时将自动降级为 HTTP 传输。')}</span>` : ''}
+                            ${state.appInfo?.hasValidTLSCert ?
+                                `<span style="display: block; font-size: 11px; color: var(--accent-success, #67c23a); margin-top: 3px;">${escapeHTML(t('tls_cert_ready') || '官方公信 TLS 已就绪')}</span>` :
+                                `<span style="display: block; font-size: 11px; color: var(--text-muted, #94a3b8); margin-top: 3px;">ℹ️ ${escapeHTML(t('tls_cert_preparing') || '局域网 TLS 正在后台准备中（首次启动或离线时将以局域网标准模式保障传输）')}</span>`}
                         </div>
                         <div class="setting-control-stack">
                             ${renderSwitch('settings-enable-tls', Boolean(state.settings?.enableTLS))}
@@ -6691,6 +6693,13 @@ EventsOn('eqt:dev-mode-changed', async (isDev) => {
     }
     try {
         state.settings = await ReadSettings();
+    } catch (_) {}
+    render();
+});
+
+EventsOn('eqt:tls-cert-ready', async () => {
+    try {
+        state.appInfo = await GetAppInfo();
     } catch (_) {}
     render();
 });

@@ -172,3 +172,19 @@ WantedBy=multi-user.target
   - `ns1` (`128.241.227.181`) 与 `ns2` (`103.232.92.220`) 的 systemd 服务挂载 `-psl-url https://github.com/publicsuffix/list/pull/3258`；
   - 权威解析器原生响应 `_psl.direct.eqt.net.im.` TXT 查询，全球公共递归解析（`1.1.1.1` / `8.8.8.8`）实时可查且必须长期保持。
 
+---
+
+## 10. 云端证书置备网关与桌面端静默置备调度 (Cloud Gateway & Silent Provisioning)
+
+- **云端置备接口 (`POST /api/v1/cert/provision`)**:
+  - 路径：`cloudflare/eqt-drm-api/src/routes/cert.ts`；
+  - 鉴权防刷：时间戳防重放（±300s）、设备黑名单过滤、D1 持久化频控（单设备 24h 最多 3 次，超限返回 429 与 `Retry-After: 86400` 并记录 `RATE_LIMIT_CERT_PROVISION`）；
+  - 强密码学 CSR 校验：纯 Web Crypto 解析 PKCS#10 DER，严格校验 CommonName 为 `${node_id}.direct.eqt.net.im`，SAN 必须同时且仅包含单域名与通配符 `*.${node_id}.direct.eqt.net.im`；
+  - 证书颁发与审计：90 天标准 X.509 签发，异步记录至 `device_cert_provisions` 审计表；
+  - 细致结构化日志：全链路覆盖 `[START]`, `[RATE-LIMIT]`, `[CSR-PARSE]`, `[ISSUE]`, `[SUCCESS]`, `[ERROR]`，保留 `trace_id`。
+- **桌面端静默置备调度 (`App.startup`)**:
+  - 启动后 3 秒低优调度 `silentProvisionDeviceTLSCert`；
+  - 探测本地 `~/.config/eqt/certs/<node-id>/fullchain.pem`，有效且剩余大于 15 天时直接复用，临期或缺失时非阻塞静默发起云端置备；
+  - 置备成功后发射 Wails 事件 `eqt:tls-cert-ready`，前端设置面板平滑切换为绿锁；
+  - 离线或异常时保持 Fail-Soft 降级，普通 HTTP 传输不受任何影响。
+

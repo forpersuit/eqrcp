@@ -10,6 +10,7 @@ import { handlePaddleRoutes } from './routes/paddle';
 import { handleDrmRoutes } from './routes/drm';
 import { handleCrashReport } from './routes/crash-report';
 import { handleTelemetryRoutes } from './routes/telemetry';
+import { handleCertRoutes } from './routes/cert';
 import { assertEnvironmentAlignment } from './utils/env-guard';
 import { wrapD1WithRetry } from './utils/d1-retry';
 import { probeSmtp } from './services/smtp';
@@ -95,6 +96,11 @@ export default {
       // 5.6 Route to Telemetry endpoints (/api/v1/telemetry/*, no auth required — rate-limited per IP)
       if (!response && url.pathname.startsWith("/api/v1/telemetry/")) {
         response = await handleTelemetryRoutes(request, env, ctx, url, corsHeaders);
+      }
+
+      // 5.7 Route to Certificate Provisioning endpoints (/api/v1/cert/*)
+      if (!response && url.pathname.startsWith("/api/v1/cert/")) {
+        response = await handleCertRoutes(request, env, ctx, url, corsHeaders);
       }
 
       // 6. Route to Client DRM endpoints (/api/v1/activate, /api/v1/verify, /api/v1/update/check)

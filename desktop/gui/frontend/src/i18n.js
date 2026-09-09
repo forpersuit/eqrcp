@@ -3,6 +3,8 @@ import { state } from './state.js';
 const translations = {
     "zh": {
         "tls_cert_not_detected": "未检测到本地有效证书缓存，无证书时将自动降级为 HTTP 传输。",
+        "tls_cert_preparing": "局域网 TLS 正在后台准备中（首次启动或离线时将以局域网标准模式保障传输）",
+        "tls_cert_ready": "官方公信 TLS 已就绪 (单机专属安全绿锁)",
         "enable_tls": "局域网传输加密 (LAN-TLS)",
         "enable_tls_desc": "启用 Let's Encrypt 官方通配符证书与 TLS 加密，防局域网嗅探、地址栏安全绿锁。",
         "block_proxy": "屏蔽系统代理 (仅限直连)",
@@ -446,6 +448,9 @@ const translations = {
         "crash_prefill_notice": "检测到上次崩溃信息，已自动填入下方表单。提交反馈时将同时上传崩溃报告。"
     },
     "en": {
+        "tls_cert_not_detected": "No valid local certificate cache detected. Transfers will gracefully fallback to standard HTTP.",
+        "tls_cert_preparing": "LAN-TLS certificate is preparing in background (standard HTTP is used while offline or initializing).",
+        "tls_cert_ready": "Official WebPKI TLS Ready (Per-device secure green lock)",
         "enable_tls": "LAN-TLS Encryption",
         "enable_tls_desc": "Encrypt local transfers using Let's Encrypt wildcard certificate & TLS (anti-sniffing, secure green lock).",
         "block_proxy": "Block System Proxy (Direct Only)",

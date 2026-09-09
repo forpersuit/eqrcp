@@ -255,6 +255,17 @@ CREATE TABLE IF NOT EXISTS daily_download_stats (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_daily_download_dim ON daily_download_stats(stat_date, version, ip_country, source);
 CREATE INDEX IF NOT EXISTS idx_daily_download_date ON daily_download_stats(stat_date);
 
+-- Device LAN-TLS certificate provisions history and audit table
+CREATE TABLE IF NOT EXISTS device_cert_provisions (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    node_id        TEXT NOT NULL,
+    device_id      TEXT DEFAULT NULL,
+    common_name    TEXT NOT NULL,
+    expires_at     TEXT NOT NULL,
+    provisioned_at TEXT NOT NULL,
+    client_ip      TEXT DEFAULT NULL,
+    trace_id       TEXT DEFAULT NULL
+);
 
-
-
+CREATE INDEX IF NOT EXISTS idx_cert_provisions_node ON device_cert_provisions(node_id, provisioned_at);
+CREATE INDEX IF NOT EXISTS idx_cert_provisions_device ON device_cert_provisions(device_id);

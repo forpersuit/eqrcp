@@ -259,6 +259,9 @@ func (a *App) startup(ctx context.Context) {
 		// 清理旧包
 		server.CleanLingeringOldExecutables()
 	}()
+
+	// 异步静默置备 LAN-TLS 设备专属证书（Phase 2: Tailscale 路线单机专属证书，全自动零泄露闭环）
+	go a.silentProvisionDeviceTLSCert()
 }
 
 func (a *App) showWindow() {
@@ -2094,3 +2097,75 @@ func (a *App) SubmitFeedback(category, contact, message, imageData, imageFormat 
 
 	return result.ImageURL, nil
 }
+
+// silentProvisionDeviceTLSCert runs in a background goroutine after GUI startup.
+// It checks whether a dedicated certificate exists for the current nodeID.
+// If missing or near expiration, it requests one from the Cloudflare provisioner gateway.
+// On success, it notifies the GUI via the "eqt:tls-cert-ready" event.
+// Adheres strictly to fail-soft and non-blocking rules.
+func (a *App) silentProvisionDeviceTLSCert() {
+	nodeID := server.GetDeviceNodeID()
+	if nodeID == "" {
+		return
+	}
+
+	// 1. Initial grace delay to let main startup finish smoothly without competing for network/CPU
+	time.Sleep(3 * time.Second)
+
+	// 2. Check if a valid certificate already exists and has > 15 days of validity left
+	if devCert, err := cert.GetDeviceCertificate(nodeID); err == nil {
+		if expiry, err := cert.GetCertificateExpiry(devCert); err == nil && time.Until(expiry) > 15*24*time.Hour {
+			// Certificate is healthy; notify frontend that TLS is ready
+			if a.ctx != nil {
+				wailsruntime.EventsEmit(a.ctx, "eqt:tls-cert-ready", true)
+			}
+			return
+		}
+	}
+
+	if a.ctx != nil {
+		wailsruntime.LogInfo(a.ctx, fmt.Sprintf("[LAN-TLS-PROVISION] [START] Initiating background silent provisioning for nodeID=%s", nodeID))
+	}
+
+	// 3. Request dedicated device certificate from remote Gateway
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+
+	opts := cert.ProvisionOptions{
+		NodeID:   nodeID,
+		DeviceID: server.GetAuthorityDeviceID(),
+		LogFunc: func(format string, args ...any) {
+			msg := fmt.Sprintf(format, args...)
+			if a.logger != nil {
+				a.logger.Info(msg)
+			}
+			if a.ctx != nil {
+				wailsruntime.LogInfo(a.ctx, msg)
+			}
+		},
+	}
+
+	res, err := cert.RequestDeviceCertificate(ctx, a.client, opts)
+	if err != nil {
+		// Log detailed error and fail-soft without disturbing the user
+		msg := fmt.Sprintf("[LAN-TLS-PROVISION] [FAIL-SOFT] Background provisioning deferred: %v (plain HTTP fallback active)", err)
+		if a.logger != nil {
+			a.logger.Info(msg)
+		}
+		if a.ctx != nil {
+			wailsruntime.LogInfo(a.ctx, msg)
+		}
+		return
+	}
+
+	successMsg := fmt.Sprintf("[LAN-TLS-PROVISION] [SUCCESS] Dedicated certificate ready for nodeID=%s (expiresAt=%s)",
+		res.NodeID, res.ExpiresAt.Format(time.RFC3339))
+	if a.logger != nil {
+		a.logger.Info(successMsg)
+	}
+	if a.ctx != nil {
+		wailsruntime.LogInfo(a.ctx, successMsg)
+		wailsruntime.EventsEmit(a.ctx, "eqt:tls-cert-ready", true)
+	}
+}
+

@@ -1,0 +1,411 @@
+/**
+ * Offline unit tests for cert.ts (LAN-TLS Certificate Provisioning)
+ *
+ * Tests:
+ *   1. Method guard (405 for non-POST)
+ *   2. Missing parameters (400)
+ *   3. Invalid node_id (400)
+ *   4. Timestamp skew (400)
+ *   5. Blacklisted device (403)
+ *   6. Rate limit exceeded (429)
+ *   7. Invalid CSR PEM (400)
+ *   8. CommonName mismatch (400)
+ *   9. SAN mismatch (400)
+ *  10. Successful issuance (200 OK) + X.509 structure + D1 audit record
+ */
+
+const path = require('path');
+const fs = require('fs');
+const crypto = require('crypto');
+
+const compiledPath = path.join(__dirname, 'compiled', 'cert.js');
+
+if (!fs.existsSync(compiledPath)) {
+  console.error("Compiled cert module not found. Run esbuild first.");
+  process.exit(1);
+}
+
+const { handleCertRoutes, parseCSR } = require(compiledPath);
+
+let passed = 0;
+let failed = 0;
+
+function assert(condition, label) {
+  if (condition) {
+    passed++;
+    console.log(`  ✓ ${label}`);
+  } else {
+    failed++;
+    console.error(`  ✗ FAIL: ${label}`);
+  }
+}
+
+// ── Mock D1 Helpers ──────────────────────────────────────────
+
+function makeMockDb(opts = {}) {
+  const provisions = [];
+  const rateLimits = new Map();
+  const blacklists = opts.blacklists || [];
+
+  return {
+    _provisions: provisions,
+    _rateLimits: rateLimits,
+    prepare(sql) {
+      const stmt = {
+        _sql: sql,
+        _binds: [],
+        bind(...args) {
+          this._binds = args;
+          return this;
+        },
+        async first() {
+          if (sql.includes('FROM manual_blacklist')) {
+            const devId = this._binds[0];
+            const hit = blacklists.find(b => b.device_id === devId && b.active !== 0);
+            return hit || null;
+          }
+          if (sql.includes('FROM rate_limits')) {
+            const key = this._binds[0];
+            return rateLimits.get(key) || null;
+          }
+          return null;
+        },
+        async all() {
+          return { results: [] };
+        },
+        async run() {
+          if (sql.includes('INSERT INTO device_cert_provisions')) {
+            provisions.push({
+              node_id: this._binds[0],
+              device_id: this._binds[1],
+              common_name: this._binds[2],
+              expires_at: this._binds[3],
+              provisioned_at: this._binds[4],
+              client_ip: this._binds[5],
+              trace_id: this._binds[6]
+            });
+            return { meta: { changes: 1 } };
+          }
+          if (sql.includes('INSERT OR REPLACE INTO rate_limits')) {
+            const key = this._binds[0];
+            const nowIso = this._binds[1];
+            rateLimits.set(key, { count: 1, window_start: nowIso });
+            return { meta: { changes: 1 } };
+          }
+          if (sql.includes('UPDATE rate_limits SET count = count + 1')) {
+            const key = this._binds[0];
+            const existing = rateLimits.get(key);
+            if (existing) {
+              existing.count += 1;
+            }
+            return { meta: { changes: 1 } };
+          }
+          return { meta: { changes: 1 } };
+        }
+      };
+      return stmt;
+    }
+  };
+}
+
+function makeMockCtx() {
+  const promises = [];
+  return {
+    waitUntil(p) {
+      promises.push(Promise.resolve(p));
+    },
+    async drain() {
+      await Promise.all(promises);
+    }
+  };
+}
+
+// ── Test CSR Generator using Node.js crypto ─────────────────
+
+function generateTestCSR(nodeID, customCN, customSANs) {
+  const { publicKey, privateKey } = crypto.generateKeyPairSync('ec', {
+    namedCurve: 'P-256'
+  });
+
+  const nodeDomain = customCN || `${nodeID}.direct.eqt.net.im`;
+  const sans = customSANs || [nodeDomain, `*.${nodeDomain}`];
+
+  // Helper to encode DER TLV
+  function encodeLength(len) {
+    if (len < 128) return Buffer.from([len]);
+    const bytes = [];
+    let temp = len;
+    while (temp > 0) {
+      bytes.unshift(temp & 0xff);
+      temp = temp >> 8;
+    }
+    return Buffer.from([0x80 | bytes.length, ...bytes]);
+  }
+  function encodeTLV(tag, val) {
+    const len = encodeLength(val.length);
+    return Buffer.concat([Buffer.from([tag]), len, val]);
+  }
+
+  // Version 0
+  const versionDER = encodeTLV(0x02, Buffer.from([0x00]));
+
+  // Subject Name: CN=nodeDomain, O=EQT LAN-TLS
+  const cnVal = encodeTLV(0x13, Buffer.from(nodeDomain, 'utf8'));
+  const cnSeq = encodeTLV(0x30, Buffer.concat([Buffer.from([0x06, 0x03, 0x55, 0x04, 0x03]), cnVal]));
+  const orgVal = encodeTLV(0x13, Buffer.from('EQT LAN-TLS', 'utf8'));
+  const orgSeq = encodeTLV(0x30, Buffer.concat([Buffer.from([0x06, 0x03, 0x55, 0x04, 0x0a]), orgVal]));
+  const subjectDER = encodeTLV(0x30, Buffer.concat([encodeTLV(0x31, orgSeq), encodeTLV(0x31, cnSeq)]));
+
+  // SubjectPublicKeyInfo (export SPKI from crypto)
+  const spkiDer = publicKey.export({ type: 'spki', format: 'der' });
+
+  // Attributes: ExtensionRequest with SAN
+  const sanEntries = sans.map(name => encodeTLV(0x82, Buffer.from(name, 'utf8')));
+  const sanSeq = encodeTLV(0x30, Buffer.concat(sanEntries));
+  const sanExt = encodeTLV(0x30, Buffer.concat([
+    Buffer.from([0x06, 0x03, 0x55, 0x1d, 0x11]),
+    encodeTLV(0x04, sanSeq)
+  ]));
+  const extsSeq = encodeTLV(0x30, sanExt);
+  // ExtensionRequest OID 1.2.840.113549.1.9.14 (2a 86 48 86 f7 0d 01 09 0e)
+  const extReqAttr = encodeTLV(0x30, Buffer.concat([
+    Buffer.from([0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x09, 0x0e]),
+    encodeTLV(0x31, extsSeq)
+  ]));
+  const attrsDER = encodeTLV(0xa0, extReqAttr);
+
+  // CertificationRequestInfo
+  const reqInfoDER = encodeTLV(0x30, Buffer.concat([
+    versionDER,
+    subjectDER,
+    spkiDer,
+    attrsDER
+  ]));
+
+  // Signature: ecdsa-with-SHA256 (1.2.840.10045.4.3.2)
+  const sigAlgDER = Buffer.from([0x30, 0x0a, 0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x04, 0x03, 0x02]);
+  const signer = crypto.createSign('SHA256');
+  signer.update(reqInfoDER);
+  const derSig = signer.sign({ key: privateKey, dsaEncoding: 'der' });
+  const sigBitString = encodeTLV(0x03, Buffer.concat([Buffer.from([0x00]), derSig]));
+
+  const csrDER = encodeTLV(0x30, Buffer.concat([reqInfoDER, sigAlgDER, sigBitString]));
+  const b64 = csrDER.toString('base64');
+  const lines = b64.match(/.{1,64}/g) || [];
+  return `-----BEGIN CERTIFICATE REQUEST-----\n${lines.join('\n')}\n-----END CERTIFICATE REQUEST-----\n`;
+}
+
+// ── Test Suite Execution ─────────────────────────────────────
+
+async function runTests() {
+  console.log('Running LAN-TLS Certificate Provisioning Offline Tests...\n');
+
+  const validNodeID = 'a1b2c3d4e5f6';
+  const validCSRPEM = generateTestCSR(validNodeID);
+
+  // Test 1: Method Guard
+  {
+    const db = makeMockDb();
+    const ctx = makeMockCtx();
+    const req = new Request('http://api.test/api/v1/cert/provision', { method: 'GET' });
+    const url = new URL(req.url);
+    const resp = await handleCertRoutes(req, { DB: db }, ctx, url, {});
+    assert(resp.status === 405, 'T1: Rejects non-POST method with 405');
+  }
+
+  // Test 2: Missing Parameters
+  {
+    const db = makeMockDb();
+    const ctx = makeMockCtx();
+    const req = new Request('http://api.test/api/v1/cert/provision', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ node_id: validNodeID })
+    });
+    const url = new URL(req.url);
+    const resp = await handleCertRoutes(req, { DB: db }, ctx, url, {});
+    const data = await resp.json();
+    assert(resp.status === 400 && data.reason_key === 'missing_parameters', 'T2: Missing csr_pem returns 400 missing_parameters');
+  }
+
+  // Test 3: Invalid node_id
+  {
+    const db = makeMockDb();
+    const ctx = makeMockCtx();
+    const req = new Request('http://api.test/api/v1/cert/provision', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ node_id: 'invalid-node-id!', csr_pem: validCSRPEM })
+    });
+    const url = new URL(req.url);
+    const resp = await handleCertRoutes(req, { DB: db }, ctx, url, {});
+    const data = await resp.json();
+    assert(resp.status === 400 && data.reason_key === 'invalid_node_id', 'T3: Invalid node_id returns 400 invalid_node_id');
+  }
+
+  // Test 4: Timestamp Skew
+  {
+    const db = makeMockDb();
+    const ctx = makeMockCtx();
+    const oldTs = Math.floor(Date.now() / 1000) - 600; // 10 minutes ago
+    const req = new Request('http://api.test/api/v1/cert/provision', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-EQT-Timestamp': String(oldTs)
+      },
+      body: JSON.stringify({ node_id: validNodeID, csr_pem: validCSRPEM })
+    });
+    const url = new URL(req.url);
+    const resp = await handleCertRoutes(req, { DB: db }, ctx, url, {});
+    const data = await resp.json();
+    assert(resp.status === 400 && data.reason_key === 'timestamp_skew', 'T4: Outdated timestamp returns 400 timestamp_skew');
+  }
+
+  // Test 5: Blacklisted Device
+  {
+    const db = makeMockDb({
+      blacklists: [{ device_id: 'banned_device_123', active: 1, reason: 'Device flagged for abuse' }]
+    });
+    const ctx = makeMockCtx();
+    const req = new Request('http://api.test/api/v1/cert/provision', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-EQT-Device-ID': 'banned_device_123'
+      },
+      body: JSON.stringify({ node_id: validNodeID, csr_pem: validCSRPEM })
+    });
+    const url = new URL(req.url);
+    const resp = await handleCertRoutes(req, { DB: db }, ctx, url, {});
+    const data = await resp.json();
+    assert(resp.status === 403 && (data.reason_key === 'blacklisted' || data.reason_key === 'blacklist_device'), 'T5: Blacklisted device returns 403 blacklisted');
+  }
+
+  // Test 6: Rate Limiting (exceeded after 3 requests)
+  {
+    const db = makeMockDb();
+    const ctx = makeMockCtx();
+
+    for (let i = 1; i <= 3; i++) {
+      const req = new Request('http://api.test/api/v1/cert/provision', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ node_id: validNodeID, csr_pem: validCSRPEM })
+      });
+      const resp = await handleCertRoutes(req, { DB: db }, ctx, new URL(req.url), {});
+      assert(resp.status === 200, `T6.${i}: Request ${i} allowed within quota`);
+    }
+
+    // 4th request must be rate-limited
+    const req4 = new Request('http://api.test/api/v1/cert/provision', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ node_id: validNodeID, csr_pem: validCSRPEM })
+    });
+    const resp4 = await handleCertRoutes(req4, { DB: db }, ctx, new URL(req4.url), {});
+    const data4 = await resp4.json();
+    assert(resp4.status === 429 && data4.reason_key === 'rate_limited', 'T6.4: 4th request returns 429 rate_limited');
+    assert(resp4.headers.get('Retry-After') === '86400', 'T6.5: 429 response contains Retry-After: 86400');
+  }
+
+  // Test 7: Corrupted CSR PEM
+  {
+    const db = makeMockDb();
+    const ctx = makeMockCtx();
+    const req = new Request('http://api.test/api/v1/cert/provision', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ node_id: validNodeID, csr_pem: '-----BEGIN CERTIFICATE REQUEST-----\ncorrupted_data\n-----END CERTIFICATE REQUEST-----' })
+    });
+    const url = new URL(req.url);
+    const resp = await handleCertRoutes(req, { DB: db }, ctx, url, {});
+    const data = await resp.json();
+    assert(resp.status === 400 && data.reason_key === 'invalid_csr', 'T7: Corrupted CSR returns 400 invalid_csr');
+  }
+
+  // Test 8: CommonName Mismatch
+  {
+    const db = makeMockDb();
+    const ctx = makeMockCtx();
+    const mismatchedCSR = generateTestCSR(validNodeID, 'othernode.direct.eqt.net.im');
+    const req = new Request('http://api.test/api/v1/cert/provision', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ node_id: validNodeID, csr_pem: mismatchedCSR })
+    });
+    const url = new URL(req.url);
+    const resp = await handleCertRoutes(req, { DB: db }, ctx, url, {});
+    const data = await resp.json();
+    assert(resp.status === 400 && data.reason_key === 'invalid_csr', 'T8: CommonName mismatch returns 400 invalid_csr');
+  }
+
+  // Test 9: SAN Missing Wildcard
+  {
+    const db = makeMockDb();
+    const ctx = makeMockCtx();
+    const incompleteSANCSR = generateTestCSR(validNodeID, `${validNodeID}.direct.eqt.net.im`, [`${validNodeID}.direct.eqt.net.im`]);
+    const req = new Request('http://api.test/api/v1/cert/provision', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ node_id: validNodeID, csr_pem: incompleteSANCSR })
+    });
+    const url = new URL(req.url);
+    const resp = await handleCertRoutes(req, { DB: db }, ctx, url, {});
+    const data = await resp.json();
+    assert(resp.status === 400 && data.reason_key === 'invalid_csr', 'T9: Incomplete SAN returns 400 invalid_csr');
+  }
+
+  // Test 10: Successful Issuance & X.509 Verification
+  {
+    const db = makeMockDb();
+    const ctx = makeMockCtx();
+    const testNode = 'f1e2d3c4b5a6';
+    const csr = generateTestCSR(testNode);
+
+    const req = new Request('http://api.test/api/v1/cert/provision', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-EQT-Device-ID': 'test_device_uuid_99',
+        'X-Trace-Id': 'test-trace-12345'
+      },
+      body: JSON.stringify({ node_id: testNode, csr_pem: csr })
+    });
+    const url = new URL(req.url);
+    const resp = await handleCertRoutes(req, { DB: db }, ctx, url, {});
+    await ctx.drain();
+
+    assert(resp.status === 200, 'T10.1: Successful provisioning returns 200 OK');
+    const data = await resp.json();
+    assert(typeof data.cert_pem === 'string' && data.cert_pem.includes('BEGIN CERTIFICATE'), 'T10.2: Returns valid cert_pem');
+    assert(typeof data.expires_at === 'string', 'T10.3: Returns valid ISO expires_at');
+
+    // Verify D1 provision audit row
+    assert(db._provisions.length === 1, 'T10.4: Recorded 1 provision record in D1');
+    const prov = db._provisions[0];
+    assert(prov.node_id === testNode, 'T10.5: D1 record has matching node_id');
+    assert(prov.device_id === 'test_device_uuid_99', 'T10.6: D1 record has matching device_id');
+    assert(prov.common_name === `${testNode}.direct.eqt.net.im`, 'T10.7: D1 record has correct common_name');
+    assert(prov.trace_id === 'test-trace-12345', 'T10.8: D1 record has preserved trace_id');
+
+    // Parse issued cert using crypto.X509Certificate (Node 15.6+)
+    const x509 = new crypto.X509Certificate(data.cert_pem);
+    assert(x509.subject.includes(`CN=${testNode}.direct.eqt.net.im`), 'T10.9: X509 Subject CN matches node domain');
+    assert(x509.subjectAltName.includes(`DNS:${testNode}.direct.eqt.net.im`), 'T10.10: X509 SAN includes exact node domain');
+    assert(x509.subjectAltName.includes(`DNS:*.${testNode}.direct.eqt.net.im`), 'T10.11: X509 SAN includes wildcard sub-domain');
+    
+    // Check 90 days validity window
+    const validToMs = new Date(x509.validTo).getTime();
+    const daysUntilExpiry = (validToMs - Date.now()) / (24 * 3600 * 1000);
+    assert(daysUntilExpiry >= 88 && daysUntilExpiry <= 91, 'T10.12: X509 certificate has ~90 days validity window');
+  }
+
+  console.log(`\nResults: ${passed} passed, ${failed} failed`);
+  if (failed > 0) process.exit(1);
+}
+
+runTests().catch(err => {
+  console.error('Unhandled test failure:', err);
+  process.exit(1);
+});
