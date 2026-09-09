@@ -400,6 +400,8 @@ Let's Encrypt 对单个主域名（Registered Domain）存在每周申请证书�
 
 ##### 4.3.1 系统交互与数据流拓扑
 
+> 🔬 **审查校准（2026-09-10）——时序图省略 RFC 8555 `new-nonce` 握手**：图中各 `POST` 交互均为 JWS 签名请求。RFC 8555 §7.2 要求**每次 JWS 请求发送前必须先向服务器获取一次性 nonce**（`GET /acme/new-nonce` 或复用上一条响应头的 `Replay-Nonce`），并将该 nonce 作为 JWS 的 `replay-nonce` protected header 回传；否则 Let's Encrypt 一律返回 `400 urn:ietf:params:acme:error:badNonce`。故 Worker 需维护 nonce 的拉取/轮转逻辑（首次握手 + 每个新 POST 前检查），实现时不可按图直接连续发请求。
+
 ```mermaid
 sequenceDiagram
     autonumber
@@ -462,14 +464,24 @@ sequenceDiagram
 2. **彻底解决 FINDING 2（补齐硬件签名校验）**：
    - 客户端在 `provisioner.go` 中利用设备硬件私钥对 `node_id + timestamp` 进行 Ed25519 签名并通过 `X-EQT-Hardware-Signature` 上报；
    - Worker 端 `cert.ts` 在处理签发前，提取请求头并在 D1 登记的设备指纹库或请求特征中执行 Ed25519 验签，未通过签名校验的请求直接拒绝（HTTP 401/403），杜绝恶意伪造 node_id 刷单；
+
+   > 🔬 **审查校准（2026-09-10）——本项为设计蓝图，落地前需先补齐客户端签名机制**：
+   > - **现状代码事实**：桌面端置备调用 `desktop/gui/app.go:2134-2146` 构造 `ProvisionOptions` 时**仅填 `NodeID`/`DeviceID`/`LogFunc`，`Signature` 与 `Timestamp` 均为零值**——`provisioner.go:441` 因 `opts.Signature == ""` 直接跳过发送，`X-EQT-Timestamp` 由 `provisioner.go:447` 用客户端当前时间兜底。即**客户端当前根本不发送硬件签名**，服务端 `cert.ts` 也无从验证；
+   > - **无设备 Ed25519 密钥**：代码库不存在独立的“设备硬件私钥（Ed25519）”及对应签名基础设施；`hardware.GetDeviceFingerprintHashes()` 产出的是 SHA-256 级联哈希（单向，不可用于签名），`provisioner.go` 仅有的非对称密钥是 ECDSA P-256 **证书私钥**（`LoadOrGenerateDeviceKey`）。因此“用设备硬件私钥做 Ed25519 签名”需要**新增**客户端密钥管理与服务端验签公钥来源（D1 公钥注册或等价机制），属蓝图承诺，非已实现能力；
+   > - **更简替代（符合第一性原理，最小新增）**：复用已存在的 ECDSA P-256 证书私钥对 `node_id + timestamp` 签名，Worker 从提交的 PKCS#10 CSR 内**直接提取公钥验签**（CSR 本就携带公钥，零 D1 注册，验签不再依赖任何“设备指纹库”）。若选 Ed25519 新增密钥体系，需在编码前明确服务端公钥来源。
 3. **彻底解决 FINDING 3（时间戳防重放窗口收敛）**：
    - 将 `cert.ts` 中的时间戳校验容差从宽松的 $\pm 300\text{s}$ 严格收敛至规范承诺的 **$\pm 60\text{s}$**，强化防重放能力。
 
 ##### 4.3.3 自建双机权威 DNS（`cmd/eqt-dns`）API 联动规范
+
+> 🔬 **审查校准（2026-09-10）——端口与传输通道需先校准**：
+> - **实现端口事实**：`cmd/eqt-dns` 的 HTTP 管理默认绑定 `127.0.0.1:5380`（`main.go:26-27`），鉴权为 Bearer `--token`（`main.go:29, 344-345`），与下文示例原写的 `:8053` **不符**，已按实现修正为 `:5380`；
+> - **安全红线冲突**：`.agents/skills/eqt-lan-tls/SKILL.md §2.1` 明令“HTTP 管理端口强行锁定在 `127.0.0.1:5380`，仅限本地或 SSH 安全通道调用，**严禁公网开放**”。但 Worker 运行在云端，无法访问 `ns1`/`ns2` 的 `127.0.0.1`——直接对 `<ns1-ip>:5380` 发起公网 HTTP 即违反该红线。**实现前必须为云端 Worker 建立到 ns 管理端点的受限通道**（任选其一并在编码前确定）：(a) SSH 隧道 / Cloudflare Tunnel 转发；(b) ns 端以 `-http-listen` 额外绑定受限接口（或公网端口）+ 防火墙仅放行 Worker 出口 IP + Bearer 鉴权；(c) 若需绕开 ns HTTP 通道，可评估让 Worker 经 Cloudflare DNS API 直接写 TXT（放弃本方案的自建权威 DNS 联动）。本节原写的“双机节点均已上线 `isValidACMERecord`”仅证明 TXT 写入规则就绪，**不代表管理端点可公网直达**。
+
 Worker 与双机权威 DNS 节点的交互使用现有的 `/acme/challenge` 端点：
 - **写入 TXT 记录**：
   ```http
-  POST http://<ns1-ip>:8053/acme/challenge
+  POST http://<ns1-ip>:5380/acme/challenge
   Authorization: Bearer <DNS_API_SECRET>
   Content-Type: application/json
 
@@ -481,7 +493,7 @@ Worker 与双机权威 DNS 节点的交互使用现有的 `/acme/challenge` 端�
   ```
 - **清理 TXT 记录**：
   ```http
-  DELETE http://<ns1-ip>:8053/acme/challenge?record=_acme-challenge.<node-id>.direct.eqt.net.im.&value=<value>
+  DELETE http://<ns1-ip>:5380/acme/challenge?record=_acme-challenge.<node-id>.direct.eqt.net.im.&value=<value>
   Authorization: Bearer <DNS_API_SECRET>
   ```
 双机权威节点（`ns1`: 128.241.227.181, `ns2`: 103.232.92.220）均已上线 `isValidACMERecord` 放行规则，写入后全球 DNS 立即生效，满足 Let's Encrypt 远程递归探测要求。
@@ -758,7 +770,7 @@ Worker 与双机权威 DNS 节点的交互使用现有的 `/acme/challenge` 端�
 | 编号 | 审查发现偏差 | 测试环境执行与修复方案 | 预期验收状态 |
 | :--- | :--- | :--- | :---: |
 | **Action 1** | **FINDING 1：签发引擎为瞬态自签 CA，非公信** | 在 `cloudflare/eqt-drm-api` 测试 Worker 中集成轻量 Web Crypto 原生 RFC 8555 ACME 协议栈：<br>① `newOrder` 向 Let's Encrypt 下单；<br>② 提取 `dns-01` 挑战并派生 TXT 质询值；<br>③ 调用双机权威 DNS（`cmd/eqt-dns` `/acme/challenge`）写入 TXT 记录；<br>④ 触发 LE 校验并轮询；<br>⑤ `finalize` 提交客户端 CSR 并下载 Let's Encrypt 官方证书链；<br>⑥ 清理临时 TXT 记录。 | 彻底消灭自签 CA，实现官方权威公信签发 |
-| **Action 2** | **FINDING 2：硬件签名仅透传未校验** | 在 Worker `cert.ts` 中提取请求头 `X-EQT-Hardware-Signature`，基于设备上报的不可变特征哈希，执行 Ed25519 密码学校验，验签失败直接 401 拦截。 | 强闭环硬件防伪防刷 |
+| **Action 2** | **FINDING 2：硬件签名仅透传未校验** | 在 Worker `cert.ts` 中提取请求头 `X-EQT-Hardware-Signature`，基于设备上报的不可变特征哈希，执行 Ed25519 密码学校验，验签失败直接 401 拦截。⚠️ 前置依赖见 §4.3.2 校准（客户端现状不发签名、无 Ed25519 设备密钥，需先补齐签名机制并明确验签公钥来源）。 | 强闭环硬件防伪防刷 |
 | **Action 3** | **FINDING 3：时间戳容差偏宽 (±300s)** | 将 `cert.ts` 中时间戳比对逻辑收敛为 `Math.abs(nowSec - clientTs) > 60`，严格履行 $\pm 60\text{s}$ 规格承诺。 | 严格防重放 |
 
 #### 10.2 测试环境部署与真机验收流程
@@ -768,5 +780,5 @@ Worker 与双机权威 DNS 节点的交互使用现有的 `/acme/challenge` 端�
 
 ---
 
-> 🏁 **最终决议**：审查员多轮复核所提出的代码事实核查、符号映射校准、TXT 质询放行、PSL 硬门槛依赖、MITM 防御纵深、既有能力复用、物理视线边界口径收敛、TLS 默认关闭与隐藏体验兜底、以及六大前置动作代码与文档实质性推进，均已达成严密一致；**路线 B 的客户端与 DNS/PSL 前置已高质量落地**。通过本次执行方案确立，云端 `cert.ts` 在测试环境中率先落地真实的 RFC 8555 Let's Encrypt DNS-01 代理引擎，彻底闭环 FINDING 1~3，达成官方公信绿锁完整承诺。
+> 🏁 **最终决议**：审查员多轮复核所提出的代码事实核查、符号映射校准、TXT 质询放行、PSL 硬门槛依赖、MITM 防御纵深、既有能力复用、物理视线边界口径收敛、TLS 默认关闭与隐藏体验兜底、以及六大前置动作代码与文档实质性推进，均已达成严密一致；**路线 B 的客户端与 DNS/PSL 前置已高质量落地**。本决议同时确立云端 `cert.ts` 在测试环境中率先落地真实 RFC 8555 Let's Encrypt DNS-01 代理引擎的执行方案与验收路径——**但 FINDING 1~3 的“彻底闭环”是本执行方案的目标承诺，而非已交付能力**：其中 FINDING 2 需先按 §4.3.2 校准补齐客户端签名机制（现状为客户端不发送签名），§4.3.3 需先确定 Worker→ns 的受限传输通道，全部落地后再以 §10.2 真机绿锁验收逐条复核“官方公信绿锁完整承诺”。
 
