@@ -61,10 +61,10 @@
 
 ### 步骤 2：访问官方申请入口并打开表单
 
-1. 打开浏览器访问 Let's Encrypt 官方联系页面：  
-   👉 [https://letsencrypt.org/contact/](https://letsencrypt.org/contact/)
-2. 在页面中定位到 **"Request a Rate Limit Exemption"（申请速率限制豁免）** 模块；
-3. 点击直达官方专用申请表单（通常为 Let's Encrypt 官方 Google Form 链接，或通过社区专用支持通道）。
+1. 官方申请专用入口（ISRG Formstack）：  
+   👉 [https://isrg.formstack.com/forms/rate_limit_adjustment_request](https://isrg.formstack.com/forms/rate_limit_adjustment_request)  
+   *(官方文档来源：[Let's Encrypt Rate Limits Documentation](https://letsencrypt.org/docs/rate-limits/#new-certificates-per-registered-domain))<br>
+2. 打开后点击 **"Begin Application"** 启动 11 步多页向导表单。
 
 ---
 
