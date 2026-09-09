@@ -138,3 +138,10 @@ WantedBy=multi-user.target
 - **严重后果**：若使用标准库 `io.MultiWriter(os.Stderr, fileLogger)`，由于 `os.Stderr` 排在第一位，其 `Write` 必定返回错误，导致 `io.MultiWriter` 立即短路退出，**后续的 `fileLogger` 永远收不到任何日志字节，造成 GUI 模式下日志全盘静默丢失**。
 - **解决方案**：必须使用容错的 `safeMultiWriter`，遍历各个 writer 独立执行 `Write`，彻底隔离 `os.Stderr` 的错误，保障核心文件日志 100% 稳定落盘。
 
+---
+
+## 8. 演进架构：单机私钥零泄漏与设备专属 ACME 自动化 (Zero-Leak Evolution)
+
+- **核心演进**：彻底淘汰过渡期通配符私钥共享与脚本同步机制，演进至工业级 Tailscale 路线（本地 ECDSA P-256 私钥自生成，永不出机；云端基于硬件指纹代理 RFC 8555 ACME DNS-01 签发）。
+- **详尽架构机制文档**：详见核心技术蓝图 [`docs/mechanism/lan-tls-zero-leak-acme-architecture.md`](file:///home/yelon/develop/me/eqrcp/docs/mechanism/lan-tls-zero-leak-acme-architecture.md)。
+
