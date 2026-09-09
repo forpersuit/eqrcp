@@ -346,3 +346,19 @@ Let's Encrypt 对单个主域名（Registered Domain）存在每周申请证书�
 
 ### 2. 权威架构结论
 审查员的审查意见极为专业、敏锐且客观，不仅纠偏了拟定符号与实际代码的映射边界，更挖掘出现有 `cmd/eqt-dns` 的天然兼容性红利。本设计蓝图已全部吸收审查意见并完成理论闭环，完全具备向 Phase 1 编码阶段演进的技术可行性。
+
+---
+
+### 3. 复核勘误与补充开放项（Reviewer Re-verification）
+
+> 复核人于 2026-09-09 对上述「完全闭环」决议做了二次独立核实（直接 `rg` 当前磁盘源码），确认决议主干成立，但存在一处事实修正与两项**尚未纳入闭环**的安全设计开放项，如实补录如下：
+
+**（一）行号勘误**：上表第 2 项引用 `GetDeviceFingerprintHashes` 行号 `:329` 有误，真实为 **`pkg/server/hardware.go:247`**（`:366` 的 `GetAuthorityDeviceID` 正确无误）。同时提示实现精度：`GetDeviceFingerprintHashes()` 返回的是**已各自独立 SHA-256 的三元组**（UUID/CPU/磁盘各单项哈希），并非 `sha256(uuid+cpu+disk)` 整体解释；据此推导 node-id 时，表达式应表述为 `sha256(concat(fingerprintHashes...))[0:12]`，而非对原始明文字段做单次整体哈希。属措辞精度，不影响可行性。
+
+**（二）核心发现复核通过**：第 4 项所指 `cmd/eqt-dns/main.go:310-319` 的阻断逻辑经逐行核实为真——`expectedSuffix = "_acme-challenge." + strings.ToLower(strings.TrimSuffix(defaultDomain,".")) + "."`（`main.go:310`），`main.go:315` 的 `!strings.HasSuffix(record, expectedSuffix) && record != expectedSuffix` 会对 `_acme-challenge.<node-id>.direct.eqt.net.im.` 触发 400 拒绝。开发提出的「`_acme-challenge.` 前缀开头 + `.direct.eqt.net.im.` 后缀结尾」的微调方向正确，确是 Phase 1 必修的阻断点。此项为开发主动挖掘、且审查员首轮遗漏的正向发现，予以确认。
+
+**（三）两项未纳入闭环的安全设计开放项（建议补充进蓝图对应小节）**：
+
+1. **§4 场景 2 “完全免疫 MITM” 的信任锚缺口**：结论方向正确（私钥不再共享，攻击者无法伪造受害设备证书），但「完全免疫」三字有过度承诺。整套绿锁的安全性**以回环 DNS 解析可信为前提**；局域网攻击者虽拿不到受害设备私钥，却可通过 ARP/DNS 欺骗将目标域名解析至其自身 IP，并套用「其作为合法 EQT 用户在 ACME 代理处为其 `<attacker-node-id>` 申请的有效证书」完成中间人。若 node-id 未与权威设备身份做强绑定，此威胁仍存在。建议：将场景 2 结论由「完全免疫」收敛为「显著缩小攻击面与爆炸半径」，并补一节「node-id 与设备身份的强绑定 / 客户端证书 pinning」作为防线补齐。
+
+2. **§4.3.2 PSL 独立申报应为 Phase 1 硬门槛而非可选梯次**：本方案规模化到万台级的核心卡点是 Let's Encrypt「单注册域名每周 50 张」上限，而文中把 `direct.eqt.net.im` 注册进 Public Suffix List 列为「梯次 2」。若不先落实 PSL，每设备一子域将直接撞墙（>50 台/周即被拒）。建议：将 PSL 申报前移为 Phase 1 的**前置硬依赖**，并标注 Mozilla PSL 存在人工审核周期（可能数月），需在商业化放量前提前发起。
