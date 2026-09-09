@@ -192,16 +192,17 @@ WantedBy=multi-user.target
   - 动态端点覆盖：Go 端 `pkg/cert` 支持通过环境变量 `EQT_PROVISION_ENDPOINT` 灵活切换置备网关；
   - 生产环境真实处境适配：在 Mozilla PSL 合并生效与 Let's Encrypt 频控豁免完成官方审批前，TLS 处于非默认开启状态。官网（`cloudflare/eqt-website`）各语言对外文案收敛隐藏 TLS 免装证书说明，重点宣导“局域网物理内网极速直连”、“零云端中继”、“无外网流量消耗”；待未来正式全量放开后再行恢复。
 - **🔴 公信绿锁验收红线与测试环境推进策略（2026-09-10 复核更新）**：
-  - ✅ **FINDING 2 彻底闭环（POPO 签名校验第一性原理）**：
-    - 客户端生成 ECDSA P-256 私钥后，使用该私钥对 `${nodeID}:${timestamp}` 进行 IEEE P1363（64 字节 raw，r 32B + s 32B 大端序）标准签名；
+  - ✅ **FINDING 2 签名校验已落地（ECDSA P-256 + CSR 公钥验签，2026-09-10 ae86321f）**：
+    - 客户端生成 ECDSA P-256 私钥后，使用该私钥对 `${nodeID}:${timestamp}` 进行 IEEE P1363（64 字节 raw，r 32B + s 32B 大端序）标准签名（`pkg/cert/provisioner.go` `SignProvisionPayload`，客户端自动签名，`app.go` 无需传参）；
     - 签名 Base64 编码设置于 `X-EQT-Device-Signature` 与 `X-EQT-Hardware-Signature` 头；
-    - 服务端 Worker 从上传的 PKCS#10 CSR 中提取 `spkiDER`，使用 Web Crypto `crypto.subtle.importKey('spki', ...)` 原生验签，既严格证明了私钥持有性（Proof-of-Possession），又无需维护中心化公钥数据库；
+    - 服务端 Worker 从上传的 PKCS#10 CSR 中提取 `spkiDER`，使用 Web Crypto `crypto.subtle.importKey('spki', ...)` 原生验签，证明私钥持有性（Proof-of-Possession），无需中心化公钥数据库；
+    - ⚠️ **安全边界（勿过度承诺）**：验签用的是 **CSR 内公钥**（自证），其防线是**防重放/防请求篡改/防无私钥伪造**，**无法阻止自持密钥者伪造任意 node_id 或为他人 node_id 申请证书**（攻击者自生成密钥对→自签 CSR→自签名，验签必过；频控按伪造 node_id 独立计数可被绕过）。要达成“硬件指纹防伪/杜绝伪造 node_id 刷单”的强承诺，必须补 **node_id→公钥 的服务端绑定（D1 首次注册公钥，验签改用它）**——当前未实现。
   - ✅ **FINDING 3 彻底闭环（时间戳容差窗口收敛）**：
-    - `cert.ts` 将请求时间戳与服务端时间比对严格收敛为 $\pm 60\text{s}$，过期立即拒绝并记录日志，有效杜绝重放攻击；
-  - 🔄 **FINDING 1 推进（RFC 8555 ACME DNS-01 代理引擎）**：
-    - `cloudflare/eqt-drm-api/src/utils/acme.ts` 已完成轻量原生 Web Crypto RFC 8555 ACME 协议栈（`newOrder`、`dns-01` 挑战值计算、`finalize` 提交客户端 CSR、下载证书链与 badNonce 自动透明重试）；
-    - 测试用例 `test:acme:offline` 12 项测试全部通过；
-    - 双机权威 DNS（`cmd/eqt-dns`）通过 `/acme/challenge` 接口支持安全写入与删除验证 TXT。
+    - `cert.ts` 将请求时间戳与服务端时间比对严格收敛为 $\pm 60\text{s}$，且缺失 `X-EQT-Timestamp` 直接 `400` 拒绝，过期立即拒绝并记录日志，有效杜绝重放攻击；
+  - 🔄 **FINDING 1 推进（RFC 8555 ACME DNS-01 代理引擎）——代码就绪，环境未激活**：
+    - `cloudflare/eqt-drm-api/src/utils/acme.ts` 已完成轻量原生 Web Crypto RFC 8555 ACME 协议栈（`newOrder`、`dns-01` 挑战值计算、`finalize` 提交客户端 CSR、下载证书链与 badNonce 自动透明重试）；测试用例 `test:acme:offline` 12 项全部通过；
+    - 双机权威 DNS（`cmd/eqt-dns`）通过 `/acme/challenge` 接口支持安全写入与删除验证 TXT（`AcmeStore` 按 record 多值共存，支持 exact+wildcard 双 authz 同时验证）；
+    - ⚠️ **激活前置未完成**：`src/types.ts` 的 `Env` 尚未声明 `ACME_DIRECTORY_URL`/`ACME_ACCOUNT_KEY`/`ACME_DNS_API_ENDPOINTS`/`ACME_DNS_API_TOKEN`，`wrangler.jsonc` 也未配置任何 ACME vars/secrets——**当前部署仍会回退瞬态自签 CA，手机扫码依旧红屏**；且 `ACME_ACCOUNT_KEY` 若缺失，`AcmeClient.create` 每次置备都会 `generateKey` 新建 LE 账户（触发账户级限频），**必须先持久化一个账户私钥**（复用既有 `ns1` 生产账户或新开测试账户）。完成 env 配置 + 部署 `lic-test.eqt.net.im` + 真机绿锁验收后才算达成 §四 DoD 3。
 
 
 

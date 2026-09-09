@@ -465,10 +465,10 @@ sequenceDiagram
    - 客户端在 `provisioner.go` 中利用设备硬件私钥对 `node_id + timestamp` 进行 Ed25519 签名并通过 `X-EQT-Hardware-Signature` 上报；
    - Worker 端 `cert.ts` 在处理签发前，提取请求头并在 D1 登记的设备指纹库或请求特征中执行 Ed25519 验签，未通过签名校验的请求直接拒绝（HTTP 401/403），杜绝恶意伪造 node_id 刷单；
 
-   > 🔬 **审查校准（2026-09-10）——本项为设计蓝图，落地前需先补齐客户端签名机制**：
-   > - **现状代码事实**：桌面端置备调用 `desktop/gui/app.go:2134-2146` 构造 `ProvisionOptions` 时**仅填 `NodeID`/`DeviceID`/`LogFunc`，`Signature` 与 `Timestamp` 均为零值**——`provisioner.go:441` 因 `opts.Signature == ""` 直接跳过发送，`X-EQT-Timestamp` 由 `provisioner.go:447` 用客户端当前时间兜底。即**客户端当前根本不发送硬件签名**，服务端 `cert.ts` 也无从验证；
-   > - **无设备 Ed25519 密钥**：代码库不存在独立的“设备硬件私钥（Ed25519）”及对应签名基础设施；`hardware.GetDeviceFingerprintHashes()` 产出的是 SHA-256 级联哈希（单向，不可用于签名），`provisioner.go` 仅有的非对称密钥是 ECDSA P-256 **证书私钥**（`LoadOrGenerateDeviceKey`）。因此“用设备硬件私钥做 Ed25519 签名”需要**新增**客户端密钥管理与服务端验签公钥来源（D1 公钥注册或等价机制），属蓝图承诺，非已实现能力；
-   > - **更简替代（符合第一性原理，最小新增）**：复用已存在的 ECDSA P-256 证书私钥对 `node_id + timestamp` 签名，Worker 从提交的 PKCS#10 CSR 内**直接提取公钥验签**（CSR 本就携带公钥，零 D1 注册，验签不再依赖任何“设备指纹库”）。若选 Ed25519 新增密钥体系，需在编码前明确服务端公钥来源。
+   > 🔬 **审查校准更新（2026-09-10 ae86321f 落地复核）——签名校验已实现，安全边界需校准**：
+   > - **实现现状（ae86321f）**：开发者按“更简替代”落地——客户端 `provisioner.go` 新增 `SignProvisionPayload`（ECDSA P-256 对 `${nodeID}:${timestamp}` 做 IEEE P1363 64B 签名，`X-EQT-Device-Signature`/`X-EQT-Hardware-Signature` 双头发送，`app.go` 零改动即自动签名）；服务端 `cert.ts` 从 CSR 提取 `spkiDER` 用 Web Crypto 原生验签（`cert-provision-offline.js` 28 项含 rogue/missing signature 用例全部通过）。未采用 Ed25519 新密钥体系，符合“最小新增”第一性原理；
+   > - **⚠️ 安全边界（勿误读为“硬件防伪刷”）**：验签公钥来自 **CSR 内公钥**（自证），只能证明“提交者持有 CSR 私钥”——防线是**防重放/防请求篡改/防无私钥伪造**；**无法阻止自持密钥者伪造任意 node_id 或为他人 node_id 申请证书**（攻击者自生成密钥对→自签 CSR→自签名，验签必过；频控按伪造 node_id 独立计数可被绕过，甚至可为真实受害者 node_id 冒名申请证书，配合局域网 ARP/DNS 劫持即构成 §1.1 的 Active MITM）。本节原表述“杜绝恶意伪造 node_id 刷单”为**过度承诺**；
+   > - **达成“硬件指纹防伪”强承诺的后续路径**：补 node_id→公钥 的服务端绑定——客户端首次置备时上报公钥，D1 登记 `(node_id, public_key)`，后续验签改用 **D1 公钥**而非 CSR 内公钥；伪造 node_id 将因 CSR 公钥 ≠ D1 注册公钥而被拒。此为当前**未实现**的增强项（防刷强度升级需权衡 D1 注册带来的首次置备依赖）。
 3. **彻底解决 FINDING 3（时间戳防重放窗口收敛）**：
    - 将 `cert.ts` 中的时间戳校验容差从宽松的 $\pm 300\text{s}$ 严格收敛至规范承诺的 **$\pm 60\text{s}$**，强化防重放能力。
 
@@ -770,15 +770,20 @@ Worker 与双机权威 DNS 节点的交互使用现有的 `/acme/challenge` 端�
 | 编号 | 审查发现偏差 | 测试环境执行与修复方案 | 预期验收状态 |
 | :--- | :--- | :--- | :---: |
 | **Action 1** | **FINDING 1：签发引擎为瞬态自签 CA，非公信** | 在 `cloudflare/eqt-drm-api` 测试 Worker 中集成轻量 Web Crypto 原生 RFC 8555 ACME 协议栈：<br>① `newOrder` 向 Let's Encrypt 下单；<br>② 提取 `dns-01` 挑战并派生 TXT 质询值；<br>③ 调用双机权威 DNS（`cmd/eqt-dns` `/acme/challenge`）写入 TXT 记录；<br>④ 触发 LE 校验并轮询；<br>⑤ `finalize` 提交客户端 CSR 并下载 Let's Encrypt 官方证书链；<br>⑥ 清理临时 TXT 记录。 | 彻底消灭自签 CA，实现官方权威公信签发 |
-| **Action 2** | **FINDING 2：硬件签名仅透传未校验** | 在 Worker `cert.ts` 中提取请求头 `X-EQT-Hardware-Signature`，基于设备上报的不可变特征哈希，执行 Ed25519 密码学校验，验签失败直接 401 拦截。⚠️ 前置依赖见 §4.3.2 校准（客户端现状不发签名、无 Ed25519 设备密钥，需先补齐签名机制并明确验签公钥来源）。 | 强闭环硬件防伪防刷 |
-| **Action 3** | **FINDING 3：时间戳容差偏宽 (±300s)** | 将 `cert.ts` 中时间戳比对逻辑收敛为 `Math.abs(nowSec - clientTs) > 60`，严格履行 $\pm 60\text{s}$ 规格承诺。 | 严格防重放 |
+| **Action 2** | **FINDING 2：硬件签名仅透传未校验** | 在 Worker `cert.ts` 中提取请求头 `X-EQT-Hardware-Signature`，基于设备上报的不可变特征哈希，执行 Ed25519 密码学校验，验签失败直接 401 拦截。⚠️ 前置依赖见 §4.3.2 校准（客户端现状不发签名、无 Ed25519 设备密钥，需先补齐签名机制并明确验签公钥来源）。 | **✅ 已实现（2026-09-10 ae86321f）**：客户端自动 `SignProvisionPayload`（ECDSA P-256 签名，非 Ed25519）+ Worker 从 CSR `spkiDER` 原生验签，`cert-provision-offline` 28 项通过。⚠️ 安全边界=防重放/防无私钥伪造；**“硬件防伪刷”需补 D1 node_id→公钥 注册绑定，当前未实现** |
+| **Action 3** | **FINDING 3：时间戳容差偏宽 (±300s)** | 将 `cert.ts` 中时间戳比对逻辑收敛为 `Math.abs(nowSec - clientTs) > 60`，严格履行 $\pm 60\text{s}$ 规格承诺。 | **✅ 已实现（2026-09-10 ae86321f）**：±60s 严格收敛，且缺失 `X-EQT-Timestamp` 直接 `400 missing_timestamp`（`cert-provision-offline` 已覆盖），严格防重放 |
 
-#### 10.2 测试环境部署与真机验收流程
-1. **测试环境部署**：修改后的代理引擎部署至 `lic-test.eqt.net.im`；
+#### 10.2 测试环境部署与真机验收流程（⚠️ ACME 激活前置未完成，2026-09-10 ae86321f 复核）
+0. **ACME 激活前置（FINDING 1 唯一未闭环项，当前未完成，完成前部署仍回退瞬态自签 CA → 手机扫码红屏）**：
+   - **类型声明**：`cloudflare/eqt-drm-api/src/types.ts` 的 `Env` 补齐 `ACME_DIRECTORY_URL` / `ACME_ACCOUNT_KEY` / `ACME_DNS_API_ENDPOINTS` / `ACME_DNS_API_TOKEN` 字段；
+   - **运行时配置**：`wrangler.jsonc` 配置对应 vars/secrets——`ACME_DNS_API_ENDPOINTS` 指向双机权威 DNS 的受限通道端点，`ACME_DNS_API_TOKEN` 与 `cmd/eqt-dns --token` 对齐；
+   - **账户私钥持久化**：`AcmeClient.create` 在 `ACME_ACCOUNT_KEY` 缺失时会 `generateKey` 每次置备新建 LE 账户（触发账户级限频），**必须持久化一份账户私钥**（复用既有 `ns1` 生产账户或新开测试账户并固定复用）；
+   - **Worker→ns 受限通道**：`cmd/eqt-dns` 管理端口锁定 `127.0.0.1:5380`（§4.3.3 校准），公网 Worker 无法直连，须经 SSH 隧道 / CF Tunnel 或受控绑定+防火墙+Bearer 建立受限通道。
+1. **测试环境部署**：完成前置后，代理引擎部署至 `lic-test.eqt.net.im`；
 2. **Go 客户端联动测试**：通过设置 `EQT_PROVISION_ENDPOINT=https://lic-test.eqt.net.im/api/v1/cert/provision` 发起真实置备；
 3. **真机扫码绿锁验收**：手机（iOS Safari / Android Chrome）扫码打开测试节点，验证地址栏安全绿锁 🔒 亮起，无任何安全证书警告，达成 [`docs/bugs/2026-09-09-new-user-tls-cert-cache-bootstrap-defect.md`](file:///home/yelon/develop/me/eqrcp/docs/bugs/2026-09-09-new-user-tls-cert-cache-bootstrap-defect.md) §四 DoD 3 最终验收标准。
 
 ---
 
-> 🏁 **最终决议**：审查员多轮复核所提出的代码事实核查、符号映射校准、TXT 质询放行、PSL 硬门槛依赖、MITM 防御纵深、既有能力复用、物理视线边界口径收敛、TLS 默认关闭与隐藏体验兜底、以及六大前置动作代码与文档实质性推进，均已达成严密一致；**路线 B 的客户端与 DNS/PSL 前置已高质量落地**。本决议同时确立云端 `cert.ts` 在测试环境中率先落地真实 RFC 8555 Let's Encrypt DNS-01 代理引擎的执行方案与验收路径——**但 FINDING 1~3 的“彻底闭环”是本执行方案的目标承诺，而非已交付能力**：其中 FINDING 2 需先按 §4.3.2 校准补齐客户端签名机制（现状为客户端不发送签名），§4.3.3 需先确定 Worker→ns 的受限传输通道，全部落地后再以 §10.2 真机绿锁验收逐条复核“官方公信绿锁完整承诺”。
+> 🏁 **最终决议**：审查员多轮复核所提出的代码事实核查、符号映射校准、TXT 质询放行、PSL 硬门槛依赖、MITM 防御纵深、既有能力复用、物理视线边界口径收敛、TLS 默认关闭与隐藏体验兜底、以及六大前置动作代码与文档实质性推进，均已达成严密一致；**路线 B 的客户端与 DNS/PSL 前置已高质量落地**。本决议同时确立云端 `cert.ts` 在测试环境中率先落地真实 RFC 8555 Let's Encrypt DNS-01 代理引擎的执行方案与验收路径——**但 FINDING 1~3 的“彻底闭环”是本执行方案的目标承诺，而非已交付能力（2026-09-10 ae86321f 落地复核更新）**：FINDING 2 签名校验**已落地**（客户端自动 ECDSA P-256 签名 + Worker 从 CSR `spkiDER` 原生验签，`cert-provision-offline` 28 项通过），FINDING 3 **已闭环**（±60s + 缺 timestamp→400）；**FINDING 1 是唯一未闭环项**——ACME 协议栈代码就绪、`acme-offline` 12 项测试全绿，但 `Env`/`wrangler.jsonc` 尚未配置 ACME vars/secrets、`ACME_ACCOUNT_KEY` 未持久化、Worker→ns 受限通道未建立，当前部署仍回退瞬态自签 CA（手机扫码红屏）。完成 §10.2 前置 0 四项后，再以真机绿锁验收逐条复核“官方公信绿锁完整承诺”。
 
