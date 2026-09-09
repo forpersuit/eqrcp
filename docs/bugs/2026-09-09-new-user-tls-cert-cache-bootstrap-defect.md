@@ -242,6 +242,7 @@ window.runtime.EventsOn("eqt:tls-cert-ready", () => {
 > - 但基于其派生的 12 字符十六进制 Node-ID（机制文档拟名 `deriveNodeID` / `hardware.GetDeviceNodeID()`）、客户端本地 CSR 生成模块（拟名 `pkg/cert/provisioner.go`）、云端代理 ACME 通道，均为**蓝图拟定符号，截至 2026-09-09 代码零实现**（与 [`lan-tls-zero-leak-acme-architecture.md`](file:///home/yelon/develop/me/eqrcp/docs/mechanism/lan-tls-zero-leak-acme-architecture.md) 顶部「代码事实核实」声明一致）；
 > - 因此 §六.2 应读作「**路线 B 的目标能力**」而非「已具备的 API」；落地路线 B 前需先补齐：Node-ID 派生算法、本地 ECDSA P-256 生钥与 CSR 生成、云端 ACME DNS-01 代理，以及前端 URL 从单级 IP 域名切换到 `192-168-x-x.<node-id>.direct` 两级域名（**无需动态 DNS 上报**——设备当前 IP 直接编码在主机名前缀中，由 `cmd/eqt-dns` 的 `parseIP` 无状态解析，机制文档 §3 已兼容）；
 > - **（2026-09-10 实现现状更新）**：上述蓝图符号已落地——`hardware.GetDeviceNodeID()`（`pkg/server/hardware.go:485`）、`pkg/cert/provisioner.go`（本地 ECDSA P-256 生钥/CSR/验证后落盘）、云端 `cloudflare/eqt-drm-api/src/routes/cert.ts`（`POST /api/v1/cert/provision`）、桌面端静默置备（`desktop/gui/app.go`）、`cmd/eqt-dns` `isValidACMERecord` 放行与 `_psl` TXT、Mozilla PSL PR 3258。**但注意**：云端签发引擎当前为**每请求瞬态自签 CA**（Issuer `EQT LAN-TLS Intermediate CA`，详见机制文档 §七.9 FINDING 1），**并非 Let's Encrypt 公信签发**——手机扫码会触发 `NET::ERR_CERT_AUTHORITY_INVALID` 红屏；“云端代理 DNS-01 从 LE 签发正规公信证书”仍是待接入项，§四 DoD 3 绿锁验收**尚未达成**。
+> - **（2026-09-10 执行方案推进裁决）**：PSL 核心价值在于公网多用户规模化时破除主域 50 张/周限额；**测试环境每周消耗极低且有 Staging（30,000张/周）兜底，测试环境绝对不需要等待 PSL**。确立测试环境（`lic-test.eqt.net.im`）率先升级为真正的 RFC 8555 Let's Encrypt DNS-01 代理引擎并补齐硬件验签，完成端到端手机真机绿锁实测验收（消灭 FINDING 1~3，达成 DoD 3）。
 
 ### 3. 过渡期破局与 UI 体验去恐慌化配套工程
 

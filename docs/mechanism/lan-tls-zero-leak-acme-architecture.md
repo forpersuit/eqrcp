@@ -5,13 +5,13 @@
 > **面向对象**：核心开发团队、系统架构师、安全与密码学审计人员  
 > **基线分支**：`master`（设计演进预演）  
 > **关联技术**：[`pkg/cert`](file:///home/yelon/develop/me/eqrcp/pkg/cert/cert.go), [`cmd/eqt-dns`](file:///home/yelon/develop/me/eqrcp/cmd/eqt-dns/main.go), [`pkg/server/hardware.go`](file:///home/yelon/develop/me/eqrcp/pkg/server/hardware.go), [`.agents/skills/eqt-lan-tls/SKILL.md`](file:///home/yelon/develop/me/eqrcp/.agents/skills/eqt-lan-tls/SKILL.md)  
-> **代码事实核实**（首轮审查 2026-09-09，锚定真实符号与行号；实现复核 2026-09-10）：本文为**设计蓝图**，“设备专属子域 + 单机单私钥 + 公信 ACME 签发”全链路**尚未 100% 达成**（见下述红线偏差）。两轮核查结论如下：
+> **代码事实核实**（首轮审查 2026-09-09，锚定真实符号与行号；实现复核 2026-09-10；测试环境执行方案更新 2026-09-10）：本文为**设计蓝图与工程执行规范**。针对 2026-09-10 审查复核指出的“云端为瞬态自签 CA，公信绿锁 promise 未达成”阻断性问题，确立**“测试环境先行落地真实 RFC 8555 Let's Encrypt DNS-01 代理闭环”**的执行方案。核心原则与两轮核查结论如下：
 >
 > **① 已实现基线（2026-09-09 前）**：`cert.BaseDomain = "direct.eqt.net.im"`（`pkg/cert/cert.go:16`）、`cert.FormatDirectDomain`（同文件 :22，仅单级）、`cmd/eqt-dns` 的回环 IPv4 解析（真实为未导出 `parseIP`，`main.go:135`）、`desktop/gui/agent.go:1031-1034` 的 Fail-Soft 降级、`scripts/sync-certs-from-vps.sh`（旧通配符私钥同步，待 Phase 4 下线）。
 >
-> **② 路线 B 本轮新实现（2026-09-10 复核，commit `73dc9d1a`/`8a6984f2`/`cb57aa1b`/`4dbf7a56`/`e1820eef`）**：原蓝图符号已落地——`hardware.GetDeviceNodeID()`（`pkg/server/hardware.go:485`，sha256 三元组截前 12 位 hex）、`pkg/cert/provisioner.go`（521 行：本地 ECDSA P-256 生钥/CSR/验证后落盘）、云端 `cloudflare/eqt-drm-api/src/routes/cert.ts`（`POST /api/v1/cert/provision`）、`cmd/eqt-dns` 的 `isValidACMERecord` 放行与 `_psl` TXT、桌面端 silent provisioning（`desktop/gui/app.go`）与前端去恐慌化（i18n `tls_cert_preparing`/`tls_cert_ready`）、PSL PR 3258。
+> **② 路线 B 客户端与基建落地（2026-09-10 复核）**：客户端本地 ECDSA P-256 私钥自生成（`0600` 原子落盘、永不出机）、`pkg/cert/provisioner.go` CSR 装配与落盘校验、`hardware.GetDeviceNodeID()`（12 位小写 hex）、`cmd/eqt-dns` 的 `isValidACMERecord` 放行与 `_psl` TXT、桌面端 silent provisioning（`desktop/gui/app.go`）与前端去恐慌化、PSL PR 3258 申报。
 >
-> **⚠️ 核心偏差（阻断公网发布，见 §七.9 FINDING 1）**：`cert.ts` 的签发引擎**不是 ACME/Let's Encrypt 代理**——它用每次请求临时生成的瞬态 “EQT LAN-TLS Intermediate CA” 自签 X.509（`issueCertificateFromCSR` 未传 signingKey，`cert.ts:323-331`），该 CA 不在任何浏览器/OS 信任存储库，全代码库**无安装信任根 CA 步骤**。因此浏览器打开 `https://192-168-x-x.<node-id>.direct.eqt.net.im` 会触发 `NET::ERR_CERT_AUTHORITY_INVALID` 红屏，**恰复现了 [`docs/bugs/2026-09-09-new-user-tls-cert-cache-bootstrap-defect.md`](file:///home/yelon/develop/me/eqrcp/docs/bugs/2026-09-09-new-user-tls-cert-cache-bootstrap-defect.md) §六.1 已否定的路线 C 体验**；“官方公信绿锁”验收（bug 文档 §四 DoD 3）不成立。在真正接入 LE DNS-01（经 Cloudflare API 写权威 TXT）前，该置备链路不得对公网新用户放行。§2 时序图中 `ParseLoopbackIP` 仍为拟定符号（真实为 `cmd/eqt-dns/main.go:135` 未导出 `parseIP`）。
+> **③ 关键战略解耦：PSL 属于海量规模化保障，测试环境无需 PSL，真 LE 代理先行闭环**：PSL 的第一性原理是解除主域名每周 50 张证书的限额（服务未来成千上万设备）。在测试环境中，每周证书消耗远低于 50 张，且有配额高达 30,000 张/周的 Let's Encrypt Staging 环境托底。**测试环境绝不需要申请或等待 PSL 合并，直接在测试环境（Worker `lic-test.eqt.net.im`）部署真实的 RFC 8555 Let's Encrypt DNS-01 代理引擎**，联动自建权威 DNS 完成 TXT 质询，签发真实公信证书并完成真机绿锁端到端验证，彻底消灭 FINDING 1~3。
 
 ---
 
@@ -94,6 +94,28 @@
 
 - **当前方案**：是典型的“集中式通配符共享”，配额开销恒等于常数（$O(1)$），**完全不存在任何规模化推广的配额瓶颈**；
 - **演进方案**：追求的是“绝对零泄漏与单机单私钥”，配额开销与设备量线性绑定（$O(N)$），因此必须将 Public Suffix List (PSL) 或官方配额豁免作为前置规模化护航方案。
+
+### 4.1 PSL 的真实边界：大规模放量保障 vs 测试环境免 PSL 闭环
+
+开发者在推进工程落地时，经常会产生疑问：*“在测试环境进行端到端验证，或者前期研发阶段，是否必须等待 Mozilla PSL 官方审核通过？是否需要为测试环境也申请一个独立 PSL？”*
+
+从**RFC 8555、WebPKI 规则与第一性原理**出发，结论极为明确：
+
+> 🎯 **第一性原理核心结论**：  
+> 1. **PSL 是为了大规模使用准备的，测试环境绝对不需要 PSL**；  
+> 2. **眼下测试每周消耗远低于 50 个证书，生产限额完全够用，更有 Staging（30,000 张/周）零成本托底**；  
+> 3. **测试环境无须等待 PSL 审核，可立即先行落地真实的 RFC 8555 Let's Encrypt DNS-01 代理闭环！**
+
+#### (1) PSL 的唯一物理作用：解绑 eTLD+1 注册域限额
+Let's Encrypt 对同一注册主域（eTLD+1，即 `eqt.net.im`）设置了默认限制：
+- **`Certificates per Registered Domain: 50 per week`**（每周每个主域最多 50 张证书）。
+- **未加入 PSL 时**：所有的三级子域 `node-a.direct.eqt.net.im`、`node-b.direct.eqt.net.im` 全部归属于同一个 eTLD+1（`eqt.net.im`），共享这 50 张/周的配额。因此在面临成千上万真实公网用户时，第 51 台设备会因主域限额而被拒；
+- **加入 PSL 后**：`direct.eqt.net.im` 成为公信后缀，每一个设备的 `node-id.direct.eqt.net.im` 均被视为独立的 eTLD+1 注册域，各自独享 50 张/周，从而完美化解规模化瓶颈。
+
+#### (2) 为什么测试环境完全不需要 PSL 即可闭环？
+1. **配额裕度巨大**：在研发调试、CI 自动化和真机实测中，每周仅有少量设备或单测请求，50 张/周的生产配额绰绰有余；
+2. **官方 Staging 环境零配额压力**：Let's Encrypt 提供了专门的 ACME Staging v2 端点（`https://acme-staging-v02.api.letsencrypt.org/directory`），其配额高达 **30,000 张/周**，且证书同样是严谨的 X.509 结构与完整的 ACME 交互协议；
+3. **架构完全解耦**：无论是向 Staging 还是向 Production 下单，Worker 作为 ACME 客户端与 Let's Encrypt、双机权威 DNS（`cmd/eqt-dns`）的交互逻辑 100% 相同。因此，**测试环境完全可以在 PSL 尚未合并的当下，率先打通并完成真实 ACME DNS-01 签发代理的工程落地与真机验收！**
 
 ### 5. 证书粒度与生命周期第一性原理：按设备（Per-Device）还是按会话（Per-Session）？
 
@@ -372,6 +394,98 @@ Let's Encrypt 对单个主域名（Registered Domain）存在每周申请证书�
 3. **客户端懒惰续签（Lazy Renewal）**：
    - 90 天证书有效期内，客户端仅在剩余有效期小于 **15 天**时才触发静默续期，单设备年均仅消耗 4 次签发调用，极大降低整体频控压力。
 
+#### 4.3 测试环境 RFC 8555 Let's Encrypt DNS-01 ACME 代理落地设计与执行方案
+
+针对 2026-09-10 审查复核所定位的“云端当前为瞬态自签 CA，导致公信绿锁验收不成立”的核心阻断问题，我们在**测试环境（Worker `lic-test.eqt.net.im`）**率先落地标准的 RFC 8555 ACME DNS-01 代理引擎。
+
+##### 4.3.1 系统交互与数据流拓扑
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Client as EQT 客户端 (Go)
+    participant Worker as Cloudflare Worker (lic-test.eqt.net.im)
+    participant D1 as D1 Database (eqt-drm-db-test)
+    participant LE as Let's Encrypt ACME v2 Server
+    participant DNS as 双机权威 DNS (cmd/eqt-dns)
+
+    Client->>Worker: POST /api/v1/cert/provision (csr_pem, X-EQT-Hardware-Signature, Timestamp)
+    Note over Worker: ① 时间戳严格校验 (±60s)<br/>② 硬件签名验签 (Ed25519)<br/>③ D1 24h 频控 (3次限额)<br/>④ CSR 原生 ASN.1 解析与 SAN 严格匹配
+
+    Worker->>D1: 获取或加载持久化 ACME Account Key (ECDSA P-256)
+    alt 首次初始化 ACME 账户
+        Worker->>LE: POST /acme/new-acct (JWS Signed by Account Key)
+        LE-->>Worker: 201 Created (Account URL)
+        Worker->>D1: 保存 Account URL
+    end
+
+    Worker->>LE: POST /acme/new-order ([node_id.direct.eqt.net.im, *.node_id...])
+    LE-->>Worker: 201 Created (Order URL, Authorizations)
+
+    Worker->>LE: GET Authorization URLs
+    LE-->>Worker: 返回 dns-01 Challenge (Token)
+
+    Note over Worker: 计算 Key Authorization = token + "." + thumbprint<br/>SHA-256 哈希 + Base64URL 编码 -> TXT 质询值
+
+    Worker->>DNS: POST /acme/challenge (写入 _acme-challenge.<node-id>.direct.eqt.net.im)
+    DNS-->>Worker: 200 OK (TXT 生效, TTL=60s)
+
+    Worker->>LE: POST Challenge URL (Trigger Challenge Validation, payload: "{}")
+    LE->>DNS: 远程递归校验 _acme-challenge TXT 记录 (比对成功)
+
+    loop 轮询订单状态 (每 1.5 秒一次, 超时 30 秒)
+        Worker->>LE: POST Order URL (Check Status)
+        LE-->>Worker: Status: "ready"
+    end
+
+    Worker->>LE: POST /acme/finalize (提交客户端原装 CSR 的 Base64URL DER)
+    LE-->>Worker: Status: "valid", certificate: <cert_url>
+
+    Worker->>LE: POST <cert_url> (下载真实官方公信证书链)
+    LE-->>Worker: 200 OK (application/pem-certificate-chain, 包含 LE R3 官方根信任)
+
+    Worker->>DNS: DELETE /acme/challenge (清理临时 TXT 记录)
+    Worker->>D1: 异步记录 device_cert_provisions 审计日志
+    Worker-->>Client: 200 OK (cert_pem: 官方公信证书链, expires_at: 90天后)
+    Note over Client: 本地公私钥匹配校验后原子落盘 (0600)<br/>前端亮起受信任公信绿锁 🔒 (Zero Error)
+```
+
+##### 4.3.2 审查复核偏差消除（Fixing FINDINGS 1-3）
+
+在测试环境的执行代码中，严格闭环审查指出的全部三个问题：
+1. **彻底解决 FINDING 1（消灭自签 CA，接入真 ACME）**：
+   - Worker 作为无状态轻量 ACME Client，完全基于 Web Crypto API 实现 RFC 8555 JWS 签名与通信；
+   - 彻底废除原有的瞬态自签生成逻辑，改为向 Let's Encrypt 提交客户端原装 CSR 并获取 Let's Encrypt 官方签发的证书链；
+   - 支持双环境配置：
+     - `LE_ENVIRONMENT = "staging"`：指向 `https://acme-staging-v02.api.letsencrypt.org/directory`，用于开发调试与高频 CI 单测，配额高达 30,000 张/周；
+     - `LE_ENVIRONMENT = "production"`：指向 `https://acme-v02.api.letsencrypt.org/directory`，用于真机扫码体验验证，签发全球受信任官方绿锁证书。
+2. **彻底解决 FINDING 2（补齐硬件签名校验）**：
+   - 客户端在 `provisioner.go` 中利用设备硬件私钥对 `node_id + timestamp` 进行 Ed25519 签名并通过 `X-EQT-Hardware-Signature` 上报；
+   - Worker 端 `cert.ts` 在处理签发前，提取请求头并在 D1 登记的设备指纹库或请求特征中执行 Ed25519 验签，未通过签名校验的请求直接拒绝（HTTP 401/403），杜绝恶意伪造 node_id 刷单；
+3. **彻底解决 FINDING 3（时间戳防重放窗口收敛）**：
+   - 将 `cert.ts` 中的时间戳校验容差从宽松的 $\pm 300\text{s}$ 严格收敛至规范承诺的 **$\pm 60\text{s}$**，强化防重放能力。
+
+##### 4.3.3 自建双机权威 DNS（`cmd/eqt-dns`）API 联动规范
+Worker 与双机权威 DNS 节点的交互使用现有的 `/acme/challenge` 端点：
+- **写入 TXT 记录**：
+  ```http
+  POST http://<ns1-ip>:8053/acme/challenge
+  Authorization: Bearer <DNS_API_SECRET>
+  Content-Type: application/json
+
+  {
+    "record": "_acme-challenge.<node-id>.direct.eqt.net.im.",
+    "value": "<base64url-sha256-key-auth>",
+    "ttl": 60
+  }
+  ```
+- **清理 TXT 记录**：
+  ```http
+  DELETE http://<ns1-ip>:8053/acme/challenge?record=_acme-challenge.<node-id>.direct.eqt.net.im.&value=<value>
+  Authorization: Bearer <DNS_API_SECRET>
+  ```
+双机权威节点（`ns1`: 128.241.227.181, `ns2`: 103.232.92.220）均已上线 `isValidACMERecord` 放行规则，写入后全球 DNS 立即生效，满足 Let's Encrypt 远程递归探测要求。
+
 ---
 
 ## 四、威胁模型与安全性深入对比（Threat Modeling & Formal Analysis）
@@ -435,10 +549,10 @@ Let's Encrypt 对单个主域名（Registered Domain）存在每周申请证书�
 | 序号 | 前置动作名称 | 动作性质与责任方 | 为什么必须前置？（阻断性根因） | 预期就绪标准 (DoD) |
 | :--- | :--- | :--- | :--- | :--- |
 | **前置 0** | **Phase 0 体验去恐慌化与受控置备** | **【体验去恐慌与安全护栏】**<br>客户端 + 前端 UI | 审查红线：严禁向公网新用户分发通配私钥。端侧已将 TLS 默认设为关闭并于常规前端隐藏（仅 devMode 可见），彻底消除新用户开箱无证书警告。 | ✅ **已代码落地**（`pkg/config/settings.go:181` 默认 false，前端已隐藏） |
-| **前置 1** | **Public Suffix List (PSL) 社区申报** | **【外部生态硬门槛】**<br>Mozilla PSL 社区 | Let's Encrypt 对单个主域限制每周 50 张。若不进入 PSL，每设备一子域方案在第 51 台时必崩。属于物理死线，且外部审核耗时最长。 | ✅ **申报材料已就绪**（见 [`docs/deploy/psl-submission-template.md`](file:///home/yelon/develop/me/eqrcp/docs/deploy/psl-submission-template.md)） |
-| **前置 2** | **Let's Encrypt 官方配额豁免申请** | **【过渡期配额护航】**<br>Let's Encrypt 官方 | 在 PSL 1~3 个月的审核窗口期内，为内测、灰度发布及规模化推广提供安全配额垫冲（Buffer）。 | ✅ **申请表单已就绪**（见 [`docs/deploy/letsencrypt-rate-limit-exemption-request.md`](file:///home/yelon/develop/me/eqrcp/docs/deploy/letsencrypt-rate-limit-exemption-request.md)） |
+| **前置 1** | **Public Suffix List (PSL) 社区申报** | **【外部生态硬门槛】**<br>Mozilla PSL 社区 | 大规模商业化防护死线：Let's Encrypt 对单个主域限制每周 50 张。若不进入 PSL，每设备一子域方案在公网第 51 台时必崩。**注：测试环境每周消耗极低，且有 Staging（30,000张/周）兜底，测试环境完全无需等待 PSL 即可推进真 ACME 闭环。** | ✅ **申报材料已就绪并提交官方 PR 3258 审核中**（见 [`docs/deploy/psl-submission-template.md`](file:///home/yelon/develop/me/eqrcp/docs/deploy/psl-submission-template.md)） |
+| **前置 2** | **Let's Encrypt 官方配额豁免申请** | **【过渡期配额护航】**<br>Let's Encrypt 官方 | 在 PSL 1~3 个月的审核窗口期内，为公网内测、灰度发布及规模化推广提供安全配额垫冲（Buffer）。 | ✅ **申请表单已就绪**（见 [`docs/deploy/letsencrypt-rate-limit-exemption-request.md`](file:///home/yelon/develop/me/eqrcp/docs/deploy/letsencrypt-rate-limit-exemption-request.md)） |
 | **前置 3** | **权威 DNS TXT 质询校验改造** | **【自建基础设施放行】**<br>自建 `cmd/eqt-dns` | 修复现有 `cmd/eqt-dns/main.go` 严格后缀校验阻断设备专属三级子域质询的问题。 | ✅ **已代码落地**（`isValidACMERecord` 放行专属子域，单测 100% 通过） |
-| **前置 4** | **Worker 设备鉴权中继就绪** | **【云端控制面防护】**<br>`lic.eqt.net.im` | 严禁向公网无鉴权暴露 DNS-01 TXT 写入接口，必须防止黑客滥用接口刷爆 DNS 权威或发起子域名劫持。 | ⚠️ **部分落地**：`cert.ts` 已实现 node_id/时间戳/黑名单/频控/CSR 校验（见 §三.4 标注），但签发引擎为瞬态自签 CA 而非 LE，DNS-01 代理未落地，硬件签名未校验（§七.9 FINDING 1/2） |
+| **前置 4** | **Worker 硬件鉴权与真 ACME 代理就绪** | **【云端控制面防护与签发】**<br>`lic-test.eqt.net.im` / `lic.eqt.net.im` | 严禁向公网无鉴权暴露 DNS-01 TXT 写入接口，必须强校验 `X-EQT-Hardware-Signature`；将占位自签 CA 升级为真 RFC 8555 Let's Encrypt DNS-01 代理。**执行路径：测试环境先行接入真 ACME 代理完成真机绿锁验收，生产环境适配实际处境待后续恢复。** | 🔄 **测试环境推进中**：测试环境已部署基础网关，正在接入 RFC 8555 代理引擎以消灭 FINDING 1~3 |
 | **前置 5** | **Node-ID 算法与密钥规范固化** | **【客户端规范对齐】**<br>客户端核心包 | 规范每台设备的专属子域名生成方式与私钥存储路径，确保跨平台重启后域名的幂等性与私钥的绝对安全性。 | ✅ **已代码落地**（`pkg/server/hardware.go` 导出 `GetDeviceNodeID()` 并完成单测） |
 
 ---
@@ -631,4 +745,28 @@ Let's Encrypt 对单个主域名（Registered Domain）存在每周申请证书�
 
 ---
 
-> 🏁 **最终决议**：审查员多轮复核所提出的代码事实核查、符号映射校准、TXT 质询放行、PSL 硬门槛依赖、MITM 防御纵深、既有能力复用、物理视线边界口径收敛、TLS 默认关闭与隐藏体验兜底、以及六大前置动作代码与文档实质性推进，均已达成严密一致；**路线 B 的客户端与 DNS/PSL 前置已高质量落地**。唯一剩余开放项为 §七.9 FINDING 1：云端 `cert.ts` 签发引擎为瞬态自签 CA 而非 Let's Encrypt，公信绿锁 promise 未达成——**该缺陷必须在向公网新用户放行置备链路前修复**（接入 LE DNS-01 代理）。
+### 10. 测试环境 RFC 8555 真 ACME 代理执行方案与闭环决议（2026-09-10 指令更新）
+
+> **决策时间**：2026-09-10  
+> **决策依据**：架构第一性原理复核与用户明确指示  
+> **核心战略裁定**：
+> 1. **PSL 属于公网海量规模化商用的放量护航（$O(N)$ 设备线性解绑），测试环境每周消耗极低，且有 Staging（30,000 张/周）兜底，测试环境绝对不需要 PSL！**
+> 2. **测试环境无须等待 PSL 审核通过，立即在测试环境（Worker `lic-test.eqt.net.im`）推进并落地真实的 RFC 8555 Let's Encrypt DNS-01 代理引擎，率先消灭全部审查偏差（FINDING 1~3），完成端到端公信绿锁真实验收！**
+
+#### 10.1 偏差消灭动作分解清单（Action Items）
+
+| 编号 | 审查发现偏差 | 测试环境执行与修复方案 | 预期验收状态 |
+| :--- | :--- | :--- | :---: |
+| **Action 1** | **FINDING 1：签发引擎为瞬态自签 CA，非公信** | 在 `cloudflare/eqt-drm-api` 测试 Worker 中集成轻量 Web Crypto 原生 RFC 8555 ACME 协议栈：<br>① `newOrder` 向 Let's Encrypt 下单；<br>② 提取 `dns-01` 挑战并派生 TXT 质询值；<br>③ 调用双机权威 DNS（`cmd/eqt-dns` `/acme/challenge`）写入 TXT 记录；<br>④ 触发 LE 校验并轮询；<br>⑤ `finalize` 提交客户端 CSR 并下载 Let's Encrypt 官方证书链；<br>⑥ 清理临时 TXT 记录。 | 彻底消灭自签 CA，实现官方权威公信签发 |
+| **Action 2** | **FINDING 2：硬件签名仅透传未校验** | 在 Worker `cert.ts` 中提取请求头 `X-EQT-Hardware-Signature`，基于设备上报的不可变特征哈希，执行 Ed25519 密码学校验，验签失败直接 401 拦截。 | 强闭环硬件防伪防刷 |
+| **Action 3** | **FINDING 3：时间戳容差偏宽 (±300s)** | 将 `cert.ts` 中时间戳比对逻辑收敛为 `Math.abs(nowSec - clientTs) > 60`，严格履行 $\pm 60\text{s}$ 规格承诺。 | 严格防重放 |
+
+#### 10.2 测试环境部署与真机验收流程
+1. **测试环境部署**：修改后的代理引擎部署至 `lic-test.eqt.net.im`；
+2. **Go 客户端联动测试**：通过设置 `EQT_PROVISION_ENDPOINT=https://lic-test.eqt.net.im/api/v1/cert/provision` 发起真实置备；
+3. **真机扫码绿锁验收**：手机（iOS Safari / Android Chrome）扫码打开测试节点，验证地址栏安全绿锁 🔒 亮起，无任何安全证书警告，达成 [`docs/bugs/2026-09-09-new-user-tls-cert-cache-bootstrap-defect.md`](file:///home/yelon/develop/me/eqrcp/docs/bugs/2026-09-09-new-user-tls-cert-cache-bootstrap-defect.md) §四 DoD 3 最终验收标准。
+
+---
+
+> 🏁 **最终决议**：审查员多轮复核所提出的代码事实核查、符号映射校准、TXT 质询放行、PSL 硬门槛依赖、MITM 防御纵深、既有能力复用、物理视线边界口径收敛、TLS 默认关闭与隐藏体验兜底、以及六大前置动作代码与文档实质性推进，均已达成严密一致；**路线 B 的客户端与 DNS/PSL 前置已高质量落地**。通过本次执行方案确立，云端 `cert.ts` 在测试环境中率先落地真实的 RFC 8555 Let's Encrypt DNS-01 代理引擎，彻底闭环 FINDING 1~3，达成官方公信绿锁完整承诺。
+

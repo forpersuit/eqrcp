@@ -191,8 +191,9 @@ WantedBy=multi-user.target
   - 测试环境隔离：Cloudflare Worker 测试环境部署在 `lic-test.eqt.net.im`，绑定专用隔离 D1 数据库 `eqt-drm-db-test`（`c4e4e57f-3b75-4198-8c60-3584758e9b47`）；
   - 动态端点覆盖：Go 端 `pkg/cert` 支持通过环境变量 `EQT_PROVISION_ENDPOINT` 灵活切换置备网关；
   - 生产环境真实处境适配：在 Mozilla PSL 合并生效与 Let's Encrypt 频控豁免完成官方审批前，TLS 处于非默认开启状态。官网（`cloudflare/eqt-website`）各语言对外文案收敛隐藏 TLS 免装证书说明，重点宣导“局域网物理内网极速直连”、“零云端中继”、“无外网流量消耗”；待未来正式全量放开后再行恢复。
-- **🔴 公信绿锁验收红线（2026-09-10 审查复核，实现状态标记）**：
+- **🔴 公信绿锁验收红线与测试环境推进策略（2026-09-10 复核更新）**：
   - ⚠️ **现状标记**：`cert.ts` 当前签发引擎为**每请求瞬态自签 CA**（Issuer `EQT LAN-TLS Intermediate CA`，`issueCertificateFromCSR` 未传 signingKey 时临时生成），**非 Let's Encrypt 公信签发**——手机扫码会触发 `NET::ERR_CERT_AUTHORITY_INVALID` 红屏，[`docs/bugs/2026-09-09-new-user-tls-cert-cache-bootstrap-defect.md`](file:///home/yelon/develop/me/eqrcp/docs/bugs/2026-09-09-new-user-tls-cert-cache-bootstrap-defect.md) §四 DoD 3 绿锁验收尚未达成；公网新用户放行前必须接入真实 LE DNS-01 代理（详见 [`docs/mechanism/lan-tls-zero-leak-acme-architecture.md`](file:///home/yelon/develop/me/eqrcp/docs/mechanism/lan-tls-zero-leak-acme-architecture.md) §七.9 FINDING 1）。
+  - 💡 **PSL 范围澄清与测试环境策略**：PSL 的第一性原理是为公网海量用户规模化时破除主域每周 50 张限额；**测试环境每周消耗极低（<50张）且有 Staging（30,000张/周）托底，测试环境绝对不需要等待 PSL，可直接在测试环境率先落地 RFC 8555 Let's Encrypt DNS-01 代理闭环！**
   - **验收四条（评估“官方公信绿锁”链路是否真正达成时逐条核对）**：
     1. 签发 CA 是否存在于浏览器/OS 信任存储库（自建/瞬态 CA 一律判失败，浏览器必红屏）；
     2. 云端是否真实存在 ACME client 交互（NewOrder/DNS-01/Finalize，而非手写 X.509 自签）；
