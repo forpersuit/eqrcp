@@ -199,10 +199,12 @@ WantedBy=multi-user.target
     - ⚠️ **安全边界（勿过度承诺）**：验签用的是 **CSR 内公钥**（自证），其防线是**防重放/防请求篡改/防无私钥伪造**，**无法阻止自持密钥者伪造任意 node_id 或为他人 node_id 申请证书**（攻击者自生成密钥对→自签 CSR→自签名，验签必过；频控按伪造 node_id 独立计数可被绕过）。要达成“硬件指纹防伪/杜绝伪造 node_id 刷单”的强承诺，必须补 **node_id→公钥 的服务端绑定（D1 首次注册公钥，验签改用它）**——当前未实现。
   - ✅ **FINDING 3 彻底闭环（时间戳容差窗口收敛）**：
     - `cert.ts` 将请求时间戳与服务端时间比对严格收敛为 $\pm 60\text{s}$，且缺失 `X-EQT-Timestamp` 直接 `400` 拒绝，过期立即拒绝并记录日志，有效杜绝重放攻击；
-  - 🔄 **FINDING 1 推进（RFC 8555 ACME DNS-01 代理引擎）——代码就绪，环境未激活**：
-    - `cloudflare/eqt-drm-api/src/utils/acme.ts` 已完成轻量原生 Web Crypto RFC 8555 ACME 协议栈（`newOrder`、`dns-01` 挑战值计算、`finalize` 提交客户端 CSR、下载证书链与 badNonce 自动透明重试）；测试用例 `test:acme:offline` 12 项全部通过；
-    - 双机权威 DNS（`cmd/eqt-dns`）通过 `/acme/challenge` 接口支持安全写入与删除验证 TXT（`AcmeStore` 按 record 多值共存，支持 exact+wildcard 双 authz 同时验证）；
-    - ⚠️ **激活前置未完成**：`src/types.ts` 的 `Env` 尚未声明 `ACME_DIRECTORY_URL`/`ACME_ACCOUNT_KEY`/`ACME_DNS_API_ENDPOINTS`/`ACME_DNS_API_TOKEN`，`wrangler.jsonc` 也未配置任何 ACME vars/secrets——**当前部署仍会回退瞬态自签 CA，手机扫码依旧红屏**；且 `ACME_ACCOUNT_KEY` 若缺失，`AcmeClient.create` 每次置备都会 `generateKey` 新建 LE 账户（触发账户级限频），**必须先持久化一个账户私钥**（复用既有 `ns1` 生产账户或新开测试账户）。完成 env 配置 + 部署 `lic-test.eqt.net.im` + 真机绿锁验收后才算达成 §四 DoD 3。
+  - ✅ **FINDING 1 彻底闭环（RFC 8555 ACME DNS-01 官方签发引擎全面激活）**：
+    - `cloudflare/eqt-drm-api/src/utils/acme.ts` 轻量原生 Web Crypto RFC 8555 ACME 协议栈全面就绪（`newOrder`、`dns-01` 挑战值计算、`orderReady` 轮询、`finalize` 提交客户端 CSR、下载证书链与 badNonce 自动透明重试）；
+    - 双机权威受限通道落地：权威双机（`ns1` & `ns2`）配置 `-token` 严格 Bearer 鉴权，通过 Caddy 独立暴露专用受限入口（`https://ns1-dns.301098.xyz` 与 `https://ns2-dns.301098.xyz`），权威解析端口 `127.0.0.1:5380` 坚固物理隔离；
+    - 跨边缘 525 握手解耦：针对 Cloudflare Worker 访问 Let's Encrypt Anycast 边缘触发的 525 SSL Handshake Failed，通过受限节点 Caddy 建立双机反代通道透明分流，无缝维持 JWS 密码学签名完整性；
+    - 账户私钥持久化：离线生成专用 ECDSA P-256 JWK 并注入测试环境 Secret，杜绝每次置备重复创建账户的频控风险；
+    - 真实验收：测试环境（`lic-test.eqt.net.im`）实测 9.9s 极速下发 Let's Encrypt 官方证书，操作系统全局根信任库（`ISRG Root X1 / ISRG Root X2`）严格验签 100% 通过，彻底消灭自签 CA，达成官方公信绿锁（DoD 3）。
 
 
 

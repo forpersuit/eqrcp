@@ -337,7 +337,12 @@ export class AcmeClient {
     return await res.json() as AcmeOrder;
   }
 
-  async pollOrder(orderUrl: string, maxWaitMs = 60000, intervalMs = 2000): Promise<AcmeOrder> {
+  async pollOrder(
+    orderUrl: string,
+    targetStatus: 'ready' | 'valid' = 'valid',
+    maxWaitMs = 60000,
+    intervalMs = 2000
+  ): Promise<AcmeOrder> {
     const start = Date.now();
     while (Date.now() - start < maxWaitMs) {
       const res = await this.postSigned(orderUrl, '');
@@ -345,7 +350,7 @@ export class AcmeClient {
         throw new Error(`failed to poll order: HTTP ${res.status}`);
       }
       const order = await res.json() as AcmeOrder;
-      if (order.status === 'valid') {
+      if (order.status === targetStatus || (targetStatus === 'ready' && order.status === 'valid')) {
         return order;
       }
       if (order.status === 'invalid') {
@@ -353,7 +358,7 @@ export class AcmeClient {
       }
       await new Promise(resolve => setTimeout(resolve, intervalMs));
     }
-    throw new Error(`ACME order poll timeout after ${maxWaitMs}ms`);
+    throw new Error(`ACME order poll timeout waiting for ${targetStatus} after ${maxWaitMs}ms`);
   }
 
   async downloadCertificate(certUrl: string): Promise<string> {

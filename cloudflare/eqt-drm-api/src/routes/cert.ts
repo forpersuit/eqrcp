@@ -701,10 +701,48 @@ export async function handleCertRoutes(
       const endpoints = env.ACME_DNS_API_ENDPOINTS.split(',').map(s => s.trim()).filter(Boolean);
       const dnsToken = env.ACME_DNS_API_TOKEN || '';
 
+      // Route outbound ACME requests to Let's Encrypt via secure reverse proxies (ns1/ns2)
+      // to circumvent Cloudflare Edge 525 SSL Handshake Loop while maintaining end-to-end JWS integrity
+      const proxyBases = endpoints.map(ep => `${ep.replace(/\/+$/, '')}/le-proxy`);
+      const acmeCustomFetch: typeof fetch = async (input, init) => {
+        const originalUrl = typeof input === 'string' ? input : (input instanceof Request ? input.url : String(input));
+        let proxyPath = '';
+        let isLE = false;
+        if (originalUrl.startsWith('https://acme-v02.api.letsencrypt.org')) {
+          proxyPath = originalUrl.slice('https://acme-v02.api.letsencrypt.org'.length);
+          isLE = true;
+        } else if (originalUrl.startsWith('https://acme-staging-v02.api.letsencrypt.org')) {
+          proxyPath = originalUrl.slice('https://acme-staging-v02.api.letsencrypt.org'.length);
+          isLE = true;
+        }
+
+        if (isLE && proxyBases.length > 0) {
+          let lastErr: any;
+          for (const base of proxyBases) {
+            try {
+              const targetUrl = `${base}${proxyPath}`;
+              const res = await fetch(targetUrl, init);
+              if (res.status !== 502 && res.status !== 504) {
+                return res;
+              }
+            } catch (err: any) {
+              lastErr = err;
+            }
+          }
+          if (lastErr) throw lastErr;
+        }
+
+        return await fetch(input, init);
+      };
+
       const acmeClient = await AcmeClient.create({
-        directoryUrl: env.ACME_DIRECTORY_URL || 'https://acme-staging-v02.api.letsencrypt.org/directory',
-        accountKeyJWK: env.ACME_ACCOUNT_KEY
+        directoryUrl: env.ACME_DIRECTORY_URL || 'https://acme-v02.api.letsencrypt.org/directory',
+        accountKeyJWK: env.ACME_ACCOUNT_KEY,
+        customFetch: acmeCustomFetch
       });
+      if (env.ACME_EMAIL) {
+        await acmeClient.initAccount(env.ACME_EMAIL);
+      }
 
       const { orderUrl, order } = await acmeClient.newOrder([expectedCommonName, expectedWildcard]);
       const thumbprint = await acmeClient.getThumbprint();
@@ -729,8 +767,11 @@ export async function handleCertRoutes(
           await acmeClient.triggerChallenge(dnsChall.url);
         }
 
+        // Wait for all DNS authorizations to be verified and the order to transition to 'ready'
+        await acmeClient.pollOrder(orderUrl, 'ready', 60000, 2000);
+
         await acmeClient.finalizeOrder(order.finalize, parsedCSR.rawDER);
-        const validOrder = await acmeClient.pollOrder(orderUrl, 90000, 2500);
+        const validOrder = await acmeClient.pollOrder(orderUrl, 'valid', 90000, 2500);
         if (!validOrder.certificate) {
           throw new Error('ACME order finalized but no certificate URL was returned');
         }

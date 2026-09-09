@@ -34,6 +34,16 @@ export interface Env {
   TELEMETRY_SALT?: string;
   /** Environment mode: 'production' | 'test' | 'development' */
   ENVIRONMENT?: string;
+  /** RFC 8555 ACME Directory URL (e.g. https://acme-v02.api.letsencrypt.org/directory) */
+  ACME_DIRECTORY_URL?: string;
+  /** Fixed ECDSA P-256 JWK string for the persistent ACME account key */
+  ACME_ACCOUNT_KEY?: string;
+  /** Comma-separated HTTPS endpoints for authoritative DNS challenge injection */
+  ACME_DNS_API_ENDPOINTS?: string;
+  /** Bearer token for authenticating against ACME_DNS_API_ENDPOINTS */
+  ACME_DNS_API_TOKEN?: string;
+  /** Optional contact email for ACME account registration */
+  ACME_EMAIL?: string;
 }
 
 export interface DownloadRecord {
