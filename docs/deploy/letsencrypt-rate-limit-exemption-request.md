@@ -11,7 +11,7 @@
 - **Contact Email**: security@eqt.net.im / forpersuit@gmail.com
 - **Organization / Project Name**: EQT Project (https://eqt.net.im)
 - **Primary Domain**: `direct.eqt.net.im` (parent: `eqt.net.im`)
-- **ACME Account ID / URI**: `https://acme-v02.api.letsencrypt.org/acme/acct/XXXXX`
+- **ACME Account ID / URI**: `https://acme-v02.api.letsencrypt.org/acme/acct/3704177676`
 
 ### 2. Requested Limits & Timeline
 - **Requested Certificates per Registered Domain**: 20,000 per week
@@ -54,7 +54,7 @@
      # 查看 accounts 目录下的 account.json
      cat ~/.lego/accounts/acme-v02.api.letsencrypt.org/*/account.json | grep -o 'https://acme-v02.api.letsencrypt.org/acme/acct/[0-9]*'
      ```
-   - **输出示例**：`https://acme-v02.api.letsencrypt.org/acme/acct/198273645`
+   - **实际账户（已从 ns1 自动提取）**：`https://acme-v02.api.letsencrypt.org/acme/acct/3704177676`
 3. 将该真实 URI 填入第一部分问案草案的第 1.4 项。
 
 ---
