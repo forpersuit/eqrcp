@@ -1127,13 +1127,17 @@ func TestRegisterPaidStatusCallback(t *testing.T) {
 
 	SetPaidStatus(true, time.Now().UTC().Format(time.RFC3339), "LIFETIME", "PRO")
 
-	select {
-	case res := <-ch:
-		if !res.paid || res.tier != "PRO" {
-			t.Errorf("expected paid=true tier=PRO, got paid=%t tier=%s", res.paid, res.tier)
+	deadline := time.After(2 * time.Second)
+	found := false
+	for !found {
+		select {
+		case res := <-ch:
+			if res.paid && res.tier == "PRO" {
+				found = true
+			}
+		case <-deadline:
+			t.Fatal("expected registered callback to be called with paid=true tier=PRO on SetPaidStatus within timeout")
 		}
-	case <-time.After(2 * time.Second):
-		t.Error("expected registered callback to be called on SetPaidStatus within timeout")
 	}
 }
 

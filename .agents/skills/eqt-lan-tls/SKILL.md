@@ -156,3 +156,19 @@ WantedBy=multi-user.target
 - **核心演进**：彻底淘汰过渡期通配符私钥共享与脚本同步机制，演进至工业级 Tailscale 路线（本地 ECDSA P-256 私钥自生成，永不出机；云端基于硬件指纹代理 RFC 8555 ACME DNS-01 签发）。
 - **详尽架构机制文档**：详见核心技术蓝图 [`docs/mechanism/lan-tls-zero-leak-acme-architecture.md`](file:///home/yelon/develop/me/eqrcp/docs/mechanism/lan-tls-zero-leak-acme-architecture.md)。
 
+---
+
+## 9. Mozilla Public Suffix List (PSL) 官方收录与自动化合规基线 (Mozilla PSL Inclusion)
+
+- **官方 Pull Request**: [publicsuffix/list#3258](https://github.com/publicsuffix/list/pull/3258) (`Add direct.eqt.net.im to PRIVATE section`)
+- **自动化 CI 审查标准**:
+  - PR 正文必须使用官方自动化模板（严禁裁剪、压缩或删除任何表单项与复选框），7 个 `<!-- FILL IN -->` 必须严丝合缝闭环；
+  - 官方 CI `PR template check / check-template (pull_request_target)` 必须 100% 通过（已秒级 Successful 通过）。
+- **PRIVATE 分区字母序铁律**:
+  - PRIVATE section 按照公司/组织名称字母序排列（`public_suffix_list.dat` 声明 `Note: these are in alphabetical order by company name`）；
+  - `EQT` (Eq...) 必须严格位于 `// encoway GmbH` 之后、`// EU.org` 之前；
+  - 必须通过官方 Go 校验工具：`tools/psltool fmt ../public_suffix_list.dat` 与 `tools/psltool validate ../public_suffix_list.dat`（输出 `PSL file is valid`）。
+- **双机权威 DNS 常驻验证记录**:
+  - `ns1` (`128.241.227.181`) 与 `ns2` (`103.232.92.220`) 的 systemd 服务挂载 `-psl-url https://github.com/publicsuffix/list/pull/3258`；
+  - 权威解析器原生响应 `_psl.direct.eqt.net.im.` TXT 查询，全球公共递归解析（`1.1.1.1` / `8.8.8.8`）实时可查且必须长期保持。
+

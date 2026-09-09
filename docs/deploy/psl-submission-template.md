@@ -87,7 +87,7 @@ Currently 5-10 thousand active distinct installations across desktop and mobile 
 <!-- FILL IN: DNS verification records (keep this line and its END FILL IN) -->
 ```
 dig +short TXT _psl.direct.eqt.net.im
-"https://github.com/publicsuffix/list/pull/XXXX"
+"https://github.com/publicsuffix/list/pull/3258"
 ```
 ```
 dig +short NS direct.eqt.net.im
