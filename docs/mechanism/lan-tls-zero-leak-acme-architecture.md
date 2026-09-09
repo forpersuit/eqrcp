@@ -5,7 +5,13 @@
 > **面向对象**：核心开发团队、系统架构师、安全与密码学审计人员  
 > **基线分支**：`master`（设计演进预演）  
 > **关联技术**：[`pkg/cert`](file:///home/yelon/develop/me/eqrcp/pkg/cert/cert.go), [`cmd/eqt-dns`](file:///home/yelon/develop/me/eqrcp/cmd/eqt-dns/main.go), [`pkg/server/hardware.go`](file:///home/yelon/develop/me/eqrcp/pkg/server/hardware.go), [`.agents/skills/eqt-lan-tls/SKILL.md`](file:///home/yelon/develop/me/eqrcp/.agents/skills/eqt-lan-tls/SKILL.md)  
-> **代码事实核实**（审查于 2026-09-09，锚定真实符号与行号）：本文为**设计蓝图**，“设备专属子域 + 单机单私钥 + Ed25519 硬件 CSR”一条全链路**尚未落地**（代码零实现）。仅以下基线已实现：`cert.BaseDomain = "direct.eqt.net.im"`（`pkg/cert/cert.go:16`）、`cert.FormatDirectDomain`（同文件 :22，仅单级）、`cmd/eqt-dns` 的回环 IPv4 解析（真实为未导出 `parseIP`，`main.go:135`）、`desktop/gui/agent.go:1031-1034` 的 Fail-Soft 降级、`scripts/sync-certs-from-vps.sh`（旧通配符私钥同步，待 Phase 4 下线）。下文 §3 中 `ParseLoopbackIP`、`hardware.GetDeviceNodeID()`、`pkg/cert/provisioner.go` 均为**蓝图内的拟定符号名，当前代码中尚不存在**（详见各节脚注）。
+> **代码事实核实**（首轮审查 2026-09-09，锚定真实符号与行号；实现复核 2026-09-10）：本文为**设计蓝图**，“设备专属子域 + 单机单私钥 + 公信 ACME 签发”全链路**尚未 100% 达成**（见下述红线偏差）。两轮核查结论如下：
+>
+> **① 已实现基线（2026-09-09 前）**：`cert.BaseDomain = "direct.eqt.net.im"`（`pkg/cert/cert.go:16`）、`cert.FormatDirectDomain`（同文件 :22，仅单级）、`cmd/eqt-dns` 的回环 IPv4 解析（真实为未导出 `parseIP`，`main.go:135`）、`desktop/gui/agent.go:1031-1034` 的 Fail-Soft 降级、`scripts/sync-certs-from-vps.sh`（旧通配符私钥同步，待 Phase 4 下线）。
+>
+> **② 路线 B 本轮新实现（2026-09-10 复核，commit `73dc9d1a`/`8a6984f2`/`cb57aa1b`/`4dbf7a56`/`e1820eef`）**：原蓝图符号已落地——`hardware.GetDeviceNodeID()`（`pkg/server/hardware.go:485`，sha256 三元组截前 12 位 hex）、`pkg/cert/provisioner.go`（521 行：本地 ECDSA P-256 生钥/CSR/验证后落盘）、云端 `cloudflare/eqt-drm-api/src/routes/cert.ts`（`POST /api/v1/cert/provision`）、`cmd/eqt-dns` 的 `isValidACMERecord` 放行与 `_psl` TXT、桌面端 silent provisioning（`desktop/gui/app.go`）与前端去恐慌化（i18n `tls_cert_preparing`/`tls_cert_ready`）、PSL PR 3258。
+>
+> **⚠️ 核心偏差（阻断公网发布，见 §七.9 FINDING 1）**：`cert.ts` 的签发引擎**不是 ACME/Let's Encrypt 代理**——它用每次请求临时生成的瞬态 “EQT LAN-TLS Intermediate CA” 自签 X.509（`issueCertificateFromCSR` 未传 signingKey，`cert.ts:323-331`），该 CA 不在任何浏览器/OS 信任存储库，全代码库**无安装信任根 CA 步骤**。因此浏览器打开 `https://192-168-x-x.<node-id>.direct.eqt.net.im` 会触发 `NET::ERR_CERT_AUTHORITY_INVALID` 红屏，**恰复现了 [`docs/bugs/2026-09-09-new-user-tls-cert-cache-bootstrap-defect.md`](file:///home/yelon/develop/me/eqrcp/docs/bugs/2026-09-09-new-user-tls-cert-cache-bootstrap-defect.md) §六.1 已否定的路线 C 体验**；“官方公信绿锁”验收（bug 文档 §四 DoD 3）不成立。在真正接入 LE DNS-01（经 Cloudflare API 写权威 TXT）前，该置备链路不得对公网新用户放行。§2 时序图中 `ParseLoopbackIP` 仍为拟定符号（真实为 `cmd/eqt-dns/main.go:135` 未导出 `parseIP`）。
 
 ---
 
@@ -226,6 +232,10 @@ sequenceDiagram
     Note over Client: 完成初始化，启动本地 LAN-TLS 安全服务
 ```
 
+> ⚠️ **实现偏差核查（2026-09-10，审查员复核）**：上图中 `Proxy->>LE: 发起 ACME NewOrder`、`LE-->>Proxy: 签发并下发 fullchain.pem`、`Proxy->>DNS: POST /acme/challenge` 三步所承诺的 **Let's Encrypt 公信签发链路当前代码未实现**。已实现的 `cloudflare/eqt-drm-api/src/routes/cert.ts` 完全绕过了 LE：`issueCertificateFromCSR(parsedCSR, 90)`（`cert.ts:565`）调用时未传入 `signingKey`，触发 `cert.ts:323-331` 每次请求用 `crypto.subtle.generateKey` 生成**瞬态 ECDSA P-256 签名密钥**，Issuer 硬编码为 `EQT LAN-TLS Intermediate CA`（`cert.ts:261`）。该 CA 不存在于任何浏览器/OS 信任存储库，全代码库也**无任何安装信任根 CA 的步骤**（已 `rg` 核查 `certutil`/`addtrustedroot`/信任根安装均无真实命中）。全代码库唯一的 ACME 相关代码是 `cmd/eqt-dns` 的 DNS-01 TXT server（自建 DNS，供 LE 回查用），`cert.ts` 内零 ACME client、零 NewOrder、零权威 TXT 写入。
+>
+> **后果与判定**：手机扫码访问 `https://192-168-x-x.<node-id>.direct.eqt.net.im:<port>/<token>` 时浏览器报 `NET::ERR_CERT_AUTHORITY_INVALID` 全屏红标——**与 [`2026-09-09-new-user-tls-cert-cache-bootstrap-defect.md`](file:///home/yelon/develop/me/eqrcp/docs/bugs/2026-09-09-new-user-tls-cert-cache-bootstrap-defect.md) §六.1 明确否定的路线 C（自签名）体验完全一致**（原话“比降级为明文 HTTP 恶劣百倍”），且与 §一.3 硬性指标 1“地址栏必须呈现官方安全绿锁 🔒”直接冲突。**因此该图当前如实应读作“目标蓝图”，而非“已交付行为”。** 放行公网新用户前必须将 `cert.ts` 替换为真正的 LE DNS-01 代理（详见表驱动决议 §七.9 FINDING 1）。
+
 ---
 
 ## 三、核心技术组件实现规格（Technical Specifications）
@@ -328,6 +338,8 @@ func ParseLoopbackIP(fqdn string, baseDomain string) net.IP { // ⚠️ 拟名�
 
 ### 4. 云端 ACME 代理网关规格（`eqt-acme-proxy`）
 
+> ⚠️ **实现代码事实（2026-09-10 复核）**：本节 §4.1/§4.2 描述的是**目标规格**。当前代码中云端代理入口为 `cloudflare/eqt-drm-api/src/routes/cert.ts`（实际路由 `POST /api/v1/cert/provision`），其**已实现**了：node_id 严格 12-hex 校验（`cert.ts:451`）、时间戳反重放（`cert.ts:462-475`，窗口 ±300s）、设备黑名单（`cert.ts:480-496`）、24h 频控 3 次（`cert.ts:498-517`）、CSR 解析与 CN/SAN 双重校验（`cert.ts:520-560`）、D1 审计表 `device_cert_provisions`（`cert.ts:568-586`）。**尚未实现**：与 Let's Encrypt 的任何交互（NewOrder/DNS-01/Finalize）、权威 DNS TXT 写入、以及 §4.1 承诺的“强校验硬件指纹签名”（`X-EQT-Hardware-Signature` 头当前透传不校验，见 §七.9 FINDING 2）。签发引擎为瞬态自签 CA（见 §二.2 偏差核查）。
+
 云端代理网关负责编排 Let's Encrypt 交互，并实施极其严密的安全与配额管控。
 
 #### 4.1 访问鉴权与防刷（DRM 硬件指纹联动）
@@ -426,7 +438,7 @@ Let's Encrypt 对单个主域名（Registered Domain）存在每周申请证书�
 | **前置 1** | **Public Suffix List (PSL) 社区申报** | **【外部生态硬门槛】**<br>Mozilla PSL 社区 | Let's Encrypt 对单个主域限制每周 50 张。若不进入 PSL，每设备一子域方案在第 51 台时必崩。属于物理死线，且外部审核耗时最长。 | ✅ **申报材料已就绪**（见 [`docs/deploy/psl-submission-template.md`](file:///home/yelon/develop/me/eqrcp/docs/deploy/psl-submission-template.md)） |
 | **前置 2** | **Let's Encrypt 官方配额豁免申请** | **【过渡期配额护航】**<br>Let's Encrypt 官方 | 在 PSL 1~3 个月的审核窗口期内，为内测、灰度发布及规模化推广提供安全配额垫冲（Buffer）。 | ✅ **申请表单已就绪**（见 [`docs/deploy/letsencrypt-rate-limit-exemption-request.md`](file:///home/yelon/develop/me/eqrcp/docs/deploy/letsencrypt-rate-limit-exemption-request.md)） |
 | **前置 3** | **权威 DNS TXT 质询校验改造** | **【自建基础设施放行】**<br>自建 `cmd/eqt-dns` | 修复现有 `cmd/eqt-dns/main.go` 严格后缀校验阻断设备专属三级子域质询的问题。 | ✅ **已代码落地**（`isValidACMERecord` 放行专属子域，单测 100% 通过） |
-| **前置 4** | **Worker 设备鉴权中继就绪** | **【云端控制面防护】**<br>`lic.eqt.net.im` | 严禁向公网无鉴权暴露 DNS-01 TXT 写入接口，必须防止黑客滥用接口刷爆 DNS 权威或发起子域名劫持。 | 🔄 **设计规格就绪**（基于设备 DRM 硬件签名拦截网关） |
+| **前置 4** | **Worker 设备鉴权中继就绪** | **【云端控制面防护】**<br>`lic.eqt.net.im` | 严禁向公网无鉴权暴露 DNS-01 TXT 写入接口，必须防止黑客滥用接口刷爆 DNS 权威或发起子域名劫持。 | ⚠️ **部分落地**：`cert.ts` 已实现 node_id/时间戳/黑名单/频控/CSR 校验（见 §三.4 标注），但签发引擎为瞬态自签 CA 而非 LE，DNS-01 代理未落地，硬件签名未校验（§七.9 FINDING 1/2） |
 | **前置 5** | **Node-ID 算法与密钥规范固化** | **【客户端规范对齐】**<br>客户端核心包 | 规范每台设备的专属子域名生成方式与私钥存储路径，确保跨平台重启后域名的幂等性与私钥的绝对安全性。 | ✅ **已代码落地**（`pkg/server/hardware.go` 导出 `GetDeviceNodeID()` 并完成单测） |
 
 ---
@@ -593,6 +605,30 @@ Let's Encrypt 对单个主域名（Registered Domain）存在每周申请证书�
 5. **【前置 4：云端控制面】（🔄 规格就绪）**：`lic.eqt.net.im` 基于设备 DRM 硬件指纹的 DNS-01 代理接口规格确立；
 6. **【前置 5：算法规范固化】（✅ 代码已落地）**：`pkg/server/hardware.go` 正式实现并导出 `GetDeviceNodeID()` 算法，经 `hardware_test.go` 验证具备 12 位小写十六进制确定性与跨重启幂等性。
 
+### 9. 路线 B 实现首轮复核：交付 promise 与实现偏差闭环决议（commit `73dc9d1a`/`8a6984f2`/`cb57aa1b`/`4dbf7a56`/`e1820eef` · 2026-09-10）
+
+**复核对象**：开发者按路线 B 将此前“蓝图符号”（`GetDeviceNodeID`、`pkg/cert/provisioner.go`、云端签发通道）首次实现化。本轮审查逐条对照本文档与 [`docs/bugs/2026-09-09-new-user-tls-cert-cache-bootstrap-defect.md`](file:///home/yelon/develop/me/eqrcp/docs/bugs/2026-09-09-new-user-tls-cert-cache-bootstrap-defect.md) 的承诺验收。
+
+**① 已高质量达成（✅）**：
+1. **客户端密钥与 CSR 装配**（`pkg/cert/provisioner.go`，521 行）：本地 ECDSA P-256 生钥（`0600` 原子落盘 `~/.config/eqt/certs/<node-id>/privkey.pem`，绝不上传）、`GenerateDeviceCSR` 生成含 exact+wildcard SAN 的 PKCS#10、`SaveDeviceCertificate` 先 `VerifyCertificateMatchesPrivateKey` 再落盘、`RequestDeviceCertificate` 15 天阈值懒惰续签、失败分类（`ErrInvalidCSR`/`ErrRateLimited`/`ErrCertKeyMismatch`）。与 §三.1 规格逐条吻合。
+2. **Node-ID 算法**（`pkg/server/hardware.go:485`）：`sha256(uuid:cpu:disk)[:12]` 与蓝图一致，带 RWMutex 缓存与 `ResetCachedNodeIDForTest`。
+3. **DNS/PSL 前置**：`cmd/eqt-dns` 新增 `_psl` TXT 应答与 `isValidACMERecord` 放行设备子域质询；Mozilla PSL PR 3258 已提交。
+4. **桌面端静默置备**（`desktop/gui/app.go`）：`silentProvisionDeviceTLSCert()` 后台 goroutine 非阻塞（`time.Sleep` 延迟规避主线程抢占），事件总线 `eqt:tls-cert-ready` 驱动前端“准备中→就绪”；`agent.go:1031` 与 `AppInfo().HasValidTLSCert` 均改走 `HasValidCertificateForNode`。全程 Fail-Soft。
+
+**② 未达成（阻断公网发布）**：
+
+| # | 偏差 | 代码事实 | 影响与判定 |
+|---|---|---|---|
+| **FINDING 1** | 云端签发引擎**非 ACME/LE** | `cert.ts:565` `issueCertificateFromCSR(parsedCSR, 90)` 未传 signingKey → `cert.ts:323-331` 每请求瞬态生成 ECDSA 签名 key；Issuer 硬编码 `EQT LAN-TLS Intermediate CA`（`cert.ts:261`）；该 CA 不在任何浏览器/OS 信任库，全库无信任根安装步骤。 | 浏览器 `NET::ERR_CERT_AUTHORITY_INVALID` 红屏，复现 bug 文档 §六.1 已否定的路线 C 体验；§四 DoD 3“官方公信绿锁”验收不成立。**放行公网前必须替换为 LE DNS-01 代理**（经 Cloudflare API 写权威 TXT）。 |
+| **FINDING 2** | 硬件签名未校验 | `provisioner.go:442-443` 发送 `X-EQT-Hardware-Signature`，但 `cert.ts` 仅校验时间戳/黑名单/频控/CSR 域名，**未验证该签名**。 | §4.1“签名防篡改：强校验硬件指纹签名”未落地；防刷仅靠 node_id 频控，攻破者可伪造 node_id 批量占额。 |
+| **FINDING 3** | 时间戳窗口偏宽 | 文档 §4.1 承诺 ±60s，实现 `cert.ts:465` 为 ±300s。 | 重放防线弱化（量级不致命，应收敛回 ±60s）。 |
+| **校准 ③** | 蓝图措辞与实现相反 | §三.1.2 写“若已完成云端注册，优先与 `GetAuthorityDeviceID()` 前缀一致”；实现 `hardware.go:502-507` 为“指纹全空才回退授权 ID”。 | 实现方向更正确（硬件指纹为主、授权 ID 兜底），仅需校准文档措辞，不改代码。 |
+
+**③ 放行结论**：
+- 客户端侧（DNS/Node-ID/CSR/落盘/UI/Fail-Soft）**全部可安全合入**，无安全倒退。
+- 云端 `cert.ts` 作为**受控内部联调/测试端**可用（自签 CA 在本地信任后仍可验证 CSR→签发→回传全链路），但**不得作为公网新用户的置备后端**。
+- **公网放行前置条件**：`cert.ts` 接入真实 Let's Encrypt DNS-01——建立 ACME 账户、经 Cloudflare API 对 `<node-id>.direct.eqt.net.im` 写 `_acme-challenge` TXT、Finalize 提交客户端原装 CSR、返回 LE 签发链；并补验 `X-EQT-Hardware-Signature`。完成后以 bug 文档 §四 DoD 逐条验收（绿锁、无警告、首发 HTTPS）。
+
 ---
 
-> 🏁 **最终决议**：至此，审查员多轮复核所提出的代码事实核查、符号映射校准、TXT 质询放行、PSL 硬门槛依赖、MITM 防御纵深、既有能力复用、物理视线边界口径收敛、**TLS 默认关闭与隐藏体验兜底、以及六大前置动作代码与文档实质性推进**，**已全部 100% 达成严密一致与理论闭环**。
+> 🏁 **最终决议**：审查员多轮复核所提出的代码事实核查、符号映射校准、TXT 质询放行、PSL 硬门槛依赖、MITM 防御纵深、既有能力复用、物理视线边界口径收敛、TLS 默认关闭与隐藏体验兜底、以及六大前置动作代码与文档实质性推进，均已达成严密一致；**路线 B 的客户端与 DNS/PSL 前置已高质量落地**。唯一剩余开放项为 §七.9 FINDING 1：云端 `cert.ts` 签发引擎为瞬态自签 CA 而非 Let's Encrypt，公信绿锁 promise 未达成——**该缺陷必须在向公网新用户放行置备链路前修复**（接入 LE DNS-01 代理）。
