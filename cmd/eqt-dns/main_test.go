@@ -301,3 +301,65 @@ func TestACMESubdomainChallengeHTTP(t *testing.T) {
 		t.Fatalf("Expected 400 for cross-zone challenge, got %d", rwBad.Code)
 	}
 }
+
+func TestPSLTXTRecord(t *testing.T) {
+	// 1. Validation test
+	baseDomain := "direct.eqt.net.im"
+	pslRecord := "_psl.direct.eqt.net.im."
+	if !isValidACMERecord(pslRecord, baseDomain) {
+		t.Fatalf("Expected _psl.%s. to be valid", baseDomain)
+	}
+
+	// 2. Static default PSL URL in DNSHandler
+	store := newAcmeStore()
+	handler := &DNSHandler{
+		baseDomain: baseDomain,
+		store:      store,
+		ns1:        "ns1.eqt.net.im.",
+		ns2:        "ns2.eqt.net.im.",
+		soaMName:   "ns1.eqt.net.im.",
+		soaRName:   "admin.eqt.net.im.",
+		pslURL:     "https://github.com/publicsuffix/list/pull/2965",
+	}
+
+	req := new(dns.Msg)
+	req.SetQuestion(pslRecord, dns.TypeTXT)
+	rw := &dummyResponseWriter{}
+	handler.ServeDNS(rw, req)
+
+	if len(rw.msg.Answer) != 1 {
+		t.Fatalf("Expected 1 TXT answer for PSL, got %d", len(rw.msg.Answer))
+	}
+	txtAnswer, ok := rw.msg.Answer[0].(*dns.TXT)
+	if !ok || len(txtAnswer.Txt) != 1 || txtAnswer.Txt[0] != "https://github.com/publicsuffix/list/pull/2965" {
+		t.Fatalf("Unexpected TXT answer: %v", rw.msg.Answer)
+	}
+
+	// 3. Dynamic HTTP API override for PSL
+	srv := startHTTPServer("127.0.0.1:0", "secret-token", baseDomain, store)
+	defer srv.Close()
+
+	bodyValid, _ := json.Marshal(map[string]interface{}{
+		"record": pslRecord,
+		"value":  "https://github.com/publicsuffix/list/pull/3000",
+		"ttl":    300,
+	})
+	reqValid, _ := http.NewRequest(http.MethodPost, "/acme/challenge", bytes.NewReader(bodyValid))
+	reqValid.Header.Set("Authorization", "Bearer secret-token")
+	rwValid := httptest.NewRecorder()
+	srv.Handler.ServeHTTP(rwValid, reqValid)
+	if rwValid.Code != http.StatusOK {
+		t.Fatalf("Expected 200 for valid PSL update, got %d: %s", rwValid.Code, rwValid.Body.String())
+	}
+
+	rwDynamic := &dummyResponseWriter{}
+	handler.ServeDNS(rwDynamic, req)
+	if len(rwDynamic.msg.Answer) != 1 {
+		t.Fatalf("Expected dynamic override in TXT answer, got %d", len(rwDynamic.msg.Answer))
+	}
+	dynAnswer := rwDynamic.msg.Answer[0].(*dns.TXT)
+	if dynAnswer.Txt[0] != "https://github.com/publicsuffix/list/pull/3000" {
+		t.Fatalf("Expected dynamically overridden PSL URL, got %s", dynAnswer.Txt[0])
+	}
+}
+

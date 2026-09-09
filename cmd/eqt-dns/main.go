@@ -31,6 +31,7 @@ var (
 	flagNS2        = flag.String("ns2", "ns2.eqt.net.im.", "Secondary nameserver")
 	flagSOAMName   = flag.String("soa-mname", "ns1.eqt.net.im.", "SOA primary master")
 	flagSOARName   = flag.String("soa-rname", "admin.eqt.net.im.", "SOA administrator email")
+	flagPSLURL     = flag.String("psl-url", "", "Default TXT record value for _psl.<domain> pointing to Mozilla PSL pull request (e.g. https://github.com/publicsuffix/list/pull/XXXX)")
 )
 
 // AcmeStore holds active ACME TXT challenges safely in memory keyed by exact record name.
@@ -130,6 +131,7 @@ func (s *AcmeStore) GetAllRecords() map[string][]string {
 var (
 	reDashedExact = regexp.MustCompile(`(?:^|[^0-9])([0-9]{1,3})-([0-9]{1,3})-([0-9]{1,3})-([0-9]{1,3})$`)
 	reACMEValue   = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
+	rePSLValue    = regexp.MustCompile(`^https://github\.com/publicsuffix/list/pull/[A-Za-z0-9_-]+$`)
 )
 
 func parseIP(domain string) net.IP {
@@ -174,6 +176,7 @@ type DNSHandler struct {
 	ns2        string
 	soaMName   string
 	soaRName   string
+	pslURL     string
 }
 
 func (h *DNSHandler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
@@ -216,7 +219,7 @@ func (h *DNSHandler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 		}
 
 	case dns.TypeTXT:
-		// Exact ACME challenge query match
+		// Exact ACME challenge query match or PSL verification
 		challenges := h.store.Get(qName)
 		for _, val := range challenges {
 			m.Answer = append(m.Answer, &dns.TXT{
@@ -230,7 +233,18 @@ func (h *DNSHandler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 			})
 		}
 		if len(challenges) == 0 {
-			if strings.HasPrefix(qName, "_acme-challenge.") || qName == cleanBase || parseIP(qName) != nil {
+			cleanPSL := "_psl." + cleanBase
+			if qName == cleanPSL && h.pslURL != "" {
+				m.Answer = append(m.Answer, &dns.TXT{
+					Hdr: dns.RR_Header{
+						Name:   q.Name,
+						Rrtype: dns.TypeTXT,
+						Class:  dns.ClassINET,
+						Ttl:    300,
+					},
+					Txt: []string{h.pslURL},
+				})
+			} else if strings.HasPrefix(qName, "_acme-challenge.") || qName == cleanBase || qName == cleanPSL || parseIP(qName) != nil {
 				m.Rcode = dns.RcodeSuccess // NOERROR with 0 answers (NODATA)
 			} else {
 				m.Rcode = dns.RcodeNameError
@@ -271,13 +285,15 @@ func (h *DNSHandler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 
 // isValidACMERecord validates that record is either:
 // 1. Exactly "_acme-challenge.<defaultDomain>."
-// 2. Or "_acme-challenge.<subdomain>.<defaultDomain>." where <subdomain> consists of valid DNS label(s).
+// 2. Exactly "_psl.<defaultDomain>." (for Mozilla Public Suffix List verification)
+// 3. Or "_acme-challenge.<subdomain>.<defaultDomain>." where <subdomain> consists of valid DNS label(s).
 func isValidACMERecord(record, defaultDomain string) bool {
 	cleanDomain := strings.ToLower(strings.TrimSuffix(defaultDomain, "."))
 	baseSuffix := "." + cleanDomain + "."
 	rootRecord := "_acme-challenge." + cleanDomain + "."
+	pslRecord := "_psl." + cleanDomain + "."
 
-	if record == rootRecord {
+	if record == rootRecord || record == pslRecord {
 		return true
 	}
 
@@ -344,11 +360,6 @@ func startHTTPServer(addr string, token string, defaultDomain string, store *Acm
 				return
 			}
 			val := strings.TrimSpace(body.Value)
-			if !reACMEValue.MatchString(val) {
-				http.Error(w, `{"error":"invalid_challenge_value"}`, http.StatusBadRequest)
-				return
-			}
-
 			record := strings.TrimSpace(body.Record)
 			cleanDomain := strings.ToLower(strings.TrimSuffix(defaultDomain, "."))
 			rootRecord := "_acme-challenge." + cleanDomain + "."
@@ -360,6 +371,16 @@ func startHTTPServer(addr string, token string, defaultDomain string, store *Acm
 					http.Error(w, `{"error":"record must belong to zone `+cleanDomain+`"}`, http.StatusBadRequest)
 					return
 				}
+			}
+
+			if record == "_psl."+cleanDomain+"." {
+				if !rePSLValue.MatchString(val) {
+					http.Error(w, `{"error":"invalid_psl_value: must match https://github.com/publicsuffix/list/pull/<pr>"}`, http.StatusBadRequest)
+					return
+				}
+			} else if !reACMEValue.MatchString(val) {
+				http.Error(w, `{"error":"invalid_challenge_value"}`, http.StatusBadRequest)
+				return
 			}
 
 			ttlSec := body.TTL
@@ -442,6 +463,11 @@ func main() {
 		log.Fatalf("[FATAL] Refusing to start HTTP management server on non-loopback interface (%s) without an authentication token! Please set -token or EQT_DNS_TOKEN to prevent unauthorized ACME challenge manipulation.", httpListen)
 	}
 
+	pslURL := strings.TrimSpace(*flagPSLURL)
+	if envPSL := strings.TrimSpace(os.Getenv("EQT_DNS_PSL_URL")); envPSL != "" && pslURL == "" {
+		pslURL = envPSL
+	}
+
 	store := newAcmeStore()
 	handler := &DNSHandler{
 		baseDomain: *flagDomain,
@@ -450,6 +476,7 @@ func main() {
 		ns2:        *flagNS2,
 		soaMName:   *flagSOAMName,
 		soaRName:   *flagSOARName,
+		pslURL:     pslURL,
 	}
 
 	var dnsAddr string
