@@ -248,9 +248,9 @@ func TestIsValidACMERecord(t *testing.T) {
 
 		// 3. Invalid records
 		{"_acme-challenge.otherdomain.com.", false},
-		{"_acme-challenge.evil.com.direct.eqt.net.im.", true}, // valid subdomain evil.com under direct.eqt.net.im
-		{"evil.direct.eqt.net.im.", false},                     // missing _acme-challenge. prefix
-		{"_acme-challenge.direct.eqt.net.im", false},           // missing trailing dot
+		{"_acme-challenge.evil.com.direct.eqt.net.im.", true},   // valid subdomain evil.com under direct.eqt.net.im
+		{"evil.direct.eqt.net.im.", false},                      // missing _acme-challenge. prefix
+		{"_acme-challenge.direct.eqt.net.im", false},            // missing trailing dot
 		{"_acme-challenge.-invalid-.direct.eqt.net.im.", false}, // label cannot start/end with hyphen
 		{"_acme-challenge..direct.eqt.net.im.", false},          // empty label
 	}

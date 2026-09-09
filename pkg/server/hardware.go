@@ -518,4 +518,3 @@ func ResetCachedNodeIDForTest() {
 	defer nodeIDMu.Unlock()
 	cachedNodeID = ""
 }
-
