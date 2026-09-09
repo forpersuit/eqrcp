@@ -364,7 +364,11 @@ func RequestDeviceCertificate(ctx context.Context, client *http.Client, opts Pro
 
 	endpoint := opts.Endpoint
 	if endpoint == "" {
-		endpoint = DefaultProvisionEndpoint
+		if envEp := os.Getenv("EQT_PROVISION_ENDPOINT"); envEp != "" {
+			endpoint = envEp
+		} else {
+			endpoint = DefaultProvisionEndpoint
+		}
 	}
 
 	timeout := opts.Timeout
