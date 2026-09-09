@@ -471,3 +471,51 @@ func RegisterDeviceOnline() {
 		}
 	}
 }
+
+var (
+	nodeIDMu     sync.RWMutex
+	cachedNodeID string
+)
+
+// GetDeviceNodeID returns a deterministic 12-character hex node identifier
+// for the local machine, derived from the cascade SHA-256 hash of the device
+// hardware fingerprints: sha256(uuidHash + ":" + cpuHash + ":" + diskHash)[:12].
+// It provides cross-reboot stability and idempotency for LAN-TLS node subdomains
+// (*.<node-id>.direct.eqt.net.im) while ensuring zero private key sharing.
+func GetDeviceNodeID() string {
+	nodeIDMu.RLock()
+	if cachedNodeID != "" {
+		id := cachedNodeID
+		nodeIDMu.RUnlock()
+		return id
+	}
+	nodeIDMu.RUnlock()
+
+	nodeIDMu.Lock()
+	defer nodeIDMu.Unlock()
+	if cachedNodeID != "" {
+		return cachedNodeID
+	}
+
+	uuid, cpu, disk := GetDeviceFingerprintHashes()
+	// Fallback to AuthorityDeviceID if available and all fingerprints are empty
+	if uuid == "" && cpu == "" && disk == "" {
+		if authID := GetAuthorityDeviceID(); len(authID) >= 12 {
+			cachedNodeID = strings.ToLower(authID[:12])
+			return cachedNodeID
+		}
+	}
+
+	combined := fmt.Sprintf("%s:%s:%s", uuid, cpu, disk)
+	sum := sha256.Sum256([]byte(combined))
+	cachedNodeID = hex.EncodeToString(sum[:])[:12]
+	return cachedNodeID
+}
+
+// ResetCachedNodeIDForTest clears cachedNodeID for testing purposes.
+func ResetCachedNodeIDForTest() {
+	nodeIDMu.Lock()
+	defer nodeIDMu.Unlock()
+	cachedNodeID = ""
+}
+

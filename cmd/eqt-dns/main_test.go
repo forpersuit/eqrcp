@@ -230,3 +230,74 @@ func TestTXTNODATAResponse(t *testing.T) {
 		t.Fatalf("Expected NXDOMAIN for non-existent name TXT query, got %d", rwNonExist.msg.Rcode)
 	}
 }
+
+func TestIsValidACMERecord(t *testing.T) {
+	baseDomain := "direct.eqt.net.im"
+
+	cases := []struct {
+		record string
+		valid  bool
+	}{
+		// 1. Root wildcard challenge
+		{"_acme-challenge.direct.eqt.net.im.", true},
+
+		// 2. Valid device node-id subdomains
+		{"_acme-challenge.a1b2c3d4e5f6.direct.eqt.net.im.", true},
+		{"_acme-challenge.node-01.direct.eqt.net.im.", true},
+		{"_acme-challenge.sub1.sub2.direct.eqt.net.im.", true},
+
+		// 3. Invalid records
+		{"_acme-challenge.otherdomain.com.", false},
+		{"_acme-challenge.evil.com.direct.eqt.net.im.", true}, // valid subdomain evil.com under direct.eqt.net.im
+		{"evil.direct.eqt.net.im.", false},                     // missing _acme-challenge. prefix
+		{"_acme-challenge.direct.eqt.net.im", false},           // missing trailing dot
+		{"_acme-challenge.-invalid-.direct.eqt.net.im.", false}, // label cannot start/end with hyphen
+		{"_acme-challenge..direct.eqt.net.im.", false},          // empty label
+	}
+
+	for _, tc := range cases {
+		got := isValidACMERecord(tc.record, baseDomain)
+		if got != tc.valid {
+			t.Errorf("isValidACMERecord(%q, %q) = %v; want %v", tc.record, baseDomain, got, tc.valid)
+		}
+	}
+}
+
+func TestACMESubdomainChallengeHTTP(t *testing.T) {
+	store := newAcmeStore()
+	srv := startHTTPServer("127.0.0.1:0", "secret-token", "direct.eqt.net.im", store)
+	defer srv.Close()
+
+	// 1. POST valid device subdomain challenge
+	nodeRec := "_acme-challenge.a1b2c3d4e5f6.direct.eqt.net.im."
+	bodyNode, _ := json.Marshal(map[string]interface{}{
+		"record": nodeRec,
+		"value":  "challenge-token-for-node",
+		"ttl":    60,
+	})
+	reqPost, _ := http.NewRequest(http.MethodPost, "/acme/challenge", bytes.NewReader(bodyNode))
+	reqPost.Header.Set("Authorization", "Bearer secret-token")
+	rwPost := httptest.NewRecorder()
+	srv.Handler.ServeHTTP(rwPost, reqPost)
+	if rwPost.Code != http.StatusOK {
+		t.Fatalf("Expected 200 for valid node subdomain challenge, got %d: %s", rwPost.Code, rwPost.Body.String())
+	}
+
+	vals := store.Get(nodeRec)
+	if len(vals) != 1 || vals[0] != "challenge-token-for-node" {
+		t.Fatalf("Expected challenge stored in memory, got %v", vals)
+	}
+
+	// 2. POST cross-zone malicious challenge (must be rejected with 400)
+	bodyBad, _ := json.Marshal(map[string]interface{}{
+		"record": "_acme-challenge.attacker.com.",
+		"value":  "evil-token",
+	})
+	reqBad, _ := http.NewRequest(http.MethodPost, "/acme/challenge", bytes.NewReader(bodyBad))
+	reqBad.Header.Set("Authorization", "Bearer secret-token")
+	rwBad := httptest.NewRecorder()
+	srv.Handler.ServeHTTP(rwBad, reqBad)
+	if rwBad.Code != http.StatusBadRequest {
+		t.Fatalf("Expected 400 for cross-zone challenge, got %d", rwBad.Code)
+	}
+}

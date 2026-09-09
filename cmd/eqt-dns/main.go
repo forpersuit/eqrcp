@@ -269,6 +269,49 @@ func (h *DNSHandler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 	_ = w.WriteMsg(m)
 }
 
+// isValidACMERecord validates that record is either:
+// 1. Exactly "_acme-challenge.<defaultDomain>."
+// 2. Or "_acme-challenge.<subdomain>.<defaultDomain>." where <subdomain> consists of valid DNS label(s).
+func isValidACMERecord(record, defaultDomain string) bool {
+	cleanDomain := strings.ToLower(strings.TrimSuffix(defaultDomain, "."))
+	baseSuffix := "." + cleanDomain + "."
+	rootRecord := "_acme-challenge." + cleanDomain + "."
+
+	if record == rootRecord {
+		return true
+	}
+
+	if !strings.HasPrefix(record, "_acme-challenge.") || !strings.HasSuffix(record, baseSuffix) {
+		return false
+	}
+
+	// Extract the middle subdomain: _acme-challenge.<subdomain>.<defaultDomain>.
+	sub := strings.TrimPrefix(record, "_acme-challenge.")
+	sub = strings.TrimSuffix(sub, baseSuffix)
+
+	if sub == "" {
+		return false
+	}
+
+	// Validate each label in sub
+	labels := strings.Split(sub, ".")
+	for _, label := range labels {
+		if len(label) == 0 || len(label) > 63 {
+			return false
+		}
+		for i := 0; i < len(label); i++ {
+			ch := label[i]
+			if !((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '-') {
+				return false
+			}
+		}
+		if label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+	}
+	return true
+}
+
 func startHTTPServer(addr string, token string, defaultDomain string, store *AcmeStore) *http.Server {
 	mux := http.NewServeMux()
 
@@ -307,13 +350,14 @@ func startHTTPServer(addr string, token string, defaultDomain string, store *Acm
 			}
 
 			record := strings.TrimSpace(body.Record)
-			expectedSuffix := "_acme-challenge." + strings.ToLower(strings.TrimSuffix(defaultDomain, ".")) + "."
+			cleanDomain := strings.ToLower(strings.TrimSuffix(defaultDomain, "."))
+			rootRecord := "_acme-challenge." + cleanDomain + "."
 			if record == "" {
-				record = expectedSuffix
+				record = rootRecord
 			} else {
 				record = strings.ToLower(strings.TrimSuffix(record, ".")) + "."
-				if !strings.HasSuffix(record, expectedSuffix) && record != expectedSuffix {
-					http.Error(w, `{"error":"record must belong to zone `+expectedSuffix+`"}`, http.StatusBadRequest)
+				if !isValidACMERecord(record, defaultDomain) {
+					http.Error(w, `{"error":"record must belong to zone `+cleanDomain+`"}`, http.StatusBadRequest)
 					return
 				}
 			}
@@ -346,8 +390,16 @@ func startHTTPServer(addr string, token string, defaultDomain string, store *Acm
 				return
 			}
 			record := strings.TrimSpace(r.URL.Query().Get("record"))
+			cleanDomain := strings.ToLower(strings.TrimSuffix(defaultDomain, "."))
+			rootRecord := "_acme-challenge." + cleanDomain + "."
 			if record == "" {
-				record = "_acme-challenge." + strings.TrimSuffix(defaultDomain, ".") + "."
+				record = rootRecord
+			} else {
+				record = strings.ToLower(strings.TrimSuffix(record, ".")) + "."
+				if !isValidACMERecord(record, defaultDomain) {
+					http.Error(w, `{"error":"record must belong to zone `+cleanDomain+`"}`, http.StatusBadRequest)
+					return
+				}
 			}
 			val := strings.TrimSpace(r.URL.Query().Get("value"))
 			if val != "" {

@@ -2391,6 +2391,7 @@ function renderSettingsPanel() {
                         </div>
                         ${renderSwitch('settings-browser', state.browserFallback)}
                     </div>
+                    ${state.settings?.devMode ? `
                     <div class="setting-row">
                         <div class="setting-copy">
                             <strong>${t('enable_tls')}</strong>
@@ -2400,7 +2401,7 @@ function renderSettingsPanel() {
                         <div class="setting-control-stack">
                             ${renderSwitch('settings-enable-tls', Boolean(state.settings?.enableTLS))}
                         </div>
-                    </div>
+                    </div>` : ''}
                     <div class="setting-row">
                         <div class="setting-copy">
                             <strong>${t('block_proxy')}</strong>
