@@ -205,6 +205,7 @@ WantedBy=multi-user.target
     - 跨边缘 525 握手解耦：针对 Cloudflare Worker 访问 Let's Encrypt Anycast 边缘触发的 525 SSL Handshake Failed，通过受限节点 Caddy 建立双机反代通道透明分流，无缝维持 JWS 密码学签名完整性；
     - 账户私钥持久化：离线生成专用 ECDSA P-256 JWK 并注入测试环境 Secret，杜绝每次置备重复创建账户的频控风险；
     - 真实验收：测试环境（`lic-test.eqt.net.im`）实测 9.9s 极速下发 Let's Encrypt 官方证书，操作系统全局根信任库（`ISRG Root X1 / ISRG Root X2`）严格验签 100% 通过，彻底消灭自签 CA，达成官方公信绿锁（DoD 3）。
+    - ⚠️ **闭环范围边界（勿过度承诺）**：FINDING 1 闭环**仅限测试环境**（`lic-test.eqt.net.im`）——ACME 配置只存在于 `wrangler.toml` 的 `[env.test.vars]`，**生产 `lic.eqt.net.im` 顶层 vars 无 ACME 字段，`useAcme` 为 false，仍回退瞬态自签 CA（手机扫码依旧红屏）**；生产公信放量须先达成 PSL 合并（破除 `eqt.net.im` eTLD+1 每周 50 张限额）再做生产真机验收。另两项部署期 secret（`ACME_ACCOUNT_KEY`＝固定 LE 账户 JWK、`ACME_DNS_API_TOKEN`＝与 `cmd/eqt-dns --token` 对齐）不入 repo，须确认已在 test env 注入，否则挑战注入 401 / 每次置备新建 LE 账户触发账户级限频。测试环境用**生产 LE 端点**（`acme-v02`）消耗 eTLD+1 每周 50 张配额（Staging 证书不被浏览器信任、无法绿锁验收），测试量级远低于限值。
 
 
 

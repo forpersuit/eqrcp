@@ -782,8 +782,9 @@ Worker 与双机权威 DNS 节点的交互使用现有的 `/acme/challenge` 端�
 1. **测试环境部署**：Worker 部署至 `lic-test.eqt.net.im`（Current Version: `8b919724`）；
 2. **Go 客户端联动测试**：执行真实置备测试，9.9s 极速下发真实证书；
 3. **官方公信根链验收**：经操作系统全局根证书库（`x509.SystemCertPool`）严格校验，根签发者为全球受信任的 **ISRG Root X1 / ISRG Root X2**，完全免装自签证书，直接呈现公信安全绿锁 🔒，达成 [`docs/bugs/2026-09-09-new-user-tls-cert-cache-bootstrap-defect.md`](file:///home/yelon/develop/me/eqrcp/docs/bugs/2026-09-09-new-user-tls-cert-cache-bootstrap-defect.md) §四 DoD 3 验收标准。
+   - ⚠️ **闭环范围边界（勿过度承诺）**：本闭环**仅限测试环境**——ACME 配置只位于 `wrangler.toml` 的 `[env.test.vars]`，**生产 `lic.eqt.net.im` 顶层 vars 无 ACME 字段（`useAcme=false`），仍回退瞬态自签 CA（手机扫码红屏）**；生产公信放量须先完成 PSL 合并（破除 `eqt.net.im` eTLD+1 每周 50 张限额）并补生产真机验收。另 `ACME_ACCOUNT_KEY`（固定 LE 账户 JWK）与 `ACME_DNS_API_TOKEN`（对齐 `cmd/eqt-dns --token`）为部署期 secret、不入 repo，须确认已在 test env 注入，否则挑战注入 401 / 每次置备新建 LE 账户触发账户级限频；测试环境用**生产 LE 端点**（`acme-v02`）消耗 eTLD+1 每周 50 张配额（Staging 证书不被浏览器信任、无法绿锁验收），测试量级远低于限值。
 
 ---
 
-> 🏁 **最终决议**：审查员多轮复核所提出的代码事实核查、符号映射校准、TXT 质询放行、PSL 硬门槛依赖、MITM 防御纵深、既有能力复用、物理视线边界口径收敛、TLS 默认关闭与隐藏体验兜底、以及六大前置动作代码与文档实质性推进，均已达成严密一致；**路线 B 的客户端与 DNS/PSL 前置高质量落地，云端 ACME DNS-01 代理签发引擎在测试环境中全面打通与闭环**。至此，FINDING 1（真实官方公信签发）、FINDING 2（POPO 签名校验）、FINDING 3（±60s 时间戳收敛）**全部闭环落地**，实实验收达成 100% 系统根信任与官方公信绿锁承诺。
+> 🏁 **最终决议**：审查员多轮复核所提出的代码事实核查、符号映射校准、TXT 质询放行、PSL 硬门槛依赖、MITM 防御纵深、既有能力复用、物理视线边界口径收敛、TLS 默认关闭与隐藏体验兜底、以及六大前置动作代码与文档实质性推进，均已达成严密一致；**路线 B 的客户端与 DNS/PSL 前置高质量落地，云端 ACME DNS-01 代理签发引擎在测试环境中全面打通与闭环**。至此，FINDING 1（真实官方公信签发）、FINDING 2（POPO 签名校验）、FINDING 3（±60s 时间戳收敛）**全部闭环落地**，实实验收达成 100% 系统根信任与官方公信绿锁承诺。⚠️ **上述“彻底闭环”均限定于测试环境**：生产 `lic.eqt.net.im` 因顶层 vars 未配置 ACME 字段（`useAcme=false`）仍回退自签 CA，公信绿锁尚未对真实公网用户放量——生产放量以 PSL 合并与生产真机验收为前置（见 §10.2 边界注记）。
 
