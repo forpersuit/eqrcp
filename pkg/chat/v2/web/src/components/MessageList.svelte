@@ -6,7 +6,7 @@
   import { getThemeColors, getSenderThemeColors } from '../services/types';
   import { currentDevice, peers, chatSessionStatus } from '../state/chatStore';
   import { isImageFile, getImageInlineUrl } from '../services/mediaPreview';
-  import { isFileSendCancelled } from '../services/attachmentPolicy';
+  import { isFileSendCancelled, resolveDownloadTransferId } from '../services/attachmentPolicy';
 
   const dispatch = createEventDispatcher();
 
@@ -438,7 +438,7 @@
     
     const mine = isMine(msg);
     const localPeer = $currentDevice?.peer || 'desktop';
-    const dlTx = txState['dl-' + msg.id + '-' + localPeer] || txState[msg.id] || Object.values(txState).find(t => t.messageId === msg.id && (t.clientId === localPeer || (!mine && t.id.startsWith('dl-'))));
+    const dlTx = txState[resolveDownloadTransferId(msg.id, localPeer)] || txState[msg.id] || Object.values(txState).find(t => t.messageId === msg.id && (t.clientId === localPeer || (!mine && t.id.startsWith('dl-'))));
     const ulTx = txState['ul-' + msg.id];
     const isTxRunning = !mine && dlTx && dlTx.state === 'running';
     const isTxCompleted = mine
@@ -1006,7 +1006,7 @@
       {:else}
         {@const mine = isMine(msg)}
         {@const localPeer = $currentDevice?.peer || 'desktop'}
-        {@const dlTx = txState['dl-' + msg.id + '-' + localPeer] || txState[msg.id] || Object.values(txState).find(t => t.messageId === msg.id && (t.clientId === localPeer || (!mine && t.id.startsWith('dl-'))))}
+        {@const dlTx = txState[resolveDownloadTransferId(msg.id, localPeer)] || txState[msg.id] || Object.values(txState).find(t => t.messageId === msg.id && (t.clientId === localPeer || (!mine && t.id.startsWith('dl-'))))}
         {@const ulTx = txState['ul-' + msg.id]}
         {@const isTxRunning = !mine && dlTx && dlTx.state === 'running'}
         {@const isTxCompleted = mine

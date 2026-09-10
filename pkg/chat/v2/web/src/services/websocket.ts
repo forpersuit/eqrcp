@@ -10,6 +10,7 @@ import {
   shouldDiscardSupersededSocketEvent,
   evaluateHeartbeatTick
 } from './visibilityPolicy';
+import { resolveDownloadTransferId } from './attachmentPolicy';
 
 /** Default page size; must stay aligned with session.DefaultHistoryPageSize. */
 export const HISTORY_PAGE_SIZE = 100;
@@ -442,7 +443,7 @@ export class ChatWebSocketClient {
               if (!isUploadJob) {
                 chatActions.markMessageDownloaded(event.transfer.messageId);
                 // Also synchronize seeded client-specific download job if present
-                const seededJobId = 'dl-' + event.transfer.messageId + '-' + this.clientPeer;
+                const seededJobId = resolveDownloadTransferId(event.transfer.messageId, this.clientPeer);
                 if (seededJobId !== event.transfer.id) {
                   chatActions.updateTransfer({
                     id: seededJobId,

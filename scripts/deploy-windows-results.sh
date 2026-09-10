@@ -122,7 +122,7 @@ if [[ "$run_checks" -eq 1 ]]; then
       cfg.author.name = 'EQT';
       fs.writeFileSync(p, JSON.stringify(cfg, null, 2) + '\n');
     " || true
-    if git -C "$root_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    if [[ "${EQT_PRE_COMMIT_CONTEXT:-0}" == "1" ]] && git -C "$root_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
       git -C "$root_dir" add "$root_dir/desktop/gui/wails.json" 2>/dev/null || true
     fi
   fi

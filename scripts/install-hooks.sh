@@ -19,7 +19,7 @@ set -euo pipefail
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 echo "=== eqt pre-commit: deploy Windows acceptance artifacts ==="
-"$root_dir/scripts/deploy-windows-results.sh"
+EQT_PRE_COMMIT_CONTEXT=1 "$root_dir/scripts/deploy-windows-results.sh"
 echo "=== eqt pre-commit completed ==="
 EOF
 

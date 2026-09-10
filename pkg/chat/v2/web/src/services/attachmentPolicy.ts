@@ -20,6 +20,75 @@ export function resolveDownloadTransferId(messageId: string, peer = 'desktop'): 
   return 'dl-' + messageId + '-' + (peer || 'desktop');
 }
 
+export interface TransferUpdatePayload {
+  id: string;
+  state: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+  progress: number;
+  speed: number;
+  error: string;
+  messageId?: string;
+  clientId?: string;
+  fileName?: string;
+  bytesDone?: number;
+  bytesTotal?: number;
+  percent?: number;
+}
+
+export interface DownloadBridgeActions {
+  updateTransfer: (update: TransferUpdatePayload) => void;
+  cancelTransfer?: (transferId: string) => void;
+  addSystemNotice?: (notice: string) => void;
+}
+
+/**
+ * 跨进程桥接：处理单文件下载取消事件 (Wails host -> Web iframe).
+ */
+export function applyDownloadCancelled(
+  messageId: string,
+  peer: string,
+  actions: DownloadBridgeActions
+): string {
+  const transferId = resolveDownloadTransferId(messageId, peer);
+  actions.updateTransfer({
+    id: transferId,
+    state: 'cancelled',
+    progress: -1,
+    speed: 0,
+    error: ''
+  });
+  if (actions.cancelTransfer) {
+    actions.cancelTransfer(transferId);
+  }
+  return transferId;
+}
+
+/**
+ * 跨进程桥接：处理批量下载取消事件 (Wails host -> Web iframe).
+ * 将所有批次文件的本地下载状态置为 cancelled，同时通知客户端取消，并输出系统提示。
+ */
+export function applyBatchDownloadCancelled(
+  messageIds: string[],
+  peer: string,
+  actions: DownloadBridgeActions,
+  lang = 'zh'
+): string[] {
+  const ids = messageIds || [];
+  const handledIds: string[] = [];
+  ids.forEach(messageId => {
+    const tid = applyDownloadCancelled(messageId, peer, {
+      updateTransfer: actions.updateTransfer,
+      cancelTransfer: actions.cancelTransfer
+    });
+    handledIds.push(tid);
+  });
+  if (actions.addSystemNotice) {
+    actions.addSystemNotice(
+      lang === 'en' ? 'Batch download cancelled.' : '已取消批量下载。'
+    );
+  }
+  return handledIds;
+}
+
 /**
  * 判定文件消息是否属于“发送方取消了发送”的状态。
  * 注意：接收方下载任务状态绝不参与此判定，签名中不包含任何下载状态参数。

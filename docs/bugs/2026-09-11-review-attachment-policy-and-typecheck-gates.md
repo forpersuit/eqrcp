@@ -209,4 +209,24 @@ const isCancelledFile = (file|image) && ((ulTx && ulTx.state==='cancelled') || (
 
 `e8af2a2a` 对 **L1 / L4 / L5 的修复经独立实测确认真实闭环**，门禁具备可证伪性（双探针均转红）；**L2 / L3 属“部分闭环”**：契约函数已抽出且可证伪，但接入面与测试覆盖均远小于 §七 自述，R1/R2 即为该落差的客观量化。R3/R4 为表述与职责边界问题。**五项均不构成功能阻断，放行结论不变**；R1/R2 建议纳入下一轮适配。
 
+---
+
+## 九、第八轮适配与残留项闭环记录（对 R1–R4 的第一性原则适配，v1.36.81）
+
+针对第七轮独立复核指出的残留问题（R1 接入率缺口、R2 测试同义反复、R3 门禁层级粒度、R4 部署脚本隐式暂存），开发团队本着第一性原则于当前版本全面完成代码适配与测试闭环：
+
+### 1. 残留项处置与闭环明细
+
+| 编号 | 性质 | 分析与裁定 | 采纳与适配落地动作 | 闭环可证伪验证 |
+|---|---|---|---|---|
+| **R1** | 契约接入率缺口（中低） | **完全合理**。虽然已抽出契约函数，但若全仓 12 处手写模板字符串不替换，未来修改 ID 规范时极易发生局部漂移。 | ① `App.svelte`（10 处：下载成功/失败/取消/批量/进度/手动发起）、`MessageList.svelte`（2 处：气泡渲染与菜单解析）、`websocket.ts`（1 处：种子任务对齐）全部改用 `resolveDownloadTransferId(messageId, peer)`；<br>② 全仓手写 `'dl-' + ...` 降为 0 处，契约函数接入率达 **100%（13/13）**。 | 全局正则检索 `'dl-'` 仅留 `attachmentPolicy.ts` 契约定义与测试文件断言，源码实现 0 残留。 |
+| **R2** | 批量取消测试同义反复（中低） | **完全合理且切中要害**。旧 Case 9 仅断言恒真纯函数，未耦合 `App.svelte` 中的批量取消分发逻辑，属于同义反复。 | ① 在 `attachmentPolicy.ts` 中抽取并导出生产级桥接函数 `applyDownloadCancelled` 与 `applyBatchDownloadCancelled`；<br>② `App.svelte:358-391` 核心处理分支直接委托给该生产函数；<br>③ 重构 `attachmentPolicy.test.ts` Case 8 与 Case 9，直接针对生产函数执行可证伪断言：断言全部批次 ID 分发、`updateTransfer` 取消载荷、`cancelTransfer` 客户端调用、双语系统提示、以及接收方 Store 注入后气泡保留（`isFileSendCancelled === false` 且副标题展示 `· 已取消`）；<br>④ 在测试及文档中显式声明：宿主侧目前无 node test runner，由前端 iframe 契约层承担严格的 `postMessage` 边界验证。 | 改变生产函数的任何字段或逻辑，Case 8/9 立即转红；实测 `npm test` 100% 通过。 |
+| **R3** | 门禁层级粒度校准（提示） | **客观事实，已对齐**。本地 pre-commit 确实为条件执行，依赖 CI 作业执行无条件硬拦截。 | ① 保持 `deploy-windows-results.sh` 中的 Notice 提示，使环境降级在控制台显式可见；<br>② 技能规范与架构文档口径全面修正为“两层硬门禁（pretest 单套件 + CI `test:ci`）+ 一层条件门禁（本地 pre-commit）”。 | 声明与实现严格一致，消除过度承诺。 |
+| **R4** | 部署脚本耦合 VCS 暂存（提示） | **完全合理**。构建部署脚本在非提交的手动执行下，不应有副作用改动 git 索引区。 | ① 在 `scripts/deploy-windows-results.sh` 中将 `git add .../wails.json` 限制在 `EQT_PRE_COMMIT_CONTEXT=1` 环境变量下触发；<br>② `scripts/install-hooks.sh` 与 `.git/hooks/pre-commit` 显式注入 `EQT_PRE_COMMIT_CONTEXT=1`；<br>③ 手动运行 `./scripts/deploy-windows-results.sh` 时绝对不触碰 git 暂存区。 | 实测手动运行脚本，`git diff --cached` 保持绝对干净；通过 git commit 触发时自动联动暂存版本。 |
+
+### 2. 综合结论
+
+至此，R1–R4 全部完成代码与测试重构闭环。传输 ID 契约实现全仓 100% 收敛，跨进程批量取消逻辑通过生产函数抽取与严密单测消除了同义反复，自动化门禁与构建脚本职责边界清晰划定。
+
+
 

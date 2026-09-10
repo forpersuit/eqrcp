@@ -9,7 +9,7 @@
   import { getThemeColors } from './services/types';
   import type { Message } from './services/types';
   import { DEFAULT_FREE_MAX_ATTACHMENT_BYTES } from './services/quotaConfig';
-  import { resolveDownloadTransferId } from './services/attachmentPolicy';
+  import { resolveDownloadTransferId, applyDownloadCancelled, applyBatchDownloadCancelled } from './services/attachmentPolicy';
 
   if (typeof window !== 'undefined') {
     window.addEventListener('error', (e) => {
@@ -326,7 +326,7 @@
       chatActions.updateMessageFilePath(messageId, path);
       chatActions.markMessageDownloaded(messageId);
       chatActions.updateTransfer({
-        id: 'dl-' + messageId + '-' + peer,
+        id: resolveDownloadTransferId(messageId, peer),
         state: 'completed',
         progress: 100,
         speed: 0,
@@ -344,14 +344,14 @@
           : '文件下载失败，请重试。'
       );
       chatActions.addDebugNotice(`download-failed messageId=${messageId} error=${error}`);
+      const transferId = resolveDownloadTransferId(messageId, peer);
       chatActions.updateTransfer({
-        id: 'dl-' + messageId + '-' + peer,
+        id: transferId,
         state: 'failed',
         progress: -1,
         speed: 0,
         error: error
       });
-      const transferId = 'dl-' + messageId + '-' + peer;
       if (client) {
         client.cancelTransfer(transferId);
       }
@@ -359,49 +359,33 @@
       const { messageId } = event.data;
       if (!messageId) return;
       const peer = client ? client['clientPeer'] : 'desktop';
-      const transferId = resolveDownloadTransferId(messageId, peer);
-      chatActions.updateTransfer({
-        id: transferId,
-        state: 'cancelled',
-        progress: -1,
-        speed: 0,
-        error: ''
+      applyDownloadCancelled(messageId, peer, {
+        updateTransfer: (u) => chatActions.updateTransfer(u as any),
+        cancelTransfer: (tid) => { if (client) client.cancelTransfer(tid); }
       });
-      if (client) {
-        client.cancelTransfer(transferId);
-      }
     } else if (event.data.type === 'download-batch-cancelled') {
       // Desktop user cancelled the batch save-folder dialog: clear seeded running transfers.
       const ids: string[] = event.data.messageIds || [];
       const peer = client ? client['clientPeer'] : 'desktop';
-      ids.forEach(messageId => {
-        chatActions.updateTransfer({
-          id: 'dl-' + messageId + '-' + peer,
-          state: 'cancelled',
-          progress: -1,
-          speed: 0,
-          error: ''
-        });
-        if (client) {
-          client.cancelTransfer('dl-' + messageId + '-' + peer);
-        }
-      });
-      chatActions.addSystemMessage(
-        currentLang === 'en' ? 'Batch download cancelled.' : '已取消批量下载。'
-      );
+      applyBatchDownloadCancelled(ids, peer, {
+        updateTransfer: (u) => chatActions.updateTransfer(u as any),
+        cancelTransfer: (tid) => { if (client) client.cancelTransfer(tid); },
+        addSystemNotice: (notice) => chatActions.addSystemMessage(notice)
+      }, currentLang);
     } else if (event.data.type === 'download-batch-failed') {
       const ids: string[] = event.data.messageIds || [];
       const peer = client ? client['clientPeer'] : 'desktop';
       ids.forEach(messageId => {
+        const transferId = resolveDownloadTransferId(messageId, peer);
         chatActions.updateTransfer({
-          id: 'dl-' + messageId + '-' + peer,
+          id: transferId,
           state: 'failed',
           progress: -1,
           speed: 0,
           error: event.data.error || 'batch download failed'
         });
         if (client) {
-          client.cancelTransfer('dl-' + messageId + '-' + peer);
+          client.cancelTransfer(transferId);
         }
       });
       chatActions.addSystemMessage(
@@ -410,7 +394,7 @@
     } else if (event.data.type === 'chat-download-progress') {
       const { messageId, progress } = event.data;
       const peer = client ? client['clientPeer'] : 'desktop';
-      const transferId = 'dl-' + messageId + '-' + peer;
+      const transferId = resolveDownloadTransferId(messageId, peer);
       if (progress === -1) {
         chatActions.updateTransfer({
           id: transferId,
@@ -1332,7 +1316,7 @@
     if (!client) return;
 
     const peer = client['clientPeer'] || 'desktop';
-    const transferId = 'dl-' + messageId + '-' + peer;
+    const transferId = resolveDownloadTransferId(messageId, peer);
     // M4: seed running state so UI does not look idle / falsely completed before server events.
     chatActions.updateTransfer({
       id: transferId,
@@ -1386,7 +1370,7 @@
     const batchItems = files.map(msg => {
       const messageId = msg.id;
       const filename = msg.fileName || 'attachment';
-      const transferId = 'dl-' + messageId + '-' + peer;
+      const transferId = resolveDownloadTransferId(messageId, peer);
       // Seed running state so UI displays activity immediately
       chatActions.updateTransfer({
         id: transferId,

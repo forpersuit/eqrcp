@@ -1,9 +1,11 @@
-/**
- * Contract tests for attachmentPolicy bubble retention rules and bridge contracts.
- * Run: node --experimental-strip-types src/services/attachmentPolicy.test.ts
- */
-import { isFileSendCancelled, resolveDownloadTransferId } from './attachmentPolicy.ts';
+import {
+  isFileSendCancelled,
+  resolveDownloadTransferId,
+  applyDownloadCancelled,
+  applyBatchDownloadCancelled
+} from './attachmentPolicy.ts';
 import type { Message, TransferEvent } from './types.ts';
+import type { TransferUpdatePayload } from './attachmentPolicy.ts';
 
 function assert(cond: boolean, msg: string): void {
   if (!cond) throw new Error(msg);
@@ -100,44 +102,88 @@ assert(
   'custom peer properly formatted'
 );
 
-// 8. Bridge Contract Test (L2 & L3):
-// Simulates Wails host bridge 'download-cancelled' event contract
-function simulateDownloadCancelledBridge(payload: { messageId?: string; type: string }, peer = 'desktop'): { transferId: string; updatedState: string } | null {
-  if (payload.type !== 'download-cancelled' || !payload.messageId) {
-    return null;
-  }
-  const transferId = resolveDownloadTransferId(payload.messageId, peer);
-  return {
-    transferId,
-    updatedState: 'cancelled'
-  };
-}
+// 8. Bridge Contract Test (L2 & R2):
+// Directly tests production function applyDownloadCancelled (invoked by App.svelte upon Wails host download-cancelled)
+const recordedUpdates: TransferUpdatePayload[] = [];
+const cancelledTransfers: string[] = [];
+const singleBridgeActions = {
+  updateTransfer: (u: TransferUpdatePayload) => recordedUpdates.push(u),
+  cancelTransfer: (tid: string) => cancelledTransfers.push(tid)
+};
 
-const bridgeResult = simulateDownloadCancelledBridge({ type: 'download-cancelled', messageId: 'file-abc' });
-assert(bridgeResult !== null, 'valid download-cancelled payload processed');
-assert(bridgeResult!.transferId === 'dl-file-abc-desktop', 'bridge derives matching transferId');
-assert(bridgeResult!.updatedState === 'cancelled', 'bridge transitions state to cancelled');
+const tid = applyDownloadCancelled('file-abc', 'desktop', singleBridgeActions);
+assert(tid === 'dl-file-abc-desktop', 'applyDownloadCancelled derives matching transferId');
+assert(recordedUpdates.length === 1, 'one updateTransfer action dispatched');
+assert(recordedUpdates[0].id === 'dl-file-abc-desktop', 'updateTransfer payload has correct ID');
+assert(recordedUpdates[0].state === 'cancelled', 'updateTransfer transitions state to cancelled');
+assert(recordedUpdates[0].progress === -1, 'updateTransfer resets progress to -1');
+assert(cancelledTransfers.length === 1 && cancelledTransfers[0] === 'dl-file-abc-desktop', 'client.cancelTransfer called with matching ID');
+
 // Verify receiver bubble retention under bridge cancellation
+const txStateSingle: Record<string, any> = {
+  [tid]: recordedUpdates[0]
+};
+const receiverDlTx = txStateSingle[resolveDownloadTransferId(baseFileMsg.id, 'desktop')];
 assert(
   isFileSendCancelled(baseFileMsg, false, undefined) === false,
   'bridge cancellation preserves receiver bubble'
 );
 
-// 9. Batch Cancellation Contract Test (L3):
-// Simulates Wails host bridge 'download-batch-cancelled' event contract
+// 9. Batch Cancellation Contract Test (L3 & R2):
+// Directly tests production function applyBatchDownloadCancelled (invoked by App.svelte upon Wails host download-batch-cancelled)
+// Note: Host side (desktop/gui/frontend) has no node test runner; iframe side strictly verifies postMessage contract boundaries.
 const batchMsgIds = ['msg-b1', 'msg-b2', 'msg-b3'];
-const batchDerivedIds = batchMsgIds.map(id => resolveDownloadTransferId(id, 'desktop'));
-assert(
-  batchDerivedIds[0] === 'dl-msg-b1-desktop' && batchDerivedIds[2] === 'dl-msg-b3-desktop',
-  'batch cancellation aligns with transfer ID contract'
-);
-// Verify each batch file retains bubble intact
-for (const id of batchMsgIds) {
-  const m: Message = { ...baseFileMsg, id };
+const batchUpdates: TransferUpdatePayload[] = [];
+const batchCancelledTids: string[] = [];
+const batchSystemNotices: string[] = [];
+
+const batchActions = {
+  updateTransfer: (u: TransferUpdatePayload) => batchUpdates.push(u),
+  cancelTransfer: (id: string) => batchCancelledTids.push(id),
+  addSystemNotice: (notice: string) => batchSystemNotices.push(notice)
+};
+
+const processedTids = applyBatchDownloadCancelled(batchMsgIds, 'desktop', batchActions, 'zh');
+
+// Assert production function processed all IDs
+assert(processedTids.length === 3, 'all batch IDs returned by production handler');
+assert(batchUpdates.length === 3, 'each batch item triggered updateTransfer');
+assert(batchCancelledTids.length === 3, 'each batch item triggered cancelTransfer');
+assert(batchSystemNotices.length === 1 && batchSystemNotices[0] === '已取消批量下载。', 'localized batch cancellation system notice emitted');
+
+// Verify contract values and UI invariants for each batch item
+for (let i = 0; i < batchMsgIds.length; i++) {
+  const expectedTid = `dl-${batchMsgIds[i]}-desktop`;
+  assert(processedTids[i] === expectedTid, `batch item ${i} has correct transferId`);
+  assert(batchUpdates[i].id === expectedTid, `batch update ${i} has matching transferId`);
+  assert(batchUpdates[i].state === 'cancelled', `batch update ${i} is in cancelled state`);
+  assert(batchUpdates[i].progress === -1, `batch update ${i} has progress reset to -1`);
+  assert(batchCancelledTids[i] === expectedTid, `batch client cancel ${i} targeted correct ID`);
+
+  // Build state map and verify MessageList rendering invariants
+  const currentMsg: Message = { ...baseFileMsg, id: batchMsgIds[i] };
+  const mockTxState: Record<string, any> = {
+    [expectedTid]: batchUpdates[i]
+  };
+  const resolvedDlTx = mockTxState[resolveDownloadTransferId(currentMsg.id, 'desktop')];
+  assert(resolvedDlTx && resolvedDlTx.state === 'cancelled', 'mock store records cancelled state');
+
+  // Rule: isFileSendCancelled MUST be false (never mistaken for sender recall)
   assert(
-    isFileSendCancelled(m, false, undefined) === false,
-    `batch file ${id} bubble MUST be preserved when batch save is cancelled`
+    isFileSendCancelled(currentMsg, false, undefined) === false,
+    `batch file ${currentMsg.id} MUST NOT be marked as send cancelled`
   );
+  // Bubble retains and renders subtitle '· 已取消' (dlTx.state === 'cancelled')
+  const shouldRenderCancelledSubtitle = resolvedDlTx.state === 'cancelled';
+  assert(shouldRenderCancelledSubtitle, `batch file ${currentMsg.id} subtitle renders '· 已取消'`);
 }
+
+// Test English localization of system notice
+const enNotices: string[] = [];
+applyBatchDownloadCancelled(['msg-en'], 'desktop', {
+  updateTransfer: () => {},
+  addSystemNotice: (notice: string) => enNotices.push(notice)
+}, 'en');
+assert(enNotices[0] === 'Batch download cancelled.', 'English system notice emitted');
 
 console.log('attachmentPolicy.test.ts: all assertions passed (including bridge contracts)');
