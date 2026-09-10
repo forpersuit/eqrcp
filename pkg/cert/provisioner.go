@@ -432,11 +432,15 @@ func GetActiveCertificate(customCert, customKey, nodeID string) (tls.Certificate
 		}
 	}
 
-	// 3. Legacy wildcard fallback
+	// 3. Legacy wildcard fallback (requires system root trust anchor verification)
 	if cacheCert, cacheKey, ok := getCachedCertPaths(); ok {
-		if cert, err := tls.LoadX509KeyPair(cacheCert, cacheKey); err == nil {
-			if !isCertExpired(cert) {
-				return cert, "", nil
+		if certPEM, err := os.ReadFile(cacheCert); err == nil {
+			if err := VerifyCertificateTrust(certPEM, nil); err == nil {
+				if cert, err := tls.LoadX509KeyPair(cacheCert, cacheKey); err == nil {
+					if !isCertExpired(cert) {
+						return cert, "", nil
+					}
+				}
 			}
 		}
 	}

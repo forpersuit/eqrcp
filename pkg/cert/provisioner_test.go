@@ -629,4 +629,26 @@ func TestUntrustedDeviceCertificate_FailSoft(t *testing.T) {
 	if HasValidCertificateForNode("", "", nodeID) {
 		t.Errorf("expected HasValidCertificateForNode to return false for untrusted cert")
 	}
+
+	// 5. Test legacy wildcard cache path: manually place untrusted cert in ~/.config/eqt/certs
+	legacyDir := filepath.Join(tempHome, ".config", "eqt", "certs")
+	if err := os.MkdirAll(legacyDir, 0700); err != nil {
+		t.Fatalf("failed to mkdir legacy certs: %v", err)
+	}
+	keyDER, _ := x509.MarshalECPrivateKey(priv)
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
+	if err := os.WriteFile(filepath.Join(legacyDir, "cert.pem"), certPEM, 0644); err != nil {
+		t.Fatalf("failed to write legacy cert.pem: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(legacyDir, "key.pem"), keyPEM, 0600); err != nil {
+		t.Fatalf("failed to write legacy key.pem: %v", err)
+	}
+
+	// Verify legacy wildcard path rejects untrusted certificate
+	if _, _, err := GetActiveCertificate("", "", ""); err == nil {
+		t.Errorf("expected GetActiveCertificate to reject untrusted legacy wildcard cert")
+	}
+	if HasValidCertificate("", "") {
+		t.Errorf("expected HasValidCertificate to return false for untrusted legacy wildcard cert")
+	}
 }

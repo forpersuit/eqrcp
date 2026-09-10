@@ -483,6 +483,7 @@ export async function setDns01Challenge(
   ttl = 300
 ): Promise<void> {
   const errors: string[] = [];
+  const succeededEndpoints: string[] = [];
   for (const ep of endpoints) {
     try {
       const url = `${ep.replace(/\/+$/, '')}/acme/challenge`;
@@ -496,12 +497,22 @@ export async function setDns01Challenge(
       });
       if (!res.ok) {
         errors.push(`${ep}: HTTP ${res.status}`);
+      } else {
+        succeededEndpoints.push(ep);
       }
     } catch (e: any) {
       errors.push(`${ep}: ${e?.message}`);
     }
   }
   if (errors.length > 0) {
+    // Immediate rollback of any endpoints that succeeded before throwing (FINDING 8: zero DNS TXT residue)
+    if (succeededEndpoints.length > 0) {
+      try {
+        await clearDns01Challenge(succeededEndpoints, token, record, value);
+      } catch (rollbackErr: any) {
+        console.warn(`[ACME] Rollback warning clearing partial DNS challenge: ${rollbackErr?.message}`);
+      }
+    }
     throw new Error(`failed to set DNS challenge on ${errors.length}/${endpoints.length} authoritative endpoint(s): ${errors.join(', ')}`);
   }
 }
@@ -870,10 +881,9 @@ export async function handleCertRoutes(
           }
 
           const challengeVal = await computeDns01ChallengeValue(dnsChall.token, thumbprint);
-          const recordName = `_acme-challenge.${cleanNode}.direct.eqt.net.im.`;
-
-          await setDns01Challenge(endpoints, dnsToken, recordName, challengeVal);
+          // Pre-register cleanup task before setting challenge to guarantee cleanup on timeout/abort (FINDING 8)
           cleanupTasks.push(() => clearDns01Challenge(endpoints, dnsToken, recordName, challengeVal));
+          await setDns01Challenge(endpoints, dnsToken, recordName, challengeVal);
 
           await acmeClient.triggerChallenge(dnsChall.url);
         }

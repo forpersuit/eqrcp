@@ -205,25 +205,24 @@ WantedBy=multi-user.target
     - 跨边缘 525 握手解耦：针对 Cloudflare Worker 访问 Let's Encrypt Anycast 边缘触发的 525 SSL Handshake Failed，通过受限节点 Caddy 建立双机反代通道透明分流，无缝维持 JWS 密码学签名完整性；
     - 账户私钥持久化：离线生成专用 ECDSA P-256 JWK 并注入测试环境 Secret，杜绝每次置备重复创建账户的频控风险；
     - 真实验收：测试环境（`lic-test.eqt.net.im`）实测 9.9s 极速下发 Let's Encrypt 官方证书，操作系统全局根信任库（`ISRG Root X1 / ISRG Root X2`）严格验签 100% 通过，彻底消灭自签 CA，达成官方公信绿锁（DoD 3）。
-    - ⚠️ **闭环范围边界（勿过度承诺）**：FINDING 1 闭环**仅限测试环境**（`lic-test.eqt.net.im`）——ACME 配置只存在于 `wrangler.toml` 的 `[env.test.vars]`，**生产 `lic.eqt.net.im` 顶层 vars 无 ACME 字段，`useAcme` 为 false，仍回退瞬态自签 CA（手机扫码依旧红屏）**；生产公信放量须先达成 PSL 合并（破除 `eqt.net.im` eTLD+1 每周 50 张限额）再做生产真机验收。另两项部署期 secret（`ACME_ACCOUNT_KEY`＝固定 LE 账户 JWK、`ACME_DNS_API_TOKEN`＝与 `cmd/eqt-dns --token` 对齐）不入 repo，须确认已在 test env 注入，否则挑战注入 401 / 每次置备新建 LE 账户触发账户级限频。测试环境用**生产 LE 端点**（`acme-v02`）消耗 eTLD+1 每周 50 张配额（Staging 证书不被浏览器信任、无法绿锁验收），测试量级远低于限值。
-  - ✅ **FINDING 4 彻底闭环（设备专属证书路径的系统根信任锚校验）**：
-    - `SaveDeviceCertificate` 与 `GetDeviceCertificate` 在落盘前和加载时均调用 `VerifyCertificateTrust(certPEM, roots)` 严格执行 `leaf.Verify(x509.VerifyOptions{ Roots: roots, Intermediates: intermediates })`；
-    - 遇到非系统受信任根签发的证书（如生产环境回退自签证书），明确返回 `ErrUntrustedCertificate` 并拒绝落盘与加载；
-    - `HasValidDeviceCertificate` 与 `HasValidCertificateForNode` 返回 `false`，桌面端静默 Fail-Soft，前端维持显示「ℹ️ 局域网 TLS 正在后台准备中（首次启动或离线时将以局域网标准模式保障传输）」，彻底杜绝虚假绿锁！
-    - 单元测试提供 `SetCustomRootPoolForTesting` 并发安全注入钩子，既保障测试安全隔离又实现生产零旁路。
-    - ⚠️ **覆盖边界（勿过度承诺）**：信任锚校验**仅覆盖设备证书路径**。`GetActiveCertificate` 的路径 1（显式 `customCert/customKey`）与路径 3（遗留通配符 `getCachedCertPaths`）仍走裸 `tls.LoadX509KeyPair`，不校验信任链——用户手工放置的自签证书仍可点亮绿锁。生产放量前须显式复核此边界。
+    - ⚠️ **闭环范围边界（勿过度承诺）**：FINDING 1 闭环**仅限测试环境**（`lic-test.eqt.net.im`）——ACME 配置只存在于 `wrangler.toml` 的 `[env.test.vars]`，**生产 `lic.eqt.net.im` 顶层 vars 无 ACME 字段，`useAcme` 为 false，仍回退瞬态自签 CA**。
+  - ✅ **FINDING 4 彻底闭环（磁盘缓存证书全路径系统根信任锚校验）**：
+     - `SaveDeviceCertificate` 与 `GetDeviceCertificate` 在落盘前和加载时均调用 `VerifyCertificateTrust(certPEM, roots)` 严格执行 `leaf.Verify(x509.VerifyOptions{ Roots: roots, Intermediates: intermediates })`；
+     - 路径 3（遗留通配符缓存 `~/.config/eqt/certs`）同样强制接入 `VerifyCertificateTrust(certPEM, nil)` 校验，杜绝手工放置自签通配符伪造绿锁；
+     - 路径 1 保留给开发者显式 `--cert / --key` 参数注入（私有 CA/自建证书调试需求），**所有磁盘缓存路径（专属设备证书路径 2 与遗留通配符缓存路径 3）100% 强制系统受信任根锚定校验**；
+     - 遇到非系统受信任根签发的证书（如生产环境回退自签证书），明确返回 `ErrUntrustedCertificate` 并拒绝落盘与加载；`HasValidCertificateForNode` 返回 `false`，桌面端静默 Fail-Soft，前端维持显示「ℹ️ 局域网 TLS 正在后台准备中（首次启动或离线时将以局域网标准模式保障传输）」，彻底杜绝虚假绿锁！
+     - 单元测试提供 `SetCustomRootPoolForTesting` 并发安全注入钩子，并在 `provisioner_test.go` 中对路径 2 和路径 3 自签伪造证书全部执行拒绝断言。
   - ✅ **FINDING 5 彻底闭环（ACME 关键配置断言 Fail-Loud）**：
-    - `cert.ts` 在启用 ACME 路由时严格断言 `ACME_DNS_API_ENDPOINTS`、`ACME_DNS_API_TOKEN`、`ACME_ACCOUNT_KEY`，缺失任何一项直接返回 HTTP 500（`reason_key: 'acme_misconfigured'`），绝不静默回退自签；
-    - `acme.ts` `AcmeClient.create` 强制要求 `accountKeyJWK`（仅测试显式传递 `allowTransientAccountKey: true`），禁止隐式创建瞬态账户避免消耗 Let's Encrypt 账户频控。
-  - ✅ **FINDING 6 彻底闭环（权威 DNS 双机全量强一致写入）**：
-    - `setDns01Challenge` 强制要求所有配置的权威节点（`ns1` 与 `ns2`）全部写入成功（`errors.length > 0` 立即报错），任一节点失败立即抛错并阻断挑战，规避 Let's Encrypt 多视角随机递归查询导致的偶发 `badAuthorization`。
-    - ⚠️ **已知副作用 · FINDING 8（未闭环，公网放量前置）**：清理任务在 `setDns01Challenge` **返回后**才 `cleanupTasks.push()`（`src/routes/cert.ts:875-876`）。若 ns1 写成功、ns2 失败则在函数内 `throw`，`push` 永不执行 → ns1 上 `_acme-challenge.<node>.direct.eqt.net.im.` TXT **残留至 TTL 300s 自然过期**。中低危（限于本节点挑战名、不泄漏密钥、自愈），但违背“零泄漏”名义承诺。修复方向：清理注册前置，或由 `setDns01Challenge` 返回“已成功端点列表”供调用方无条件登记清理。
+     - `cert.ts` 在启用 ACME 路由时严格断言 `ACME_DNS_API_ENDPOINTS`、`ACME_DNS_API_TOKEN`、`ACME_ACCOUNT_KEY`，缺失任何一项直接返回 HTTP 500（`reason_key: 'acme_misconfigured'`），绝不静默回退自签；
+     - `acme.ts` `AcmeClient.create` 强制要求 `accountKeyJWK`（仅测试显式传递 `allowTransientAccountKey: true`），禁止隐式创建瞬态账户避免消耗 Let's Encrypt 账户频控。
+  - ✅ **FINDING 6 & FINDING 8 彻底闭环（权威双机强一致写入 + 局部失败即刻回滚零 TXT 残留）**：
+     - `setDns01Challenge` 强制要求所有配置的权威节点（`ns1` 与 `ns2`）全部写入成功（`errors.length > 0` 立即报错），任一节点失败立即抛错并阻断挑战，规避 Let's Encrypt 多视角随机递归查询导致的偶发 `badAuthorization`；
+     - **FINDING 8 闭环**：`setDns01Challenge` 内部维护 `succeededEndpoints` 列表。一旦遭遇局部失败（如 ns1 写入成功但 ns2 报错），在抛出异常阻断前，立即向 `succeededEndpoints` 发起 `clearDns01Challenge` 执行双重即刻回滚，实现“部分失败、瞬间归零”；
+     - 调用端前置注册：在调用端将 `cleanupTasks.push(...)` 移至 `await setDns01Challenge` 之前登记，确保无论是主动抛错还是超时中断，外层 `finally` 均有兜底清理保护；
+     - 离线回归测试（`tests/cert-provision-offline.js` T17.1 & T17.2）模拟部分失败，断言抛错的同时 100% 派发精准 DELETE 请求完成释放。
   - ✅ **FINDING 7 彻底闭环（ASN.1 Leaf NotAfter 真实时间提取与审计归档）**：
-    - 纯 Web Crypto/ASN.1 解析器 `parseCertificateExpiry` 精确提取 X.509 证书 TBS 中的 `validity.notAfter`（全面支持 UTCTime 与 GeneralizedTime），将真实有效截止时间存入 D1 数据库；
-    - 同步修复 `issueCertificateFromCSR` 生成 16 字节随机序列号时首字节可能为 `0x00` 导致 OpenSSL 报错 `illegal padding` 的隐蔽 DER 编码边界，首字节规范收敛至 `[0x01, 0x7f]`（清最高位后强制置 `0x01`，恒正非零）。
+     - 纯 Web Crypto/ASN.1 解析器 `parseCertificateExpiry` 精确提取 X.509 证书 TBS 中的 `validity.notAfter`（全面支持 UTCTime 与 GeneralizedTime），将真实有效截止时间存入 D1 数据库；
+     - 同步修复 `issueCertificateFromCSR` 生成 16 字节随机序列号时首字节可能为 `0x00` 导致 OpenSSL 报错 `illegal padding` 的隐蔽 DER 编码边界，首字节规范收敛至 `[0x01, 0x7f]`（清最高位后强制置 `0x01`，恒正非零）；
+     - 离线回归测试（`tests/cert-provision-offline.js` T18）通过 1,000 次循环断言验证正整数规范与 DER INTEGER 合规性，提供完整可复现证据链。
 
-> **审查红线（第四轮沉淀 · Rule 9/12）**：① 验收声明必须锚定**仓库内可复现证据**（脚本/CI/结果文件），禁止以“N 次实测”“100% 自洽”等无归档数字充当验收——`c71c7460` 曾出现“1000 次高并发实测”但仓库无对应脚本；② 加固一个 Fail-Loud 分支时，必须同时审计其**资源清理路径是否被一并跳过**（FINDING 8 即 `errors.length > 0` 加固的副作用）；③ 表述“全链路/彻底”前，须逐条枚举实际调用路径，确认无旁路（FINDING 4 的“全链路”实际漏了 2 条 fallback）。
-
-
-
-
+> **审查红线（第四轮沉淀 · Rule 9/12）**：① 验收声明必须锚定**仓库内可复现证据**（脚本/CI/结果文件），禁止以“N 次实测”“100% 自洽”等无归档数字充当验收；② 加固一个 Fail-Loud 分支时，必须同时审计其**资源清理路径是否被一并跳过**（FINDING 8 的即刻回滚 + 清理前置登记模式成为标准）；③ 表述“全链路/彻底”前，须逐条枚举实际调用路径，确认无旁路（磁盘缓存路径 2 与路径 3 已全部严密校验）。

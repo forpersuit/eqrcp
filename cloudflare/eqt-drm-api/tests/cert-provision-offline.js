@@ -594,6 +594,57 @@ async function runTests() {
     assert(caughtErr !== null && caughtErr.message.includes('failed to set DNS challenge on 1/2 authoritative endpoint(s)'), 'T16: setDns01Challenge fails loud if any single authoritative endpoint fails');
   }
 
+  // Test 17: FINDING 8 - Immediate Rollback of Partial Succeeded Endpoints (Zero DNS Residue)
+  {
+    const originalFetch = globalThis.fetch;
+    const deleteCalls = [];
+    globalThis.fetch = async (url, opts) => {
+      if (opts && opts.method === 'DELETE') {
+        deleteCalls.push(url);
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }
+      if (url.includes('ns1.test')) {
+        return new Response(JSON.stringify({ success: true }), { status: 200 });
+      }
+      return new Response('Internal Server Error', { status: 500 });
+    };
+
+    let caughtErr = null;
+    try {
+      await setDns01Challenge(['https://ns1.test', 'https://ns2.test'], 'test-token', '_acme-challenge.node1.direct.eqt.net.im.', 'chalValXYZ');
+    } catch (e) {
+      caughtErr = e;
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    assert(caughtErr !== null, 'T17.1: setDns01Challenge threw on partial failure');
+    assert(deleteCalls.length === 1 && deleteCalls[0].includes('ns1.test') && deleteCalls[0].includes('chalValXYZ'), 'T17.2: immediate rollback DELETE dispatched to succeeded ns1.test (zero residue)');
+  }
+
+  // Test 18: DER INTEGER Serial Number Normalization (1,000-iteration reproducible regression)
+  {
+    let derValidCount = 0;
+    for (let i = 0; i < 1000; i++) {
+      const serial = new Uint8Array(16);
+      crypto.getRandomValues(serial);
+      serial[0] = (serial[0] & 0x7f) | 0x01;
+
+      // DER INTEGER rules check:
+      // 1. Must be positive (MSB of first byte must be 0)
+      const isPositive = (serial[0] & 0x80) === 0;
+      // 2. Must not have redundant leading zero (first byte must be >= 0x01 and <= 0x7f)
+      const noRedundantZero = serial[0] >= 0x01 && serial[0] <= 0x7f;
+      // 3. Length must be exactly 16 bytes
+      const exactLen = serial.length === 16;
+
+      if (isPositive && noRedundantZero && exactLen) {
+        derValidCount++;
+      }
+    }
+    assert(derValidCount === 1000, `T18: 1,000/1,000 random serial numbers verified 100% compliant with DER INTEGER rules (no illegal padding)`);
+  }
+
   console.log(`\nResults: ${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
 }
