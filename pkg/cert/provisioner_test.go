@@ -153,7 +153,26 @@ func TestSaveAndGetDeviceCertificate(t *testing.T) {
 		t.Fatalf("failed to generate key: %v", err)
 	}
 
-	// 1. Create a self-signed leaf certificate matching this private key
+	// Setup mock test CA
+	caPriv, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	caTemplate := x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "Test LAN-TLS Root CA"},
+		NotBefore:             time.Now().Add(-1 * time.Hour),
+		NotAfter:              time.Now().Add(365 * 24 * time.Hour),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+	}
+	caDER, err := x509.CreateCertificate(rand.Reader, &caTemplate, &caTemplate, &caPriv.PublicKey, caPriv)
+	if err != nil {
+		t.Fatalf("failed to create CA: %v", err)
+	}
+	caCert, _ := x509.ParseCertificate(caDER)
+	testPool := x509.NewCertPool()
+	testPool.AddCert(caCert)
+
+	// 1. Create a leaf certificate matching this private key signed by caPriv
 	template := x509.Certificate{
 		SerialNumber: big.NewInt(1001),
 		Subject: pkix.Name{
@@ -166,32 +185,44 @@ func TestSaveAndGetDeviceCertificate(t *testing.T) {
 			"*.node99887766.direct.eqt.net.im",
 		},
 	}
-	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+	certDER, err := x509.CreateCertificate(rand.Reader, &template, caCert, &priv.PublicKey, caPriv)
 	if err != nil {
 		t.Fatalf("failed to create test certificate: %v", err)
 	}
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	certPEM = append(certPEM, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER})...)
 
-	// 2. Try to save certificate using a mismatched private key (must fail)
+	// 2. Without testPool in CustomRootPoolForTesting, SaveDeviceCertificate MUST reject untrusted certificate (FINDING 4)
+	SetCustomRootPoolForTesting(nil)
+	if err := SaveDeviceCertificate(nodeID, certPEM); err == nil {
+		t.Fatalf("expected SaveDeviceCertificate to reject untrusted certificate when not in root store")
+	}
+
+	// 3. Now configure testPool as trusted roots for the test
+	SetCustomRootPoolForTesting(testPool)
+	defer SetCustomRootPoolForTesting(nil)
+
+	// 4. Try to save certificate using a mismatched private key (must fail)
 	otherPriv, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	mismatchDER, _ := x509.CreateCertificate(rand.Reader, &template, &template, &otherPriv.PublicKey, otherPriv)
+	mismatchDER, _ := x509.CreateCertificate(rand.Reader, &template, caCert, &otherPriv.PublicKey, caPriv)
 	mismatchPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: mismatchDER})
+	mismatchPEM = append(mismatchPEM, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER})...)
 
 	if err := SaveDeviceCertificate(nodeID, mismatchPEM); err == nil {
 		t.Fatalf("expected SaveDeviceCertificate to reject mismatched key, got nil error")
 	}
 
-	// 3. Save matching certificate (must succeed)
+	// 5. Save matching certificate (must succeed now that root is trusted)
 	if err := SaveDeviceCertificate(nodeID, certPEM); err != nil {
 		t.Fatalf("failed to save matching certificate: %v", err)
 	}
 
-	// 4. Verify HasValidDeviceCertificate
+	// 6. Verify HasValidDeviceCertificate
 	if !HasValidDeviceCertificate(nodeID) {
 		t.Errorf("expected HasValidDeviceCertificate to return true")
 	}
 
-	// 5. Load certificate and verify SANs
+	// 7. Load certificate and verify SANs
 	tlsCert, err := GetDeviceCertificate(nodeID)
 	if err != nil {
 		t.Fatalf("failed to get device certificate: %v", err)
@@ -204,7 +235,7 @@ func TestSaveAndGetDeviceCertificate(t *testing.T) {
 		t.Errorf("unexpected CommonName: %s", leaf.Subject.CommonName)
 	}
 
-	// 6. Test GetActiveCertificate resolution order
+	// 8. Test GetActiveCertificate resolution order
 	activeCert, activeNode, err := GetActiveCertificate("", "", nodeID)
 	if err != nil {
 		t.Fatalf("failed to get active certificate: %v", err)
@@ -223,6 +254,27 @@ func TestRequestDeviceCertificate_SuccessAndReuse(t *testing.T) {
 
 	nodeID := "nodebeef1234"
 	var requestCount int
+
+	// Setup mock root CA for test gateway
+	mockCAPriv, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	mockCATemplate := x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "Mock Gateway Root CA"},
+		NotBefore:             time.Now().Add(-1 * time.Hour),
+		NotAfter:              time.Now().Add(365 * 24 * time.Hour),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+	}
+	mockCADER, err := x509.CreateCertificate(rand.Reader, &mockCATemplate, &mockCATemplate, &mockCAPriv.PublicKey, mockCAPriv)
+	if err != nil {
+		t.Fatalf("failed to create mock CA: %v", err)
+	}
+	mockCACert, _ := x509.ParseCertificate(mockCADER)
+	mockPool := x509.NewCertPool()
+	mockPool.AddCert(mockCACert)
+	SetCustomRootPoolForTesting(mockPool)
+	defer SetCustomRootPoolForTesting(nil)
 
 	// Set up mock Gateway server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -279,8 +331,7 @@ func TestRequestDeviceCertificate_SuccessAndReuse(t *testing.T) {
 			t.Errorf("POPO signature verification failed in mock server")
 		}
 
-		// Self-sign a CA/leaf cert with the public key from the CSR
-		caPriv, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		// Issue cert signed by mock CA
 		template := x509.Certificate{
 			SerialNumber: big.NewInt(777),
 			Subject:      csr.Subject,
@@ -288,11 +339,12 @@ func TestRequestDeviceCertificate_SuccessAndReuse(t *testing.T) {
 			NotAfter:     time.Now().Add(90 * 24 * time.Hour),
 			DNSNames:     csr.DNSNames,
 		}
-		certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, csr.PublicKey, caPriv)
+		certDER, err := x509.CreateCertificate(rand.Reader, &template, mockCACert, csr.PublicKey, mockCAPriv)
 		if err != nil {
 			t.Fatalf("failed to create certificate: %v", err)
 		}
 		certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+		certPEM = append(certPEM, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: mockCADER})...)
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -513,5 +565,68 @@ func TestSignAndVerifyProvisionPayload(t *testing.T) {
 	}
 	if _, err := SignProvisionPayload(priv, nodeID, 0); err == nil {
 		t.Errorf("expected error for zero timestamp")
+	}
+}
+
+func TestUntrustedDeviceCertificate_FailSoft(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+
+	nodeID := "nodefailsoft00"
+	priv, err := LoadOrGenerateDeviceKey(nodeID)
+	if err != nil {
+		t.Fatalf("failed to generate key: %v", err)
+	}
+
+	// Create an untrusted self-signed certificate (typical of standalone CA / fallback)
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(9999),
+		Subject: pkix.Name{
+			CommonName: "nodefailsoft00.direct.eqt.net.im",
+		},
+		NotBefore: time.Now().Add(-1 * time.Hour),
+		NotAfter:  time.Now().Add(90 * 24 * time.Hour),
+		DNSNames: []string{
+			"nodefailsoft00.direct.eqt.net.im",
+			"*.nodefailsoft00.direct.eqt.net.im",
+		},
+	}
+	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+	if err != nil {
+		t.Fatalf("failed to create certificate: %v", err)
+	}
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+
+	// 1. SaveDeviceCertificate MUST reject untrusted certificate
+	SetCustomRootPoolForTesting(nil)
+	if err := SaveDeviceCertificate(nodeID, certPEM); err == nil {
+		t.Fatalf("expected SaveDeviceCertificate to reject untrusted cert, got nil error")
+	} else if !errors.Is(err, ErrUntrustedCertificate) {
+		t.Errorf("expected ErrUntrustedCertificate, got: %v", err)
+	}
+
+	// 2. Even if an untrusted certificate was manually placed on disk, GetDeviceCertificate must reject it
+	dir, err := GetDeviceCertDir(nodeID)
+	if err != nil {
+		t.Fatalf("failed to get cert dir: %v", err)
+	}
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatalf("failed to mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "fullchain.pem"), certPEM, 0644); err != nil {
+		t.Fatalf("failed to write untrusted fullchain.pem: %v", err)
+	}
+
+	// 3. Verify GetDeviceCertificate rejects untrusted certificate
+	if _, err := GetDeviceCertificate(nodeID); err == nil {
+		t.Fatalf("expected GetDeviceCertificate to reject untrusted cert from disk")
+	}
+
+	// 4. Verify HasValidDeviceCertificate and HasValidCertificateForNode return false
+	if HasValidDeviceCertificate(nodeID) {
+		t.Errorf("expected HasValidDeviceCertificate to return false for untrusted cert")
+	}
+	if HasValidCertificateForNode("", "", nodeID) {
+		t.Errorf("expected HasValidCertificateForNode to return false for untrusted cert")
 	}
 }

@@ -211,6 +211,86 @@ export function parseCSR(pemStr: string): ParsedCSR {
   };
 }
 
+export function parseCertificateExpiry(pemStr: string): Date {
+  const match = pemStr.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/);
+  const targetPEM = match ? match[0] : pemStr;
+  const cleanPEM = targetPEM
+    .replace(/-----BEGIN CERTIFICATE-----/, '')
+    .replace(/-----END CERTIFICATE-----/, '')
+    .replace(/\s+/g, '');
+
+  if (!cleanPEM) {
+    throw new Error('empty or invalid certificate PEM');
+  }
+
+  let binaryStr: string;
+  if (typeof Buffer !== 'undefined') {
+    binaryStr = Buffer.from(cleanPEM, 'base64').toString('binary');
+  } else {
+    binaryStr = atob(cleanPEM);
+  }
+
+  const der = new Uint8Array(binaryStr.length);
+  for (let i = 0; i < binaryStr.length; i++) {
+    der[i] = binaryStr.charCodeAt(i);
+  }
+
+  const root = parseTLV(der, 0);
+  if (!root || root.tag !== 0x30) {
+    throw new Error('certificate root must be ASN.1 SEQUENCE');
+  }
+
+  const rootChildren = parseChildren(root.value);
+  if (rootChildren.length < 3) {
+    throw new Error('invalid X.509 certificate structure');
+  }
+
+  const tbs = rootChildren[0];
+  const tbsChildren = parseChildren(tbs.value);
+  let validityIdx = 3;
+  if (tbsChildren.length > 0 && tbsChildren[0].tag === 0xa0) {
+    validityIdx = 4;
+  }
+  if (tbsChildren.length <= validityIdx) {
+    throw new Error('validity field not found in certificate TBS');
+  }
+
+  const validity = tbsChildren[validityIdx];
+  const vChildren = parseChildren(validity.value);
+  if (vChildren.length < 2) {
+    throw new Error('invalid validity sequence in certificate');
+  }
+
+  const notAfterNode = vChildren[1];
+  let timeStr = '';
+  for (let i = 0; i < notAfterNode.value.length; i++) {
+    timeStr += String.fromCharCode(notAfterNode.value[i]);
+  }
+
+  if (notAfterNode.tag === 0x17) {
+    // UTCTime: YYMMDDHHMMSSZ
+    const yy = parseInt(timeStr.substring(0, 2), 10);
+    const year = yy >= 50 ? 1900 + yy : 2000 + yy;
+    const month = parseInt(timeStr.substring(2, 4), 10) - 1;
+    const day = parseInt(timeStr.substring(4, 6), 10);
+    const hour = parseInt(timeStr.substring(6, 8), 10);
+    const minute = parseInt(timeStr.substring(8, 10), 10);
+    const second = parseInt(timeStr.substring(10, 12), 10);
+    return new Date(Date.UTC(year, month, day, hour, minute, second));
+  } else if (notAfterNode.tag === 0x18) {
+    // GeneralizedTime: YYYYMMDDHHMMSSZ
+    const year = parseInt(timeStr.substring(0, 4), 10);
+    const month = parseInt(timeStr.substring(4, 6), 10) - 1;
+    const day = parseInt(timeStr.substring(6, 8), 10);
+    const hour = parseInt(timeStr.substring(8, 10), 10);
+    const minute = parseInt(timeStr.substring(10, 12), 10);
+    const second = parseInt(timeStr.substring(12, 14), 10);
+    return new Date(Date.UTC(year, month, day, hour, minute, second));
+  } else {
+    throw new Error(`unsupported time tag in certificate validity: 0x${notAfterNode.tag.toString(16)}`);
+  }
+}
+
 function formatUTCTime(d: Date): Uint8Array {
   const pad = (n: number) => (n < 10 ? '0' + n : '' + n);
   const yy = pad(d.getUTCFullYear() % 100);
@@ -249,10 +329,10 @@ export async function issueCertificateFromCSR(
   // 1. Version [0] EXPLICIT INTEGER (v3: 2) -> A0 03 02 01 02
   const versionDER = new Uint8Array([0xa0, 0x03, 0x02, 0x01, 0x02]);
 
-  // 2. Serial Number (INTEGER, positive random 16 bytes)
+  // 2. Serial Number (INTEGER, positive random 16 bytes with non-zero high byte for canonical DER)
   const serialBytes = new Uint8Array(16);
   crypto.getRandomValues(serialBytes);
-  serialBytes[0] = serialBytes[0] & 0x7f; // Ensure non-negative
+  serialBytes[0] = (serialBytes[0] & 0x7f) | 0x01; // Ensure positive and non-zero high byte
   const serialDER = encodeTLV(0x02, serialBytes);
 
   // 3. Signature Algorithm Identifier (ecdsa-with-SHA256: 1.2.840.10045.4.3.2)
@@ -421,8 +501,8 @@ export async function setDns01Challenge(
       errors.push(`${ep}: ${e?.message}`);
     }
   }
-  if (errors.length === endpoints.length) {
-    throw new Error(`failed to set DNS challenge on all endpoints: ${errors.join(', ')}`);
+  if (errors.length > 0) {
+    throw new Error(`failed to set DNS challenge on ${errors.length}/${endpoints.length} authoritative endpoint(s): ${errors.join(', ')}`);
   }
 }
 
@@ -694,12 +774,43 @@ export async function handleCertRoutes(
     let certPEM: string;
     let expiresAt: string;
 
-    const useAcme = Boolean(env.ACME_DIRECTORY_URL || (env.ENVIRONMENT === 'test' && env.ACME_DNS_API_ENDPOINTS));
+    const acmeRequested = Boolean(env.ACME_DIRECTORY_URL || (env.ENVIRONMENT === 'test' && env.ACME_DNS_API_ENDPOINTS));
 
-    if (useAcme && env.ACME_DNS_API_ENDPOINTS) {
+    if (acmeRequested) {
+      if (!env.ACME_DNS_API_ENDPOINTS) {
+        console.error(`[LAN-TLS-PROVISION] [CONFIG-ERROR] ACME requested but ACME_DNS_API_ENDPOINTS is missing`);
+        return new Response(JSON.stringify({
+          error: 'ACME configuration error: ACME_DNS_API_ENDPOINTS is required for DNS-01 challenges',
+          reason_key: 'acme_misconfigured'
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      if (!env.ACME_DNS_API_TOKEN) {
+        console.error(`[LAN-TLS-PROVISION] [CONFIG-ERROR] ACME requested but ACME_DNS_API_TOKEN is missing`);
+        return new Response(JSON.stringify({
+          error: 'ACME configuration error: ACME_DNS_API_TOKEN is required for authoritative DNS updates',
+          reason_key: 'acme_misconfigured'
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      if (!env.ACME_ACCOUNT_KEY) {
+        console.error(`[LAN-TLS-PROVISION] [CONFIG-ERROR] ACME requested but ACME_ACCOUNT_KEY is missing`);
+        return new Response(JSON.stringify({
+          error: 'ACME configuration error: ACME_ACCOUNT_KEY is required to prevent account exhaustion',
+          reason_key: 'acme_misconfigured'
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
       console.log(`[LAN-TLS-PROVISION] [ACME] Starting RFC 8555 Let's Encrypt DNS-01 issuance for nodeID=${cleanNode}...`);
       const endpoints = env.ACME_DNS_API_ENDPOINTS.split(',').map(s => s.trim()).filter(Boolean);
-      const dnsToken = env.ACME_DNS_API_TOKEN || '';
+      const dnsToken = env.ACME_DNS_API_TOKEN;
 
       // Route outbound ACME requests to Let's Encrypt via secure reverse proxies (ns1/ns2)
       // to circumvent Cloudflare Edge 525 SSL Handshake Loop while maintaining end-to-end JWS integrity
@@ -777,7 +888,12 @@ export async function handleCertRoutes(
         }
 
         certPEM = await acmeClient.downloadCertificate(validOrder.certificate);
-        expiresAt = new Date(Date.now() + 90 * 24 * 3600 * 1000).toISOString();
+        try {
+          expiresAt = parseCertificateExpiry(certPEM).toISOString();
+        } catch (e: any) {
+          console.warn(`[ACME] Failed to parse leaf cert expiry, falling back to 90d default: ${e?.message}`);
+          expiresAt = new Date(Date.now() + 90 * 24 * 3600 * 1000).toISOString();
+        }
       } finally {
         ctx.waitUntil(Promise.all(cleanupTasks.map(fn => fn().catch(err => console.warn('[ACME] DNS cleanup warning:', err)))));
       }

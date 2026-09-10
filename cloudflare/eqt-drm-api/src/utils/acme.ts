@@ -120,6 +120,7 @@ export class AcmeClient {
     accountKeyJWK?: string;
     accountUrl?: string;
     customFetch?: typeof fetch;
+    allowTransientAccountKey?: boolean;
   }): Promise<AcmeClient> {
     const dirUrl = opts.directoryUrl || 'https://acme-staging-v02.api.letsencrypt.org/directory';
 
@@ -150,26 +151,30 @@ export class AcmeClient {
       });
     }
 
-    keyPair = await crypto.subtle.generateKey(
-      { name: 'ECDSA', namedCurve: 'P-256' },
-      true,
-      ['sign', 'verify']
-    );
-    const jwk = await crypto.subtle.exportKey('jwk', keyPair.publicKey) as JwkKey;
-    publicJwk = {
-      kty: jwk.kty,
-      crv: jwk.crv,
-      x: jwk.x,
-      y: jwk.y
-    };
+    if (opts.allowTransientAccountKey) {
+      keyPair = await crypto.subtle.generateKey(
+        { name: 'ECDSA', namedCurve: 'P-256' },
+        true,
+        ['sign', 'verify']
+      );
+      const jwk = await crypto.subtle.exportKey('jwk', keyPair.publicKey) as JwkKey;
+      publicJwk = {
+        kty: jwk.kty,
+        crv: jwk.crv,
+        x: jwk.x,
+        y: jwk.y
+      };
 
-    return new AcmeClient({
-      directoryUrl: dirUrl,
-      accountKey: keyPair.privateKey,
-      publicJwk,
-      accountUrl: opts.accountUrl,
-      customFetch: opts.customFetch
-    });
+      return new AcmeClient({
+        directoryUrl: dirUrl,
+        accountKey: keyPair.privateKey,
+        publicJwk,
+        accountUrl: opts.accountUrl,
+        customFetch: opts.customFetch
+      });
+    }
+
+    throw new Error('accountKeyJWK is required for AcmeClient to ensure consistent account identity (fail loud)');
   }
 
   async getDirectory(): Promise<AcmeDirectory> {

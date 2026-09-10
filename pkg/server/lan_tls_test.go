@@ -219,7 +219,27 @@ func TestLanTLSWithDedicatedNodeCertificate(t *testing.T) {
 		t.Fatalf("Failed to generate device key: %v", err)
 	}
 
-	// 2. Self-sign dedicated certificate matching this node ID
+	// 2. Issue dedicated certificate matching this node ID using mock test CA
+	caPriv, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	caTemplate := x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "Mock Test LAN-TLS CA"},
+		NotBefore:             time.Now().Add(-1 * time.Hour),
+		NotAfter:              time.Now().Add(365 * 24 * time.Hour),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+	}
+	caDER, err := x509.CreateCertificate(rand.Reader, &caTemplate, &caTemplate, &caPriv.PublicKey, caPriv)
+	if err != nil {
+		t.Fatalf("Failed to create CA: %v", err)
+	}
+	caCert, _ := x509.ParseCertificate(caDER)
+	testPool := x509.NewCertPool()
+	testPool.AddCert(caCert)
+	cert.SetCustomRootPoolForTesting(testPool)
+	defer cert.SetCustomRootPoolForTesting(nil)
+
 	nodeDomain := cert.GetNodeDomain(nodeID)
 	wildcardDomain := "*." + nodeDomain
 	template := x509.Certificate{
@@ -236,11 +256,12 @@ func TestLanTLSWithDedicatedNodeCertificate(t *testing.T) {
 		DNSNames:              []string{nodeDomain, wildcardDomain, "127-0-0-1." + nodeDomain},
 	}
 
-	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, caCert, &priv.PublicKey, caPriv)
 	if err != nil {
 		t.Fatalf("Failed to create certificate: %v", err)
 	}
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
+	certPEM = append(certPEM, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER})...)
 
 	if err := cert.SaveDeviceCertificate(nodeID, certPEM); err != nil {
 		t.Fatalf("Failed to save dedicated certificate: %v", err)

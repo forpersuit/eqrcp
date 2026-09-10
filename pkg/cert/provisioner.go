@@ -23,6 +23,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -237,8 +238,81 @@ func VerifyCertificateMatchesPrivateKey(cert *x509.Certificate, priv *ecdsa.Priv
 	return pubKey.Equal(&priv.PublicKey)
 }
 
+var (
+	customRootsMu sync.RWMutex
+	customRoots   *x509.CertPool
+)
+
+// ErrUntrustedCertificate indicates that a certificate chain cannot be anchored to a trusted root authority.
+var ErrUntrustedCertificate = errors.New("certificate chain is not trusted by system root store")
+
+// SetCustomRootPoolForTesting sets a custom CertPool for verifying certificates against mock test roots.
+// Set to nil to restore strict OS system root store verification.
+func SetCustomRootPoolForTesting(pool *x509.CertPool) {
+	customRootsMu.Lock()
+	defer customRootsMu.Unlock()
+	customRoots = pool
+}
+
+// GetCustomRootPoolForTesting returns the custom CertPool set for testing, or nil if using host system roots.
+func GetCustomRootPoolForTesting() *x509.CertPool {
+	customRootsMu.RLock()
+	defer customRootsMu.RUnlock()
+	return customRoots
+}
+
+// VerifyCertificateTrust verifies that the provided PEM certificate chain anchors to a trusted root authority.
+// If roots is nil, it strictly enforces the host operating system's native system root CA store.
+func VerifyCertificateTrust(certPEM []byte, roots *x509.CertPool) error {
+	var certs []*x509.Certificate
+	rest := certPEM
+	for {
+		var block *pem.Block
+		block, rest = pem.Decode(rest)
+		if block == nil {
+			break
+		}
+		if block.Type == "CERTIFICATE" {
+			c, err := x509.ParseCertificate(block.Bytes)
+			if err != nil {
+				return fmt.Errorf("failed to parse certificate in chain: %w", err)
+			}
+			certs = append(certs, c)
+		}
+	}
+	if len(certs) == 0 {
+		return errors.New("invalid PEM data: no certificate block found")
+	}
+
+	leaf := certs[0]
+	intermediates := x509.NewCertPool()
+	for _, c := range certs[1:] {
+		intermediates.AddCert(c)
+	}
+
+	var expectedDNS string
+	if len(leaf.DNSNames) > 0 {
+		expectedDNS = leaf.DNSNames[0]
+	} else if leaf.Subject.CommonName != "" {
+		expectedDNS = leaf.Subject.CommonName
+	}
+
+	opts := x509.VerifyOptions{
+		DNSName:       expectedDNS,
+		Intermediates: intermediates,
+		Roots:         roots, // When nil, x509 uses host OS system cert pool
+		CurrentTime:   time.Now(),
+	}
+
+	if _, err := leaf.Verify(opts); err != nil {
+		return fmt.Errorf("%w: %v", ErrUntrustedCertificate, err)
+	}
+	return nil
+}
+
 // SaveDeviceCertificate verifies and saves the full certificate chain (PEM) for nodeID.
-// It ensures that the leaf certificate matches the local private key before writing to disk.
+// It ensures that the leaf certificate matches the local private key and anchors to a trusted
+// root CA before writing to disk (preventing untrusted fallback certificates from posing as valid TLS).
 func SaveDeviceCertificate(nodeID string, certPEM []byte) error {
 	cleanNode := strings.ToLower(strings.TrimSpace(nodeID))
 	if cleanNode == "" {
@@ -265,7 +339,12 @@ func SaveDeviceCertificate(nodeID string, certPEM []byte) error {
 		return errors.New("certificate public key does not match local device private key")
 	}
 
-	// 3. Atomically save fullchain.pem
+	// 3. Verify that the certificate chain anchors to a trusted root authority
+	if err := VerifyCertificateTrust(certPEM, GetCustomRootPoolForTesting()); err != nil {
+		return fmt.Errorf("cannot save untrusted certificate: %w", err)
+	}
+
+	// 4. Atomically save fullchain.pem
 	dir, err := GetDeviceCertDir(cleanNode)
 	if err != nil {
 		return err
@@ -288,7 +367,7 @@ func SaveDeviceCertificate(nodeID string, certPEM []byte) error {
 }
 
 // GetDeviceCertificate loads the unexpired TLS certificate for nodeID from disk.
-// Returns an error if the certificate does not exist, is expired, or fails verification.
+// Returns an error if the certificate does not exist, is expired, or fails trust verification.
 func GetDeviceCertificate(nodeID string) (tls.Certificate, error) {
 	cleanNode := strings.ToLower(strings.TrimSpace(nodeID))
 	if cleanNode == "" {
@@ -303,11 +382,17 @@ func GetDeviceCertificate(nodeID string) (tls.Certificate, error) {
 	certPath := filepath.Join(dir, "fullchain.pem")
 	keyPath := filepath.Join(dir, "privkey.pem")
 
-	if _, err := os.Stat(certPath); err != nil {
+	certBytes, err := os.ReadFile(certPath)
+	if err != nil {
 		return tls.Certificate{}, fmt.Errorf("device certificate not found: %w", err)
 	}
 	if _, err := os.Stat(keyPath); err != nil {
 		return tls.Certificate{}, fmt.Errorf("device private key not found: %w", err)
+	}
+
+	// Verify that the certificate on disk is anchored to a trusted root authority
+	if err := VerifyCertificateTrust(certBytes, GetCustomRootPoolForTesting()); err != nil {
+		return tls.Certificate{}, fmt.Errorf("device certificate is not trusted by system root: %w", err)
 	}
 
 	tlsCert, err := tls.LoadX509KeyPair(certPath, keyPath)

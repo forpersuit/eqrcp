@@ -25,7 +25,7 @@ if (!fs.existsSync(compiledPath)) {
   process.exit(1);
 }
 
-const { handleCertRoutes, parseCSR } = require(compiledPath);
+const { handleCertRoutes, parseCSR, parseCertificateExpiry, setDns01Challenge } = require(compiledPath);
 
 let passed = 0;
 let failed = 0;
@@ -502,6 +502,96 @@ async function runTests() {
     const validToMs = new Date(x509.validTo).getTime();
     const daysUntilExpiry = (validToMs - Date.now()) / (24 * 3600 * 1000);
     assert(daysUntilExpiry >= 88 && daysUntilExpiry <= 91, 'T13.12: X509 certificate has ~90 days validity window');
+
+    // Test 14: ASN.1 Leaf NotAfter Expiry Extraction (FINDING 7)
+    const parsedExpiry = parseCertificateExpiry(data.cert_pem);
+    assert(parsedExpiry instanceof Date, 'T14.1: parseCertificateExpiry returns a Date instance');
+    assert(parsedExpiry.toISOString() === new Date(x509.validTo).toISOString(), 'T14.2: parseCertificateExpiry matches x509.validTo exactly');
+  }
+
+  // Test 15: ACME Fail-Loud on Misconfiguration (FINDING 5)
+  {
+    const testNode = 'a1b2c3d4e5f6';
+    const { csrPEM: csr, privateKey: testKey } = generateTestCSR(testNode);
+    const nowTs = Math.floor(Date.now() / 1000);
+    const sig = signNodePayload(testKey, testNode, nowTs);
+
+    // 15.1: Missing ACME_DNS_API_ENDPOINTS
+    const req1 = new Request('http://api.test/api/v1/cert/provision', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-EQT-Timestamp': String(nowTs),
+        'X-EQT-Device-Signature': sig
+      },
+      body: JSON.stringify({ node_id: testNode, csr_pem: csr })
+    });
+    const resp1 = await handleCertRoutes(req1, {
+      DB: makeMockDb(),
+      ACME_DIRECTORY_URL: 'https://acme-v02.api.letsencrypt.org/directory'
+    }, makeMockCtx(), new URL(req1.url), {});
+    const d1 = await resp1.json();
+    assert(resp1.status === 500 && d1.reason_key === 'acme_misconfigured', 'T15.1: Missing ACME_DNS_API_ENDPOINTS fails loud with 500 acme_misconfigured');
+
+    // 15.2: Missing ACME_DNS_API_TOKEN
+    const req2 = new Request('http://api.test/api/v1/cert/provision', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-EQT-Timestamp': String(nowTs),
+        'X-EQT-Device-Signature': sig
+      },
+      body: JSON.stringify({ node_id: testNode, csr_pem: csr })
+    });
+    const resp2 = await handleCertRoutes(req2, {
+      DB: makeMockDb(),
+      ACME_DIRECTORY_URL: 'https://acme-v02.api.letsencrypt.org/directory',
+      ACME_DNS_API_ENDPOINTS: 'https://ns1.test'
+    }, makeMockCtx(), new URL(req2.url), {});
+    const d2 = await resp2.json();
+    assert(resp2.status === 500 && d2.reason_key === 'acme_misconfigured', 'T15.2: Missing ACME_DNS_API_TOKEN fails loud with 500 acme_misconfigured');
+
+    // 15.3: Missing ACME_ACCOUNT_KEY
+    const req3 = new Request('http://api.test/api/v1/cert/provision', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-EQT-Timestamp': String(nowTs),
+        'X-EQT-Device-Signature': sig
+      },
+      body: JSON.stringify({ node_id: testNode, csr_pem: csr })
+    });
+    const resp3 = await handleCertRoutes(req3, {
+      DB: makeMockDb(),
+      ACME_DIRECTORY_URL: 'https://acme-v02.api.letsencrypt.org/directory',
+      ACME_DNS_API_ENDPOINTS: 'https://ns1.test',
+      ACME_DNS_API_TOKEN: 'secret-token'
+    }, makeMockCtx(), new URL(req3.url), {});
+    const d3 = await resp3.json();
+    assert(resp3.status === 500 && d3.reason_key === 'acme_misconfigured', 'T15.3: Missing ACME_ACCOUNT_KEY fails loud with 500 acme_misconfigured');
+  }
+
+  // Test 16: DNS-01 Challenge Strict Dual-Endpoint Consistency (FINDING 6)
+  {
+    const originalFetch = globalThis.fetch;
+    let fetchCalls = 0;
+    globalThis.fetch = async (url) => {
+      fetchCalls++;
+      if (url.includes('ns1.test')) {
+        return new Response(JSON.stringify({ success: true }), { status: 200 });
+      }
+      return new Response('Internal Server Error', { status: 500 });
+    };
+
+    let caughtErr = null;
+    try {
+      await setDns01Challenge(['https://ns1.test', 'https://ns2.test'], 'test-token', '_acme.test.', 'val123');
+    } catch (e) {
+      caughtErr = e;
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+    assert(caughtErr !== null && caughtErr.message.includes('failed to set DNS challenge on 1/2 authoritative endpoint(s)'), 'T16: setDns01Challenge fails loud if any single authoritative endpoint fails');
   }
 
   console.log(`\nResults: ${passed} passed, ${failed} failed`);

@@ -206,11 +206,20 @@ WantedBy=multi-user.target
     - 账户私钥持久化：离线生成专用 ECDSA P-256 JWK 并注入测试环境 Secret，杜绝每次置备重复创建账户的频控风险；
     - 真实验收：测试环境（`lic-test.eqt.net.im`）实测 9.9s 极速下发 Let's Encrypt 官方证书，操作系统全局根信任库（`ISRG Root X1 / ISRG Root X2`）严格验签 100% 通过，彻底消灭自签 CA，达成官方公信绿锁（DoD 3）。
     - ⚠️ **闭环范围边界（勿过度承诺）**：FINDING 1 闭环**仅限测试环境**（`lic-test.eqt.net.im`）——ACME 配置只存在于 `wrangler.toml` 的 `[env.test.vars]`，**生产 `lic.eqt.net.im` 顶层 vars 无 ACME 字段，`useAcme` 为 false，仍回退瞬态自签 CA（手机扫码依旧红屏）**；生产公信放量须先达成 PSL 合并（破除 `eqt.net.im` eTLD+1 每周 50 张限额）再做生产真机验收。另两项部署期 secret（`ACME_ACCOUNT_KEY`＝固定 LE 账户 JWK、`ACME_DNS_API_TOKEN`＝与 `cmd/eqt-dns --token` 对齐）不入 repo，须确认已在 test env 注入，否则挑战注入 401 / 每次置备新建 LE 账户触发账户级限频。测试环境用**生产 LE 端点**（`acme-v02`）消耗 eTLD+1 每周 50 张配额（Staging 证书不被浏览器信任、无法绿锁验收），测试量级远低于限值。
-  - 🆕 **FINDING 4（2026-09-10 第三轮复核，公网放行新增阻断项）：客户端/前端必须做信任锚校验，禁止“伪绿锁”**：
-    - **缺陷**：`pkg/cert` 的 `SaveDeviceCertificate`（`provisioner.go:242-288`）落盘前仅校验**公私钥匹配 + 未过期**，**不校验签发链能否锚定系统根**（全包无 `x509.SystemCertPool`/`VerifyOptions`）；前端 `main.js:2399` 仅凭 `hasValidTLSCert` 显示「🔒 官方公信 TLS 已就绪」；而 `app.go:264` 启动即**无条件**执行 `silentProvisionDeviceTLSCert`，默认端点 `https://lic.eqt.net.im/...`（**生产**，当前 `useAcme=false`）回退自签。
-    - **后果**：公网用户会被静默落盘一张自签证书并看到「公信绿锁就绪」文案，启用 TLS 后 `NET::ERR_CERT_AUTHORITY_INVALID` 红屏。**比 FINDING 1 更隐蔽——系统主动谎报就绪**。
-    - **验收红线**：任何「已就绪」判定必须经 `x509.SystemCertPool()` + `leaf.Verify()` 完整链校验；校验失败一律视为未就绪、保持「准备中」，使“生产回退自签”在客户端显性 Fail-Soft。
-  - 🆕 **FINDING 5~7（同轮，健壮性加固，不阻断但生产放量前应闭环）**：ACME 配置不全时静默回退自签（应显式 5xx `acme_misconfigured`）；`ACME_ACCOUNT_KEY` 缺失静默新建瞬态账户（应拒绝）；DNS 挑战“部分端点成功即放行”（应全端点成功或明确 WARN 重试）；服务端 `expires_at` 硬编码 90 天而非 leaf `NotAfter`（审计数据失真）。
+  - ✅ **FINDING 4 彻底闭环（客户端与磁盘缓存全链路系统根证书信任锚校验）**：
+    - `SaveDeviceCertificate` 与 `GetDeviceCertificate` 在落盘前和加载时均调用 `VerifyCertificateTrust(certPEM, roots)` 严格执行 `leaf.Verify(x509.VerifyOptions{ Roots: roots, Intermediates: intermediates })`；
+    - 遇到非系统受信任根签发的证书（如生产环境回退自签证书），明确返回 `ErrUntrustedCertificate` 并拒绝落盘与加载；
+    - `HasValidDeviceCertificate` 与 `HasValidCertificateForNode` 返回 `false`，桌面端静默 Fail-Soft，前端维持显示「ℹ️ 局域网 TLS 正在后台准备中（首次启动或离线时将以局域网标准模式保障传输）」，彻底杜绝虚假绿锁！
+    - 单元测试提供 `SetCustomRootPoolForTesting` 并发安全注入钩子，既保障测试安全隔离又实现生产零旁路。
+  - ✅ **FINDING 5 彻底闭环（ACME 关键配置断言 Fail-Loud）**：
+    - `cert.ts` 在启用 ACME 路由时严格断言 `ACME_DNS_API_ENDPOINTS`、`ACME_DNS_API_TOKEN`、`ACME_ACCOUNT_KEY`，缺失任何一项直接返回 HTTP 500（`reason_key: 'acme_misconfigured'`），绝不静默回退自签；
+    - `acme.ts` `AcmeClient.create` 强制要求 `accountKeyJWK`（仅测试显式传递 `allowTransientAccountKey: true`），禁止隐式创建瞬态账户避免消耗 Let's Encrypt 账户频控。
+  - ✅ **FINDING 6 彻底闭环（权威 DNS 双机全量强一致写入）**：
+    - `setDns01Challenge` 强制要求所有配置的权威节点（`ns1` 与 `ns2`）全部写入成功（`errors.length > 0` 立即报错），任一节点失败立即抛错并阻断挑战，规避 Let's Encrypt 多视角随机递归查询导致的偶发 `badAuthorization`。
+  - ✅ **FINDING 7 彻底闭环（ASN.1 Leaf NotAfter 真实时间提取与审计归档）**：
+    - 纯 Web Crypto/ASN.1 解析器 `parseCertificateExpiry` 精确提取 X.509 证书 TBS 中的 `validity.notAfter`（全面支持 UTCTime 与 GeneralizedTime），将真实有效截止时间存入 D1 数据库；
+    - 同步修复 `issueCertificateFromCSR` 生成 16 字节随机序列号时首字节可能为 `0x00` 导致 OpenSSL 报错 `illegal padding` 的隐蔽 DER 编码边界，首字节规范收敛至 `[0x01, 0x7f]` 保证 100% 严格符合 DER 规范。
+
 
 
 

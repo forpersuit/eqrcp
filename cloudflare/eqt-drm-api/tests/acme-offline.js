@@ -217,9 +217,22 @@ async function runTests() {
       return new Response('Not Found', { status: 404 });
     };
 
+    // Test fail-loud when accountKeyJWK is missing
+    let failLoudCaught = false;
+    try {
+      await AcmeClient.create({
+        directoryUrl: 'https://acme.test/directory',
+        customFetch: mockFetch
+      });
+    } catch (e) {
+      failLoudCaught = true;
+    }
+    assert(failLoudCaught, 'T3.0: AcmeClient.create fails loud when accountKeyJWK is missing without allowTransientAccountKey');
+
     const client = await AcmeClient.create({
       directoryUrl: 'https://acme.test/directory',
-      customFetch: mockFetch
+      customFetch: mockFetch,
+      allowTransientAccountKey: true
     });
 
     // 1. Account registration
