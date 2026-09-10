@@ -354,6 +354,20 @@
       if (client) {
         client.cancelTransfer(transferId);
       }
+    } else if (event.data.type === 'download-cancelled') {
+      const { messageId } = event.data;
+      const peer = client ? client['clientPeer'] : 'desktop';
+      const transferId = 'dl-' + messageId + '-' + peer;
+      chatActions.updateTransfer({
+        id: transferId,
+        state: 'cancelled',
+        progress: -1,
+        speed: 0,
+        error: ''
+      });
+      if (client) {
+        client.cancelTransfer(transferId);
+      }
     } else if (event.data.type === 'download-batch-cancelled') {
       // Desktop user cancelled the batch save-folder dialog: clear seeded running transfers.
       const ids: string[] = event.data.messageIds || [];

@@ -6,6 +6,7 @@
   import { getThemeColors, getSenderThemeColors } from '../services/types';
   import { currentDevice, peers, chatSessionStatus } from '../state/chatStore';
   import { isImageFile, getImageInlineUrl } from '../services/mediaPreview';
+  import { isFileSendCancelled } from '../services/attachmentPolicy';
 
   const dispatch = createEventDispatcher();
 
@@ -1016,7 +1017,7 @@
         {@const tx = mine ? ulTx : (isTxCompleted ? null : dlTx)}
         {@const colors = getMessageColors(msg, mine)}
         {@const identity = getSenderIdentity(msg)}
-        {@const isCancelledFile = (msg.type === 'file' || msg.type === 'image') && ((ulTx && ulTx.state === 'cancelled') || (dlTx && dlTx.state === 'cancelled'))}
+        {@const isCancelledFile = isFileSendCancelled(msg, mine, ulTx, dlTx)}
         <div 
           class="message" 
           class:mine 

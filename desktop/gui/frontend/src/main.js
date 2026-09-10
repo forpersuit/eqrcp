@@ -327,6 +327,12 @@ window.addEventListener('message', (e) => {
                         messageId: messageId,
                         path: path
                     }, targetOrigin);
+                } else {
+                    console.log('[Antigravity Debug] SaveChatAttachmentAs cancelled by user. messageId:', messageId);
+                    e.source?.postMessage({
+                        type: 'download-cancelled',
+                        messageId: messageId
+                    }, targetOrigin);
                 }
             })
             .catch((err) => {
