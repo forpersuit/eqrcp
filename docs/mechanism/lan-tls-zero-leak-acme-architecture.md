@@ -18,6 +18,8 @@
 > **⑤ 第四轮落地复核（2026-09-10，详见 §11.6）**：开发已按第三轮意见提交 `c71c7460` 落地修复。复核确认 **FINDING 4~7 已在代码中真实闭环**（非文档自述），`go test ./pkg/cert ./pkg/server ./cmd/eqt-dns` 与离线套件全绿。但再审查发现：**修复 FINDING 6 时引入 FINDING 8（部分失败下 TXT 记录残留）**，且 §11.5 对 FINDING 4 的覆盖范围表述**夸大**（“全链路”实际仅覆盖设备证书路径），另有 1 条**无仓库证据**的声明需收敛。详见 §11.6。
 >
 > **⑥ 第五轮落地复核（2026-09-10，详见 §11.8）**：开发提交 `c73862a2` 修复 FINDING 8 并补齐路径 3 信任校验。复核结论：**FINDING 8 的即刻回滚修复有效**（T17 为真实覆盖），但**本次重排序删除了 `const recordName` 声明**，导致 `cert.ts:885-886` 引用未声明变量 → **整个 ACME 签发路径运行时 `ReferenceError` 500**，**这是比 FINDING 8 更严重的全新阻断回归（FINDING 9）**；另发现路径 3 的单元测试**空转不可证伪（FINDING 10）**、T18 DER 回归**同义反复未触及生产代码（FINDING 11）**。详见 §11.8。
+>
+> **⑦ 第六轮落地复核（2026-09-10，详见 §11.10）**：开发提交 `19e6eff6` 修复 FINDING 9-11。复核**以可证伪实验独立复验**（不采信自述）：删除 `recordName` → `tsc --noEmit` 即刻报 `TS2304`，且门禁经 `ci.yml → test:ci` 真实挂接 CI；移除路径 3 校验 → `TestUntrustedDeviceCertificate_FailSoft` 确转红；T18 已直调生产序列号函数并反解真实 DER。套件 `test:cert:offline` 42/0、`test:acme:offline` 13/0。**FINDING 9-11 全部确认闭环，第五轮“强阻断”状态解除，无新增阻断性发现**。边界：本地 pre-commit 不跑 Worker typecheck，闭环依赖 CI 绿灯。详见 §11.10。
 
 ---
 
@@ -964,8 +966,43 @@ Worker 与双机权威 DNS 节点的交互使用现有的 `/acme/challenge` 端�
    - **生产函数回归（T18.1）**：自动化循环 1,000 次真实调用生产函数 `generateCompliantSerialNumber()`，断言 MSB=0、首字节处于 `[0x01, 0x7f]` 且长度严格 16 字节，验证 1,000/1,000 成功；
    - **真实证书反解（T18.2）**：真实调用生产签发函数 `issueCertificateFromCSR(parsedCSR, 90)` 生成 X.509 证书，使用 `crypto.X509Certificate` 真实反解 DER 中的 `x509.serialNumber`，断言实际输出的序列号首字节严格合规，消除任何同义反复。
 
+#### 11.10 第六轮复核（对 `19e6eff6` 的独立验证：FINDING 9-11 确认闭环）
+
+本轮不采信 §11.9 自述与提交信息，**以可证伪实验独立复验**。结论：FINDING 9、10、11 **全部确认真闭环**，且**无新增阻断性发现**。
+
+**一、FINDING 9 复核 → 确认闭环（含门禁有效性实测）**
+- **代码事实**：`src/routes/cert.ts` 中 `const recordName = \`_acme-challenge.${cleanNode}.direct.eqt.net.im.\`;` 声明已恢复，ACME 主路径引用自洽。
+- **门禁有效性实证**：临时删除 `recordName` 声明以复活原缺陷，`npm run typecheck` **立即失败**：`src/routes/cert.ts(898,76): error TS2304: Cannot find name 'recordName'` 与 `(899,56)`，退出码 2。证明门禁非装饰性声明。
+- **门禁落点实证（关键）**：`.github/workflows/ci.yml` 的 `drm-api-test` 作业在 `cloudflare/eqt-drm-api` 下执行 `npm run test:ci`（该作业**早于本次提交即已存在**）；`19e6eff6` 将 `typecheck` 作为**第一前置命令**注入 `test:ci` 链首。故类型门禁**真实挂接在 CI 流水线**上（`push: [master, dev]` 与 `PR → master` 触发），而非仅存在于本地脚本。
+- **端到端守护实证**：T19 经 `handleCertRoutes` 真实进入 ACME 分支；若 `recordName` 缺失必抛 `ReferenceError`，T19.1 的 HTTP 200 断言随即转红——即 T19 确实能捕获 FINDING 9 类回归。
+
+**二、FINDING 10 复核 → 确认闭环（可证伪性实测复现）**
+- 夹具文件名已由 `cert.pem/key.pem` 更正为与 `getCachedCertPaths()` 一致的 `fullchain.pem/privkey.pem`，路径 3 真实进入被测逻辑。
+- **可证伪性实证（Rule 9）**：临时移除路径 3 的 `VerifyCertificateTrust` 调用 → `TestUntrustedDeviceCertificate_FailSoft` **转红**（失败于 `provisioner_test.go:655` 与 `:658`）。第五轮时该测试在同样移除下**仍 PASS**（空转）；本轮不可复现，空转隐患已消除。
+
+**三、FINDING 11 复核 → 确认闭环**
+- `generateCompliantSerialNumber()` 已抽取并导出，且被生产函数 `issueCertificateFromCSR` 实际消费；T18.1 直调生产函数 1000 次；T18.2 调用 `issueCertificateFromCSR` 后以 `crypto.X509Certificate` 反解**真实 DER** 序列号。同义反复已消除。
+
+**四、套件运行结果（本地可复现）**
+- `npm run typecheck` → 退出码 0；
+- `npm run test:cert:offline` → **42 passed, 0 failed**（含 T17 回滚、T18.1/18.2 生产序列号、T19.1–19.4 端到端路由）；
+- `npm run test:acme:offline` → **13 passed, 0 failed**；
+- `go test ./pkg/cert -run TestUntrustedDeviceCertificate_FailSoft` → **PASS**。
+
+**五、残留校准（非缺陷，但须准确表述）**
+1. **本地 pre-commit 钩子未运行 Worker typecheck**：钩子仅覆盖 Go 侧测试与 Windows 验收，本地仍可提交含 TS 类型错误的 commit，由 CI `test:ci` 兜底。故**闭环成立的前提是 CI 该作业绿灯**；放量前须确认对应 CI run 通过（本地无法代跑 GitHub Actions，此为外部依赖项）。
+2. **门禁粒度**：`test:cert:offline` / `test:acme:offline` **单独运行不含** typecheck，仅 `test:offline` / `test:ci` 含。即“只跑单个离线套件”仍可绕过类型门禁——闭环依赖调用链为 `test:ci`（CI 即用此链）。
+3. **同批夹带**：`19e6eff6` 一并修改了 `pkg/server/receive_progress_gate_test.go` 与 `pkg/server/util_test.go`（`SetUsed*` 归零 + `defer` 的测试隔离性收尾），与 FINDING 9-11 无关。此为范围卫生提示（Rule 3），非功能缺陷。
+4. **措辞校准**：§11.9 与 🏁 的“彻底杜绝 / 严密闭环”表述，**在本轮双向证伪实验证据下成立**（此前数轮同类措辞均因缺乏可证伪证据被推翻；本轮属首次经实证支撑）。
+
+**六、第六轮结论**
+- FINDING 9、10、11 **独立验证通过，确认闭环**；本轮**无新增阻断性发现**，第五轮“强阻断”状态**解除**。
+- 放行口径不变：仍以 §10.2 外部前置（Mozilla PSL 合并 + 生产真机灰度）为唯一门槛。
+
 ---
 
 > 🏁 **最终决议**：审查员五轮复核所提出的代码事实核查、符号映射校准、TXT 质询放行、PSL 硬门槛依赖、MITM 防御纵深、物理视线边界口径收敛、TLS 默认关闭与隐藏体验兜底、客户端系统信任锚全链路拦截（FINDING 4）、ACME 服务端 Fail-Loud（FINDING 5）、权威双机全量强同步（FINDING 6）、真实 Leaf NotAfter 提取与 ASN.1 解析（FINDING 7）、部分失败 TXT 零残留即刻回滚（FINDING 8）、未声明变量修复与 TypeScript 编译期门禁（FINDING 9）、路径 3 缓存双向可证伪回归测试（FINDING 10）、以及生产序列号函数直测与真实 X.509 反解（FINDING 11），**已全部真实闭环落地**。Worker 流水线已具备 `tsc --noEmit` 强类型静态防护，离线套件包含全流程 ACME 模拟实测，测试环境公信签发链路坚固可靠。⚠️ **公网放量唯一外部前置**：保持以 Mozilla PSL 合并与生产真机灰度为前置（见 §10.2 边界注记）。生产 Worker 因未配 ACME 字段暂走自签兜底，已被客户端系统根校验完整拦截为 Fail-Soft 准备中状态，系统安全逻辑严密闭环。
+>
+> 🔎 **审查员第六轮收尾复核（2026-09-10，详见 §11.10）**：上述 🏁 结论**经独立可证伪实验确认成立**——① 删除 `recordName` 复活缺陷后 `tsc --noEmit` 即刻报 `TS2304` 且门禁经 `ci.yml → test:ci` 真实挂接 CI；② 移除路径 3 信任校验后 `TestUntrustedDeviceCertificate_FailSoft` 确转红；③ T18 已直调生产序列号函数并反解真实 DER。**边界（勿过度解读为“本地已封死”）**：本地 pre-commit 钩子**不运行** Worker typecheck，闭环依赖 **CI `test:ci` 绿灯**；且 `test:cert:offline`/`test:acme:offline` 单跑不含类型门禁，仅 `test:offline`/`test:ci` 含。**放量前须确认对应 CI run 通过**（本地无法代跑 GitHub Actions，属外部依赖项）。第五轮“强阻断”状态**解除**，无新增阻断性发现。
 
 

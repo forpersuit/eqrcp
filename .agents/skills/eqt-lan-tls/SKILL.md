@@ -228,6 +228,7 @@ WantedBy=multi-user.target
      - 补齐 `cloudflare/eqt-drm-api/src/routes/cert.ts` 中缺失的 `const recordName = \`_acme-challenge.${cleanNode}.direct.eqt.net.im.\`;` 声明，彻底修复运行时 `ReferenceError`；
      - 接入 TypeScript 严格类型门禁：在 `package.json` 中配置 `"typecheck": "tsc --noEmit"` 并前置注入 `npm run test:offline` 与 `npm run test:ci`，杜绝 esbuild 默认打包放行未声明自由变量的编译盲区；
      - 补齐真实走通 `handleCertRoutes` ACME 逻辑的端到端离线回归测试（`tests/cert-provision-offline.js` T19）：完整模拟客户端通过 HTTP 请求到达 Worker 路由、完成 ACME 订单交互、DNS 质询、`recordName` 动态校验、TXT 清理与证书下载全链路，断言返回 HTTP 200 OK 且 0 运行时错误。
+     - 🔎 **第六轮独立复验（2026-09-10，Rule 9）**：删除 `recordName` 复活原缺陷 → `tsc --noEmit` 即刻报 `cert.ts(898,76)/(899,56): error TS2304`（退出码 2），证明门禁有效；确认该门禁经 `.github/workflows/ci.yml` 的 `drm-api-test` 作业（`npm run test:ci` 链首）真实挂接 CI；`test:cert:offline` 42/0、`test:acme:offline` 13/0。**FINDING 9 确认真闭环。**
   - ✅ **FINDING 7 & FINDING 11 彻底闭环（ASN.1 Leaf NotAfter 提取与生产序列号函数直测反解，Rule 9）**：
      - 纯 Web Crypto/ASN.1 解析器 `parseCertificateExpiry` 精确提取 X.509 证书 TBS 中的 `validity.notAfter`（全面支持 UTCTime 与 GeneralizedTime），将真实有效截止时间存入 D1 数据库；
      - 修复 `issueCertificateFromCSR` 随机序列号首字节可能为 `0x00` 导致 OpenSSL 报错 `illegal padding` 的隐蔽 DER 边界，首字节规范收敛至 `[0x01, 0x7f]`；
@@ -236,3 +237,5 @@ WantedBy=multi-user.target
 > **审查红线（第四轮沉淀 · Rule 9/12）**：① 验收声明必须锚定**仓库内可复现证据**（脚本/CI/结果文件），禁止以“N 次实测”“100% 自洽”等无归档数字充当验收；② 加固一个 Fail-Loud 分支时，必须同时审计其**资源清理路径是否被一并跳过**（FINDING 8 的即刻回滚 + 清理前置登记模式成为标准）；③ 表述“全链路/彻底”前，须逐条枚举实际调用路径，确认无旁路（磁盘缓存路径 2 与路径 3 已全部严密校验）。
 >
 > **审查红线（第五轮沉淀 · Rule 9/12/13）**：④ **代码重排（reorder）与删除声明必须同步全文检索被移动符号的所有引用**——FINDING 9 即“前置 push、删掉 `const recordName`”造成的运行时 500，且可静默通过打包与全部离线用例；⑤ **“测试全绿”≠“被测代码被执行”**：新增断言必须验证其**可证伪**（临时移除被测生产逻辑，测试必须转红），否则为空转（FINDING 10）；⑥ **测试不得复述被测公式**：在被测函数之外重抄一遍算法再断言其结果属同义反复（FINDING 11），必须调用生产代码路径并反解产物；⑦ Worker/TS 交付须具备 `tsc --noEmit` 类型门禁——esbuild 打包默认不做类型检查，未声明标识符会被原样放行。
+>
+> **审查红线（第六轮沉淀 · Rule 12/14/15）**：⑧ **类型/静态门禁必须挂接在真实执行的流水线上才算生效**——仅在 `package.json` 声明 `"typecheck"` 不等于有门禁，须确认它被注入**会真实运行**的调用链（本项目为 `.github/workflows/ci.yml` 的 `drm-api-test` 作业 → `npm run test:ci` → 链首 `typecheck`）。**陷阱**：本地 pre-commit 钩子不覆盖 Worker 侧，本地可提交含 TS 错误的 commit，闭环前提是 **CI 绿灯**；且 `test:cert:offline`/`test:acme:offline` 单跑**不含** typecheck，只有 `test:offline`/`test:ci` 含。验收声明须锚定“CI 该作业通过”，而非“本地某脚本退出码 0”。
