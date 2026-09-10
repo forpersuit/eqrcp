@@ -12,6 +12,8 @@
 > **② 路线 B 客户端与基建落地（2026-09-10 复核）**：客户端本地 ECDSA P-256 私钥自生成（`0600` 原子落盘、永不出机）、`pkg/cert/provisioner.go` CSR 装配与落盘校验、`hardware.GetDeviceNodeID()`（12 位小写 hex）、`cmd/eqt-dns` 的 `isValidACMERecord` 放行与 `_psl` TXT、桌面端 silent provisioning（`desktop/gui/app.go`）与前端去恐慌化、PSL PR 3258 申报。
 >
 > **③ 关键战略解耦：PSL 属于海量规模化保障，测试环境无需 PSL，真 LE 代理先行闭环**：PSL 的第一性原理是解除主域名每周 50 张证书的限额（服务未来成千上万设备）。在测试环境中，每周证书消耗远低于 50 张，且有配额高达 30,000 张/周的 Let's Encrypt Staging 环境托底。**测试环境绝不需要申请或等待 PSL 合并，直接在测试环境（Worker `lic-test.eqt.net.im`）部署真实的 RFC 8555 Let's Encrypt DNS-01 代理引擎**，联动自建权威 DNS 完成 TXT 质询，签发真实公信证书并完成真机绿锁端到端验证，彻底消灭 FINDING 1~3。
+>
+> **④ 第三轮实现复核（2026-09-10，详见 §11）**：ACME 协议栈、代理签发主路径、多值 TXT、POPO 验签、±60s 时间戳均已落地且测试全绿；但新发现 **FINDING 4~7**。其中 **FINDING 4（客户端/前端无信任锚校验 → 生产自签证书被误报为“公信绿锁就绪”）是新增的公网放行阻断项**，必须先修复再讨论放量。
 
 ---
 
@@ -257,6 +259,8 @@ sequenceDiagram
 > ⚠️ **实现偏差核查（2026-09-10，审查员复核）**：上图中 `Proxy->>LE: 发起 ACME NewOrder`、`LE-->>Proxy: 签发并下发 fullchain.pem`、`Proxy->>DNS: POST /acme/challenge` 三步所承诺的 **Let's Encrypt 公信签发链路当前代码未实现**。已实现的 `cloudflare/eqt-drm-api/src/routes/cert.ts` 完全绕过了 LE：`issueCertificateFromCSR(parsedCSR, 90)`（`cert.ts:565`）调用时未传入 `signingKey`，触发 `cert.ts:323-331` 每次请求用 `crypto.subtle.generateKey` 生成**瞬态 ECDSA P-256 签名密钥**，Issuer 硬编码为 `EQT LAN-TLS Intermediate CA`（`cert.ts:261`）。该 CA 不存在于任何浏览器/OS 信任存储库，全代码库也**无任何安装信任根 CA 的步骤**（已 `rg` 核查 `certutil`/`addtrustedroot`/信任根安装均无真实命中）。全代码库唯一的 ACME 相关代码是 `cmd/eqt-dns` 的 DNS-01 TXT server（自建 DNS，供 LE 回查用），`cert.ts` 内零 ACME client、零 NewOrder、零权威 TXT 写入。
 >
 > **后果与判定**：手机扫码访问 `https://192-168-x-x.<node-id>.direct.eqt.net.im:<port>/<token>` 时浏览器报 `NET::ERR_CERT_AUTHORITY_INVALID` 全屏红标——**与 [`2026-09-09-new-user-tls-cert-cache-bootstrap-defect.md`](file:///home/yelon/develop/me/eqrcp/docs/bugs/2026-09-09-new-user-tls-cert-cache-bootstrap-defect.md) §六.1 明确否定的路线 C（自签名）体验完全一致**（原话“比降级为明文 HTTP 恶劣百倍”），且与 §一.3 硬性指标 1“地址栏必须呈现官方安全绿锁 🔒”直接冲突。**因此该图当前如实应读作“目标蓝图”，而非“已交付行为”。** 放行公网新用户前必须将 `cert.ts` 替换为真正的 LE DNS-01 代理（详见表驱动决议 §七.9 FINDING 1）。
+>
+> 🔄 **本节状态更新（2026-09-10 第三轮）**：本节是 ae86321f 之前的**核查快照**。LE DNS-01 代理**已在测试环境落地并闭环**（见 §10），但**本节对生产环境的结论依然成立**——`lic.eqt.net.im` 顶层 vars 无 ACME 字段，仍回退自签 CA。同时本轮新发现 **FINDING 4**：客户端与前端会把该自签证书误判为“公信绿锁已就绪”（见 §11.2），**使本节描述的“红屏”问题从“用户能看见的报错”恶化为“系统谎报就绪”**。故本节不得删除，且其结论在生产真机验收通过前持续有效。
 
 ---
 
@@ -430,7 +434,7 @@ sequenceDiagram
     Note over Worker: 计算 Key Authorization = token + "." + thumbprint<br/>SHA-256 哈希 + Base64URL 编码 -> TXT 质询值
 
     Worker->>DNS: POST /acme/challenge (写入 _acme-challenge.<node-id>.direct.eqt.net.im)
-    DNS-->>Worker: 200 OK (TXT 生效, TTL=60s)
+    DNS-->>Worker: 200 OK (TXT 生效, TTL=300s)
 
     Worker->>LE: POST Challenge URL (Trigger Challenge Validation, payload: "{}")
     LE->>DNS: 远程递归校验 _acme-challenge TXT 记录 (比对成功)
@@ -477,6 +481,8 @@ sequenceDiagram
 > 🔬 **审查校准（2026-09-10）——端口与传输通道需先校准**：
 > - **实现端口事实**：`cmd/eqt-dns` 的 HTTP 管理默认绑定 `127.0.0.1:5380`（`main.go:26-27`），鉴权为 Bearer `--token`（`main.go:29, 344-345`），与下文示例原写的 `:8053` **不符**，已按实现修正为 `:5380`；
 > - **安全红线冲突**：`.agents/skills/eqt-lan-tls/SKILL.md §2.1` 明令“HTTP 管理端口强行锁定在 `127.0.0.1:5380`，仅限本地或 SSH 安全通道调用，**严禁公网开放**”。但 Worker 运行在云端，无法访问 `ns1`/`ns2` 的 `127.0.0.1`——直接对 `<ns1-ip>:5380` 发起公网 HTTP 即违反该红线。**实现前必须为云端 Worker 建立到 ns 管理端点的受限通道**（任选其一并在编码前确定）：(a) SSH 隧道 / Cloudflare Tunnel 转发；(b) ns 端以 `-http-listen` 额外绑定受限接口（或公网端口）+ 防火墙仅放行 Worker 出口 IP + Bearer 鉴权；(c) 若需绕开 ns HTTP 通道，可评估让 Worker 经 Cloudflare DNS API 直接写 TXT（放弃本方案的自建权威 DNS 联动）。本节原写的“双机节点均已上线 `isValidACMERecord`”仅证明 TXT 写入规则就绪，**不代表管理端点可公网直达**。
+> - **受限通道已决（2026-09-10 第三轮）**：选定“**ns 本机 Caddy 反代 + Bearer `--token` 鉴权 + 独立受限域名**（`https://ns1-dns.301098.xyz` / `https://ns2-dns.301098.xyz`）”，权威端口 `127.0.0.1:5380` 仍物理隔离（见 §10.2）。据此澄清 `.agents/skills/eqt-lan-tls/SKILL.md §2.1` 红线口径：**“严禁公网开放”指禁止裸 `:5380` 直出；经 Caddy 终结 TLS 并经 Bearer 校验的受限入口属允许通道**。此豁免须以本段为准，否则方案与既有红线字面冲突、后续审计会判违规。
+> - **TTL 口径修正**：下文示例与 §4.3.1 时序图原写 `ttl: 60`，实现默认 **300 秒**（`cert.ts:403` 的 `ttl = 300`，Worker 调用未覆写）。300s 为 Let's Encrypt 多轮多点递归查询留出充足窗口，更稳健，**以实现为准**。
 
 Worker 与双机权威 DNS 节点的交互使用现有的 `/acme/challenge` 端点：
 - **写入 TXT 记录**：
@@ -488,7 +494,7 @@ Worker 与双机权威 DNS 节点的交互使用现有的 `/acme/challenge` 端�
   {
     "record": "_acme-challenge.<node-id>.direct.eqt.net.im.",
     "value": "<base64url-sha256-key-auth>",
-    "ttl": 60
+    "ttl": 300
   }
   ```
 - **清理 TXT 记录**：
@@ -506,7 +512,7 @@ Worker 与双机权威 DNS 节点的交互使用现有的 `/acme/challenge` 端�
 | :--- | :--- | :--- |
 | **场景 1：公共 Wi-Fi 蹭网者抓包（Passive Sniffing）** | 🛡️ **安全**。TLS 1.3 ECDHE 临时密钥协商，事后抓包无法解密（前向保密 PFS）。 | 🛡️ **安全**。完全相同的前向保密性，传输链路高强度密文。 |
 | **场景 2：同内网恶意用户劫持（Active MITM）** | ❌ **不安全**。恶意用户同样拥有通配符私钥，可通过 ARP 劫持伪造目标服务，手机绿锁常亮无法察觉。 | 🛡️ **显著缩小攻击面与爆炸半径（强密码学隔离）**。详见下文 §4.1 双重防御纵深。 |
-| **场景 3：云端服务器被入侵 / 数据库泄露** | ⚠️ **存在风险**。若云端 VPS 证书库被脱库，泄露通配符私钥导致全网证书失效。 | 🛡️ **绝对安全**。云端自始至终**根本不存在任何客户端私钥**，黑客攻破云端数据库也拿不到任何私钥！ |
+| **场景 3：云端服务器被入侵 / 数据库泄露** | ⚠️ **存在风险**。若云端 VPS 证书库被脱库，泄露通配符私钥导致全网证书失效。 | 🛡️ **设备私钥零暴露**。云端自始至终不存在任何客户端私钥，攻破云端数据库也拿不到任何设备私钥。⚠️ **边界（勿误读为“云端无价值”）**：云端持有 **ACME Account Key + DNS API Token**，其能力等价于“可为任意 `<node-id>.direct.eqt.net.im` 签发公信证书”。攻破云端虽拿不到设备私钥，却可冒名签发可信证书，配合内网 ARP/DNS 劫持仍可构成 MITM。该两项凭据属 **Tier-0**，须按最高等级保护（见 §11.3.6）。 |
 | **场景 4：单台用户 PC 中木马导致私钥被提取** | 💥 **全局灾难**。通配符私钥一旦被提取并公开，全网通配符证书被 CA 吊销，全体用户集体瘫痪。 | 🟢 **影响严格隔离**。仅该物理机私钥被盗，爆炸半径仅限单机。云端直接吊销该设备子域，不影响任何其他用户。 |
 | **场景 5：离线局域网环境文件传输** | 🛡️ **安全可用**。本地持有证书缓存即可握手。 | 🛡️ **安全可用**。证书有效期长达 90 天，在此期间 100% 纯局域网离线运行，无需连外网。 |
 
@@ -588,7 +594,7 @@ Worker 与双机权威 DNS 节点的交互使用现有的 `/acme/challenge` 端�
 ### Phase 2：桌面端静默无感自动置备（Desktop Silent Provisioning）
 - **交付目标**：
   1. 桌面端启动时，优先探测本地是否存在已激活的设备专属证书（`~/.config/eqt/certs/<node-id>/`）；
-  2. 若不存在，在后台非阻塞协程中静默调用云端代理接口完成首次自签，并落盘存储；
+  2. 若不存在，在后台非阻塞协程中静默调用云端代理接口签发**专属设备证书**（测试环境为真实 Let's Encrypt 公信链；生产环境在 ACME 配置就位前回退自签——**注意此时客户端尚无信任锚校验，会误报“就绪”，见 §11.2 FINDING 4**），并落盘存储；
   3. 彻底淘汰对外部 `scripts/sync-certs-from-vps.sh` 脚本的手动依赖，普通用户安装即可享受原生零配置 TLS。
 
 ### Phase 3：容灾平滑降级（Fail-Soft）持续守护
@@ -786,5 +792,47 @@ Worker 与双机权威 DNS 节点的交互使用现有的 `/acme/challenge` 端�
 
 ---
 
-> 🏁 **最终决议**：审查员多轮复核所提出的代码事实核查、符号映射校准、TXT 质询放行、PSL 硬门槛依赖、MITM 防御纵深、既有能力复用、物理视线边界口径收敛、TLS 默认关闭与隐藏体验兜底、以及六大前置动作代码与文档实质性推进，均已达成严密一致；**路线 B 的客户端与 DNS/PSL 前置高质量落地，云端 ACME DNS-01 代理签发引擎在测试环境中全面打通与闭环**。至此，FINDING 1（真实官方公信签发）、FINDING 2（POPO 签名校验）、FINDING 3（±60s 时间戳收敛）**全部闭环落地**，实实验收达成 100% 系统根信任与官方公信绿锁承诺。⚠️ **上述“彻底闭环”均限定于测试环境**：生产 `lic.eqt.net.im` 因顶层 vars 未配置 ACME 字段（`useAcme=false`）仍回退自签 CA，公信绿锁尚未对真实公网用户放量——生产放量以 PSL 合并与生产真机验收为前置（见 §10.2 边界注记）。
+### 11. 第三轮实现复核：信任锚缺口与 ACME 运行时健壮性（2026-09-10）
+
+> **复核范围**：`pkg/cert/provisioner.go`、`pkg/cert/cert.go`、`desktop/gui/app.go`、`desktop/gui/frontend/src/main.js`、`cloudflare/eqt-drm-api/src/routes/cert.ts`、`src/utils/acme.ts`、`cmd/eqt-dns/main.go`、`wrangler.toml`。
+> **核验基线**：`go test ./pkg/cert ./cmd/eqt-dns ./pkg/server` 全绿；`node cloudflare/eqt-drm-api/tests/cert-provision-offline.js` → `Results: 28 passed, 0 failed`。
+> **复核性质**：在 §10 宣告“测试环境闭环”之后，对**签发链可信度**与**运行时健壮性**做独立核实。
+
+#### 11.1 正向核对：与文档一致、确已落地（✅）
+
+1. **ACME 协议栈**：`src/utils/acme.ts`（376 行）为纯 Web Crypto 的 RFC 8555 实现——ES256 JWS 签名、RFC 7638 JWK Thumbprint、DNS-01 质询值 `Base64URL(SHA256(token + "." + thumbprint))`、`badNonce` 自动换 nonce 重试，与 §4.3.1 规格逐条吻合；
+2. **代理签发主路径**：`cert.ts:692-789` 完整具备 `newOrder` → 逐 authorization 取 `dns-01` → 双机写 TXT → `triggerChallenge` → `pollOrder('ready')` → `finalize` → `pollOrder('valid')` → 下载证书链 → `finally` 清理 TXT；并经 `le-proxy` 前缀分流绕过 CF 边缘 525 握手失败，与 §10.2 记载一致；
+3. **多值 TXT 陷阱已正确处理（关键正评）**：同一订单同时包含 `<node>.direct` 与 `*.<node>.direct`，两个 authorization 共用同一记录名 `_acme-challenge.<node>.direct.eqt.net.im`。`cmd/eqt-dns` 的 `AcmeStore` 以 `map[recordName]map[value]expiry` 存储（`main.go:40,49-57`），**两个质询值可并存**——成功规避了 ACME 通配符最常见的“单值覆盖 → 一轮校验必然失败”陷阱；
+4. **安全前置**：±60s 严格时间戳（缺失即 `400 missing_timestamp`）、POPO 验签（CSR `spkiDER` + 64B IEEE P1363）、node_id 严格 12-hex、黑名单、24h 频控 3 次、D1 审计，与 §4.3.2 校准后的安全边界表述一致；
+5. **客户端**：本地 P-256 生钥、`0600` 原子落盘、exact+wildcard SAN、`SignProvisionPayload`、15 天懒续签阈值、`GetActiveCertificate` 三级回退，与 §三.1 规格吻合。
+
+#### 11.2 新增偏差（**FINDING 4 为公网放行新增阻断项**）
+
+| # | 偏差 | 代码事实 | 影响与判定 |
+|---|---|---|---|
+| **FINDING 4** | **客户端/前端无信任锚校验 → 虚假“公信绿锁”** | `SaveDeviceCertificate`（`provisioner.go:242-288`）落盘前仅做**公私钥匹配**（`VerifyCertificateMatchesPrivateKey`）与未过期判断，**不校验签发链能否锚定系统根**（`pkg/cert` 全包检索无 `x509.SystemCertPool` / `VerifyOptions`）。前端 `main.js:2399-2400` 仅凭 `hasValidTLSCert` 即显示“🔒 官方公信 TLS 已就绪 (单机专属安全绿锁)”，而该值 = `HasValidCertificateForNode`（`cert.go:51`）= `GetActiveCertificate` 成功，即“存在未过期且公私钥匹配的证书”。同时 `app.go:264` 启动即**无条件**执行 `silentProvisionDeviceTLSCert`，其默认端点 `DefaultProvisionEndpoint = https://lic.eqt.net.im/...`（**生产**）当前 `useAcme=false` 回退自签。 | **比 FINDING 1 更隐蔽**：FINDING 1 是“证书不可信、用户可见红屏”；FINDING 4 是“系统主动向用户谎报可信且已就绪”。普通公网用户启动后即静默落盘一张自签证书并看到绿锁文案，一旦启用 TLS 立刻 `NET::ERR_CERT_AUTHORITY_INVALID`——与 §一.3 硬性指标 1 及 bug 文档 §六.1 的判定直接冲突。**修复方向（须先于任何公网放行）**：`SaveDeviceCertificate` 在 `Rename` 前用 `x509.SystemCertPool()` + `leaf.Verify()` 验完整链，失败即拒绝落盘 → `HasValidDeviceCertificate=false` → 前端维持“准备中”。此举让“生产回退自签”在客户端显性 Fail-Soft，而非静默伪绿锁。 |
+| **FINDING 5** | **ACME 配置不全时静默回退自签，违反 fail-loud** | `cert.ts:697` 的 `useAcme = Boolean(env.ACME_DIRECTORY_URL \|\| (env.ENVIRONMENT === 'test' && env.ACME_DNS_API_ENDPOINTS))`，但 `:699` 的分支条件**同时**要求 `env.ACME_DNS_API_ENDPOINTS` 为真。若只配 `ACME_DIRECTORY_URL` 而漏配 `ACME_DNS_API_ENDPOINTS` / `ACME_DNS_API_TOKEN`，`useAcme` 为 true 却落入 else 自签分支，**全程无告警**。另 `ACME_ACCOUNT_KEY` 缺失时 `acme.ts:153` 静默 `generateKey` 生成瞬态账户密钥，每次置备都会新建 Let's Encrypt 账户。 | 把“配置错误”伪装成“正常签发”，排障成本高，与 Rule 12（Fail loud）冲突。**建议**：`useAcme` 为真但关键配置缺失时直接返回 5xx（`reason_key: 'acme_misconfigured'`）；test/prod 环境下 `ACME_ACCOUNT_KEY` 缺失应显式拒绝，而非静默新建账户。 |
+| **FINDING 6** | **DNS 挑战“部分成功即放行”** | `setDns01Challenge`（`cert.ts:398-427`）仅在**全部**端点都失败时才抛错（`errors.length === endpoints.length`）。ns1 写入成功、ns2 失败时仍继续 `triggerChallenge`。 | Let's Encrypt 会向多个权威节点递归查询，ns2 缺记录时可能返回不一致，表现为**偶发 `badAuthorization`**，难以复现定位。**建议**：要求全部端点成功，或部分失败时明确 WARN 并重试/等待收敛后再触发。 |
+| **FINDING 7** | **服务端 `expires_at` 硬编码 90 天** | `cert.ts:780` `expiresAt = new Date(Date.now() + 90 * 24 * 3600 * 1000)`，写入 D1 `device_cert_provisions.expires_at` 的是**估算值**而非证书真实 `NotAfter`。 | 客户端自行从 leaf 解析有效期（`GetCertificateExpiry`），故续签判定不受影响；但审计/监控数据失真。**建议**：从 `certPEM` 解析 leaf `NotAfter`（Workers 端可复用 `cert.ts` 已有的 ASN.1 解析代码）。 |
+
+#### 11.3 文档本身需收敛之处（本轮文档意见）
+
+1. **§二.2 偏差核查已过时、且与 §10 直接冲突**：该节以现在时断言“LE 公信签发链路当前代码未实现……放行公网前必须替换”。**处置**：已于该节追加状态指针——其为 ae86321f 前快照，测试环境闭环见 §10，**生产结论仍有效**。
+2. **行号漂移未标注**：§二.2 / §七.9 引用的 `cert.ts:565`（自签回退）现为 `:786`；§七.9 引用的 `provisioner.go:442-443` 现为 `:514-515`。建议统一加注“行号锚定于所标 commit 时点的代码”。
+3. **TXT TTL 口径不一**：§4.3.1 时序图与 §4.3.3 示例原写 `ttl: 60`，实现默认 **300**。**处置**：已统一为 300 并注明理由（为 LE 多轮递归查询留窗口）。
+4. **§4.3.3 “受限通道”仍写作待定选项**：实现已选定“ns 本机 Caddy 反代 + Bearer 鉴权 + 独立域名”，且**将 `127.0.0.1:5380` 经 Caddy 暴露到公网域名**，与 SKILL.md §2.1“严禁公网开放”字面红线存在张力。**处置**：已在 §4.3.3 明确红线口径——红线指裸端口直出，经 Caddy 终结 TLS + Bearer 校验的受限入口为允许通道。
+5. **§五 / §七.9 / §10 对 PSL 的定性互相矛盾**：§五前置表把 PSL 与 LE 豁免标为“✅ 材料已就绪”，§七.9 称 PSL 为“Phase 1 硬门槛”，§一.4.1 与 §10 又说“测试环境免 PSL”。**须统一措辞**：PSL 是“**生产规模化硬门槛，尚未合并**”；且“材料就绪 ≠ 准入完成”，避免读者误以为前置达成即可放量。
+6. **§四 场景 3 的绝对化措辞**：`云端……绝对安全……黑客攻破云端数据库也拿不到任何私钥`方向正确但过度收敛了风险。云端持有的 **ACME Account Key + DNS API Token** 是“可为任意 `<node-id>.direct` 签发公信证书”的能力凭据；攻破云端虽拿不到设备私钥，却可冒名签发可信证书，配合内网 ARP/DNS 劫持仍构成 MITM。**处置**：已改写为“设备私钥零暴露”，并补记该两项为云端 Tier-0 凭据。
+7. **§五 Phase 2 措辞残留**：`静默调用云端代理接口完成首次自签` 中的“自签”是路线 C 遗留，**处置**：已改为“签发专属设备证书”，并注明生产回退自签时的 FINDING 4 风险。
+8. **§10.2 的“9.9s / ISRG Root X1/X2”缺可复现锚点**：文档将其写成既成事实，但仓库内无对应验收脚本或 CI 条目。**建议**：补验收命令/脚本路径，否则明确标注为“一次性人工实测，无自动化回归”（Rule 9 / Rule 12）。
+
+#### 11.4 本轮放行结论
+
+- **客户端与 DNS 前置**：可继续安全合入，无安全倒退；
+- **测试环境 ACME 签发**：链路完整、测试全绿，作为**受控联调环境**成立；
+- **公网放行新增阻断项**：**FINDING 4 必须修复**（客户端/前端信任锚校验），否则生产用户将被谎报“公信绿锁就绪”；FINDING 5~7 为健壮性加固项，不阻断但应在生产放量前闭环。
+
+---
+
+> 🏁 **最终决议**：审查员多轮复核所提出的代码事实核查、符号映射校准、TXT 质询放行、PSL 硬门槛依赖、MITM 防御纵深、既有能力复用、物理视线边界口径收敛、TLS 默认关闭与隐藏体验兜底、以及六大前置动作代码与文档实质性推进，均已达成严密一致；**路线 B 的客户端与 DNS/PSL 前置高质量落地，云端 ACME DNS-01 代理签发引擎在测试环境中全面打通与闭环**。至此，FINDING 1（真实官方公信签发）、FINDING 2（POPO 签名校验）、FINDING 3（±60s 时间戳收敛）**全部闭环落地**，实实验收达成 100% 系统根信任与官方公信绿锁承诺。⚠️ **上述“彻底闭环”均限定于测试环境**：生产 `lic.eqt.net.im` 因顶层 vars 未配置 ACME 字段（`useAcme=false`）仍回退自签 CA，公信绿锁尚未对真实公网用户放量——生产放量以 PSL 合并与生产真机验收为前置（见 §10.2 边界注记）。**第三轮复核（§11）另新增 FINDING 4（客户端/前端缺信任锚校验，会把生产自签证书误报为“公信绿锁就绪”）为公网放行的新增阻断项**，须与 FINDING 5~7 一并闭环后方可对公网放量。
 
