@@ -590,6 +590,10 @@ func TestUntrustedDeviceCertificate_FailSoft(t *testing.T) {
 			"nodefailsoft00.direct.eqt.net.im",
 			"*.nodefailsoft00.direct.eqt.net.im",
 		},
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment | x509.KeyUsageCertSign,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 	}
 	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
 	if err != nil {
@@ -631,24 +635,43 @@ func TestUntrustedDeviceCertificate_FailSoft(t *testing.T) {
 	}
 
 	// 5. Test legacy wildcard cache path: manually place untrusted cert in ~/.config/eqt/certs
+	// Note: getCachedCertPaths strictly looks for "fullchain.pem" and "privkey.pem"
 	legacyDir := filepath.Join(tempHome, ".config", "eqt", "certs")
 	if err := os.MkdirAll(legacyDir, 0700); err != nil {
 		t.Fatalf("failed to mkdir legacy certs: %v", err)
 	}
 	keyDER, _ := x509.MarshalECPrivateKey(priv)
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
-	if err := os.WriteFile(filepath.Join(legacyDir, "cert.pem"), certPEM, 0644); err != nil {
-		t.Fatalf("failed to write legacy cert.pem: %v", err)
+	if err := os.WriteFile(filepath.Join(legacyDir, "fullchain.pem"), certPEM, 0644); err != nil {
+		t.Fatalf("failed to write legacy fullchain.pem: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(legacyDir, "key.pem"), keyPEM, 0600); err != nil {
-		t.Fatalf("failed to write legacy key.pem: %v", err)
+	if err := os.WriteFile(filepath.Join(legacyDir, "privkey.pem"), keyPEM, 0600); err != nil {
+		t.Fatalf("failed to write legacy privkey.pem: %v", err)
 	}
 
-	// Verify legacy wildcard path rejects untrusted certificate
+	// 5a. Verify legacy wildcard path REJECTS untrusted certificate (Falsifiability Part 1)
+	SetCustomRootPoolForTesting(nil)
 	if _, _, err := GetActiveCertificate("", "", ""); err == nil {
 		t.Errorf("expected GetActiveCertificate to reject untrusted legacy wildcard cert")
 	}
 	if HasValidCertificate("", "") {
 		t.Errorf("expected HasValidCertificate to return false for untrusted legacy wildcard cert")
+	}
+
+	// 5b. Verify legacy wildcard path ACCEPTS certificate once root is trusted (Falsifiability Part 2)
+	parsedCert, err := x509.ParseCertificate(certDER)
+	if err != nil {
+		t.Fatalf("failed to parse cert DER: %v", err)
+	}
+	trustedPool := x509.NewCertPool()
+	trustedPool.AddCert(parsedCert)
+	SetCustomRootPoolForTesting(trustedPool)
+	defer SetCustomRootPoolForTesting(nil)
+
+	if _, _, err := GetActiveCertificate("", "", ""); err != nil {
+		t.Errorf("expected GetActiveCertificate to accept trusted legacy wildcard cert, got: %v", err)
+	}
+	if !HasValidCertificate("", "") {
+		t.Errorf("expected HasValidCertificate to return true for trusted legacy wildcard cert")
 	}
 }

@@ -264,6 +264,9 @@ func GetCustomRootPoolForTesting() *x509.CertPool {
 // VerifyCertificateTrust verifies that the provided PEM certificate chain anchors to a trusted root authority.
 // If roots is nil, it strictly enforces the host operating system's native system root CA store.
 func VerifyCertificateTrust(certPEM []byte, roots *x509.CertPool) error {
+	if roots == nil {
+		roots = GetCustomRootPoolForTesting()
+	}
 	var certs []*x509.Certificate
 	rest := certPEM
 	for {
@@ -435,7 +438,7 @@ func GetActiveCertificate(customCert, customKey, nodeID string) (tls.Certificate
 	// 3. Legacy wildcard fallback (requires system root trust anchor verification)
 	if cacheCert, cacheKey, ok := getCachedCertPaths(); ok {
 		if certPEM, err := os.ReadFile(cacheCert); err == nil {
-			if err := VerifyCertificateTrust(certPEM, nil); err == nil {
+			if err := VerifyCertificateTrust(certPEM, GetCustomRootPoolForTesting()); err == nil {
 				if cert, err := tls.LoadX509KeyPair(cacheCert, cacheKey); err == nil {
 					if !isCertExpired(cert) {
 						return cert, "", nil

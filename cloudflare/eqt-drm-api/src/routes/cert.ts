@@ -318,6 +318,19 @@ function concatBuffers(...bufs: Uint8Array[]): Uint8Array {
 }
 
 /**
+ * Generates a 16-byte random serial number strictly conforming to RFC 5280 and X.690 DER INTEGER rules:
+ * - MSB is 0 (positive integer without requiring a leading 0x00 padding byte)
+ * - First byte is in range [0x01, 0x7f] (non-zero, preventing redundant leading zero)
+ * - Exactly 16 bytes
+ */
+export function generateCompliantSerialNumber(): Uint8Array {
+  const serialBytes = new Uint8Array(16);
+  crypto.getRandomValues(serialBytes);
+  serialBytes[0] = (serialBytes[0] & 0x7f) | 0x01; // Ensure positive and non-zero high byte
+  return serialBytes;
+}
+
+/**
  * Issues an X.509 certificate conforming to RFC 5280 from a client CSR
  * using Web Crypto (ECDSA P-256 + SHA-256).
  */
@@ -330,9 +343,7 @@ export async function issueCertificateFromCSR(
   const versionDER = new Uint8Array([0xa0, 0x03, 0x02, 0x01, 0x02]);
 
   // 2. Serial Number (INTEGER, positive random 16 bytes with non-zero high byte for canonical DER)
-  const serialBytes = new Uint8Array(16);
-  crypto.getRandomValues(serialBytes);
-  serialBytes[0] = (serialBytes[0] & 0x7f) | 0x01; // Ensure positive and non-zero high byte
+  const serialBytes = generateCompliantSerialNumber();
   const serialDER = encodeTLV(0x02, serialBytes);
 
   // 3. Signature Algorithm Identifier (ecdsa-with-SHA256: 1.2.840.10045.4.3.2)
@@ -403,13 +414,15 @@ export async function issueCertificateFromCSR(
   ));
 
   // 9. Sign TBSCertificate with ECDSA P-256
-  let caKey = signingKey;
-  if (!caKey) {
-    const keyPair = await crypto.subtle.generateKey(
+  let caKey: CryptoKey;
+  if (signingKey) {
+    caKey = signingKey;
+  } else {
+    const keyPair = (await crypto.subtle.generateKey(
       { name: 'ECDSA', namedCurve: 'P-256' },
       false,
       ['sign']
-    );
+    )) as CryptoKeyPair;
     caKey = keyPair.privateKey;
   }
 
@@ -881,6 +894,7 @@ export async function handleCertRoutes(
           }
 
           const challengeVal = await computeDns01ChallengeValue(dnsChall.token, thumbprint);
+          const recordName = `_acme-challenge.${cleanNode}.direct.eqt.net.im.`;
           // Pre-register cleanup task before setting challenge to guarantee cleanup on timeout/abort (FINDING 8)
           cleanupTasks.push(() => clearDns01Challenge(endpoints, dnsToken, recordName, challengeVal));
           await setDns01Challenge(endpoints, dnsToken, recordName, challengeVal);

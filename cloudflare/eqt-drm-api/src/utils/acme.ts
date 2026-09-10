@@ -152,11 +152,11 @@ export class AcmeClient {
     }
 
     if (opts.allowTransientAccountKey) {
-      keyPair = await crypto.subtle.generateKey(
+      keyPair = (await crypto.subtle.generateKey(
         { name: 'ECDSA', namedCurve: 'P-256' },
         true,
         ['sign', 'verify']
-      );
+      )) as CryptoKeyPair;
       const jwk = await crypto.subtle.exportKey('jwk', keyPair.publicKey) as JwkKey;
       publicJwk = {
         kty: jwk.kty,

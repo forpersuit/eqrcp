@@ -25,7 +25,7 @@ if (!fs.existsSync(compiledPath)) {
   process.exit(1);
 }
 
-const { handleCertRoutes, parseCSR, parseCertificateExpiry, setDns01Challenge } = require(compiledPath);
+const { handleCertRoutes, parseCSR, parseCertificateExpiry, setDns01Challenge, generateCompliantSerialNumber, issueCertificateFromCSR } = require(compiledPath);
 
 let passed = 0;
 let failed = 0;
@@ -622,13 +622,12 @@ async function runTests() {
     assert(deleteCalls.length === 1 && deleteCalls[0].includes('ns1.test') && deleteCalls[0].includes('chalValXYZ'), 'T17.2: immediate rollback DELETE dispatched to succeeded ns1.test (zero residue)');
   }
 
-  // Test 18: DER INTEGER Serial Number Normalization (1,000-iteration reproducible regression)
+  // Test 18: DER INTEGER Serial Number Normalization (1,000-iteration reproducible regression touching production code)
   {
     let derValidCount = 0;
+    // 18.1: Test production generateCompliantSerialNumber() 1,000 times
     for (let i = 0; i < 1000; i++) {
-      const serial = new Uint8Array(16);
-      crypto.getRandomValues(serial);
-      serial[0] = (serial[0] & 0x7f) | 0x01;
+      const serial = generateCompliantSerialNumber();
 
       // DER INTEGER rules check:
       // 1. Must be positive (MSB of first byte must be 0)
@@ -642,7 +641,145 @@ async function runTests() {
         derValidCount++;
       }
     }
-    assert(derValidCount === 1000, `T18: 1,000/1,000 random serial numbers verified 100% compliant with DER INTEGER rules (no illegal padding)`);
+    assert(derValidCount === 1000, `T18.1: 1,000/1,000 production serial numbers verified 100% compliant with DER INTEGER rules`);
+
+    // 18.2: Test actual certificate generation via production issueCertificateFromCSR()
+    const { csrPEM: testCsr } = generateTestCSR('t18node001234');
+    const parsed = await parseCSR(testCsr);
+    let certDerValid = true;
+    for (let i = 0; i < 10; i++) {
+      const issued = await issueCertificateFromCSR(parsed, 90);
+      const x509 = new crypto.X509Certificate(issued.certPEM);
+      // Serial number is a 32-hex character string
+      const serialHex = x509.serialNumber;
+      const firstByte = parseInt(serialHex.slice(0, 2), 16);
+      if (firstByte < 0x01 || firstByte > 0x7f) {
+        certDerValid = false;
+      }
+    }
+    assert(certDerValid, 'T18.2: Production issueCertificateFromCSR outputs valid DER serial numbers across repeated issuances');
+  }
+
+  // Test 19: End-to-End ACME Route Execution via handleCertRoutes (FINDING 9 Regression Guard)
+  {
+    const originalFetch = globalThis.fetch;
+    const dnsSetCalls = [];
+    const dnsDeleteCalls = [];
+    const acctKey = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+    const acctJwk = acctKey.privateKey.export({ format: 'jwk' });
+
+    const acmeNode = 'ac1de0123456';
+    const { csrPEM: acmeCsr, privateKey: acmeDevKey } = generateTestCSR(acmeNode);
+    const nowTs = Math.floor(Date.now() / 1000);
+    const sig = signNodePayload(acmeDevKey, acmeNode, nowTs);
+
+    // Mock dummy issued cert PEM for download
+    const dummyIssued = await issueCertificateFromCSR(await parseCSR(acmeCsr), 90);
+
+    let isFinalized = false;
+    let nonceCounter = 1;
+    globalThis.fetch = async (input, init) => {
+      const url = typeof input === 'string' ? input : (input instanceof Request ? input.url : String(input));
+      const method = (init && init.method) ? init.method.toUpperCase() : 'GET';
+
+      if (url === 'https://acme.test/directory') {
+        return new Response(JSON.stringify({
+          newNonce: 'https://acme.test/nonce',
+          newAccount: 'https://acme.test/new-acct',
+          newOrder: 'https://acme.test/new-order'
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (url === 'https://acme.test/nonce') {
+        return new Response(null, { status: 200, headers: { 'Replay-Nonce': `nonce-${nonceCounter++}` } });
+      }
+      if (url === 'https://acme.test/new-acct') {
+        return new Response(JSON.stringify({ status: 'valid' }), {
+          status: 200,
+          headers: { 'Location': 'https://acme.test/acct/1', 'Replay-Nonce': `nonce-${nonceCounter++}`, 'Content-Type': 'application/json' }
+        });
+      }
+      if (url === 'https://acme.test/new-order') {
+        return new Response(JSON.stringify({
+          status: 'pending',
+          authorizations: ['https://acme.test/authz/1'],
+          finalize: 'https://acme.test/finalize/1'
+        }), {
+          status: 201,
+          headers: { 'Location': 'https://acme.test/order/1', 'Replay-Nonce': `nonce-${nonceCounter++}`, 'Content-Type': 'application/json' }
+        });
+      }
+      if (url === 'https://acme.test/authz/1') {
+        return new Response(JSON.stringify({
+          status: 'pending',
+          identifier: { value: `${acmeNode}.direct.eqt.net.im` },
+          challenges: [{ type: 'dns-01', url: 'https://acme.test/chal/1', token: 'tokenXYZ' }]
+        }), { status: 200, headers: { 'Replay-Nonce': `nonce-${nonceCounter++}`, 'Content-Type': 'application/json' } });
+      }
+      if (url.includes('/acme/challenge')) {
+        if (method === 'POST') {
+          dnsSetCalls.push({ url, body: init ? JSON.parse(init.body) : null });
+          return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+        if (method === 'DELETE') {
+          dnsDeleteCalls.push(url);
+          return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+      }
+      if (url === 'https://acme.test/chal/1') {
+        return new Response(JSON.stringify({ status: 'valid' }), { status: 200, headers: { 'Replay-Nonce': `nonce-${nonceCounter++}` } });
+      }
+      if (url === 'https://acme.test/order/1') {
+        return new Response(JSON.stringify({
+          status: isFinalized ? 'valid' : 'ready',
+          finalize: 'https://acme.test/finalize/1',
+          certificate: isFinalized ? 'https://acme.test/cert/1' : undefined
+        }), { status: 200, headers: { 'Replay-Nonce': `nonce-${nonceCounter++}`, 'Content-Type': 'application/json' } });
+      }
+      if (url === 'https://acme.test/finalize/1') {
+        isFinalized = true;
+        return new Response(JSON.stringify({
+          status: 'valid',
+          certificate: 'https://acme.test/cert/1'
+        }), { status: 200, headers: { 'Replay-Nonce': `nonce-${nonceCounter++}`, 'Content-Type': 'application/json' } });
+      }
+      if (url === 'https://acme.test/cert/1') {
+        return new Response(dummyIssued.certPEM, { status: 200, headers: { 'Content-Type': 'application/pem-certificate-chain' } });
+      }
+
+      return new Response('Not Found', { status: 404 });
+    };
+
+    let acmeResp = null;
+    let acmeData = null;
+    try {
+      const req = new Request('http://api.test/api/v1/cert/provision', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-EQT-Timestamp': String(nowTs),
+          'X-EQT-Device-Signature': sig
+        },
+        body: JSON.stringify({ node_id: acmeNode, csr_pem: acmeCsr })
+      });
+
+      acmeResp = await handleCertRoutes(req, {
+        DB: makeMockDb(),
+        ENVIRONMENT: 'test',
+        ACME_DIRECTORY_URL: 'https://acme.test/directory',
+        ACME_DNS_API_ENDPOINTS: 'https://ns1.test,https://ns2.test',
+        ACME_DNS_API_TOKEN: 'secret-dns-token',
+        ACME_ACCOUNT_KEY: JSON.stringify(acctJwk)
+      }, makeMockCtx(), new URL(req.url), {});
+
+      acmeData = await acmeResp.json();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    assert(acmeResp && acmeResp.status === 200, 'T19.1: ACME issuance path executes end-to-end with 200 OK (no ReferenceError/500)');
+    assert(acmeData && acmeData.cert_pem && acmeData.expires_at, 'T19.2: ACME response contains valid cert_pem and expires_at');
+    assert(dnsSetCalls.length === 2, 'T19.3: DNS challenge set on all authoritative endpoints');
+    assert(dnsSetCalls[0].body && dnsSetCalls[0].body.record === `_acme-challenge.${acmeNode}.direct.eqt.net.im.`, 'T19.4: DNS challenge recordName correctly constructed with device node');
   }
 
   console.log(`\nResults: ${passed} passed, ${failed} failed`);

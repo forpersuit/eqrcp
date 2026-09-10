@@ -16,6 +16,13 @@ import (
 )
 
 func TestReceiveTusSafetyGate_InitAndDone(t *testing.T) {
+	SetUsedReceiveTransfers(0)
+	SetUsedTransfers(0)
+	defer func() {
+		SetUsedReceiveTransfers(0)
+		SetUsedTransfers(0)
+	}()
+
 	tempDir, err := os.MkdirTemp("", "eqt_recv_gate_test")
 	if err != nil {
 		t.Fatal(err)

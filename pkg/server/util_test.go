@@ -1695,6 +1695,7 @@ func TestIsReceiveClientLimitExceeded(t *testing.T) {
 
 	// 1. Set UsedReceiveTransfers to 0 (Not exceeded free quota)
 	SetUsedReceiveTransfers(0)
+	defer SetUsedReceiveTransfers(0)
 
 	// In this state, there are NO limits (it should never exceed)
 	if srv.isReceiveClientLimitExceeded(clientID_A) {
