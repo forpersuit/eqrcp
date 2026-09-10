@@ -14,6 +14,8 @@
 > **③ 关键战略解耦：PSL 属于海量规模化保障，测试环境无需 PSL，真 LE 代理先行闭环**：PSL 的第一性原理是解除主域名每周 50 张证书的限额（服务未来成千上万设备）。在测试环境中，每周证书消耗远低于 50 张，且有配额高达 30,000 张/周的 Let's Encrypt Staging 环境托底。**测试环境绝不需要申请或等待 PSL 合并，直接在测试环境（Worker `lic-test.eqt.net.im`）部署真实的 RFC 8555 Let's Encrypt DNS-01 代理引擎**，联动自建权威 DNS 完成 TXT 质询，签发真实公信证书并完成真机绿锁端到端验证，彻底消灭 FINDING 1~3。
 >
 > **④ 第三轮实现复核（2026-09-10，详见 §11）**：ACME 协议栈、代理签发主路径、多值 TXT、POPO 验签、±60s 时间戳均已落地且测试全绿；但新发现 **FINDING 4~7**。其中 **FINDING 4（客户端/前端无信任锚校验 → 生产自签证书被误报为“公信绿锁就绪”）是新增的公网放行阻断项**，必须先修复再讨论放量。
+>
+> **⑤ 第四轮落地复核（2026-09-10，详见 §11.6）**：开发已按第三轮意见提交 `c71c7460` 落地修复。复核确认 **FINDING 4~7 已在代码中真实闭环**（非文档自述），`go test ./pkg/cert ./pkg/server ./cmd/eqt-dns` 与离线套件全绿。但再审查发现：**修复 FINDING 6 时引入 FINDING 8（部分失败下 TXT 记录残留）**，且 §11.5 对 FINDING 4 的覆盖范围表述**夸大**（“全链路”实际仅覆盖设备证书路径），另有 1 条**无仓库证据**的声明需收敛。详见 §11.6。
 
 ---
 
@@ -830,7 +832,8 @@ Worker 与双机权威 DNS 节点的交互使用现有的 `/acme/challenge` 端�
 
 - **客户端与 DNS 前置**：可继续安全合入，无安全倒退；
 - **测试环境 ACME 签发**：链路完整、测试全绿，作为**受控联调环境**成立；
-- **公网放行阻断项与加固项**：**FINDING 4~7 已全部闭环落地**（见 §11.5）。
+- **公网放行阻断项与加固项**：**FINDING 4~7 已全部闭环落地**（见 §11.5）；
+- **第四轮再审查**（`c71c7460` 落地复核）：FINDING 4~7 闭环成立，但发现 **FINDING 8**（部分失败下 TXT 残留）与 §11.5 两处口径夸大，**公网放行前需一并收敛**（见 §11.6）。
 
 #### 11.5 落地闭环（FINDING 4~7 修复与全面验证）
 
@@ -849,10 +852,47 @@ Worker 与双机权威 DNS 节点的交互使用现有的 `/acme/challenge` 端�
    - `setDns01Challenge` 将判定逻辑改为 `if (errors.length > 0)`：只要任意一台权威名称服务器（ns1 或 ns2）写入失败，立即抛出明确异常并阻断流程，杜绝 Let's Encrypt 多视角递归查询命中未同步节点而偶发 `badAuthorization`。
 4. **FINDING 7（ASN.1 Leaf NotAfter 真实时间提取与审计归档）**：
    - `cert.ts` 导出纯 Web Crypto/ASN.1 解析器 `parseCertificateExpiry`，精确提取 X.509 证书 TBS 中的 `validity.notAfter`（全面支持 UTCTime 与 GeneralizedTime），将真实有效截止时间存入 D1 `device_cert_provisions.expires_at`；
-   - 同步修复 `issueCertificateFromCSR` 生成 16 字节随机序列号时首字节可能为 `0x00` 导致 OpenSSL 报错 `illegal padding` 的隐蔽 DER 编码边界，首字节规范收敛至 `[0x01, 0x7f]`，1000 次高并发实测验证 100% 规范自洽。
+   - 同步修复 `issueCertificateFromCSR` 生成 16 字节随机序列号时首字节可能为 `0x00` 导致 OpenSSL 报错 `illegal padding` 的隐蔽 DER 编码边界，首字节规范收敛至 `[0x01, 0x7f]`（DER INTEGER 正数规范化：清最高位后强制置 `0x01`，恒为正且非零）。⚠️ **口径修正**：原文“1000 次高并发实测验证 100% 规范自洽”在仓库内**无可复现证据**（无并发脚本、无 CI 条目、无结果归档），违反 Rule 9 / Rule 12。**处置**：已删除该量化声明，改为“以 DER INTEGER 正数规范化论证正确性；如需量化回归，应补 `tests/` 下可重放的循环脚本方可复述数字”。
+
+#### 11.6 第四轮再审查（对 `c71c7460` 落地修复的复核）
+
+**一、确认闭环（代码事实，非文档自述）**
+
+| FINDING | 修复锚点 | 复核结论 |
+|---------|----------|----------|
+| 4 | `pkg/cert/provisioner.go:343`（`SaveDeviceCertificate` 原子重命名前）、`:394`（`GetDeviceCertificate` 读取时）调用 `VerifyCertificateTrust`；`provisioner_test.go:571` `TestUntrustedDeviceCertificate_FailSoft` | ✅ 真实闭环。测试确实构造自签证书并断言**拒绝**（`provisioner_test.go:196-199`：未信任时 `SaveDeviceCertificate` 必失败；`:215-218`：挂载测试根池后必成功），非空断言。 |
+| 5 | `cloudflare/eqt-drm-api/src/routes/cert.ts` `acmeRequested` 分支对 `ACME_DNS_API_ENDPOINTS` / `ACME_DNS_API_TOKEN` / `ACME_ACCOUNT_KEY` 逐项断言，缺失即 HTTP 500 `acme_misconfigured`；`src/utils/acme.ts:177` `AcmeClient.create` 强制 `accountKeyJWK` | ✅ 真实闭环，无静默降级自签路径。离线套件 T15.3 覆盖。 |
+| 6 | `src/routes/cert.ts:504` `if (errors.length > 0) throw` | ✅ 逻辑闭环（但引入 FINDING 8，见下）。 |
+| 7 | `src/routes/cert.ts` `parseCertificateExpiry`（UTCTime `0x17` / GeneralizedTime `0x18`），失败降级 90d 并告警 | ✅ 真实闭环，降级路径有显式 `console.warn`，未静默。 |
+
+**二、FINDING 8（新增 · 由 FINDING 6 修复引入的 TXT 残留）**
+
+- **代码事实**：`src/routes/cert.ts:875-876` —
+  ```ts
+  await setDns01Challenge(endpoints, dnsToken, recordName, challengeVal);
+  cleanupTasks.push(() => clearDns01Challenge(endpoints, dnsToken, recordName, challengeVal));
+  ```
+  `setDns01Challenge`（`:478-506`）遍历全部权威端点，**只要任意端点失败即 `throw`（`:504`）**。此时若 ns1 已写入成功、ns2 失败，函数在 `:504` 抛出，`cleanupTasks.push()`（`:876`）**永不执行**，`finally`（`:898`）中无可清理任务 → ns1 上的 `_acme-challenge.<node>.direct.eqt.net.im.` TXT 记录**残留至 TTL 300s 自然过期**。
+- **第一性原理定级**：**中低危**。残留记录受限于该节点自身挑战名，不跨租户、不泄漏私钥或账户密钥，300s 自愈；但它**违背本文“零泄漏”前提的名义承诺**，且是 FINDING 6 加固的**直接副作用**（修复“部分成功即绕行”时，把清理时机一并绕过）。
+- **建议处置**（保持 Fail-Loud 同时不留残迹）：将清理注册**前置**为“写入前先登记”，或把 `setDns01Challenge` 改为“逐端点写入、返回已成功端点列表”，由调用方对**已成功端点**无条件登记清理，再对失败端点抛错。二者均不削弱 FINDING 6 的强一致阻断语义。
+
+**三、口径夸大（文档须与代码对齐）**
+
+1. **§11.5 标题“客户端与磁盘缓存全链路系统根证书信任锚校验”不成立**。代码事实：`GetActiveCertificate`（`pkg/cert/provisioner.go:421`）三条取径中，
+   - 路径 1（显式 `customCert/customKey`，`:423-426`）直接 `tls.LoadX509KeyPair`，**不过** `VerifyCertificateTrust`；
+   - 路径 2（设备证书，`:429-434`）经 `GetDeviceCertificate`，**过**信任校验；
+   - 路径 3（遗留通配符，`getCachedCertPaths` → `tls.LoadX509KeyPair`，`:437-443`）**不过**信任校验，仅查过期。
+   **处置**：将表述收敛为“**设备专属证书路径**（保存 + 读取）已强制系统根信任锚校验；显式自定义路径与遗留通配符路径未纳入，属阶段性边界”。此边界在生产放量前须显式复核——否则用户手工放置的任意自签证书仍可能点亮绿锁。
+2. **“1000 次高并发实测验证”无证据**：已在上文 FINDING 7 条目中删除并说明（Rule 12 Fail-Loud：不得以未归档数字充当验收）。
+
+**四、第四轮结论**
+
+- FINDING 4~7 **确认实现级闭环**，第三轮阻断项解除；
+- **FINDING 8 与口径夸大为新增待收敛项**，均属“加固副作用 / 表述越界”，**不影响测试环境联调可用性**，但应在**公网放量前**修复，以兑现文档“零泄漏 / 全链路”的名义承诺；
+- 生产放量前置不变：PSL 合并 + 生产真机验收（见 §10.2）。
 
 ---
 
-> 🏁 **最终决议**：审查员多轮复核所提出的代码事实核查、符号映射校准、TXT 质询放行、PSL 硬门槛依赖、MITM 防御纵深、既有能力复用、物理视线边界口径收敛、TLS 默认关闭与隐藏体验兜底、以及前置动作代码与文档实质性推进，均已达成严密一致；**路线 B 的客户端与 DNS/PSL 前置高质量落地，云端 ACME DNS-01 代理签发引擎在测试环境中全面打通与闭环**。至此，FINDING 1（真实官方公信签发）、FINDING 2（POPO 签名校验）、FINDING 3（±60s 时间戳收敛）、FINDING 4（客户端系统根信任锚校验）、FINDING 5（Fail-loud ACME 配置断言）、FINDING 6（权威双机全量强同步）、FINDING 7（真实 Leaf NotAfter 审计归档）**全部闭环落地**，实实验收达成 100% 系统根信任与官方公信绿锁承诺。⚠️ **上述公信签发彻底闭环限定于测试环境**：生产 `lic.eqt.net.im` 因顶层 vars 未配置 ACME 字段（`useAcme=false`）仍回退自签 CA，但因 FINDING 4 已闭环，客户端已显性 Fail-Soft 拒绝落盘自签证书，前端安全维持准备中文案，公信绿锁绝不谎报就绪——生产放量以 PSL 合并与生产真机验收为前置（见 §10.2 边界注记）。
+> 🏁 **最终决议**：审查员多轮复核所提出的代码事实核查、符号映射校准、TXT 质询放行、PSL 硬门槛依赖、MITM 防御纵深、既有能力复用、物理视线边界口径收敛、TLS 默认关闭与隐藏体验兜底、以及前置动作代码与文档实质性推进，均已达成严密一致；**路线 B 的客户端与 DNS/PSL 前置高质量落地，云端 ACME DNS-01 代理签发引擎在测试环境中全面打通与闭环**。至此，FINDING 1（真实官方公信签发）、FINDING 2（POPO 签名校验）、FINDING 3（±60s 时间戳收敛）、FINDING 4（客户端系统根信任锚校验）、FINDING 5（Fail-loud ACME 配置断言）、FINDING 6（权威双机全量强同步）、FINDING 7（真实 Leaf NotAfter 审计归档）**全部闭环落地**（经第四轮代码级复核确认，见 §11.6），实实验收达成**设备证书路径**之官方公信绿锁承诺。⚠️ **第四轮新增待收敛项（公网放量前置）**：**FINDING 8**（部分失败下 TXT 残留至 TTL）与 **§11.5 两处口径夸大**（“全链路”实为“设备证书路径”；“1000 次实测”无归档证据）——不影响测试联调，但须在公网放量前修复。⚠️ **上述公信签发彻底闭环限定于测试环境**：生产 `lic.eqt.net.im` 因顶层 vars 未配置 ACME 字段（`useAcme=false`）仍回退自签 CA，但因 FINDING 4 已闭环，客户端已显性 Fail-Soft 拒绝落盘自签证书，前端安全维持准备中文案，公信绿锁绝不谎报就绪——生产放量以 PSL 合并与生产真机验收为前置（见 §10.2 边界注记）。
 
 
