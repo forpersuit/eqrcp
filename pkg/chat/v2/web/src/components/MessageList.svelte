@@ -1017,7 +1017,7 @@
         {@const tx = mine ? ulTx : (isTxCompleted ? null : dlTx)}
         {@const colors = getMessageColors(msg, mine)}
         {@const identity = getSenderIdentity(msg)}
-        {@const isCancelledFile = isFileSendCancelled(msg, mine, ulTx, dlTx)}
+        {@const isCancelledFile = isFileSendCancelled(msg, mine, ulTx)}
         <div 
           class="message" 
           class:mine 

@@ -9,6 +9,7 @@
   import { getThemeColors } from './services/types';
   import type { Message } from './services/types';
   import { DEFAULT_FREE_MAX_ATTACHMENT_BYTES } from './services/quotaConfig';
+  import { resolveDownloadTransferId } from './services/attachmentPolicy';
 
   if (typeof window !== 'undefined') {
     window.addEventListener('error', (e) => {
@@ -356,8 +357,9 @@
       }
     } else if (event.data.type === 'download-cancelled') {
       const { messageId } = event.data;
+      if (!messageId) return;
       const peer = client ? client['clientPeer'] : 'desktop';
-      const transferId = 'dl-' + messageId + '-' + peer;
+      const transferId = resolveDownloadTransferId(messageId, peer);
       chatActions.updateTransfer({
         id: transferId,
         state: 'cancelled',

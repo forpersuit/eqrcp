@@ -122,6 +122,9 @@ if [[ "$run_checks" -eq 1 ]]; then
       cfg.author.name = 'EQT';
       fs.writeFileSync(p, JSON.stringify(cfg, null, 2) + '\n');
     " || true
+    if git -C "$root_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+      git -C "$root_dir" add "$root_dir/desktop/gui/wails.json" 2>/dev/null || true
+    fi
   fi
 
   if wails_cmd="$(find_wails)"; then
@@ -133,9 +136,13 @@ if [[ "$run_checks" -eq 1 ]]; then
   echo "Building GUI frontend..."
   (cd "$root_dir/desktop/gui/frontend" && npm run build)
   echo "Building Chat v2 frontend..."
-  (cd "$root_dir/pkg/chat/v2/web" && npm run build)
+  (cd "$root_dir/pkg/chat/v2/web" && npm test && npm run build)
   echo "Running TypeScript typecheck on Cloudflare Worker (eqt-drm-api)..."
-  (cd "$root_dir/cloudflare/eqt-drm-api" && npm run typecheck)
+  if [[ -d "$root_dir/cloudflare/eqt-drm-api/node_modules" ]]; then
+    (cd "$root_dir/cloudflare/eqt-drm-api" && npm run typecheck)
+  else
+    echo "Notice: cloudflare/eqt-drm-api/node_modules not found, skipping local typecheck (CI will enforce)."
+  fi
 
   echo "Running go vet on desktop module..."
   (cd "$root_dir/desktop/gui" && go vet ./...)

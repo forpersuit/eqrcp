@@ -13,18 +13,25 @@ import type { Message, TransferEvent } from './types';
  */
 
 /**
+ * 解析客户端下载传输 ID (Transfer ID Contract).
+ * 统一 Wails 宿主桥接、App.svelte 消息监听及测试之间的契约规范。
+ */
+export function resolveDownloadTransferId(messageId: string, peer = 'desktop'): string {
+  return 'dl-' + messageId + '-' + (peer || 'desktop');
+}
+
+/**
  * 判定文件消息是否属于“发送方取消了发送”的状态。
+ * 注意：接收方下载任务状态绝不参与此判定，签名中不包含任何下载状态参数。
  * 
  * @param msg 消息对象
  * @param mine 当前客户端是否为发送者
  * @param ulTx 发送方的上传传输状态 (ul- 开头)
- * @param _dlTx 接收方的下载传输状态 (dl- 开头，仅供接口兼容，绝不可用于取消发送判定)
  */
 export function isFileSendCancelled(
   msg: Message,
   mine: boolean,
-  ulTx?: TransferEvent | { state?: string },
-  _dlTx?: TransferEvent | { state?: string }
+  ulTx?: TransferEvent | { state?: string }
 ): boolean {
   if (msg.type !== 'file' && msg.type !== 'image') {
     return false;

@@ -164,3 +164,21 @@ const isCancelledFile = (file|image) && ((ulTx && ulTx.state==='cancelled') || (
 | — | 低危 | 版本号双面（`version.go` / `wails.json`）scripted 同步，避免补偿提交 |
 
 **总体判定**：`1930ad84` 修复真实缺陷且逻辑正确；`b22cd102` 的类型门禁三层接线**经实测确认真实生效**。上述 4 项均为**验证完备性与流程一致性**问题，**不构成功能阻断**，可择机处置。
+
+---
+
+## 七、审查意见分析与适配落地记录（2026-09-11 闭环）
+
+经第一性原则全面审视，本期审查意见全部客观、中肯且切中工程闭环盲区，**全部予以采纳并已完成代码适配**：
+
+### 1. 各项处置与闭环明细
+
+| 编号 | 审查意见性质 | 分析结论 | 采纳与适配落地动作 | 闭环验证 |
+|---|---|---|---|---|
+| **L1** | 单测门禁缺口（中危） | **完全合理**。单测必须接入自动化门禁，否则随时间推移极易发生静默退化。Node 原生 strip-types 耗时仅 ~0.1s，零外部重量级依赖，成本极低。 | ① 在 `.github/workflows/ci.yml` 的 3 处 web 构建步骤中均插入 `npm test`；<br>② 在 `scripts/deploy-windows-results.sh` 的 `run_checks` 环节加入 `(cd .../pkg/chat/v2/web && npm test && npm run build)`；<br>③ 对 pre-commit 中 `cloudflare/eqt-drm-api` 增加 `node_modules` 存在性探测与友好跳过提示。 | 本地执行 `deploy-windows-results.sh` 顺利走通，全量单测强制校验通过；CI 配置文件语法与步骤对齐。 |
+| **L2** | 事件桥接侧契约测试缺口（低危） | **完全合理**。Wails 宿主与 Svelte iframe 间通过 `postMessage` 异步通信，`transferId` 拼接规范若发生代码漂移将导致状态挂起。 | ① 在 `attachmentPolicy.ts` 导出统一契约函数 `resolveDownloadTransferId(messageId, peer)`；<br>② `App.svelte` 改用该契约函数解析 `transferId`；<br>③ 在 `attachmentPolicy.test.ts` 中新增 Case 8 专门覆盖桥接 payload 解析与状态流转契约。 | `npm test` 自动执行 Case 8 模拟跨进程取消，断言 100% 通过。 |
+| **L3** | 批量取消路径语义确认（低危） | **确认完全符合预期**。第一性原则：除非发送方撤回，其他任何接收端行为绝不可移除气泡实体。用户关闭批量保存目录弹窗只是放弃本次批量落盘，绝非删除已收到的文件。 | ① 明确将“批量取消下载后保留气泡并标明 `· 已取消`”确认为核心产品预期；<br>② 在 `attachmentPolicy.test.ts` 中新增 Case 9 对批量取消场景实施强断言锁定。 | 测试 Case 9 验证循环遍历被取消的批量消息，气泡强驻留断言全过。 |
+| **L4** | `isFileSendCancelled` 未使用参数（提示） | **合理且使代码更干净**。既然第一性原则已确定“接收端下载状态绝对不参与取消发送判定”，将无用形参剔除能杜绝误导。 | ① `attachmentPolicy.ts` 中将 `_dlTx` 从形参列表彻底移除；<br>② `MessageList.svelte:1020` 同步精简为 3 参数调用；<br>③ 单测同步精简。 | `svelte-check` 静态类型检查 0 errors。 |
+| **L5** | 技能文档分割线粘连格式问题（提示） | **格式失误，立即修正**。粘连会导致 `---` 被当作字面文本渲染，且缺少标题前置空行。 | 修复 `.agents/skills/eqt-ux/SKILL.md` 中第 18 节前置的 `---` 为独立空行段落。 | Markdown 格式对齐，符合渲染规范。 |
+| **版本双面** | 版本偏斜导致补偿提交（低危） | **完全合理**。此前因 `wails.json` 在 pre-commit 执行中修改但未被暂存，导致 commit 遗漏。 | 在 `scripts/deploy-windows-results.sh` 同步脚本中追加 `git add desktop/gui/wails.json` 自动暂存防护。 | 任意修改 `version.go` 后触发 commit 时，`wails.json` 自动联动同次提交，消除补偿提交。 |
+

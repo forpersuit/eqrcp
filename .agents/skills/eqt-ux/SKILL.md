@@ -335,7 +335,9 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
   - **模块化剥离**：遵循前端工程规范，将托盘渲染逻辑封装在独立文件 `desktop/gui/frontend/src/components/chat_tray.js` 中，严禁在 `main.js` 中直接拼装大块 HTML。
   - **抗并发与无竞态覆盖**：采用独立任务列表（List）展示所有在传附件（文件名、上传者、格式化尺寸、百分比、平滑进度条），彻底避免单行副标题在多文件并发时的相互覆盖与抢占。
   - **自适应收起与极简心智**：在无活跃传输时，托盘组件返回空字符串，DOM 节点平滑隐藏，不侵占聊天消息主区域的空间。
-  - **合规标准**：自包含纯函数转义（`escapeHTML`/`escapeAttr`），严禁内联 `onclick`，多语言在 `i18n.js` 中统一注册。---
+  - **合规标准**：自包含纯函数转义（`escapeHTML`/`escapeAttr`），严禁内联 `onclick`，多语言在 `i18n.js` 中统一注册。
+
+---
 
 ## 18. 聊天文件气泡生命周期与接收端下载状态解耦原则 (Chat Bubble Retention & Receiver Decoupling Principle)
 
