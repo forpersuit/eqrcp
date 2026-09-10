@@ -16,6 +16,8 @@
 > **④ 第三轮实现复核（2026-09-10，详见 §11）**：ACME 协议栈、代理签发主路径、多值 TXT、POPO 验签、±60s 时间戳均已落地且测试全绿；但新发现 **FINDING 4~7**。其中 **FINDING 4（客户端/前端无信任锚校验 → 生产自签证书被误报为“公信绿锁就绪”）是新增的公网放行阻断项**，必须先修复再讨论放量。
 >
 > **⑤ 第四轮落地复核（2026-09-10，详见 §11.6）**：开发已按第三轮意见提交 `c71c7460` 落地修复。复核确认 **FINDING 4~7 已在代码中真实闭环**（非文档自述），`go test ./pkg/cert ./pkg/server ./cmd/eqt-dns` 与离线套件全绿。但再审查发现：**修复 FINDING 6 时引入 FINDING 8（部分失败下 TXT 记录残留）**，且 §11.5 对 FINDING 4 的覆盖范围表述**夸大**（“全链路”实际仅覆盖设备证书路径），另有 1 条**无仓库证据**的声明需收敛。详见 §11.6。
+>
+> **⑥ 第五轮落地复核（2026-09-10，详见 §11.8）**：开发提交 `c73862a2` 修复 FINDING 8 并补齐路径 3 信任校验。复核结论：**FINDING 8 的即刻回滚修复有效**（T17 为真实覆盖），但**本次重排序删除了 `const recordName` 声明**，导致 `cert.ts:885-886` 引用未声明变量 → **整个 ACME 签发路径运行时 `ReferenceError` 500**，**这是比 FINDING 8 更严重的全新阻断回归（FINDING 9）**；另发现路径 3 的单元测试**空转不可证伪（FINDING 10）**、T18 DER 回归**同义反复未触及生产代码（FINDING 11）**。详见 §11.8。
 
 ---
 
@@ -833,7 +835,8 @@ Worker 与双机权威 DNS 节点的交互使用现有的 `/acme/challenge` 端�
 - **客户端与 DNS 前置**：可继续安全合入，无安全倒退；
 - **测试环境 ACME 签发**：链路完整、测试全绿，作为**受控联调环境**成立；
 - **公网放行阻断项与加固项**：**FINDING 4~7 已全部闭环落地**（见 §11.5）；
-- **第四轮再审查**（`c71c7460` 落地复核）：FINDING 4~7 闭环成立，但发现 **FINDING 8**（部分失败下 TXT 残留）与 §11.5 两处口径夸大，**公网放行前需一并收敛**（见 §11.6）。
+- **第四轮再审查**（`c71c7460` 落地复核）：FINDING 4~7 闭环成立，但发现 **FINDING 8**（部分失败下 TXT 残留）与 §11.5 两处口径夸大，**公网放行前需一并收敛**（见 §11.6）；
+- **第五轮再审查**（`c73862a2` 落地复核）：FINDING 8 修复有效，但该重排**引入 FINDING 9**（`recordName` 未声明 → ACME 主路径运行时 500，**强阻断**），另有 FINDING 10/11 两条验收不可信缺陷，**放行结论被推翻**（见 §11.8）。
 
 #### 11.5 落地闭环（FINDING 4~7 修复与全面验证）
 
@@ -899,9 +902,52 @@ Worker 与双机权威 DNS 节点的交互使用现有的 `/acme/challenge` 端�
    - **单元测试覆盖**：在 `pkg/cert/provisioner_test.go` 中扩展 `TestUntrustedDeviceCertificate_FailSoft`，在 `~/.config/eqt/certs` 伪造自签通配符证书，严格断言 `GetActiveCertificate` 与 `HasValidCertificate` 拒绝加载并返回 false。
 3. **DER INTEGER 序列号规范化 1,000 次可重放证据（补齐 Rule 9 / Rule 12 证据链）**：
    - 在 `tests/cert-provision-offline.js` 增加 T18，以可重放的自动化循环脚本对 1,000 次随机生成的 16 字节序列号执行 DER INTEGER 规则检验（MSB=0 确保正整数、首字节位于 `[0x01, 0x7f]` 彻底杜绝冗余前导 0、长度严格 16 字节），实测 1,000/1,000 成功，证据链完全闭环。
+   - ⚠️ **复核修正（第五轮）**：上述“证据链完全闭环”表述**不成立**——T18 未调用生产函数 `issueCertificateFromCSR`，属同义反复（FINDING 11）；且本小节所称“单元测试覆盖”的路径 3 断言**空转不可证伪**（FINDING 10）。详见 §11.8。
+
+#### 11.8 第五轮再审查（对 `c73862a2` 的复核）
+
+**一、FINDING 8 修复：确认有效**
+
+`setDns01Challenge`（`src/routes/cert.ts:478-521`）新增 `succeededEndpoints` 追踪，在 `errors.length > 0` 抛出前对已成功端点执行 `clearDns01Challenge` 回滚（`:504-513`）；调用端将 `cleanupTasks.push` 前置（`:885`）。离线测试 T17.1/T17.2（`tests/cert-provision-offline.js`）真实调用生产函数并断言“抛错 + 向 ns1 派发 DELETE”，**为有效覆盖**。✅ FINDING 8 闭环成立。
+
+**二、FINDING 9（全新 · 严重 · 公网放行强阻断）：ACME 签发路径引用未声明变量**
+
+- **代码事实**：`src/routes/cert.ts:885-886` 两处引用 `recordName`，而**全文无 `recordName` 声明**（`grep -n recordName` 仅返回这两行）。`c73862a2` 在重排“清理前置登记”时，**删除了原 `const recordName = \`_acme-challenge.${cleanNode}.direct.eqt.net.im.\`` 声明行**却保留了其使用。
+- **运行时后果**：`:886` 为即时求值表达式，`recordName` 触发 `ReferenceError` → 被路由外层 try/catch 捕获 → 返回 500。**整条 RFC 8555 ACME 签发主路径完全不可用**，测试环境公信签发能力实则已被打穿。其严重性**高于所修复的 FINDING 8**。
+- **为何无任何测试拦截（Rule 12）**：
+  1. 离线套件中 `handleCertRoutes` 的调用均走非 ACME 路由（`acmeRequested=false`）；T17 直接单测 `setDns01Challenge`，未经过 `:885` 所在代码；
+  2. `wrangler` 打包走 esbuild，**默认不做类型检查**：实测 `npx esbuild src/routes/cert.ts ...` 退出码 0，产物中 `recordName` 被原样保留为自由变量（`/tmp/cert-probe.js:1336-1337`）；
+  3. `cloudflare/eqt-drm-api/package.json` **无 `tsc` / typecheck 脚本**，CI 与 pre-commit 均不覆盖 Worker 类型正确性。
+- **处置**：**立即补回 `const recordName` 声明**，并在 `package.json` 增加 `"typecheck": "tsc --noEmit"` 纳入验收，杜绝同类“打包静默放过”缺陷。
+
+**三、FINDING 10（中危 · 测试空转不可证伪，Rule 9）：路径 3 信任校验的单元测试未执行到被测代码**
+
+- **代码事实**：`getCachedCertPaths`（`pkg/cert/cert.go:62-63`）只识别 `fullchain.pem` / `privkey.pem`；而新增测试夹具写入的是 `cert.pem` / `key.pem`（`pkg/cert/provisioner_test.go:640-643`）。文件名不匹配 → `getCachedCertPaths` 返回 `ok=false` → **路径 3 从未进入**。
+- **可证伪性实验（已执行）**：临时**完整移除**路径 3 的 `VerifyCertificateTrust(certPEM, nil)` 后重跑 `go test ./pkg/cert -run TestUntrustedDeviceCertificate_FailSoft`，**仍然 PASS**（实验后已 `git` 原样还原，工作区无残留）。即：该测试**无法在业务逻辑被删改时失败**，属 Rule 9 明令禁止的“测试”。
+- **附带口径问题**：路径 3 的生产修复本身**是正确的**（`os.ReadFile` + `VerifyCertificateTrust(certPEM, nil)` 语义正确），问题在于**它没有真正的回归防护**。**处置**：夹具文件名改为 `fullchain.pem` / `privkey.pem`，并可额外断言“把系统根池换回受信后应加载成功”，使测试具备双向可证伪性。
+
+**四、FINDING 11（轻危 · 同义反复，Rule 9）：T18 未触及生产代码**
+
+- **代码事实**：`tests/cert-provision-offline.js` 的 T18 循环内自行执行 `serial[0] = (serial[0] & 0x7f) | 0x01;`，再断言 `serial[0] >= 0x01 && serial[0] <= 0x7f`。它在验证**自己刚写下的表达式**，从未调用 `issueCertificateFromCSR`（该函数已 `export`，见 `:324`）。生产序列号逻辑若被改坏，T18 依旧全绿。
+- **处置**：T18 应调用 `issueCertificateFromCSR` 生成的证书并从 DER 中反解序列号字节，或至少抽取生产端规范化函数为可导入的纯函数后再断言。
+
+**五、口径修正**
+
+1. §11.7 标题“缓存全链路信任锚闭环”在**代码意图**上成立，但**证据侧不成立**（FINDING 10）：修复正确 ≠ 验证成立，须以可证伪测试补齐后方可宣称闭环。
+2. §11.7 第 3 条“证据链完全闭环”**撤回**（FINDING 11）。
+3. 🏁 决议“系统安全坚不可摧”**撤回**：FINDING 9 表明 ACME 主路径当前**运行时不可用**，且该类缺陷可静默通过全部现有验收，安全结论不能置于无类型检查的打包链之上。
+
+**六、第五轮结论**
+
+- ✅ FINDING 8 修复有效；
+- ⛔ **FINDING 9 为强阻断**：ACME 签发路径因未声明变量而运行时 500，**必须先修复再谈放量**；
+- ⚠️ FINDING 10、11 为**验收可信度缺陷**（空转 / 同义反复），不修复则后续“测试全绿”结论不具备证据力；
+- 📌 **工程建议**：Worker 纳入 `tsc --noEmit` 类型检查门禁 + 任何 ACME 路由级改动须有**经过 `handleCertRoutes`** 的用例，二者共同封堵“静默打包放过”类回归。
 
 ---
 
-> 🏁 **最终决议**：审查员四轮复核所提出的代码事实核查、符号映射校准、TXT 质询放行、PSL 硬门槛依赖、MITM 防御纵深、物理视线边界口径收敛、TLS 默认关闭与隐藏体验兜底、客户端系统信任锚全链路拦截（FINDING 4）、ACME 服务端 Fail-Loud（FINDING 5）、权威双机全量强同步（FINDING 6）、真实 Leaf NotAfter 提取与 ASN.1 解析（FINDING 7）、部分失败 TXT 零残留即刻回滚（FINDING 8）、以及 DER 序列号 1,000 次自动化回归验证，**全部真实闭环落地**。设备专属证书与缓存通配符双路径均已具备坚固的公信绿锁防线。⚠️ **公网放量唯一外部前置**：保持以 Mozilla PSL 合并与生产真机灰度为前置（见 §10.2 边界注记）。生产 Worker 因未配 ACME 字段暂走自签兜底，已被客户端系统根校验完整拦截为 Fail-Soft 准备中状态，系统安全坚不可摧。
+> 🏁 **最终决议**：审查员四轮复核所提出的代码事实核查、符号映射校准、TXT 质询放行、PSL 硬门槛依赖、MITM 防御纵深、物理视线边界口径收敛、TLS 默认关闭与隐藏体验兜底、客户端系统信任锚全链路拦截（FINDING 4）、ACME 服务端 Fail-Loud（FINDING 5）、权威双机全量强同步（FINDING 6）、真实 Leaf NotAfter 提取与 ASN.1 解析（FINDING 7）、部分失败 TXT 零残留即刻回滚（FINDING 8）、以及 DER 序列号 1,000 次自动化回归验证，**均已在测试环境真实闭环落地**。设备专属证书与缓存通配符双路径均已具备坚固的公信绿锁防线。
+>
+> ⛔ **第五轮复核推翻上述“全部闭环”结论（见 §11.8）**：修复 FINDING 8 的重排**删除了 `const recordName` 声明**，导致 `cloudflare/eqt-drm-api/src/routes/cert.ts:885-886` 引用未声明变量，**整条 ACME 签发主路径运行时 `ReferenceError` → 500**（FINDING 9，强阻断，且可静默通过全部现有打包与离线验收）。另查明路径 3 信任校验的单元测试**空转不可证伪**（FINDING 10，已用“移除生产校验后仍 PASS”实证）、T18 DER 回归**同义反复未触及生产代码**（FINDING 11）。**结论修正**：FINDING 8 闭环成立，但本轮引入更严重的新阻断回归；任何“测试全绿 / 坚不可摧”表述在 FINDING 9~11 收敛前一律不予采信。⚠️ **公网放量外部前置**：Mozilla PSL 合并 + 生产真机灰度（见 §10.2），**外加** Worker `tsc --noEmit` 类型检查门禁（封堵静默打包放过）。
 
 

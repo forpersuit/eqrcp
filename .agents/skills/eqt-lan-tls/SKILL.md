@@ -212,6 +212,7 @@ WantedBy=multi-user.target
      - 路径 1 保留给开发者显式 `--cert / --key` 参数注入（私有 CA/自建证书调试需求），**所有磁盘缓存路径（专属设备证书路径 2 与遗留通配符缓存路径 3）100% 强制系统受信任根锚定校验**；
      - 遇到非系统受信任根签发的证书（如生产环境回退自签证书），明确返回 `ErrUntrustedCertificate` 并拒绝落盘与加载；`HasValidCertificateForNode` 返回 `false`，桌面端静默 Fail-Soft，前端维持显示「ℹ️ 局域网 TLS 正在后台准备中（首次启动或离线时将以局域网标准模式保障传输）」，彻底杜绝虚假绿锁！
      - 单元测试提供 `SetCustomRootPoolForTesting` 并发安全注入钩子，并在 `provisioner_test.go` 中对路径 2 和路径 3 自签伪造证书全部执行拒绝断言。
+     - ⚠️ **FINDING 10（中危，未闭环）：路径 3 断言空转不可证伪**。`getCachedCertPaths`（`pkg/cert/cert.go:62-63`）只识别 `fullchain.pem`/`privkey.pem`，而测试夹具写入的是 `cert.pem`/`key.pem`（`provisioner_test.go:640-643`）→ 路径 3 从未进入，断言恒真。**实证**：移除路径 3 的 `VerifyCertificateTrust` 后重跑测试**仍然 PASS**。生产修复本身正确，缺的是真正的回归防护。**处置**：夹具改用 `fullchain.pem`/`privkey.pem`，并补“换回受信根池应加载成功”的双向断言。
   - ✅ **FINDING 5 彻底闭环（ACME 关键配置断言 Fail-Loud）**：
      - `cert.ts` 在启用 ACME 路由时严格断言 `ACME_DNS_API_ENDPOINTS`、`ACME_DNS_API_TOKEN`、`ACME_ACCOUNT_KEY`，缺失任何一项直接返回 HTTP 500（`reason_key: 'acme_misconfigured'`），绝不静默回退自签；
      - `acme.ts` `AcmeClient.create` 强制要求 `accountKeyJWK`（仅测试显式传递 `allowTransientAccountKey: true`），禁止隐式创建瞬态账户避免消耗 Let's Encrypt 账户频控。
@@ -220,9 +221,13 @@ WantedBy=multi-user.target
      - **FINDING 8 闭环**：`setDns01Challenge` 内部维护 `succeededEndpoints` 列表。一旦遭遇局部失败（如 ns1 写入成功但 ns2 报错），在抛出异常阻断前，立即向 `succeededEndpoints` 发起 `clearDns01Challenge` 执行双重即刻回滚，实现“部分失败、瞬间归零”；
      - 调用端前置注册：在调用端将 `cleanupTasks.push(...)` 移至 `await setDns01Challenge` 之前登记，确保无论是主动抛错还是超时中断，外层 `finally` 均有兜底清理保护；
      - 离线回归测试（`tests/cert-provision-offline.js` T17.1 & T17.2）模拟部分失败，断言抛错的同时 100% 派发精准 DELETE 请求完成释放。
+     - ⛔ **同批重排引入 FINDING 9（强阻断，未闭环）**：本次把 `cleanupTasks.push` 前置于 `await setDns01Challenge` 时，**删除了 `const recordName = \`_acme-challenge.${cleanNode}.direct.eqt.net.im.\`` 声明行却保留使用**，导致 `src/routes/cert.ts:885-886` 引用未声明变量，**整条 ACME 签发路径运行时 `ReferenceError` → 500**。该缺陷可静默通过全部现有验收：esbuild 打包不做类型检查（实测退出码 0，产物保留自由变量）、`package.json` 无 `tsc`/typecheck 脚本、离线用例均未经由 `handleCertRoutes` 的 ACME 分支。**处置**：补回 `const recordName`；`package.json` 增设 `"typecheck": "tsc --noEmit"` 并纳入验收门禁。**教训：任何 ACME 路由级改动必须有一条真正走 `handleCertRoutes` 的用例，仅单测子函数不算覆盖。**
   - ✅ **FINDING 7 彻底闭环（ASN.1 Leaf NotAfter 真实时间提取与审计归档）**：
      - 纯 Web Crypto/ASN.1 解析器 `parseCertificateExpiry` 精确提取 X.509 证书 TBS 中的 `validity.notAfter`（全面支持 UTCTime 与 GeneralizedTime），将真实有效截止时间存入 D1 数据库；
      - 同步修复 `issueCertificateFromCSR` 生成 16 字节随机序列号时首字节可能为 `0x00` 导致 OpenSSL 报错 `illegal padding` 的隐蔽 DER 编码边界，首字节规范收敛至 `[0x01, 0x7f]`（清最高位后强制置 `0x01`，恒正非零）；
      - 离线回归测试（`tests/cert-provision-offline.js` T18）通过 1,000 次循环断言验证正整数规范与 DER INTEGER 合规性，提供完整可复现证据链。
+     - ⚠️ **FINDING 11（轻危，未闭环）：T18 同义反复，未触及生产代码**。循环内自行执行 `serial[0] = (serial[0] & 0x7f) | 0x01` 再断言其结果，验证的是刚刚写下的表达式自身，**从未调用生产函数 `issueCertificateFromCSR`**（已 export，`cert.ts:324`）；生产逻辑若被改坏 T18 依旧全绿。**处置**：改为调用 `issueCertificateFromCSR` 产出证书后从 DER 反解序列号，或抽纯函数后断言。
 
 > **审查红线（第四轮沉淀 · Rule 9/12）**：① 验收声明必须锚定**仓库内可复现证据**（脚本/CI/结果文件），禁止以“N 次实测”“100% 自洽”等无归档数字充当验收；② 加固一个 Fail-Loud 分支时，必须同时审计其**资源清理路径是否被一并跳过**（FINDING 8 的即刻回滚 + 清理前置登记模式成为标准）；③ 表述“全链路/彻底”前，须逐条枚举实际调用路径，确认无旁路（磁盘缓存路径 2 与路径 3 已全部严密校验）。
+>
+> **审查红线（第五轮沉淀 · Rule 9/12/13）**：④ **代码重排（reorder）与删除声明必须同步全文检索被移动符号的所有引用**——FINDING 9 即“前置 push、删掉 `const recordName`”造成的运行时 500，且可静默通过打包与全部离线用例；⑤ **“测试全绿”≠“被测代码被执行”**：新增断言必须验证其**可证伪**（临时移除被测生产逻辑，测试必须转红），否则为空转（FINDING 10）；⑥ **测试不得复述被测公式**：在被测函数之外重抄一遍算法再断言其结果属同义反复（FINDING 11），必须调用生产代码路径；⑦ Worker/TS 交付须具备 `tsc --noEmit` 类型门禁——esbuild 打包默认不做类型检查，未声明标识符会被原样放行。
