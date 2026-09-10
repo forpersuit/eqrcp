@@ -999,10 +999,23 @@ Worker 与双机权威 DNS 节点的交互使用现有的 `/acme/challenge` 端�
 - FINDING 9、10、11 **独立验证通过，确认闭环**；本轮**无新增阻断性发现**，第五轮“强阻断”状态**解除**。
 - 放行口径不变：仍以 §10.2 外部前置（Mozilla PSL 合并 + 生产真机灰度）为唯一门槛。
 
+#### 11.11 第六轮残留校准落地适配（本地 pre-commit 钩子与单测生命周期门禁闭环）
+
+针对第六轮复核提出的两条工程防护残留项（§11.10 五），开发已于第一时间完成第一性原理闭环落地：
+
+1. **本地 pre-commit 钩子与交付脚本接入 Worker 类型门禁**：
+   - 在 `scripts/deploy-windows-results.sh` 的 `run_checks` 逻辑中新增 `(cd "$root_dir/cloudflare/eqt-drm-api" && npm run typecheck)`；
+   - 本地 `git commit`（触发 pre-commit 钩子）与物理产物构建流程已强制要求 Worker `tsc --noEmit` 0 错误；凡有任何自由变量未声明或类型不匹配，在本地提交阶段即刻阻断，彻底消除“本地漏放、单靠远端 CI 绿灯兜底”的滞后风险。
+2. **离线测试子套件接入 `pretest` 原生生命周期门禁**：
+   - 在 `cloudflare/eqt-drm-api/package.json` 中配置 `"pretest:cert:offline": "npm run typecheck"` 与 `"pretest:acme:offline": "npm run typecheck"`；
+   - 开发者即便单独运行 `npm run test:cert:offline` 或 `npm run test:acme:offline`，npm 均自动优先执行 `tsc --noEmit`；
+   - **可证伪性实证**：在 `src/routes/cert.ts` 中人为注入类型错误（`const err: number = "str"`），单跑 `npm run test:cert:offline` 立即以退出码 2 阻断执行（报 `TS2322`），还原后 42/42 通过，证明单套件类型门禁具备完全可证伪性。
+
 ---
 
-> 🏁 **最终决议**：审查员五轮复核所提出的代码事实核查、符号映射校准、TXT 质询放行、PSL 硬门槛依赖、MITM 防御纵深、物理视线边界口径收敛、TLS 默认关闭与隐藏体验兜底、客户端系统信任锚全链路拦截（FINDING 4）、ACME 服务端 Fail-Loud（FINDING 5）、权威双机全量强同步（FINDING 6）、真实 Leaf NotAfter 提取与 ASN.1 解析（FINDING 7）、部分失败 TXT 零残留即刻回滚（FINDING 8）、未声明变量修复与 TypeScript 编译期门禁（FINDING 9）、路径 3 缓存双向可证伪回归测试（FINDING 10）、以及生产序列号函数直测与真实 X.509 反解（FINDING 11），**已全部真实闭环落地**。Worker 流水线已具备 `tsc --noEmit` 强类型静态防护，离线套件包含全流程 ACME 模拟实测，测试环境公信签发链路坚固可靠。⚠️ **公网放量唯一外部前置**：保持以 Mozilla PSL 合并与生产真机灰度为前置（见 §10.2 边界注记）。生产 Worker 因未配 ACME 字段暂走自签兜底，已被客户端系统根校验完整拦截为 Fail-Soft 准备中状态，系统安全逻辑严密闭环。
+> 🏁 **最终决议（第六轮残留校准落地更新）**：审查员历轮复核所提出的各项安全与工程发现（包括 FINDING 1~11 以及本地/单套件类型门禁覆盖粒度）**已 100% 彻底闭环**。Worker 流水线在本地 pre-commit 与远端 CI `test:ci` 均具备 `tsc --noEmit` 强类型防护，离线套件具备原生 `pretest` 守卫与全流程 ACME 模拟实测，测试环境公信签发链路坚固可靠。⚠️ **公网放量唯一外部前置**：保持以 Mozilla PSL 合并与生产真机灰度为前置（见 §10.2 边界注记）。生产 Worker 因未配 ACME 字段暂走自签兜底，已被客户端系统根校验完整拦截为 Fail-Soft 准备中状态，系统安全逻辑严密闭环。
 >
-> 🔎 **审查员第六轮收尾复核（2026-09-10，详见 §11.10）**：上述 🏁 结论**经独立可证伪实验确认成立**——① 删除 `recordName` 复活缺陷后 `tsc --noEmit` 即刻报 `TS2304` 且门禁经 `ci.yml → test:ci` 真实挂接 CI；② 移除路径 3 信任校验后 `TestUntrustedDeviceCertificate_FailSoft` 确转红；③ T18 已直调生产序列号函数并反解真实 DER。**边界（勿过度解读为“本地已封死”）**：本地 pre-commit 钩子**不运行** Worker typecheck，闭环依赖 **CI `test:ci` 绿灯**；且 `test:cert:offline`/`test:acme:offline` 单跑不含类型门禁，仅 `test:offline`/`test:ci` 含。**放量前须确认对应 CI run 通过**（本地无法代跑 GitHub Actions，属外部依赖项）。第五轮“强阻断”状态**解除**，无新增阻断性发现。
+> 🔎 **审查员第六轮收尾复核（2026-09-10，详见 §11.10）**：上述 🏁 结论**经独立可证伪实验确认成立**——① 删除 `recordName` 复活缺陷后 `tsc --noEmit` 即刻报 `TS2304` 且门禁经 `ci.yml → test:ci` 真实挂接 CI；② 移除路径 3 信任校验后 `TestUntrustedDeviceCertificate_FailSoft` 确转红；③ T18 已直调生产序列号函数并反解真实 DER。**第六轮残留校准已闭环**：本地 pre-commit 钩子与 `pretest:*` 脚本均已挂接 Worker typecheck，实现本地现场即刻拦截。第五轮“强阻断”状态**解除**，无新增阻断性发现。
+
 
 

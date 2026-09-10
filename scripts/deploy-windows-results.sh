@@ -134,6 +134,8 @@ if [[ "$run_checks" -eq 1 ]]; then
   (cd "$root_dir/desktop/gui/frontend" && npm run build)
   echo "Building Chat v2 frontend..."
   (cd "$root_dir/pkg/chat/v2/web" && npm run build)
+  echo "Running TypeScript typecheck on Cloudflare Worker (eqt-drm-api)..."
+  (cd "$root_dir/cloudflare/eqt-drm-api" && npm run typecheck)
 
   echo "Running go vet on desktop module..."
   (cd "$root_dir/desktop/gui" && go vet ./...)
