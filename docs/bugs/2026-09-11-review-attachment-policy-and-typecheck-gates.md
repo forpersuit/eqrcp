@@ -182,3 +182,31 @@ const isCancelledFile = (file|image) && ((ulTx && ulTx.state==='cancelled') || (
 | **L5** | 技能文档分割线粘连格式问题（提示） | **格式失误，立即修正**。粘连会导致 `---` 被当作字面文本渲染，且缺少标题前置空行。 | 修复 `.agents/skills/eqt-ux/SKILL.md` 中第 18 节前置的 `---` 为独立空行段落。 | Markdown 格式对齐，符合渲染规范。 |
 | **版本双面** | 版本偏斜导致补偿提交（低危） | **完全合理**。此前因 `wails.json` 在 pre-commit 执行中修改但未被暂存，导致 commit 遗漏。 | 在 `scripts/deploy-windows-results.sh` 同步脚本中追加 `git add desktop/gui/wails.json` 自动暂存防护。 | 任意修改 `version.go` 后触发 commit 时，`wails.json` 自动联动同次提交，消除补偿提交。 |
 
+---
+
+## 八、审查员第七轮独立复核（对 `e8af2a2a`，2026-09-11，Rule 9/12）
+
+**方法**：不采信提交信息与 §七 自述，全部以**源码事实 + 可证伪探针**锚定。
+
+### 8.1 已确认闭环（真闭环，探针转红为证）
+
+| 项 | 独立验证动作与结果 | 判定 |
+|---|---|---|
+| **L1 单测门禁** | ① 本地 `npm test` 8 个套件全绿、`EXIT=0`；② 探针 A（把 `isFileSendCancelled` 的 `return !!msg.uploading;` 改为 `return false;`）→ 断言 "sender cancelled while uploading…" 抛错、`EXIT=1`；③ 探针 B（把 `resolveDownloadTransferId` 前缀 `dl-` 改 `dlx-`）→ 断言 "default peer resolves to desktop" 抛错、`EXIT=1`；④ `ci.yml:28/62/104` 三处插入 `npm test`；⑤ `deploy-windows-results.sh:139` 改为 `npm test && npm run build`。 | ✅ **真闭环**，门禁可证伪 |
+| **L4 冗余参数** | `attachmentPolicy.ts` 形参列表已减为 `(msg, mine, ulTx)`，`MessageList.svelte:1020` 同步为 3 参调用，`npm run check`（svelte-check）0 error。 | ✅ **闭环** |
+| **L5 Markdown 粘连** | `.agents/skills/eqt-ux/SKILL.md:337-340` 已将 `…统一注册。---` 拆为独立空行段落 + 独立 `---`。 | ✅ **闭环** |
+
+### 8.2 复核后仍存在的残留（新增 R1–R4，均非阻断）
+
+| 编号 | 等级 | 事实（file:line 锚定） | 影响与建议 |
+|---|---|---|---|
+| **R1** | 中低 | `resolveDownloadTransferId` 契约函数**仅接入 1/13 处调用点**。全仓 `'dl-' + messageId + '-' + peer` 手写副本共 12 处：`App.svelte:329,348,354,379,386,397,404,413,1335,1389`、`MessageList.svelte:441,1009`、`websocket.ts:445`。§七 声称的“统一契约规范”与实际接入面不符。 | 契约漂移风险**降低但未消除**——改格式仍将漏改 12 处。建议：要么把余下 12 处全部改用该函数，要么将 §七 表述收敛为“新增契约函数并先行接入 1 处，余量待清理”。 |
+| **R2** | 中低 | §七 称 Case 9 “对批量取消场景实施强断言锁定”，但 Case 9 仅做两件事：(a) `batchMsgIds.map(resolveDownloadTransferId)`（契约函数，与 Case 7/8 重复）；(b) 循环断言 `isFileSendCancelled(m,false,undefined)===false`——该断言在 `ulTx` 为 `undefined` 时**必然为真**，与 `download-batch-cancelled` 处理逻辑（`App.svelte:373-391`）无任何耦合。**删除整个批量取消分支，Case 9 仍全绿**（同义反复，Rule 9）。此外宿主侧 `desktop/gui/frontend` **无任何 test 脚本**（package.json 仅 dev/build/preview），`main.js` 的桥接发送端（`:333,:369`）零覆盖。 | 批量取消语义目前是**“已声明、未锁定”**。建议：断言应直接覆盖 `download-batch-cancelled` 分支的可见效果（如经 `chatActions` 桩校验 `updateTransfer` 收到 `state:'cancelled'` 且气泡未被移除），而非重跑纯函数恒真式；并在正文澄清宿主侧无门禁。 |
+| **R3** | 提示 | `deploy-windows-results.sh:141-145` 将 Worker 类型门禁改为**条件执行**：`node_modules` 不存在时打印 Notice 并**跳过** typecheck。这使 `eqt-lan-tls` 审查红线 ⑧ 中“三层无缝闭环 / 任何一处改动均为即刻可证伪强约束”的表述对**层①（本地 pre-commit）失真**——实际为“两层硬门禁（pretest 单套件 + CI `test:ci`）+ 一层条件门禁”。 | 非功能缺陷（CI 兜底仍在），但**声明须与事实对齐**。已同步修正红线 ⑧ 表述；建议保留 Notice 以便察觉降级。 |
+| **R4** | 提示 | `deploy-windows-results.sh:125-127` 在同步 `wails.json` 后追加 `git add …/wails.json`。该脚本同时用于**非提交场景的手动部署**，届时会**隐式改动 git 索引**（构建脚本耦合 VCS 状态）。 | 低风险（暂存内容仅为版本同步结果）。建议将 `git add` 限定在 pre-commit 上下文（如由钩子脚本负责暂存），保持“构建”与“暂存”职责分离。 |
+
+### 8.3 复核结论
+
+`e8af2a2a` 对 **L1 / L4 / L5 的修复经独立实测确认真实闭环**，门禁具备可证伪性（双探针均转红）；**L2 / L3 属“部分闭环”**：契约函数已抽出且可证伪，但接入面与测试覆盖均远小于 §七 自述，R1/R2 即为该落差的客观量化。R3/R4 为表述与职责边界问题。**五项均不构成功能阻断，放行结论不变**；R1/R2 建议纳入下一轮适配。
+
+

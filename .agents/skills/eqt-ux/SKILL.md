@@ -358,6 +358,10 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
 
 ## 19. 前端单测门禁接线红线 (Frontend Unit-Test Gate Wiring)
 
-- **事实**：`pkg/chat/v2/web/package.json` 的 `test` 脚本以链式 `node --experimental-strip-types …` 运行全部 `*.test.ts`；但 `ci.yml` 三处 web 作业（`:25/:28-29`、`:58/:61-62`、`:99/:102-103`）仅执行 `npm ci && npm run check && npm run build`，`scripts/deploy-windows-results.sh:136`（pre-commit 路径）亦仅 `npm run build`——**均不执行 `npm test`**。
+- **事实（2026-09-11 更新）**：`pkg/chat/v2/web/package.json` 的 `test` 脚本以链式 `node --experimental-strip-types …` 运行 8 个 `*.test.ts`；该脚本**已接入自动化门禁**——`ci.yml` 三处 web 作业均执行 `npm ci && npm test && npm run check && npm run build`（`:25-30`、`:59-64`、`:101-106`），`scripts/deploy-windows-results.sh:139`（pre-commit 路径）执行 `npm test && npm run build`。经独立探针验证：破坏生产逻辑（`return !!msg.uploading` → `return false`；契约前缀 `dl-` → `dlx-`）均使 `npm test` 转红（`EXIT=1`）。
 - **红线**：新增 `*.test.ts` 时，**不得**以“已加入 `npm test` 脚本链”宣称获得回归防护。必须确认存在**真实调用 `npm test` 的自动化门禁**（CI 作业或 pre-commit 脚本）；否则该测试仅在开发者手动执行时生效，防护力为零。
+- **覆盖边界（勿过度承诺）**：
+  - 门禁**仅覆盖 `pkg/chat/v2/web`**；`desktop/gui/frontend`（`main.js` 桥接宿主）**无任何 test 脚本**（package.json 仅有 dev/build/preview），其 `postMessage` 发送端零覆盖。
+  - 断言必须触达真实分支：仅对纯函数传入 `undefined` 再断言 `===false` 属**恒真式**（同义反复，Rule 9），无法锁定任何 UI 行为；锁定某分支须驱动该分支的可见效果（如桩化 `chatActions` 校验副作用）。
+  - 抽出“契约函数”后须**全量收敛调用点**：`resolveDownloadTransferId` 目前仅接入 1/13 处，`'dl-' + messageId + '-' + peer` 仍手写 12 处（`App.svelte:329,348,354,379,386,397,404,413,1335,1389`、`MessageList.svelte:441,1009`、`websocket.ts:445`），漂移风险未消除。
 - **通用判据**（与 `eqt-lan-tls` 审查红线 ⑧ 同源）：任何“门禁 / 校验”声明，须锚定到**会真实运行的流水线调用点（文件:行）**，而非脚本定义处。

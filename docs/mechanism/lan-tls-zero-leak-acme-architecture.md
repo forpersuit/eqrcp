@@ -20,6 +20,8 @@
 > **⑥ 第五轮落地复核（2026-09-10，详见 §11.8）**：开发提交 `c73862a2` 修复 FINDING 8 并补齐路径 3 信任校验。复核结论：**FINDING 8 的即刻回滚修复有效**（T17 为真实覆盖），但**本次重排序删除了 `const recordName` 声明**，导致 `cert.ts:885-886` 引用未声明变量 → **整个 ACME 签发路径运行时 `ReferenceError` 500**，**这是比 FINDING 8 更严重的全新阻断回归（FINDING 9）**；另发现路径 3 的单元测试**空转不可证伪（FINDING 10）**、T18 DER 回归**同义反复未触及生产代码（FINDING 11）**。详见 §11.8。
 >
 > **⑦ 第六轮落地复核（2026-09-10，详见 §11.10）**：开发提交 `19e6eff6` 修复 FINDING 9-11。复核**以可证伪实验独立复验**（不采信自述）：删除 `recordName` → `tsc --noEmit` 即刻报 `TS2304`，且门禁经 `ci.yml → test:ci` 真实挂接 CI；移除路径 3 校验 → `TestUntrustedDeviceCertificate_FailSoft` 确转红；T18 已直调生产序列号函数并反解真实 DER。套件 `test:cert:offline` 42/0、`test:acme:offline` 13/0。**FINDING 9-11 全部确认闭环，第五轮“强阻断”状态解除，无新增阻断性发现**。边界：本地 pre-commit 不跑 Worker typecheck，闭环依赖 CI 绿灯。详见 §11.10。
+>
+> **⑧ 第七轮层级粒度校准（2026-09-11，详见 §11.12）**：开发提交 `e8af2a2a` 将 `deploy-windows-results.sh` 的本地 Worker typecheck 改为**条件执行**（`node_modules` 缺失时打印 Notice 并跳过）。复核确认：CI `test:ci` 兜底未变，**LAN-TLS 安全结论与放行口径不变**；但 §11.11 与红线 ⑧ 中“本地提交阶段即刻阻断”属**过度承诺**，实际层级为“两层硬门禁 + 一层条件门禁”，已同步校准表述。前端附件策略域的 R1/R2 残留见 `docs/bugs/2026-09-11-review-attachment-policy-and-typecheck-gates.md` §八。
 
 ---
 
@@ -1016,6 +1018,22 @@ Worker 与双机权威 DNS 节点的交互使用现有的 `/acme/challenge` 端�
 > 🏁 **最终决议（第六轮残留校准落地更新）**：审查员历轮复核所提出的各项安全与工程发现（包括 FINDING 1~11 以及本地/单套件类型门禁覆盖粒度）**已 100% 彻底闭环**。Worker 流水线在本地 pre-commit 与远端 CI `test:ci` 均具备 `tsc --noEmit` 强类型防护，离线套件具备原生 `pretest` 守卫与全流程 ACME 模拟实测，测试环境公信签发链路坚固可靠。⚠️ **公网放量唯一外部前置**：保持以 Mozilla PSL 合并与生产真机灰度为前置（见 §10.2 边界注记）。生产 Worker 因未配 ACME 字段暂走自签兜底，已被客户端系统根校验完整拦截为 Fail-Soft 准备中状态，系统安全逻辑严密闭环。
 >
 > 🔎 **审查员第六轮收尾复核（2026-09-10，详见 §11.10）**：上述 🏁 结论**经独立可证伪实验确认成立**——① 删除 `recordName` 复活缺陷后 `tsc --noEmit` 即刻报 `TS2304` 且门禁经 `ci.yml → test:ci` 真实挂接 CI；② 移除路径 3 信任校验后 `TestUntrustedDeviceCertificate_FailSoft` 确转红；③ T18 已直调生产序列号函数并反解真实 DER。**第六轮残留校准已闭环**：本地 pre-commit 钩子与 `pretest:*` 脚本均已挂接 Worker typecheck，实现本地现场即刻拦截。第五轮“强阻断”状态**解除**，无新增阻断性发现。
+
+#### 11.12 第七轮复核：类型门禁“层级粒度”表述校准（对 `e8af2a2a`）
+
+开发提交 `e8af2a2a` 在适配前端附件策略审查意见的同时，对 §11.11 所述门禁做了一处**结构性调整**，复核结论如下：
+
+1. **事实变更（源码锚定）**：`scripts/deploy-windows-results.sh:141-145` 现将 Worker typecheck 改为**条件执行**——
+   ```bash
+   if [[ -d "$root_dir/cloudflare/eqt-drm-api/node_modules" ]]; then
+     (cd "$root_dir/cloudflare/eqt-drm-api" && npm run typecheck)
+   else
+     echo "Notice: cloudflare/eqt-drm-api/node_modules not found, skipping local typecheck (CI will enforce)."
+   fi
+   ```
+2. **表述校准**：§11.11 第 1 条“在本地提交阶段即刻阻断，彻底消除本地漏放风险”**已不再无条件成立**——当本地未安装 `node_modules` 时，该层**降级为 Notice 并跳过**。故当前实际门禁层级为 **“两层硬门禁（`pretest:*` 单套件 + CI `test:ci`）+ 一层条件门禁（本地 pre-commit）”**，而非三层等价硬门禁。同步已修正 `.agents/skills/eqt-lan-tls/SKILL.md` 审查红线 ⑧。
+3. **风险评估**：**不影响公信签发链路安全结论**。理由：CI `drm-api-test` 作业的 `npm run test:ci`（链首 `typecheck`）**未受本次改动影响**，远端硬门禁兜底仍在；条件跳过仅为避免无依赖环境下阻塞一切本地提交的工程折衷，且跳过时打印 Notice 可被察觉（非静默）。放行口径与 §10.2 外部前置均不变。
+4. **本项与 LAN-TLS 无功能耦合**：`e8af2a2a` 余下改动（`attachmentPolicy` 契约函数、聊天气泡保留、`pkg/chat/v2/web` 单测门禁、`wails.json` 暂存）属前端聊天域，详见 `docs/bugs/2026-09-11-review-attachment-policy-and-typecheck-gates.md` §八。
 
 
 
