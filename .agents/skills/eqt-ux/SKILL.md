@@ -351,3 +351,11 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
   - **正确行为规范**：
     - 下载取消或失败时，文件气泡卡片必须 100% 完整保留，副标题仅作状态文本标注（如 `· 已取消`、`· 下载失败`）；
     - 气泡交互菜单中提供“下载文件”或“重新下载”入口，允许用户随时再次发起下载，杜绝因关闭保存窗口而导致气泡凭空消失的异常体验。
+
+---
+
+## 19. 前端单测门禁接线红线 (Frontend Unit-Test Gate Wiring)
+
+- **事实**：`pkg/chat/v2/web/package.json` 的 `test` 脚本以链式 `node --experimental-strip-types …` 运行全部 `*.test.ts`；但 `ci.yml` 三处 web 作业（`:25/:28-29`、`:58/:61-62`、`:99/:102-103`）仅执行 `npm ci && npm run check && npm run build`，`scripts/deploy-windows-results.sh:136`（pre-commit 路径）亦仅 `npm run build`——**均不执行 `npm test`**。
+- **红线**：新增 `*.test.ts` 时，**不得**以“已加入 `npm test` 脚本链”宣称获得回归防护。必须确认存在**真实调用 `npm test` 的自动化门禁**（CI 作业或 pre-commit 脚本）；否则该测试仅在开发者手动执行时生效，防护力为零。
+- **通用判据**（与 `eqt-lan-tls` 审查红线 ⑧ 同源）：任何“门禁 / 校验”声明，须锚定到**会真实运行的流水线调用点（文件:行）**，而非脚本定义处。
