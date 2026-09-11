@@ -22,9 +22,14 @@ export function base64UrlEncode(buf: Uint8Array | string): string {
   return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-export function base64UrlDecode(str: string): Uint8Array {
+export function normalizeBase64Url(str: string): string {
   let b64 = str.replace(/-/g, '+').replace(/_/g, '/');
   while (b64.length % 4) b64 += '=';
+  return b64;
+}
+
+export function base64UrlDecode(str: string): Uint8Array {
+  const b64 = normalizeBase64Url(str);
   const binary = typeof Buffer !== 'undefined' ? Buffer.from(b64, 'base64').toString('binary') : atob(b64);
   const out = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);

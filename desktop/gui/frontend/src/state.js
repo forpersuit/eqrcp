@@ -57,4 +57,6 @@ export const state = {
     pendingCrashDump: false,
     crashDetail: null,
     crashAcknowledged: false,
+    tlsKeyMismatch: false,
+    tlsKeyMismatchMsg: '',
 };

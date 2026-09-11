@@ -141,6 +141,27 @@ func TestLoadOrGenerateDeviceKey(t *testing.T) {
 	if !strings.Contains(logBuf.String(), "[WARNING] Private key at") || !strings.Contains(logBuf.String(), "is missing while fullchain.pem exists") {
 		t.Errorf("expected warning in log for missing key when certificate exists, got: %s", logBuf.String())
 	}
+	logBuf.Reset()
+
+	// 5. Read error (non-NotExist error: permission denied triggers WARNING)
+	if err := os.Chmod(keyPath, 0000); err == nil {
+		// Verify if chmod 0000 makes it unreadable for current process
+		if _, testReadErr := os.ReadFile(keyPath); testReadErr != nil {
+			priv5, err := LoadOrGenerateDeviceKey(nodeID)
+			_ = os.Chmod(keyPath, 0600) // Restore for teardown
+			if err != nil {
+				t.Fatalf("unexpected failure on unreadable key: %v", err)
+			}
+			if priv5 == nil {
+				t.Fatalf("expected valid key to be generated")
+			}
+			if !strings.Contains(logBuf.String(), "[WARNING] Failed to read private key at") {
+				t.Errorf("expected warning in log for read error, got: %s", logBuf.String())
+			}
+		} else {
+			_ = os.Chmod(keyPath, 0600)
+		}
+	}
 }
 
 func TestGenerateDeviceCSR(t *testing.T) {

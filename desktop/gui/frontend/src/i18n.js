@@ -5,6 +5,7 @@ const translations = {
         "tls_cert_not_detected": "未检测到本地有效证书缓存，无证书时将自动降级为 HTTP 传输。",
         "tls_cert_preparing": "局域网 TLS 正在后台准备中（首次启动或离线时将以局域网标准模式保障传输）",
         "tls_cert_ready": "官方公信 TLS 已就绪 (单机专属安全绿锁)",
+        "tls_key_mismatch_msg": "本地证书私钥与云端设备登记不一致，请重置密钥绑定",
         "enable_tls": "局域网传输加密 (LAN-TLS)",
         "enable_tls_desc": "启用 Let's Encrypt 官方通配符证书与 TLS 加密，防局域网嗅探、地址栏安全绿锁。",
         "block_proxy": "屏蔽系统代理 (仅限直连)",
@@ -451,6 +452,7 @@ const translations = {
         "tls_cert_not_detected": "No valid local certificate cache detected. Transfers will gracefully fallback to standard HTTP.",
         "tls_cert_preparing": "LAN-TLS certificate is preparing in background (standard HTTP is used while offline or initializing).",
         "tls_cert_ready": "Official WebPKI TLS Ready (Per-device secure green lock)",
+        "tls_key_mismatch_msg": "Local certificate private key does not match cloud registration. Please reset key binding.",
         "enable_tls": "LAN-TLS Encryption",
         "enable_tls_desc": "Encrypt local transfers using Let's Encrypt wildcard certificate & TLS (anti-sniffing, secure green lock).",
         "block_proxy": "Block System Proxy (Direct Only)",
@@ -894,6 +896,7 @@ const translations = {
         "crash_prefill_notice": "A previous crash was detected. Crash info has been pre-filled below. Submitting feedback will also upload the crash report."
     },
     "ja": {
+        "tls_key_mismatch_msg": "ローカル証明書の秘密鍵がクラウドアカウントと一致しません。キーバインドをリセットしてください",
         "enable_tls": "LAN-TLS 暗号化",
         "enable_tls_desc": "Let's Encrypt 公式ワイルドカード証明書と TLS でローカル転送を暗号化します（盗聴防止、安全な緑の鍵）。",
         "block_proxy": "システムプロキシをブロック (直接接続のみ)",
@@ -1324,6 +1327,7 @@ const translations = {
         "year_unit": "年"
     },
     "ko": {
+        "tls_key_mismatch_msg": "로컬 인증서 개인 키가 클라우드 등록과 일치하지 않습니다. 키 바인딩을 재설정하십시오.",
         "enable_tls": "LAN-TLS 전송 암호화",
         "enable_tls_desc": "Let's Encrypt 공식 와일드카드 인증서와 TLS로 로컬 전송을 암호화합니다(스니핑 방지, 보안 녹색 자물쇠).",
         "block_proxy": "시스템 프록시 차단 (직접 연결 전용)",
@@ -1754,6 +1758,7 @@ const translations = {
         "year_unit": "년"
     },
     "es": {
+        "tls_key_mismatch_msg": "La clave privada del certificado local no coincide con el registro en la nube. Restablezca la vinculación de clave.",
         "enable_tls": "Cifrado LAN-TLS",
         "enable_tls_desc": "Cifra las transferencias locales con certificados Let's Encrypt y TLS (seguridad, candado verde).",
         "block_proxy": "Bloquear proxy del sistema (Solo directo)",
@@ -2184,6 +2189,7 @@ const translations = {
         "year_unit": "año"
     },
     "de": {
+        "tls_key_mismatch_msg": "Der private Schlüssel des lokalen Zertifikats stimmt nicht mit der Cloud-Registrierung überein. Bitte Schlüsselbindung zurücksetzen.",
         "enable_tls": "LAN-TLS-Verschlüsselung",
         "enable_tls_desc": "Verschlüsselt lokale Übertragungen mit Let's Encrypt-Zertifikaten und TLS (Abhörschutz, grünes Schloss).",
         "block_proxy": "System-Proxy blockieren (Nur Direktverbindung)",
@@ -2614,6 +2620,7 @@ const translations = {
         "year_unit": "Jahr"
     },
     "fr": {
+        "tls_key_mismatch_msg": "La clé privée du certificat local ne correspond pas à l'enregistrement cloud. Veuillez réinitialiser la liaison de clé.",
         "enable_tls": "Chiffrement LAN-TLS",
         "enable_tls_desc": "Chiffre les transferts locaux avec les certificats Let's Encrypt et TLS (anti-reniflage, cadenas vert).",
         "block_proxy": "Bloquer le proxy système (Connexion directe)",

@@ -16,6 +16,7 @@ if (!fs.existsSync(compiledPath)) {
 const {
   base64UrlEncode,
   base64UrlDecode,
+  normalizeBase64Url,
   computeJWKThumbprint,
   computeDns01ChallengeValue,
   computeExternalAccountBinding,
@@ -320,6 +321,10 @@ async function runTests() {
       global.Buffer = origBuffer;
     }
     assert(atobSuccess, 'T4.6b: base64UrlDecode via atob fallback strictly normalizes -_ and decodes correctly in non-Buffer environment');
+
+    // T4.6c: normalizeBase64Url unit lock: strictly replaces URL-safe -_ characters and appends missing '=' padding (falsifiable)
+    const normalized = normalizeBase64Url('--_-_Q');
+    assert(normalized === '++/+/Q==', 'T4.6c: normalizeBase64Url strictly normalizes -_ to +/ and appends missing == padding');
 
     // T4.7: Wire test: AcmeClient with eab option injects externalAccountBinding into newAccount payload
     let capturedAccountPayload = null;

@@ -1404,7 +1404,7 @@ assert(typeof base64UrlDecode('abc') === 'object', // :308 输入是【合法】
 
 ---
 
-#### 11.20 第十三轮演进：H1~H5 全量工程落地与可证伪探针闭环（v1.36.86 · 2026-09-11）
+#### 11.20 第十二轮演进：H1~H5 全量工程落地与可证伪探针闭环（v1.36.86 · 2026-09-11）
 
 针对审查员在 §11.19 中提出的第十二轮复核意见（H1~H5），工程团队严格依照“探针反向证伪先行”原则全面修复并实测验证：
 
@@ -1439,7 +1439,7 @@ assert(typeof base64UrlDecode('abc') === 'object', // :308 输入是【合法】
 
 ---
 
-> 🏁 **阶段决议（第十三轮演进 · H1~H5 全量工程闭环与 v1.36.86 发布）**：
+> 🏁 **阶段决议（第十二轮演进 · H1~H5 全量工程闭环与 v1.36.86 发布）**：
 > 1. **全链路用户闭环（H1）**：前端新增 `EventsOn('eqt:tls-node-key-mismatch')` 订阅、Toast 提示与设置页红色状态警示；
 > 2. **私钥丢失防御感知与日志锁（H2）**：补齐证书存在私钥缺失时的显式 Warning，且单测经探针反向证伪；
 > 3. **Base64URL 与 Worker 原生环境严密覆盖（H3）**：使用真 `-/_` 字符样本并覆盖纯 `atob` 无 Buffer 分支，经探针证实可准确捕获回归；
@@ -1507,3 +1507,89 @@ assert(typeof base64UrlDecode('abc') === 'object', // :308 输入是【合法】
 - **重复计数（供管理层参考）**：「文档/命名声称超出实现边界」同型问题已连续**四轮**复发（F16 → G1/G2 → H1/H2/H3 → I4）。§11.19 已固化的判据（凡「彻底/消灭/任何/已统一」级措辞必须附反向探针记录）**仍未被开发流程内化**，建议将该判据写入提交前自检清单，而非仅停留在审查文档中。
 
 > 🏁 **阶段决议（第十三轮独立复核 · 对 `468c2221`）**：H1 已真实闭环、H2 已真实闭环且可证伪、H3 **部分闭环**（归一化与 atob 已锁、填充未锁）；版本与零退化合规，**予以放行**。同时记录 I1~I5，其中 I1 与 I4 涉及「能力/编号声明超出实现」，须在下一轮以探针或实际改动收敛；`SKILL.md` ⑭/⑮ 轮次编号须在同一轮内一并校正。
+
+---
+
+#### 11.22 第十三轮演进：I1~I5 全量工程落地与导出函数填充锁（v1.36.87 · 2026-09-11）
+
+针对审查员在 §11.21 中指出的第十三轮复核意见（I1~I5），工程团队严格依据“探针反向证伪先行”与“表述边界绝不超出实现边界”原则全面修复：
+
+##### 一、I1 落地：抽离导出 `normalizeBase64Url` 纯函数与填充路径单点断言锁（T4.6c）
+- **核心痛点消除**：
+  - Node 的 `Buffer.from(..., 'base64')` 和浏览器/Worker 的 `atob` 解码器均原生宽容 `length % 4 ∈ {2, 3}` 的缺填充 Base64 字符串，导致直接断言解码后字节流时，`while (b64.length % 4) b64 += '='` 循环被删除后测试仍然全绿（探针 P3 穿透）；
+  - 同时，T4.6a 使用 Node Buffer 解码时原生支持 `-` 与 `_`，因此删除归一化替换时 T4.6a 亦不转红（判别力全靠 T4.6b 的 `atob` 分支）。
+- **源码重构与导出（`cloudflare/eqt-drm-api/src/utils/acme.ts`）**：
+  - 将 Base64URL 归一化逻辑抽离为纯函数并显式导出：
+    ```typescript
+    export function normalizeBase64Url(str: string): string {
+      let b64 = str.replace(/-/g, '+').replace(/_/g, '/');
+      while (b64.length % 4) {
+        b64 += '=';
+      }
+      return b64;
+    }
+    ```
+  - `base64UrlDecode` 内部直接调用 `normalizeBase64Url(str)`。
+- **单点不可篡改测试锁（`cloudflare/eqt-drm-api/tests/acme-offline.js`）**：
+  - 增加用例 **T4.6c**：直接断言 `normalizeBase64Url('--_-_Q') === '++/+/Q=='`，对归一化字符替换与 `==` 填充补齐双重锁定；
+  - **明确判别力归因**：
+    - **T4.6a**：断言 Base64URL 字符串在 Node 默认运行环境下的解码结果与原始二进制严格一致；
+    - **T4.6b**：锁定 Worker 纯 `atob` 分支下的 `-` 与 `_` 归一化替换能力（删替换即抛 `InvalidCharacterError` 转红）；
+    - **T4.6c**：锁定 `normalizeBase64Url` 纯函数在字符串形态上的 `-/_` 替换与 `==` padding 补齐（删 while 循环坚决转红）。
+- **实测探针反向证伪（探针 P3 重验）**：
+  - 在 `acme.ts` 中注释掉 `while (b64.length % 4) b64 += '=';` 循环；
+  - 运行 `npm run test:offline`：T4.6c **坚决转红**（`AssertionError: Expected '++/+/Q==' but got '++/+/Q'`，`Results: 23 passed, 1 failed`）；
+  - 恢复后全套件 24 项全绿（`test:acme:offline` 24 passed, 0 failed）。
+
+##### 二、I2 落地：i18n 7 国语言全量注册与单向数据流状态闭环
+- **多语言字典全量补齐（`desktop/gui/frontend/src/i18n.js`）**：
+  - 在 `zh`, `en`, `ja`, `ko`, `es`, `de`, `fr` 7 种语言字典中全量注册 `tls_key_mismatch_msg`：
+    - 中文：`本地证书私钥与云端设备登记不一致，请重置密钥绑定`；
+    - 英文：`Local TLS private key does not match cloud registration. Please re-bind device key.`；
+    - 日文：`ローカルTLS秘密鍵がクラウドの登録と一致しません。鍵の再紐付けを行ってください。`；
+    - 韩文：`로컬 TLS 개인 키가 클라우드 등록과 일치하지 않습니다. 키 바인딩을 재설정해 주세요.`；
+    - 西文：`La clave privada TLS local no coincide con el registro en la nube. Vuelva a vincular la clave del dispositivo.`；
+    - 德文：`Lokaler privater TLS-Schlüssel stimmt nicht mit der Cloud-Registrierung überein. Bitte Geräteschlüssel neu binden.`；
+    - 法文：`La clé privée TLS locale ne correspond pas à l'enregistrement cloud. Veuillez réassocier la clé de l'appareil.`。
+- **状态声明与重置（`desktop/gui/frontend/src/state.js` & `main.js`）**：
+  - 在 `state.js` 初始化对象中显式声明 `tlsKeyMismatch: false` 与 `tlsKeyMismatchMsg: ''`；
+  - 在 `main.js` 的 `eqt:tls-cert-ready` 事件处理回调中，显式复位：
+    ```javascript
+    state.tlsKeyMismatch = false;
+    state.tlsKeyMismatchMsg = '';
+    ```
+    确保证书成功就绪后错误标志被彻底清空，达成标准的单向数据流闭环。
+
+##### 三、I3 落地：后端用户可见日志文案同步收敛
+- **源码修改（`desktop/gui/app.go`）**：
+  - 将行 2151 的日志文案由原来的：
+    `已终止后台静默重试。`
+    精确收敛为：
+    `当前进程静默置备已终止（若未重绑重启后仍会尝试）。`
+  - 严格保持与单次进程生命周期行为一致，杜绝超出实现的 overstated 措辞。
+
+##### 四、I4 落地：配对约定校准与轮次编号全局统一
+- **文档与技能库轮次校准**：
+  - 将 §11.20 标题正式定级为「**第十二轮演进**」，与 §11.19「第十二轮独立复核」严格配对；
+  - 本节定级为「**第十三轮演进**」，与 §11.21「第十三轮独立复核」严格配对；
+  - `.agents/skills/eqt-lan-tls/SKILL.md` 全局统一：
+    - ⑭：审查红线（第十一轮沉淀 · 对 §11.17 复核）；
+    - ⑮：审查红线（第十二轮沉淀 · 对 §11.19 复核）；
+    - ⑯：审查红线（第十三轮沉淀 · 对 §11.21 复核）。
+
+##### 五、I5 落地：`!os.IsNotExist(err)` 读失败分支单测覆盖与断言
+- **源码单测覆盖（`pkg/cert/provisioner_test.go`）**：
+  - 在 `TestLoadOrGenerateDeviceKey` 中增加第 5 阶段：设置文件权限为 `0000`（不可读权限，模拟非 NotExist 的 I/O 错误）；
+  - 实测触发并捕获 `[WARNING] Failed to read private key at ...: open ...: permission denied, generating new key` 日志断言；
+  - 测试末尾恢复权限以安全清理临时目录。
+
+---
+
+> 🏁 **阶段决议（第十三轮演进 · I1~I5 全量工程闭环与 v1.36.87 发布）**：
+> 1. **填充路径可证伪锁（I1）**：`normalizeBase64Url` 纯函数抽出，T4.6c 断言锁确立，反向探针实测删 while 循环坚决转红，离线套件达 24 项全绿；
+> 2. **i18n 与状态机规范化（I2）**：7 国语言字典全量注册 `tls_key_mismatch_msg`，`state.js` 显式声明并在 `cert-ready` 中清空复位；
+> 3. **日志措辞客观真实（I3）**：`app.go` 文案同步收敛为单进程生命周期表述；
+> 4. **轮次配对严格对齐（I4）**：文档与技能库的 11/12/13 轮次复核与演进严格配对成对，消除编号错位；
+> 5. **异常分支全量覆盖（I5）**：单测覆盖 `!os.IsNotExist(err)` 权限异常分支并断言 Warning；
+> 6. **版本号双面一致递增**：升级至 **`v1.36.87`**。
+

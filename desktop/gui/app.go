@@ -2148,7 +2148,7 @@ func (a *App) silentProvisionDeviceTLSCert() {
 	res, err := cert.RequestDeviceCertificate(ctx, a.client, opts)
 	if err != nil {
 		if errors.Is(err, cert.ErrNodeKeyMismatch) {
-			warnMsg := fmt.Sprintf("[LAN-TLS-PROVISION] [CRITICAL] Node key mismatch for nodeID=%s: 本地证书私钥与云端设备登记不一致，请重置密钥绑定。已终止后台静默重试。", nodeID)
+			warnMsg := fmt.Sprintf("[LAN-TLS-PROVISION] [CRITICAL] Node key mismatch for nodeID=%s: 本地证书私钥与云端设备登记不一致，请重置密钥绑定。当前进程静默置备已终止（若未重绑重启后仍会尝试）。", nodeID)
 			if a.logger != nil {
 				a.logger.Warning(warnMsg)
 			}

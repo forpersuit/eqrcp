@@ -6708,13 +6708,18 @@ EventsOn('eqt:dev-mode-changed', async (isDev) => {
 EventsOn('eqt:tls-cert-ready', async () => {
     try {
         state.appInfo = await GetAppInfo();
+        state.tlsKeyMismatch = false;
+        state.tlsKeyMismatchMsg = '';
     } catch (_) {}
     render();
 });
 
 EventsOn('eqt:tls-node-key-mismatch', (payload) => {
     console.warn('[LAN-TLS] Device key mismatch received:', payload);
-    const msgText = (payload && payload.message) || t('tls_key_mismatch_msg') || '本地证书私钥与云端设备登记不一致，请重置密钥绑定';
+    const localized = t('tls_key_mismatch_msg');
+    const msgText = (localized && localized !== 'tls_key_mismatch_msg')
+        ? localized
+        : ((payload && payload.message) || '本地证书私钥与云端设备登记不一致，请重置密钥绑定');
     state.tlsKeyMismatch = true;
     state.tlsKeyMismatchMsg = msgText;
     showToast('⚠️ ' + msgText);

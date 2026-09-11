@@ -286,3 +286,5 @@ WantedBy=multi-user.target
 > - **I5（提示）新分支必须有用例驱动**：`provisioner.go:100-101`（读失败非 NotExist）新增 WARNING 零覆盖；测试以 `log.SetOutput` 做**全局** logger 替换，当前 `pkg/cert` 无 `t.Parallel()` 故安全，**引入并行测试前必须改局部注入**。
 > - **✅ 本轮确认属实项**：H1 订阅数 0→1 且 `showToast` 为 DOM toast（非 alert）、H2 缺失分支**生产可达**（`fullchain.pem` 与 `SaveDeviceCertificate` 同名同目录）且探针 P1 转红、H3 的 `atob` 分支经交叉验证确被执行、版本双面 `v1.36.86`、`test:acme:offline` **23/0** 与 `go test ./pkg/cert` 全绿——**零退化，本轮放行，无阻断项**。
 > - **⚠️ 复发计数**：「文档/命名声称超出实现」已连续 **四轮**复发（§11.15 F16 → §11.17 G1/G2 → §11.19 H1/H2/H3 → §11.21 I1/I4）。**该判据应进入提交前自检清单**，而非仅停留于审查文档。
+> - **✅ I1~I5 闭环落实（v1.36.87 · 2026-09-11）**：I1 抽离导出纯函数 `normalizeBase64Url` 并通过 T4.6c 单点锁定字符替换与 padding 补齐，反向探针 P3 实测删 `while` 循环坚决转红，离线套件扩至 24 项全绿；I2 在 `i18n.js` 7 语字典全量补齐 `tls_key_mismatch_msg`，在 `state.js` 显式声明并在 `cert-ready` 中清空复位；I3 同步收敛 `app.go:2151` 日志文案为单进程表述；I4 纠偏机制文档 §11.20 标题为第十二轮演进并新增 §11.22 成对闭合，技能库 ⑭/⑮/⑯ 编号彻底对齐；I5 单测补齐 `!os.IsNotExist(err)` 读失败分支并捕获 Warning 日志断言；版本号双面递增至 `v1.36.87`。
+
