@@ -2204,6 +2204,129 @@ assert(typeof base64UrlDecode('abc') === 'object', // :308 输入是【合法】
 > 2. **原生 Go 客户端真实验收**：`RequestDeviceCertificate` 在 12 秒内完成全自动化公信证书置备；
 > 3. **版本号双面一致递增**：升级至 **`v1.36.95`**。
 
+---
+
+#### 11.36 第十九轮独立复核：应用路径统一（`.local`/`.config` → 单一根）的迁移完整性审查（对 `6bd40f7e` · v1.36.96 · 2026-09-12）
+
+> 审查对象：`6bd40f7eaad7d0ee50cc693832dd33a147231c73`「Unify local app paths to eqt with logs subdir and surface TLS cert status」（15 文件，+144/−75）。
+> 复核方法：`git show` 逐文件核对 + 路径解析探针实证 + 全仓 `rg` 交叉引用核验。**本节结论基于 `6bd40f7e` 本身；审查过程中其后的 `63d222df`/`1745b051` 相继落地，凡涉及其影响处均以 HEAD 源码复核后标注。**
+
+##### 一、本次变更的实质：一次"数据根迁移"
+
+变更前的仓库**同时存在两个不一致的根**（本次提交试图统一的历史包袱）：
+
+| 用途 | 迁移前 | 迁移后 |
+| --- | --- | --- |
+| 配置 `config.yml` | `os.UserHomeDir()/.local/eqt` | `os.UserConfigDir()/eqt` |
+| 设备证书 `<node>/` | `os.UserHomeDir()/.config/eqt/certs/<node>` | `os.UserConfigDir()/eqt/certs/<node>` |
+| 通配符证书 | `~/.config/eqt/certs` | 同上 |
+| 日志 / crash dump / agent.port / webview2 | 分散（`UserCacheDir` 等） | 全部收拢至统一根 |
+
+`os.UserConfigDir()` 的跨平台语义差异是本次风险的根源：Linux 为 `$XDG_CONFIG_HOME`（缺省 `~/.config`）、**Windows 为 `%APPDATA%`**。故新旧根的等价性**并非全平台成立**：
+
+- **Linux 且 `XDG_CONFIG_HOME` 未设**：新根 `~/.config/eqt` ≡ 设备证书旧根 ⇒ 设备证书不迁移也**不丢**；
+- **Linux 且 `XDG_CONFIG_HOME` 已设**：新根 `$XDG_CONFIG_HOME/eqt` ≠ 旧根 ⇒ **失配**；
+- **Windows**：新根 `%APPDATA%\eqt` ≠ 旧根 `%USERPROFILE%\.config\eqt`（设备证书）与 `%USERPROFILE%\.local\eqt`（配置）⇒ **必然失配**；
+- **配置 `config.yml`**：旧根 `~/.local/eqt` 与新根在任何平台**均不等价** ⇒ **全平台孤儿化**。
+
+##### 二、正向确认（避免只列问题）
+
+| 项 | 核验方式 | 结果 |
+| --- | --- | --- |
+| 版本双面 | `pkg/version/version.go` + `desktop/gui/wails.json` | `v1.36.96` / `1.36.96` 一致 ✅ |
+| 构建 | `go build ./...` | OK ✅ |
+| 包测试 | `go test ./pkg/config ./pkg/cert -count=1` | 均 `ok` ✅ |
+| 新增前端状态消费点 | `rg tlsCertIssuer\|tlsCertExpiry` | `main.js:2405` 真实消费 `state.appInfo.*`，非"只定义不消费"（对比 §11.31 的 K1 型隐患）✅ |
+| Go/TS 字段一致 | `app.go:174-176` ↔ `models.ts` | `TLSCertIssuer`/`TLSCertExpiry`/`TLSNodeID` 已同步 ✅ |
+| 通配符证书回退 | `cert.go:58-78` `getCachedCertPaths()` | **有** legacy 回退至 `~/.config/eqt/certs` ✅ |
+| crash dump 回退 | `desktop/crash/reporter.go` | `LoadRawDump` 读双路径、`ClearDump` 删双路径 ✅ |
+| 根收拢一致性 | `main.go`(webview2)、`app.go`(agent.port)、`file_logger.go` | 均改用统一根 ✅ |
+
+**关键判断**：作者**已经掌握**"数据根迁移需配 legacy 回退"这一模式（通配符证书与 crash dump 两处都做了），却**恰好漏掉了设备证书与 `config.yml`**——这不是认知空白，而是覆盖遗漏，性质与"设计缺陷"不同，修复成本低。
+
+##### 三、P1〔高危〕设备证书与设备私钥在升级后孤儿化，Windows 平台必然发生
+
+`pkg/cert/provisioner.go` 提交后实现：
+
+```go
+func GetDeviceCertDir(nodeID string) (string, error) {
+	baseDir := config.DefaultCertsDir()   // os.UserConfigDir()/eqt/certs
+	cleanNode := strings.ToLower(strings.TrimSpace(nodeID))
+	if cleanNode == "" {
+		return baseDir, nil
+	}
+	return filepath.Join(baseDir, cleanNode), nil
+}
+```
+
+**无任何 legacy 回退**，与其同包的 `getCachedCertPaths()`（通配符，有回退）形成**不对称**。
+
+**失效链**（设备私钥是零泄露架构的根基：本地生成、永不外传）：
+
+1. Windows 升级后，`%USERPROFILE%\.config\eqt\certs\<node>\privkey.pem` 在新根 `%APPDATA%\eqt\certs\<node>\` 下不可见；
+2. `LoadOrGenerateDeviceKey` 因新目录既无 key 也无 `fullchain.pem`，走 **INFO「(initial setup), generating new key」**分支，**静默生成新密钥**——日志级别把"路径迁移"伪装成"首次安装"，**主动误导排查方向**；
+3. 后续签发请求携带**新公钥**，服务端 D1 `node_public_keys` 的 TOFU 绑定（见 §11.16/§11.18）拒绝，返回 **403 `node_key_mismatch`**；
+4. 用户界面呈现"密钥不匹配"，而真实根因是**升级导致的目录变更**。
+
+**探针实证**（临时测试 `pkg/cert/zz_probe_migration_test.go`，运行后已删除、工作区无残留）：分离 `XDG_CONFIG_HOME` 后打印
+
+```
+legacy device dir  : /tmp/.../001/.config/eqt/certs/abcdef123456
+resolved device dir: /tmp/.../002/eqt/certs/abcdef123456
+PROBE: legacy device cert/key at .../001/.config/eqt/certs/abcdef123456 is INVISIBLE; a fresh key will be generated
+```
+
+**缓解现状（须如实说明）**：`getCachedCertPaths()` 的 legacy 回退仍在，故**通配符证书**可继续提供服务——即 TLS 不会立刻中断，症状被掩盖，直到设备证书签发路径被触发才暴露。这解释了为何该问题不易被常规冒烟测试发现。
+
+##### 四、P2/P3〔中危〕配置迁移已落地，但对 P1 无效
+
+- **P2（已在 `1745b051` 修复）**：`config.yml` 由 `~/.local/eqt` 迁至 `os.UserConfigDir()/eqt`，`6bd40f7e` **提交内未含任何迁移逻辑** ⇒ 当时全平台用户设置会丢失（回落到默认配置）。此缺口已由后续提交 `1745b051`「Add legacy config migration and unify fallback websocket logs」（v1.36.97）补上 `maybeMigrateLegacyConfig`，源 `~/.local/eqt` 对 `config.yml` 而言**正确**。
+- **P3（仍成立）**：该迁移器对 P1 **完全无效**，原因有二：
+  1. **源目录错误**——设备证书从来不在 `~/.local/eqt`，而在 `~/.config/eqt/certs`；迁移器只扫 `~/.local/eqt`，永远看不到设备证书；
+  2. **跳过子目录**——`if entry.IsDir() { continue }`，而设备证书恰恰存放于 `<node>/` **子目录**中，即便源目录正确也会被跳过。
+
+  ⇒ **该迁移器已落地（`1745b051`）且经 HEAD 源码复核与上文完全一致，但 P1 依旧存在**——在 HEAD 上 `GetDeviceCertDir` 仍为 `config.DefaultCertsDir()/<node>` 无任何回退。正确做法是：对 `<旧certs根>` → `<新certs根>` 做**整目录递归**迁移（含 `<node>/` 子目录），并保留设备私钥的 0600 权限语义。
+
+##### 五、P6〔中危〕`scripts/sync-certs-from-vps.sh` 与实现、文档三方不一致
+
+`63d222df` 的 skill 文档已宣告新路径（`%APPDATA%\eqt\certs`），但同步脚本未同步更新：
+
+- `:15` `LOCAL_CERT_DIR="${HOME}/.config/eqt/certs"` —— Linux 侧因新根同为 `~/.config/eqt` 而**恰好仍然正确**（掩盖了问题）；
+- `:36` `win_cert_dir="/mnt/c/Users/${target_win_user}/.config/eqt/certs"` —— **仍是旧 Windows 路径**，而应用已改读 `%APPDATA%\eqt\certs`。
+
+⇒ **脚本向应用不再读取的目录写入证书，同步工具在 Windows 上功能性失效**；且**文档已先行宣告新路径**，构成"文档声称超出实现"的同型问题（本项目已连续九轮复现的病灶，见 §11.31 与技能红线 ㉒）。此外该脚本与 P1 同源：两者都依赖"Windows 证书根 = `%USERPROFILE%\.config\eqt\certs`"这一已被本次提交废弃的前提。
+
+##### 六、P4/P5/P7/P8〔低危~提示〕
+
+| 编号 | 级别 | 位置 | 问题 |
+| --- | --- | --- | --- |
+| P4 | 中低 | `main.js:2405` | 新增文案 `· 到期: ` 中「**到期**」为硬编码中文，**无 i18n 键**；同界面 7 语用户将看到中英混排。应补 `tls_cert_expiry_label` 类词条 |
+| P5 | 提示 | `pkg/config/config_test.go` | `TestDefaultConfigFileUsesLocalEQTDirectory` 断言由 `/.local/eqt/config.yml` 改为 `/eqt/config.yml`，**判别力归零**——实测 `/home/u/.local/eqt/config.yml`、`/home/u/.config/eqt/config.yml`、`/home/u/AppData/Roaming/eqt/config.yml` **三者皆满足该后缀**（含被本次修订所废弃的旧路径）。应断言 `os.UserConfigDir()` 前缀而非后缀 |
+| P7 | 提示 | `desktop/gui/agent.go:1032` | **用户可见日志**字面写 `~/.config/eqt/certs`，在 Windows 上为错误路径；注释 `pkg/cert/cert.go:40`、`pkg/cert/provisioner.go:433` 同为旧路径 |
+| P8 | 提示 | `pkg/config/config.go`（`1745b051` 起） | `DefaultConfigDir()` 由纯 getter 变为**带文件 I/O 与迁移副作用**的函数，且依赖包级 `migrateLegacyOnce sync.Once` 可变状态（测试间不可重入）。此类高频调用点宜保持无副作用，迁移应在启动路径**显式**调用一次 |
+
+##### 七、复核结论
+
+本次变更的**方向正确**（消灭长期存在的双根分裂，收拢至 `os.UserConfigDir()` 单一根），前端状态消费接线完整，版本与构建无误。但作为一次**数据根迁移**，其迁移完整性存在**不对称覆盖**：
+
+1. **通配符证书** — 有回退 ✅；**crash dump** — 有回退 ✅；**设备证书** — 无回退 ❌（P1，高危）；**`config.yml`** — 提交内无迁移 ❌（P2）。
+2. 后续提交 `1745b051` 补了配置迁移（P2 关闭），但因**源目录不含证书**且**跳过子目录**，对 P1 无效（P3）⇒ **不能期望它以现状修复 P1**；经 HEAD 源码复核，P1 在 v1.36.97 上**依然存在**。
+3. 外围一致性未跟上：同步脚本（P6）、用户可见日志（P7）、测试判别力（P5）、i18n（P4）均留有痕迹。
+
+**建议的最小修复集**（按优先级）：
+
+1. `GetDeviceCertDir` 增加 legacy 回退（`~/.config/eqt/certs/<node>`，Windows 即 `%USERPROFILE%\.config\eqt\certs\<node>`）——与 `getCachedCertPaths` 对称；
+2. 将 `LoadOrGenerateDeviceKey` 的「initial setup」分支**降级为可区分的告警**（如 `[LAN-TLS-KEY] [WARN] no key at <新路径>; legacy key found at <旧路径>`），消除"静默重生 + 误导日志"；
+3. 让 `maybeMigrateLegacyConfig`（`1745b051` 已落地）补齐 `<旧certs根>` → `<新certs根>` 的**递归**迁移，并修正 `scripts/sync-certs-from-vps.sh:36` 的 Windows 目标路径；
+4. 补 `tls_cert_expiry_label` i18n 词条；修正 `TestDefaultConfigFileUsesLocalEQTDirectory` 为前缀断言。
+
+> 🏁 **阶段决议（第十九轮独立复核 · 路径统一提交 `6bd40f7e`）**：
+> 1. **方向正确、迁移不完整**：单一根收拢是正解，但四类落盘数据中仅两类配了回退，**设备证书（P1）与 `config.yml`（P2）被遗漏**；
+> 2. **P1 为高危且平台相关**：Windows 必然失配，Linux 仅在 `XDG_CONFIG_HOME` 已设时失配；后果是设备私钥静默重生并经服务的 TOFU 拒绝（403 `node_key_mismatch`），且日志级别误导排查；
+> 3. **已落地的配置迁移器不足以修复 P1**（源目录错误 + 跳过子目录；经 HEAD/v1.36.97 源码复核，P1 依然存在）；
+> 4. **外围一致性缺口**：同步脚本 Windows 目标路径仍是旧值（P6），与已更新的 skill 文档相矛盾；
+> 5. **沉淀为技能红线 ㉓**：**数据根迁移必须逐消费者盘点回退覆盖，且回退须对称**——迁移后应 `rg` 所有旧根字面量，逐项确认消费点已回退或已更新，不得只覆盖"最容易想到"的一两处。
+
 
 
 
