@@ -234,11 +234,7 @@ func parseArgs(args []string) (string, []string, error) {
 }
 
 func createLog() (*os.File, string, error) {
-	dir, err := os.UserCacheDir()
-	if err != nil {
-		dir = os.TempDir()
-	}
-	dir = filepath.Join(dir, "eqt")
+	dir := config.DefaultLogsDir()
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, "", err
 	}
@@ -309,11 +305,7 @@ func readTail(path string, limit int64) string {
 var desktopAgentPortFilePath = defaultDesktopAgentPortFilePath
 
 func defaultDesktopAgentPortFilePath() string {
-	dir, err := os.UserCacheDir()
-	if err != nil {
-		dir = os.TempDir()
-	}
-	return filepath.Join(dir, "eqt", "agent.port")
+	return filepath.Join(config.DefaultConfigDir(), "agent.port")
 }
 
 func readPortFileAndGetURL() string {

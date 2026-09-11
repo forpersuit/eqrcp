@@ -162,8 +162,8 @@ func TestNew(t *testing.T) {
 
 func TestDefaultConfigFileUsesLocalEQTDirectory(t *testing.T) {
 	got := filepath.ToSlash(DefaultConfigFile())
-	if !strings.HasSuffix(got, "/.local/eqt/config.yml") {
-		t.Fatalf("DefaultConfigFile() = %q, want ~/.local/eqt/config.yml", got)
+	if !strings.HasSuffix(got, "/eqt/config.yml") {
+		t.Fatalf("DefaultConfigFile() = %q, want .../eqt/config.yml", got)
 	}
 }
 

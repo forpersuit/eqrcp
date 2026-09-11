@@ -38,11 +38,7 @@ func desktopLogFilePath() string {
 	if err == nil && settings.LogDir != "" {
 		return filepath.Join(settings.LogDir, "desktop.log")
 	}
-	dir, err := os.UserCacheDir()
-	if err != nil {
-		dir = os.TempDir()
-	}
-	return filepath.Join(dir, "eqt", "desktop.log")
+	return filepath.Join(config.DefaultLogsDir(), "desktop.log")
 }
 
 func main() {
@@ -305,7 +301,8 @@ func startWailsGUI() {
 		MinHeight:         640,
 		HideWindowOnClose: false,
 		Windows: &windows.Options{
-			ZoomFactor: 1.0,
+			ZoomFactor:          1.0,
+			WebviewUserDataPath: filepath.Join(config.DefaultConfigDir(), "webview2"),
 		},
 		AssetServer: &assetserver.Options{
 			Assets: assets,

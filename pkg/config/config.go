@@ -174,24 +174,42 @@ func GetViperInstance(app application.App) *viper.Viper {
 	return v
 }
 
-// DefaultConfigDir returns the configuration directory.
+// DefaultConfigDir returns the unified base application data and configuration directory.
 // Priority order:
 // 1. EQT_CONFIG_DIR env var (primarily for test isolation and custom directory overrides)
-// 2. User home directory (~/.local/eqt)
-// 3. Current directory fallback (./.local/eqt)
+// 2. Standard user config directory via os.UserConfigDir():
+//   - Windows: %APPDATA%\eqt (e.g. C:\Users\<user>\AppData\Roaming\eqt)
+//   - Linux/POSIX: ~/.config/eqt (or $XDG_CONFIG_HOME/eqt)
+//   - macOS: ~/Library/Application Support/eqt
+//
+// 3. User home directory fallback (~/.config/eqt)
+// 4. Current directory fallback (./eqt)
 // Note: EQT_CONFIG_DIR is intended for testing or explicit custom deployment overrides.
 func DefaultConfigDir() string {
 	if envDir := os.Getenv("EQT_CONFIG_DIR"); envDir != "" {
 		return envDir
 	}
+	if dir, err := os.UserConfigDir(); err == nil && dir != "" {
+		return filepath.Join(dir, "eqt")
+	}
 	home, err := os.UserHomeDir()
 	if err == nil && home != "" {
-		return filepath.Join(home, ".local", "eqt")
+		return filepath.Join(home, ".config", "eqt")
 	}
 	if current, err := user.Current(); err == nil && current.HomeDir != "" {
-		return filepath.Join(current.HomeDir, ".local", "eqt")
+		return filepath.Join(current.HomeDir, ".config", "eqt")
 	}
-	return filepath.Join(".", ".local", "eqt")
+	return filepath.Join(".", "eqt")
+}
+
+// DefaultLogsDir returns the unified directory for application logs (xxx/eqt/logs).
+func DefaultLogsDir() string {
+	return filepath.Join(DefaultConfigDir(), "logs")
+}
+
+// DefaultCertsDir returns the unified directory for LAN-TLS certificates (xxx/eqt/certs).
+func DefaultCertsDir() string {
+	return filepath.Join(DefaultConfigDir(), "certs")
 }
 
 func DefaultConfigFile() string {

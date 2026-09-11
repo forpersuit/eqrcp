@@ -2240,11 +2240,7 @@ func runDesktopAgentBackground(command *cobra.Command) error {
 }
 
 func createDesktopAgentBackgroundLog() (*os.File, string, error) {
-	dir, err := os.UserCacheDir()
-	if err != nil {
-		dir = os.TempDir()
-	}
-	dir = filepath.Join(dir, application.New().Name)
+	dir := config.DefaultLogsDir()
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, "", err
 	}
@@ -2301,11 +2297,7 @@ func waitForDesktopAgentReady(timeout time.Duration) error {
 var desktopAgentPortFilePath = defaultDesktopAgentPortFilePath
 
 func defaultDesktopAgentPortFilePath() string {
-	dir, err := os.UserCacheDir()
-	if err != nil {
-		dir = os.TempDir()
-	}
-	return filepath.Join(dir, "eqt", "agent.port")
+	return filepath.Join(config.DefaultConfigDir(), "agent.port")
 }
 
 func desktopAgentAddressInUse(err error) bool {

@@ -9,9 +9,10 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
+
+	"eqt/pkg/config"
 )
 
 var desktopAgentURL = getDesktopAgentURL()
@@ -184,11 +185,7 @@ func runDirectCLI(exe string, args []string, logFile *os.File) error {
 }
 
 func createLauncherLog() (*os.File, string, error) {
-	dir, err := os.UserCacheDir()
-	if err != nil {
-		dir = os.TempDir()
-	}
-	dir = filepath.Join(dir, "eqt")
+	dir := config.DefaultLogsDir()
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, "", err
 	}

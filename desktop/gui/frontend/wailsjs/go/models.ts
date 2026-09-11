@@ -174,6 +174,9 @@ export namespace main {
 	    uploadDirFreeSpace?: string;
 	    isTest: boolean;
 	    hasValidTLSCert: boolean;
+	    tlsCertIssuer?: string;
+	    tlsCertExpiry?: string;
+	    tlsNodeId?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppInfo(source);
@@ -193,6 +196,9 @@ export namespace main {
 	        this.uploadDirFreeSpace = source["uploadDirFreeSpace"];
 	        this.isTest = source["isTest"];
 	        this.hasValidTLSCert = source["hasValidTLSCert"];
+	        this.tlsCertIssuer = source["tlsCertIssuer"];
+	        this.tlsCertExpiry = source["tlsCertExpiry"];
+	        this.tlsNodeId = source["tlsNodeId"];
 	    }
 	}
 	export class ChatAttachmentSaveResult {

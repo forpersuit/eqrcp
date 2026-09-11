@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"eqt/cmd"
@@ -170,6 +171,9 @@ type AppInfo struct {
 	UploadDirFreeSpace string `json:"uploadDirFreeSpace,omitempty"`
 	IsTest             bool   `json:"isTest"`
 	HasValidTLSCert    bool   `json:"hasValidTLSCert"`
+	TLSCertIssuer      string `json:"tlsCertIssuer,omitempty"`
+	TLSCertExpiry      string `json:"tlsCertExpiry,omitempty"`
+	TLSNodeID          string `json:"tlsNodeId,omitempty"`
 }
 
 type DesktopIntegrationStatus struct {
@@ -1251,6 +1255,24 @@ func (a *App) AppInfo() AppInfo {
 	if logPath == "" {
 		logPath = desktopLogFilePath()
 	}
+	nodeID := server.GetDeviceNodeID()
+	hasValidCert := cert.HasValidCertificateForNode("", "", nodeID)
+	var certIssuer, certExpiry string
+	if hasValidCert {
+		if devCert, err := cert.GetDeviceCertificate(nodeID); err == nil {
+			if expiry, err := cert.GetCertificateExpiry(devCert); err == nil {
+				certExpiry = expiry.Format("2006-01-02 15:04")
+			}
+			if len(devCert.Certificate) > 0 {
+				if parsed, err := x509.ParseCertificate(devCert.Certificate[0]); err == nil {
+					certIssuer = parsed.Issuer.CommonName
+					if certIssuer == "" && len(parsed.Issuer.Organization) > 0 {
+						certIssuer = parsed.Issuer.Organization[0]
+					}
+				}
+			}
+		}
+	}
 	info := AppInfo{
 		Product:         "EQT",
 		Name:            "Easy QR Transfer",
@@ -1261,7 +1283,10 @@ func (a *App) AppInfo() AppInfo {
 		Arch:            runtime.GOARCH,
 		LogPath:         logPath,
 		IsTest:          server.IsTestBuild(),
-		HasValidTLSCert: cert.HasValidCertificateForNode("", "", server.GetDeviceNodeID()),
+		HasValidTLSCert: hasValidCert,
+		TLSCertIssuer:   certIssuer,
+		TLSCertExpiry:   certExpiry,
+		TLSNodeID:       nodeID,
 	}
 	if cli, err := findEqtCLI(); err == nil {
 		info.CLIPath = cli
@@ -1869,11 +1894,7 @@ func (a *App) logDebug(message string) {
 }
 
 func desktopAgentPortFilePath() string {
-	dir, err := os.UserCacheDir()
-	if err != nil {
-		dir = os.TempDir()
-	}
-	return filepath.Join(dir, "eqt", "agent.port")
+	return filepath.Join(config.DefaultConfigDir(), "agent.port")
 }
 
 type FeedbackPayload struct {
@@ -2115,16 +2136,34 @@ func (a *App) silentProvisionDeviceTLSCert() {
 	// 2. Check if a valid certificate already exists and has > 15 days of validity left
 	if devCert, err := cert.GetDeviceCertificate(nodeID); err == nil {
 		if expiry, err := cert.GetCertificateExpiry(devCert); err == nil && time.Until(expiry) > 15*24*time.Hour {
-			// Certificate is healthy; notify frontend that TLS is ready
+			issuer := "Unknown CA"
+			if len(devCert.Certificate) > 0 {
+				if parsed, err := x509.ParseCertificate(devCert.Certificate[0]); err == nil {
+					issuer = parsed.Issuer.CommonName
+					if issuer == "" && len(parsed.Issuer.Organization) > 0 {
+						issuer = parsed.Issuer.Organization[0]
+					}
+				}
+			}
+			msg := fmt.Sprintf("[LAN-TLS] Local dedicated certificate is active for nodeID=%s (issuer=%s, expiresAt=%s, %d days remaining)",
+				nodeID, issuer, expiry.Format("2006-01-02 15:04"), int(time.Until(expiry).Hours()/24))
+			if a.logger != nil {
+				a.logger.Info(msg)
+			}
 			if a.ctx != nil {
+				wailsruntime.LogInfo(a.ctx, msg)
 				wailsruntime.EventsEmit(a.ctx, "eqt:tls-cert-ready", true)
 			}
 			return
 		}
 	}
 
+	startMsg := fmt.Sprintf("[LAN-TLS-PROVISION] [START] Initiating background silent provisioning for nodeID=%s", nodeID)
+	if a.logger != nil {
+		a.logger.Info(startMsg)
+	}
 	if a.ctx != nil {
-		wailsruntime.LogInfo(a.ctx, fmt.Sprintf("[LAN-TLS-PROVISION] [START] Initiating background silent provisioning for nodeID=%s", nodeID))
+		wailsruntime.LogInfo(a.ctx, startMsg)
 	}
 
 	// 3. Request dedicated device certificate from remote Gateway
@@ -2174,8 +2213,17 @@ func (a *App) silentProvisionDeviceTLSCert() {
 		return
 	}
 
-	successMsg := fmt.Sprintf("[LAN-TLS-PROVISION] [SUCCESS] Dedicated certificate ready for nodeID=%s (expiresAt=%s)",
-		res.NodeID, res.ExpiresAt.Format(time.RFC3339))
+	issuer := "Unknown CA"
+	if len(res.Certificate.Certificate) > 0 {
+		if parsed, err := x509.ParseCertificate(res.Certificate.Certificate[0]); err == nil {
+			issuer = parsed.Issuer.CommonName
+			if issuer == "" && len(parsed.Issuer.Organization) > 0 {
+				issuer = parsed.Issuer.Organization[0]
+			}
+		}
+	}
+	successMsg := fmt.Sprintf("[LAN-TLS-PROVISION] [SUCCESS] Dedicated certificate ready for nodeID=%s (issuer=%s, expiresAt=%s)",
+		res.NodeID, issuer, res.ExpiresAt.Format("2006-01-02 15:04"))
 	if a.logger != nil {
 		a.logger.Info(successMsg)
 	}

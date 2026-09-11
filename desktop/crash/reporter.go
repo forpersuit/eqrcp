@@ -50,9 +50,9 @@ type DumpFile struct {
 	Dismissed bool   `json:"dismissed"`
 }
 
-// dumpFilePath returns the path to the crash dump file.
+// dumpFilePath returns the path to the crash dump file (xxx/eqt/logs/crash.dump).
 func dumpFilePath() string {
-	return filepath.Join(config.DefaultConfigDir(), "crash.dump")
+	return filepath.Join(config.DefaultLogsDir(), "crash.dump")
 }
 
 // Collect gathers diagnostic information at crash time.
@@ -115,6 +115,14 @@ func LoadRawDump() (*DumpFile, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
+			// Check legacy root directory
+			legacyPath := filepath.Join(config.DefaultConfigDir(), "crash.dump")
+			if legacyData, lErr := os.ReadFile(legacyPath); lErr == nil {
+				var dump DumpFile
+				if jsonErr := json.Unmarshal(legacyData, &dump); jsonErr == nil {
+					return &dump, nil
+				}
+			}
 			return nil, nil
 		}
 		return nil, err
@@ -189,7 +197,12 @@ func MarkDismissed() error {
 
 // ClearDump removes the crash dump file entirely.
 func ClearDump() error {
-	return os.Remove(dumpFilePath())
+	_ = os.Remove(filepath.Join(config.DefaultConfigDir(), "crash.dump"))
+	err := os.Remove(dumpFilePath())
+	if err != nil && os.IsNotExist(err) {
+		return nil
+	}
+	return err
 }
 
 // HasPendingDump returns true if there is an un-uploaded crash dump on disk.

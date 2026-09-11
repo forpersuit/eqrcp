@@ -25,6 +25,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"eqt/pkg/config"
 )
 
 // GetNodeDomain returns the canonical apex domain for the given node ID.
@@ -60,17 +62,14 @@ func FormatDirectDomainWithNode(ipStr string, nodeID string) string {
 }
 
 // GetDeviceCertDir returns the directory path where certificate and private key
-// for the given node ID are stored (~/.config/eqt/certs/<node-id>).
+// for the given node ID are stored (xxx/eqt/certs/<node-id>).
 func GetDeviceCertDir(nodeID string) (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("failed to get user home directory: %w", err)
-	}
+	baseDir := config.DefaultCertsDir()
 	cleanNode := strings.ToLower(strings.TrimSpace(nodeID))
 	if cleanNode == "" {
-		return filepath.Join(home, ".config", "eqt", "certs"), nil
+		return baseDir, nil
 	}
-	return filepath.Join(home, ".config", "eqt", "certs", cleanNode), nil
+	return filepath.Join(baseDir, cleanNode), nil
 }
 
 // LoadOrGenerateDeviceKey loads the ECDSA P-256 private key for nodeID from disk,

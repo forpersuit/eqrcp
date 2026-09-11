@@ -84,11 +84,7 @@ func (l *FileLogger) SetLogDir(logDir string) {
 	if logDir != "" {
 		newPath = filepath.Join(logDir, "desktop.log")
 	} else {
-		dir, err := os.UserCacheDir()
-		if err != nil {
-			dir = os.TempDir()
-		}
-		newPath = filepath.Join(dir, "eqt", "desktop.log")
+		newPath = filepath.Join(config.DefaultLogsDir(), "desktop.log")
 	}
 
 	if l.filePath == newPath && l.file != nil {

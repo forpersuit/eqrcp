@@ -2397,13 +2397,12 @@ function renderSettingsPanel() {
                         </div>
                         ${renderSwitch('settings-browser', state.browserFallback)}
                     </div>
-                    ${state.settings?.devMode ? `
                     <div class="setting-row">
                         <div class="setting-copy">
                             <strong>${t('enable_tls')}</strong>
                             <span>${t('enable_tls_desc')}</span>
                             ${state.appInfo?.hasValidTLSCert ?
-                                `<span style="display: block; font-size: 11px; color: var(--accent-success, #67c23a); margin-top: 3px;">${escapeHTML(t('tls_cert_ready') || '官方公信 TLS 已就绪')}</span>` :
+                                `<span style="display: block; font-size: 11px; color: var(--accent-success, #67c23a); margin-top: 3px;">🔒 ${escapeHTML(t('tls_cert_ready') || '官方公信 TLS 已就绪')}${state.appInfo?.tlsCertIssuer ? ` <span style="color: var(--text-muted, #94a3b8); margin-left: 4px;">(${escapeHTML(state.appInfo.tlsCertIssuer)} · 到期: ${escapeHTML(state.appInfo.tlsCertExpiry || '')})</span>` : ''}</span>` :
                                 state.tlsKeyMismatch ?
                                 `<span style="display: block; font-size: 11px; color: var(--accent-danger, #ef4444); margin-top: 3px;">⚠️ ${escapeHTML(state.tlsKeyMismatchMsg || '本地证书私钥与云端设备登记不一致，请重置密钥绑定')}</span>` :
                                 `<span style="display: block; font-size: 11px; color: var(--text-muted, #94a3b8); margin-top: 3px;">ℹ️ ${escapeHTML(t('tls_cert_preparing') || '局域网 TLS 正在后台准备中（首次启动或离线时将以局域网标准模式保障传输）')}</span>`}
@@ -2411,7 +2410,7 @@ function renderSettingsPanel() {
                         <div class="setting-control-stack">
                             ${renderSwitch('settings-enable-tls', Boolean(state.settings?.enableTLS))}
                         </div>
-                    </div>` : ''}
+                    </div>
                     <div class="setting-row">
                         <div class="setting-copy">
                             <strong>${t('block_proxy')}</strong>

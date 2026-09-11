@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"eqt/pkg/config"
 )
 
 const (
@@ -54,17 +56,27 @@ func HasValidCertificateForNode(customCert, customKey, nodeID string) bool {
 }
 
 func getCachedCertPaths() (string, string, bool) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", "", false
-	}
-	dir := filepath.Join(home, ".config", "eqt", "certs")
+	dir := config.DefaultCertsDir()
 	certFile := filepath.Join(dir, "fullchain.pem")
 	keyFile := filepath.Join(dir, "privkey.pem")
 
 	if _, err := os.Stat(certFile); err == nil {
 		if _, err := os.Stat(keyFile); err == nil {
 			return certFile, keyFile, true
+		}
+	}
+
+	// Fallback to legacy path if exists
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		legacyDir := filepath.Join(home, ".config", "eqt", "certs")
+		if legacyDir != dir {
+			legacyCert := filepath.Join(legacyDir, "fullchain.pem")
+			legacyKey := filepath.Join(legacyDir, "privkey.pem")
+			if _, err := os.Stat(legacyCert); err == nil {
+				if _, err := os.Stat(legacyKey); err == nil {
+					return legacyCert, legacyKey, true
+				}
+			}
 		}
 	}
 	return "", "", false
