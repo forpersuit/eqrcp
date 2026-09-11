@@ -269,3 +269,14 @@ CREATE TABLE IF NOT EXISTS device_cert_provisions (
 
 CREATE INDEX IF NOT EXISTS idx_cert_provisions_node ON device_cert_provisions(node_id, provisioned_at);
 CREATE INDEX IF NOT EXISTS idx_cert_provisions_device ON device_cert_provisions(device_id);
+
+-- Device LAN-TLS node to public key cryptographic binding table (TOFU / Anti-Spoofing)
+CREATE TABLE IF NOT EXISTS node_public_keys (
+    node_id           TEXT PRIMARY KEY,
+    public_key_sha256 TEXT NOT NULL,
+    device_id         TEXT DEFAULT NULL,
+    first_bound_at    TEXT NOT NULL,
+    last_seen_at      TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_node_public_keys_device ON node_public_keys(device_id);

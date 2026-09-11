@@ -46,10 +46,12 @@ function makeMockDb(opts = {}) {
   const provisions = [];
   const rateLimits = new Map();
   const blacklists = opts.blacklists || [];
+  const nodeKeys = new Map();
 
   return {
     _provisions: provisions,
     _rateLimits: rateLimits,
+    _nodeKeys: nodeKeys,
     prepare(sql) {
       const stmt = {
         _sql: sql,
@@ -68,6 +70,10 @@ function makeMockDb(opts = {}) {
             const key = this._binds[0];
             return rateLimits.get(key) || null;
           }
+          if (sql.includes('FROM node_public_keys')) {
+            const nodeId = this._binds[0];
+            return nodeKeys.get(nodeId) || null;
+          }
           return null;
         },
         async all() {
@@ -84,6 +90,25 @@ function makeMockDb(opts = {}) {
               client_ip: this._binds[5],
               trace_id: this._binds[6]
             });
+            return { meta: { changes: 1 } };
+          }
+          if (sql.includes('INSERT INTO node_public_keys')) {
+            const nodeId = this._binds[0];
+            const pubKeyHash = this._binds[1];
+            const deviceId = this._binds[2];
+            nodeKeys.set(nodeId, {
+              node_id: nodeId,
+              public_key_sha256: pubKeyHash,
+              device_id: deviceId
+            });
+            return { meta: { changes: 1 } };
+          }
+          if (sql.includes('UPDATE node_public_keys')) {
+            const nodeId = this._binds[1];
+            const existing = nodeKeys.get(nodeId);
+            if (existing) {
+              existing.last_seen_at = this._binds[0];
+            }
             return { meta: { changes: 1 } };
           }
           if (sql.includes('INSERT OR REPLACE INTO rate_limits')) {
@@ -780,6 +805,92 @@ async function runTests() {
     assert(acmeData && acmeData.cert_pem && acmeData.expires_at, 'T19.2: ACME response contains valid cert_pem and expires_at');
     assert(dnsSetCalls.length === 2, 'T19.3: DNS challenge set on all authoritative endpoints');
     assert(dnsSetCalls[0].body && dnsSetCalls[0].body.record === `_acme-challenge.${acmeNode}.direct.eqt.net.im.`, 'T19.4: DNS challenge recordName correctly constructed with device node');
+  }
+
+  // Test 20: First-Use Public Key Binding (TOFU)
+  {
+    const tofuNode = 'e1f2a3b4c5d6';
+    const { csrPEM: csr1, privateKey: priv1 } = generateTestCSR(tofuNode);
+    const { csrPEM: csr2, privateKey: priv2 } = generateTestCSR(tofuNode); // Different keypair for same node!
+    const db = makeMockDb();
+    const ctx = makeMockCtx();
+    const nowTs = Math.floor(Date.now() / 1000);
+
+    // 1st request with priv1 binds tofuNode to pubkey1
+    const sig1 = signNodePayload(priv1, tofuNode, nowTs);
+    const req1 = new Request('http://api.test/api/v1/cert/provision', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-EQT-Timestamp': String(nowTs),
+        'X-EQT-Device-Signature': sig1
+      },
+      body: JSON.stringify({ node_id: tofuNode, csr_pem: csr1 })
+    });
+    const resp1 = await handleCertRoutes(req1, { DB: db }, ctx, new URL(req1.url), {});
+    await ctx.drain();
+    assert(resp1.status === 200, 'T20.1: Initial registration with key 1 succeeds and binds key');
+
+    // 2nd request with priv2 (different key!) must be rejected with 403 node_key_mismatch
+    const sig2 = signNodePayload(priv2, tofuNode, nowTs);
+    const req2 = new Request('http://api.test/api/v1/cert/provision', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-EQT-Timestamp': String(nowTs),
+        'X-EQT-Device-Signature': sig2
+      },
+      body: JSON.stringify({ node_id: tofuNode, csr_pem: csr2 })
+    });
+    const resp2 = await handleCertRoutes(req2, { DB: db }, ctx, new URL(req2.url), {});
+    const data2 = await resp2.json();
+    assert(resp2.status === 403 && data2.reason_key === 'node_key_mismatch', 'T20.2: Mismatched public key for bound node returns 403 node_key_mismatch');
+  }
+
+  // Test 21: IP Rate Limiting
+  {
+    const testIp = '198.51.100.42';
+    const db = makeMockDb();
+    const ctx = makeMockCtx();
+    const nowTs = Math.floor(Date.now() / 1000);
+
+    // Exhaust 10 requests from same IP with different node_ids
+    let lastResp = null;
+    for (let i = 0; i < 10; i++) {
+      const iterNode = `aa000000000${i}`;
+      const { csrPEM, privateKey } = generateTestCSR(iterNode);
+      const sig = signNodePayload(privateKey, iterNode, nowTs);
+      const req = new Request('http://api.test/api/v1/cert/provision', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-EQT-Timestamp': String(nowTs),
+          'X-EQT-Device-Signature': sig,
+          'CF-Connecting-IP': testIp
+        },
+        body: JSON.stringify({ node_id: iterNode, csr_pem: csrPEM })
+      });
+      lastResp = await handleCertRoutes(req, { DB: db }, ctx, new URL(req.url), {});
+      assert(lastResp.status === 200, `T21.1: Request ${i + 1} from IP ${testIp} permitted`);
+    }
+
+    // 11th request from same IP should be blocked
+    const blockedNode = 'aa0000000010';
+    const { csrPEM: blockedCsr, privateKey: blockedPriv } = generateTestCSR(blockedNode);
+    const blockedSig = signNodePayload(blockedPriv, blockedNode, nowTs);
+    const blockedReq = new Request('http://api.test/api/v1/cert/provision', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-EQT-Timestamp': String(nowTs),
+        'X-EQT-Device-Signature': blockedSig,
+        'CF-Connecting-IP': testIp
+      },
+      body: JSON.stringify({ node_id: blockedNode, csr_pem: blockedCsr })
+    });
+    const blockedResp = await handleCertRoutes(blockedReq, { DB: db }, ctx, new URL(blockedReq.url), {});
+    const blockedData = await blockedResp.json();
+    assert(blockedResp.status === 429 && blockedData.reason_key === 'ip_rate_limited', 'T21.2: 11th request from same IP blocked with 429 ip_rate_limited');
   }
 
   console.log(`\nResults: ${passed} passed, ${failed} failed`);

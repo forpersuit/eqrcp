@@ -30,13 +30,25 @@ export async function ensureCertProvisionsTable(env: Env): Promise<void> {
     await env.DB.prepare(
       `CREATE INDEX IF NOT EXISTS idx_cert_provisions_device ON device_cert_provisions(device_id)`
     ).run();
+    await env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS node_public_keys (
+        node_id           TEXT PRIMARY KEY,
+        public_key_sha256 TEXT NOT NULL,
+        device_id         TEXT DEFAULT NULL,
+        first_bound_at    TEXT NOT NULL,
+        last_seen_at      TEXT NOT NULL
+      )
+    `).run();
+    await env.DB.prepare(
+      `CREATE INDEX IF NOT EXISTS idx_node_public_keys_device ON node_public_keys(device_id)`
+    ).run();
     CERT_TABLE_ENSURED.add(env.DB);
   } catch (err: any) {
     const msg = String(err?.message || err);
     if (/already exists/i.test(msg)) {
       CERT_TABLE_ENSURED.add(env.DB);
     } else {
-      console.error('Failed to ensure device_cert_provisions table:', err);
+      console.error('Failed to ensure device_cert_provisions or node_public_keys table:', err);
     }
   }
 }
@@ -675,7 +687,10 @@ export async function handleCertRoutes(
     }
   }
 
-  // 5. Rate limit check: Maximum 3 certificate provisions per 24 hours per node_id
+  const acmeRequested = Boolean(env.ACME_DIRECTORY_URL || (env.ENVIRONMENT === 'test' && env.ACME_DNS_API_ENDPOINTS));
+
+  // 5. Multi-tier Rate Limiting Defense (Node-level, IP-level, Global Production ceiling)
+  // 5.1 Node-ID Rate Limit: Maximum 3 certificate provisions per 24 hours per node_id
   const rateLimitKey = `cert_provision:${cleanNode}`;
   const rateLimited = await isD1RateLimited(env, rateLimitKey, 3, 24 * 3600 * 1000);
   if (rateLimited) {
@@ -694,6 +709,52 @@ export async function handleCertRoutes(
       status: 429,
       headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '86400' }
     });
+  }
+
+  // 5.2 IP-level Rate Limit: Maximum 10 certificate provisions per 24 hours per IP
+  if (clientIp && clientIp !== 'unknown' && clientIp !== '127.0.0.1') {
+    const ipRateLimitKey = `cert_provision:ip:${clientIp}`;
+    const ipRateLimited = await isD1RateLimited(env, ipRateLimitKey, 10, 24 * 3600 * 1000);
+    if (ipRateLimited) {
+      await logRateLimitHit(env, 'CERT_PROVISION_IP', ipRateLimitKey, {
+        node_id: cleanNode,
+        device_id: deviceIdHeader,
+        client_ip: clientIp,
+        trace_id: traceId
+      });
+      console.warn(`[LAN-TLS-PROVISION] [RATE-LIMIT] IP ${clientIp} exceeded 24h limit`);
+      return new Response(JSON.stringify({
+        error: 'Too many certificate requests from this IP address (maximum 10 per 24 hours)',
+        reason_key: 'ip_rate_limited',
+        retry_after: 86400
+      }), {
+        status: 429,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '86400' }
+      });
+    }
+  }
+
+  // 5.3 Global Production Safety Guard: Prevent burning Let's Encrypt 50 certs/week ceiling
+  if (env.ENVIRONMENT === 'production' && acmeRequested) {
+    const globalRateLimitKey = 'cert_provision:global_acme';
+    const globalRateLimited = await isD1RateLimited(env, globalRateLimitKey, 40, 7 * 24 * 3600 * 1000);
+    if (globalRateLimited) {
+      await logRateLimitHit(env, 'CERT_PROVISION_GLOBAL', globalRateLimitKey, {
+        node_id: cleanNode,
+        device_id: deviceIdHeader,
+        client_ip: clientIp,
+        trace_id: traceId
+      });
+      console.error(`[LAN-TLS-PROVISION] [RATE-LIMIT] Global ACME production safety threshold reached (40/week)`);
+      return new Response(JSON.stringify({
+        error: 'Global production certificate issuance threshold reached. Plain LAN HTTP fallback active.',
+        reason_key: 'global_rate_limited',
+        retry_after: 604800
+      }), {
+        status: 429,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '604800' }
+      });
+    }
   }
 
   // 6. Cryptographic CSR Parsing & Domain Sanity Check
@@ -793,12 +854,62 @@ export async function handleCertRoutes(
     });
   }
 
+  // 6.2 Node-to-PublicKey Cryptographic Binding (TOFU / First-Use Binding)
+  try {
+    await ensureCertProvisionsTable(env);
+    const pubKeyHashBuf = await crypto.subtle.digest('SHA-256', parsedCSR.spkiDER);
+    const pubKeyFingerprint = Array.from(new Uint8Array(pubKeyHashBuf))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+
+    const existingKey = await env.DB.prepare(
+      `SELECT public_key_sha256 FROM node_public_keys WHERE node_id = ?`
+    ).bind(cleanNode).first<{ public_key_sha256: string }>();
+
+    if (existingKey) {
+      if (existingKey.public_key_sha256 !== pubKeyFingerprint) {
+        console.warn(`[LAN-TLS-PROVISION] [REJECT] Key mismatch for nodeID=${cleanNode}: bound=${existingKey.public_key_sha256} req=${pubKeyFingerprint}`);
+        return new Response(JSON.stringify({
+          error: 'Device public key mismatch: this node ID is cryptographically bound to a different keypair',
+          reason_key: 'node_key_mismatch'
+        }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      ctx.waitUntil((async () => {
+        try {
+          await env.DB.prepare(`
+            UPDATE node_public_keys SET last_seen_at = ? WHERE node_id = ?
+          `).bind(new Date().toISOString(), cleanNode).run();
+        } catch (_) {}
+      })());
+    } else {
+      ctx.waitUntil((async () => {
+        try {
+          await env.DB.prepare(`
+            INSERT INTO node_public_keys (node_id, public_key_sha256, device_id, first_bound_at, last_seen_at)
+            VALUES (?, ?, ?, ?, ?)
+          `).bind(
+            cleanNode,
+            pubKeyFingerprint,
+            deviceIdHeader || null,
+            new Date().toISOString(),
+            new Date().toISOString()
+          ).run();
+        } catch (bindErr) {
+          console.error(`[LAN-TLS-PROVISION] Failed to bind node public key in D1:`, bindErr);
+        }
+      })());
+    }
+  } catch (bindingErr: any) {
+    console.warn(`[LAN-TLS-PROVISION] Public key binding check error for nodeID=${cleanNode}:`, bindingErr);
+  }
+
   // 7. Certificate Issuance Engine (RFC 8555 ACME DNS-01 or Fallback Signer)
   try {
     let certPEM: string;
     let expiresAt: string;
-
-    const acmeRequested = Boolean(env.ACME_DIRECTORY_URL || (env.ENVIRONMENT === 'test' && env.ACME_DNS_API_ENDPOINTS));
 
     if (acmeRequested) {
       if (!env.ACME_DNS_API_ENDPOINTS) {

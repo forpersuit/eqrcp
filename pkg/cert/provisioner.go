@@ -422,8 +422,9 @@ func HasValidDeviceCertificate(nodeID string) bool {
 // 3. Legacy wildcard certificate in ~/.config/eqt/certs (if valid and unexpired).
 // Returns the tls.Certificate, the resolved active nodeID (empty string for legacy wildcard), and any error.
 func GetActiveCertificate(customCert, customKey, nodeID string) (tls.Certificate, string, error) {
-	// 1. Explicit custom paths
+	// 1. Explicit custom paths (developer debug override)
 	if customCert != "" && customKey != "" {
+		log.Printf("[LAN-TLS] [SECURITY-NOTICE] Using explicit custom TLS certificates from %s and %s (skipping public root trust anchor verification)", customCert, customKey)
 		cert, err := tls.LoadX509KeyPair(customCert, customKey)
 		return cert, "", err
 	}

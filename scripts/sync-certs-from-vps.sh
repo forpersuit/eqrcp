@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Script: sync-certs-from-vps.sh
-# Purpose: Synchronize official Let's Encrypt wildcard certificates from VPS
-#          Node 1 (ns1.eqt.net.im) to the local desktop client certificate cache.
-#          Supports Linux, WSL2, and Windows host sync.
+# DEPRECATED (Phase 4 Cleanup Track):
+#   This script belongs to the legacy Phase 1 wildcard certificate mechanism.
+#   EQT has transitioned to the LAN-TLS Zero-Leak architecture (RFC 8555 per-device
+#   key generation with dedicated subdomain ACME DNS-01 issuance).
+#   This sync script is retained strictly for legacy developer test fallback.
 # ==============================================================================
 set -euo pipefail
 
@@ -12,6 +14,7 @@ VPS_USER="${EQT_VPS_USER:-root}"
 VPS_CERT_DIR="/etc/letsencrypt/live/direct.eqt.net.im"
 LOCAL_CERT_DIR="${HOME}/.config/eqt/certs"
 
+echo "⚠️  [WARNING] sync-certs-from-vps.sh is DEPRECATED (Legacy Phase 1 fallback)"
 echo "=== [EQT] Syncing Wildcard Certificates from VPS ==="
 echo "Source: ${VPS_USER}@${VPS_HOST}:${VPS_CERT_DIR}"
 echo "Target: ${LOCAL_CERT_DIR}"
