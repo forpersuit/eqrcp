@@ -267,3 +267,4 @@ WantedBy=multi-user.target
 >   - **G2（提示）「闭环」措辞须按项收敛**：F12–F15 全为蓝图（`/rebind`、`ON CONFLICT`、`STRICT_SECURITY_MODE`、`X-EQT-Security-Degraded`、`isFirstBound` 均 0 命中），只有 F16/F17 真闭环。章节标题不得用「闭环决议」覆盖仅有方案的部分。
 >   - **G3（低危）新增用例必须能因被覆盖逻辑的回归而转红**：T4.6 名为"非法 Base64URL 拒绝"，实则断言**合法**输入 `typeof base64UrlDecode('abc')==='object'`（恒真），且 `threwInvalidB64` 赋值后**永不读取**（N4 同型死变量）；删掉整段非法输入 try/catch 后仍绿 ⇒ 零判别力。**新断言写完必须做"删掉它要保护的那段逻辑，用例是否转红"的反向验证**（falsification probe）。
 >   - **G4（提示）失败要 fail-clean**：T4.7c 未做空值短路，回归时抛 `TypeError` 使套件以 `Unhandled test failure` **中断**，丢失 `Results: N passed, M failed` 与后续用例计数。断言链上的多级取值须用可选链前置短路。
+>   - **✅ G1~G5 闭环落实（v1.36.85 · 2026-09-11）**：G1 三项已全量落入 `pkg/cert` 与 `desktop/gui`，配齐可证伪单测与 Warning；G3 移除死变量并采用 RFC 7515 官方向量精确比对；G4 接入可选链达成 Fail-Clean；版本升级至 `v1.36.85`。

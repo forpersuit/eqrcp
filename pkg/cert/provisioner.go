@@ -96,6 +96,7 @@ func LoadOrGenerateDeviceKey(nodeID string) (*ecdsa.PrivateKey, error) {
 				}
 			}
 		}
+		log.Printf("[LAN-TLS-KEY] [WARNING] Existing private key at %s is corrupted or invalid, generating new key (may cause cloud node_key_mismatch if already registered)", keyPath)
 	}
 
 	// 2. Generate a new ECDSA P-256 private key
@@ -128,6 +129,7 @@ func LoadOrGenerateDeviceKey(nodeID string) (*ecdsa.PrivateKey, error) {
 		return nil, fmt.Errorf("failed to commit private key: %w", err)
 	}
 
+	log.Printf("[LAN-TLS-KEY] [INFO] Generated new ECDSA P-256 private key for node %s at %s", nodeID, keyPath)
 	return priv, nil
 }
 
@@ -462,6 +464,7 @@ var (
 	ErrRateLimited     = errors.New("certificate issuance rate limit exceeded")
 	ErrGatewayFailed   = errors.New("remote certification gateway request failed")
 	ErrCertKeyMismatch = errors.New("certificate public key does not match local device private key")
+	ErrNodeKeyMismatch = errors.New("node public key does not match cloud registration")
 )
 
 // ProvisionOptions configures the client parameters for provisioning a device certificate.
@@ -641,6 +644,9 @@ func RequestDeviceCertificate(ctx context.Context, client *http.Client, opts Pro
 		}
 		if resp.StatusCode == http.StatusBadRequest && respPayload.ReasonKey == "invalid_csr" {
 			return nil, fmt.Errorf("%w: %s", ErrInvalidCSR, respPayload.Error)
+		}
+		if resp.StatusCode == http.StatusForbidden && respPayload.ReasonKey == "node_key_mismatch" {
+			return nil, fmt.Errorf("%w: %s", ErrNodeKeyMismatch, respPayload.Error)
 		}
 		return nil, fmt.Errorf("%w: HTTP %d: %s", ErrGatewayFailed, resp.StatusCode, respPayload.Error)
 	}

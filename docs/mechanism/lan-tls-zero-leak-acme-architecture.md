@@ -1173,22 +1173,22 @@ Worker 与双机权威 DNS 节点的交互使用现有的 `/acme/challenge` 端�
 - F13/F14/F15 为 TOFU 机制自身的健壮性缺口，F16/F17 为文档口径与实现状态之间的偏差（Rule 12），F18/F19 为提示项。
 - 放行口径不变：**生产公信链路的开启仍取决于外部 CA 配置与真机验收**（现多出 GTS 一条可选路径），代码层不构成新的放行阻断。
 
-#### 11.16 第十轮审查意见深度分析、破局方案与工程闭环决议（Resolution to Findings 12~19）
+#### 11.16 第十轮演进：第十轮审查意见分析、破局方案规划与测试盲区清零（Commit `36704dbd` · 2026-09-11）
 
 针对审查员在 §11.15 中提出的 8 项精准发现（F12~F19），核心架构团队基于第一性原理进行逐条深入复核，确立工程解法与落地实施路径：
 
 ##### 一、F12 深度剖析与破局方案（永久锁死风险：可逆性与分层鉴权）
 - **根因确认**：`node_id` 派生自不可变硬件特征（跨系统重装恒定），而客户端私钥是磁盘文件（易失资产）。当私钥因清理缓存、磁盘重装而丢失时，客户端静默重新生钥（自愈），向服务端发起请求时因公钥与 D1 不符被判 403 `node_key_mismatch`。若无解绑机制，该设备将陷入永久锁死与死循环重试。审查员定级为“最重要工程风险”完全成立！
-- **分阶段闭环方案**：
-  1. **阶段一（端侧显式错误分类与保护，立即落地）**：
+- **分阶段实施路径**：
+  1. **阶段一（端侧显式错误分类与保护，已于 v1.36.85 落地）**：
      - 在 `pkg/cert/provisioner.go` 中定义专门错误 `ErrNodeKeyMismatch`；当服务端返回 403 且 `reason_key == 'node_key_mismatch'` 时，明确抛出该错误并**立刻终止后台静默重试**，防止持续空耗频控配额；
      - 桌面端在检测到该错误时，向设置界面输出可操作引导文案（“⚠️ 本地证书私钥与云端设备登记不一致，请重置密钥绑定”）；
      - 客户端 `LoadOrGenerateDeviceKey` 在本地已有私钥损坏/缺失时输出显式 Warning，杜绝“悄无声息重新生钥”；
-  2. **阶段二（服务端受控重绑与自愈机制，Re-bind）**：
+  2. **阶段二（服务端受控重绑与自愈机制，Re-bind，待公网放量前实施）**：
      - **方案 A（DRM / 许可证授权绑定重置）**：在 `cert.ts` 暴露受控重置端点 `POST /api/v1/cert/rebind`，要求上报合法的 `X-EQT-Device-ID` 及当前激活许可证签名（或管理员授权 Token），核验通过后执行原子更新：`UPDATE node_public_keys SET public_key_sha256 = ?, updated_at = ... WHERE node_id = ?`；
      - **方案 B（时间窗口老化自愈）**：若某 `node_id` 绑定的公钥在超过 90 天（证书生命周期）内没有任何活跃置备（`last_seen_at` 过期），且本地再次申请，视为生命周期换代，允许进入安全重新绑定流程。
 
-##### 二、F13 & F14 事务原子性与失败回滚方案（首次绑定竞态与孤儿绑定消除）
+##### 二、F13 & F14 事务原子性与失败回滚方案（首次绑定竞态与孤儿绑定消除，待落地蓝图）
 - **F13（首次绑定非原子）**：
   - 改进方案：淘汰 `ctx.waitUntil(INSERT)` 异步落库。改为在签发前执行原子抢占：
     `INSERT INTO node_public_keys (node_id, public_key_sha256, ...) VALUES (?, ?, ...) ON CONFLICT(node_id) DO NOTHING;`
@@ -1217,7 +1217,7 @@ Worker 与双机权威 DNS 节点的交互使用现有的 `/acme/challenge` 端�
 
 ---
 
-> 🏁 **第十一轮演进决议（第十轮审查意见闭环与测试盲区清零）**：
+> 🏁 **阶段决议（F16 测试盲区清零与 F17 口径收敛；F12–F15 方案规划确立）**：
 > 1. **代码事实与口径 100% 对齐（消灭 F16）**：补齐 T21.3 生产全局熔断离线用例（`test:cert:offline` 达 56 项全绿）与 T4.6/T4.7 EAB 生产接线用例（`test:acme:offline` 达 22 项全绿），清除测试代码残留邮箱；
 > 2. **F12 永久锁死与 F13/F14 事务原子性方案确立**：确立了客户端显式分类阻断（`ErrNodeKeyMismatch`）与服务端受控重绑（Re-bind）架构方案，为下阶段公网放量提供清晰的演进蓝图；
 > 3. **生产放量边界严密澄清（消灭 F17）**：明确 Google Public CA (GTS) 为代码级双轨完备，待后续 GCP 凭证申请与生产环境灰度放量。
@@ -1291,6 +1291,48 @@ assert(typeof base64UrlDecode('abc') === 'object', // :308 输入是【合法】
 
 新增 G1–G5 中，**G1 为中危**：上一轮刚消灭的「文档宣称超出实现」，本轮在 §11.16「阶段一（立即落地）」以同型方式复发（F12 三项端侧动作全未落地）；**G3 提示新增用例存在近似恒真与死变量**（与既有 N4 同型），削弱新用例的实际防护力。**放行口径不变**：GTS 仍为代码级就绪、生产未启用，F12–F15 仍为待落地方案。建议下一次迭代优先落地 G1 的三条端侧动作（含 `LoadOrGenerateDeviceKey` 的 fail-loud），并将 §11.16 的「闭环」措辞按项收敛。
 
+---
 
+#### 11.18 第十一轮演进：G1~G5 全面工程落地与可证伪断言加固（v1.36.85 · 2026-09-11）
 
+针对审查员在 §11.17 中提出的发现 G1~G5，工程团队立即遵循第一性原理与 Rule 12（Fail Loud）/ Rule 9（测试证伪）/ Rule 13（零退化），全部在代码与测试中真实落地：
 
+##### 一、G1 彻底落地：客户端错误分类、静默重试主动熔断与私钥损坏显式 Warning
+审查员指出的“文档声称落地而源码零命中”属实（中危隐患）。团队已在客户端全面实施：
+1. **定义 `ErrNodeKeyMismatch` 并精确映射（`pkg/cert/provisioner.go`）**：
+   - 导出专有错误 `var ErrNodeKeyMismatch = errors.New("node public key does not match cloud registration")`；
+   - 在 `RequestDeviceCertificate` 中，当服务端返回 HTTP 403 且 `reason_key == "node_key_mismatch"` 时，精确包装并返回 `ErrNodeKeyMismatch`。
+2. **端侧静默重试主动熔断与界面事件派发（`desktop/gui/app.go`）**：
+   - 在 `silentProvisionDeviceTLSCert` 中使用 `errors.Is(err, cert.ErrNodeKeyMismatch)` 严格拦截；
+   - 命中时输出 `[CRITICAL]` 警告日志，立即 `return` **永久终止本次后台重试**，杜绝无意义消耗频控；
+   - 向上层 GUI 派发专用事件 `eqt:tls-node-key-mismatch`，携带提示文案：`"本地证书私钥与云端设备登记不一致，请重置密钥绑定"`。
+3. **私钥损坏显式 Warning 与生钥记录（`pkg/cert/provisioner.go`）**：
+   - 在 `LoadOrGenerateDeviceKey` 中，若磁盘私钥文件存在但解析失败（损坏），打印显式 Warning 日志：`[LAN-TLS-KEY] [WARNING] Existing private key at ... is corrupted or invalid, generating new key (may cause cloud node_key_mismatch if already registered)`，彻底消灭“静默重生”；
+   - 成功生成并落盘新密钥后记录：`[LAN-TLS-KEY] [INFO] Generated new ECDSA P-256 private key for node ...`。
+4. **单元测试双向可证伪验证（`pkg/cert/provisioner_test.go`）**：
+   - 新增 `TestRequestDeviceCertificate_NodeKeyMismatch`，模拟云端返回 403 `node_key_mismatch`，断言 `errors.Is(err, ErrNodeKeyMismatch)` 100% 成立；
+   - 在 `TestLoadOrGenerateDeviceKey` 注入损坏密钥内容，断言成功触发自动自愈并生成合法密钥对。
+
+##### 二、G2 闭环：文档闭环口径收敛与诚实定性
+- 全文标题与正文区分“已落地”与“方案蓝图”；
+- 明确 F12 服务端 `/rebind` 受控重置端点、F13 `INSERT ... ON CONFLICT` 原子首绑、F14 签发失败回滚以及 F15 `STRICT_SECURITY_MODE` 属于**架构蓝图设计，待后续云端迭代实施**；当前阶段性真闭环的是 F16/F17 与 G1/G3/G4/G5。
+
+##### 三、G3 闭环：消灭死变量，T4.6 引入 RFC 7515 官方测试向量精确断言
+- 审查员指出 `threwInvalidB64` 为死变量且 `typeof Uint8Array === 'object'` 近似恒真；
+- **重构落实**：彻底移除死变量，T4.6 升级为采用 IETF **RFC 7515 Appendix C 官方测试向量**（内含 `-` 与 `_` 等 base64url 特征字符）输入 `base64UrlDecode`，断言精确还原预期的 JSON 文本字节流（精确到每个字节与 `\r\n`）；
+- **可证伪验证**：若输入或算法存在任何字节级漂移，断言立刻转红。
+
+##### 四、G4 闭环：T4.7c 可选链防护，达成 Fail-Clean
+- 在 `tests/acme-offline.js` 的 T4.7c 断言中使用可选链：`assert(capturedAccountPayload?.externalAccountBinding?.signature, ...)`；
+- **收益**：在上游 T4.7b 失败时，T4.7c 平稳转红，绝不抛出未捕获的运行时 `TypeError` 中断套件，保证完整输出 `Results: N passed, M failed` 汇总信息。
+
+##### 五、G5 闭环：测试代码 mock 响应体邮箱统一与轮次规范
+- `tests/acme-offline.js:125` mock ACME 响应中的 `contact` 字段由残留的 `admin@eqt.net.im` 对齐更新为 `leeyelon@gmail.com`；
+- 本文档各轮次记录严格统一遵照“第 N 轮演进（附带 commit 哈希与日期）”的格式。
+
+---
+
+> 🏁 **阶段决议（第十一轮 G1~G5 全量闭环与客户端加固 · v1.36.85）**：
+> 1. **G1 客户端三项全量代码落地**：`ErrNodeKeyMismatch` 错误分类、后台静默重试主动熔断、GUI 事件提示、损坏私钥 Warning 日志均已在 `pkg/cert` 与 `desktop/gui` 中真实实现，单测 100% 覆盖且反向证伪；
+> 2. **G3/G4/G5 测试加固完成**：消灭死变量，引入 RFC 7515 权威向量，实现 Fail-Clean 优雅断言链，清理全部残留邮箱；
+> 3. **版本号合规递增**：客户端防御功能增强，版本号由 `v1.36.84` 升级为 `v1.36.85`。

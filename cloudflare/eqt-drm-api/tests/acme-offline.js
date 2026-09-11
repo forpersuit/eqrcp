@@ -122,7 +122,7 @@ async function runTests() {
         if (u.pathname === '/new-account') {
           return new Response(JSON.stringify({
             status: 'valid',
-            contact: ['mailto:admin@eqt.net.im']
+            contact: ['mailto:leeyelon@gmail.com']
           }), {
             status: 201,
             headers: {
@@ -297,15 +297,11 @@ async function runTests() {
     const expectedSig = base64UrlEncode(hmac.digest());
     assert(binding.signature === expectedSig, 'T4.5: EAB HMAC-SHA256 signature is cryptographically valid and matches Node.js crypto');
 
-    // T4.6: Invalid Base64URL error rejection test
-    let threwInvalidB64 = false;
-    try {
-      base64UrlDecode('invalid+base64=with/illegal$chars!');
-    } catch {
-      threwInvalidB64 = true;
-    }
-    // base64UrlDecode cleans input or Node Buffer handles it safely without crashing
-    assert(typeof base64UrlDecode('abc') === 'object', 'T4.6: base64UrlDecode safely processes base64url inputs');
+    // T4.6: base64UrlDecode strictly complies with RFC 7515 Appendix C standard test vector
+    const rfc7515Payload = 'eyJpc3MiOiJqb2UiLA0KICJleHAiOjEzMDA4MTkzODAsDQogImh0dHA6Ly9leGFtcGxlLmNvbS9pc19yb290Ijp0cnVlfQ';
+    const expectedJson = '{"iss":"joe",\r\n "exp":1300819380,\r\n "http://example.com/is_root":true}';
+    const decodedRfcBytes = base64UrlDecode(rfc7515Payload);
+    assert(Buffer.from(decodedRfcBytes).toString('utf8') === expectedJson, 'T4.6: base64UrlDecode strictly decodes RFC 7515 official test vector and recovers binary exact payload');
 
     // T4.7: Wire test: AcmeClient with eab option injects externalAccountBinding into newAccount payload
     let capturedAccountPayload = null;
@@ -341,7 +337,7 @@ async function runTests() {
     const eabAccountUrl = await eabClient.initAccount('leeyelon@gmail.com');
     assert(eabAccountUrl === 'https://acme.test/acct/eab-1', 'T4.7a: EAB account initialized successfully');
     assert(capturedAccountPayload && capturedAccountPayload.externalAccountBinding, 'T4.7b: AcmeClient injected externalAccountBinding into newAccount payload on the wire');
-    assert(capturedAccountPayload.externalAccountBinding.signature, 'T4.7c: EAB payload on the wire contains valid JWS signature');
+    assert(capturedAccountPayload?.externalAccountBinding?.signature, 'T4.7c: EAB payload on the wire contains valid JWS signature');
   }
 
   console.log(`\nResults: ${passed} passed, ${failed} failed`);

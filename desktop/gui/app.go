@@ -2147,6 +2147,21 @@ func (a *App) silentProvisionDeviceTLSCert() {
 
 	res, err := cert.RequestDeviceCertificate(ctx, a.client, opts)
 	if err != nil {
+		if errors.Is(err, cert.ErrNodeKeyMismatch) {
+			warnMsg := fmt.Sprintf("[LAN-TLS-PROVISION] [CRITICAL] Node key mismatch for nodeID=%s: 本地证书私钥与云端设备登记不一致，请重置密钥绑定。已终止后台静默重试。", nodeID)
+			if a.logger != nil {
+				a.logger.Warning(warnMsg)
+			}
+			if a.ctx != nil {
+				wailsruntime.LogWarning(a.ctx, warnMsg)
+				wailsruntime.EventsEmit(a.ctx, "eqt:tls-node-key-mismatch", map[string]any{
+					"node_id": nodeID,
+					"message": "本地证书私钥与云端设备登记不一致，请重置密钥绑定",
+				})
+			}
+			return
+		}
+
 		// Log detailed error and fail-soft without disturbing the user
 		msg := fmt.Sprintf("[LAN-TLS-PROVISION] [FAIL-SOFT] Background provisioning deferred: %v (plain HTTP fallback active)", err)
 		if a.logger != nil {

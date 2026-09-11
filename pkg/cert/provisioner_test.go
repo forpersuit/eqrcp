@@ -95,6 +95,18 @@ func TestLoadOrGenerateDeviceKey(t *testing.T) {
 	if !priv1.PublicKey.Equal(&priv2.PublicKey) {
 		t.Fatalf("expected identical public key on reload")
 	}
+
+	// 3. Corrupted key recovery: overwriting with invalid PEM triggers regeneration with warning
+	if err := os.WriteFile(keyPath, []byte("-----BEGIN EC PRIVATE KEY-----\nINVALID CORRUPTED\n-----END EC PRIVATE KEY-----"), 0600); err != nil {
+		t.Fatalf("failed to write corrupted key: %v", err)
+	}
+	priv3, err := LoadOrGenerateDeviceKey(nodeID)
+	if err != nil {
+		t.Fatalf("failed to regenerate key after corruption: %v", err)
+	}
+	if priv3 == nil || priv1.PublicKey.Equal(&priv3.PublicKey) {
+		t.Fatalf("expected new key pair to be generated when existing key file is corrupted")
+	}
 }
 
 func TestGenerateDeviceCSR(t *testing.T) {
@@ -515,6 +527,34 @@ func TestRequestDeviceCertificate_GatewayError(t *testing.T) {
 	}
 	if !errors.Is(err, ErrGatewayFailed) {
 		t.Errorf("expected error to wrap ErrGatewayFailed, got: %v", err)
+	}
+}
+
+func TestRequestDeviceCertificate_NodeKeyMismatch(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_ = json.NewEncoder(w).Encode(provisionResponsePayload{
+			Error:     "node public key mismatch with cloud registered key",
+			ReasonKey: "node_key_mismatch",
+		})
+	}))
+	defer server.Close()
+
+	opts := ProvisionOptions{
+		Endpoint: server.URL,
+		NodeID:   "mismatchnode01",
+	}
+
+	_, err := RequestDeviceCertificate(context.Background(), server.Client(), opts)
+	if err == nil {
+		t.Fatalf("expected ErrNodeKeyMismatch, got nil")
+	}
+	if !errors.Is(err, ErrNodeKeyMismatch) {
+		t.Errorf("expected error to wrap ErrNodeKeyMismatch, got: %v", err)
 	}
 }
 
