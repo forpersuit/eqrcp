@@ -25,7 +25,7 @@
 >
 > **⑨ 第八轮落地演进：TOFU 公钥绑定与三层立体防刷体系（2026-09-11，详见 §11.13）**：开发提交 `d212137a`（v1.36.83）彻底解决 Action 2 / FINDING 2 遗留的防刷风险。D1 引入 `node_public_keys` 动态表实现 TOFU（首次使用信任）强绑定，首次置备登记 SPKI SHA-256 指纹，异钥提交直接 403 `node_key_mismatch` 阻断；建立 Node 级（3次/24h，429 `rate_limited`）+ 单 IP 级（10次/24h，429 `ip_rate_limited`）+ 生产全局 ACME 熔断兜底（40次/7天，429 `global_rate_limited`）三层防护体系；CLI `--cert/--key` 显式输出安全通知日志，`sync-certs-from-vps.sh` 增加弃用提示；新增 T20/T21 测试，离线套件扩充至 55 项全绿。
 >
-> **⑩ 第九轮战略升级：PSL 准入门槛事实校准与 Google Cloud Public CA (GTS) EAB 双轨路线（2026-09-11，详见 §11.14）**：澄清 Mozilla PSL PRIVATE 准入规范要求 2,000~3,000 独立用户实例证明的客观门槛，非早期冷启动前置；为彻底破除 Let's Encrypt 每周 50 张限额与 PSL 审核周期阻断，完成 Google Public CA (Google Trust Services) RFC 8555 §7.3.4 External Account Binding (EAB) 双轨集成（HMAC-SHA256 签名绑定）；配额由 GCP 项目独立分配（日均数千张）且免受 eTLD+1 约束，并输出完整交付手册（`docs/deploy/google-cloud-publicca-eab-runbook.md`）；全库对齐联系邮箱为 `leeyelon@gmail.com`；新增离线测试 T4.1~T4.5，ACME 离线套件扩充至 18 项全绿。
+> **⑩ 第九轮战略升级：PSL 准入门槛事实校准与 Google Cloud Public CA (GTS) EAB 双轨路线（2026-09-11，详见 §11.14）**：澄清 Mozilla PSL PRIVATE 准入规范要求 2,000~3,000 独立用户实例证明的客观门槛，非早期冷启动前置；为彻底破除 Let's Encrypt 每周 50 张限额与 PSL 审核周期阻断，完成 Google Public CA (Google Trust Services) RFC 8555 §7.3.4 External Account Binding (EAB) 双轨集成（HMAC-SHA256 签名绑定）；配额由 GCP 项目独立分配且免受 eTLD+1 约束（以实际 Quota 为准），并输出完整交付手册（`docs/deploy/google-cloud-publicca-eab-runbook.md`）；全库对齐联系邮箱为 `leeyelon@gmail.com`；新增离线测试 T4.1~T4.5，ACME 离线套件扩充至 18 项全绿。
 
 ---
 
@@ -137,7 +137,7 @@ Let's Encrypt 对同一注册主域（eTLD+1，即 `eqt.net.im`）设置了默�
    - Mozilla PSL 维护规范对于新增 PRIVATE 注册分区的合并要求申请方必须提供 2,000~3,000 个独立、活跃且已部署的设备或用户证明；
    - 在项目早期、冷启动或灰度测试阶段，该体量尚未达成，因此 **PSL 无法作为早期公网推广的即时前置依赖**；
 2. **突破 50 张/周限制的解耦路径：Google Trust Services (Google Cloud Public CA) RFC 8555 EAB**：
-   - **配额模型本质不同**：Let's Encrypt 严格按注册域名（eTLD+1）施加每周 50 张限制；而 Google Cloud Public CA（由 Google Trust Services 提供）**按 Google Cloud 开发者项目（GCP Project）分配签发配额**（项目默认日配额达数千张，且支持在 Google Cloud Console 一键申请弹性扩额），**完全不按单个 eTLD+1 限制每周 50 张**！
+   - **配额模型本质不同**：Let's Encrypt 严格按注册域名（eTLD+1）施加每周 50 张限制；而 Google Cloud Public CA（由 Google Trust Services 提供）**按 Google Cloud 开发者项目（GCP Project）分配签发配额**（基于项目配额管理，支持在 Google Cloud Console 弹性扩额），**完全不按单个 eTLD+1 限制每周 50 张**！
    - **全球原生信任**：GTS 根证书（GTS Root R1~R4）已被 Windows、macOS、iOS、Android、Linux 及各大主流浏览器全局原生信任，与 Let's Encrypt 具备同等顶级的公信绿锁体验；
    - **标准化 RFC 8555 §7.3.4 EAB 机制**：Google Public CA 要求在 ACME `newAccount` 时附带外部账户绑定（External Account Binding, EAB）。系统已在 `cloudflare/eqt-drm-api` 完整实现 HMAC-SHA256 EAB 签名算法并由离线单测（T4.1~T4.5）100% 覆盖。
    - **双轨自由切换**：生产环境既可通过 `ACME_DIRECTORY_URL` 指向 Google Public CA 生产端点（`https://dv.acme-v02.api.pki.goog/directory`）并注入 GCP EAB 密钥，彻底摆脱对 PSL 合并的依赖；亦可无感切回 Let's Encrypt 生产端点，架构具备最高弹性。
@@ -439,7 +439,7 @@ func ParseLoopbackIP(fqdn string, baseDomain string) net.IP { // ⚠️ 拟名�
 
 ##### 4.2.3 Google Trust Services (Google Cloud Public CA) RFC 8555 EAB 双轨路线（已落地就绪）
 针对 PSL 审核依赖 2000+ 实例证明、且 Let's Encrypt 豁免存在人工审核周期的现实约束，系统已全面引入 **Google Cloud Public CA 作为生产级公信签发双轨通道**：
-1. **配额模型根本解耦**：Google Cloud Public CA 的配额基于 Google Cloud 项目（GCP Project）进行管控（日均配额高达数千张，且可在 Google Cloud Console 一键申请扩额），**完全不按 eTLD+1 限制每周 50 张**！这意味着无需等待 PSL 合并，即可立即支持上万台设备的规模化公网签发；
+1. **配额模型根本解耦**：Google Cloud Public CA 的配额基于 Google Cloud 项目（GCP Project）进行管控（基于项目配额管理，支持在 Google Cloud Console 弹性扩额），**完全不按 eTLD+1 限制每周 50 张**！无需等待 PSL 合并即可突破单主域 50 张/周限制；
 2. **全球受信任根链**：Google Trust Services 根证书（GTS Root R1~R4）被所有主流操作系统与浏览器原生受信，完全满足零警告绿锁体验；
 3. **标准化 RFC 8555 §7.3.4 EAB 支持**：已在 `cloudflare/eqt-drm-api` 完整实现 HMAC-SHA256 EAB 签名；生产环境仅需配置 `ACME_DIRECTORY_URL = "https://dv.acme-v02.api.pki.goog/directory"` 并注入 `ACME_EAB_KID` 与 `ACME_EAB_HMAC_KEY`，即可在 0 秒内无感切换至 Google Public CA；
 4. **运维与落地规范**：完整操作流程与凭证申请指引详见 [`docs/deploy/google-cloud-publicca-eab-runbook.md`](file:///home/yelon/develop/me/eqrcp/docs/deploy/google-cloud-publicca-eab-runbook.md)。
@@ -1105,7 +1105,7 @@ Worker 与双机权威 DNS 节点的交互使用现有的 `/acme/challenge` 端�
    - 澄清 Mozilla PSL 社区对于 PRIVATE 注册分区的合并要求申请方必须提供 2,000~3,000 个独立、活跃且已部署的设备或用户证明；
    - 在项目冷启动和初期推广阶段，由于尚未达到该规模，**PSL 无法作为早期公网推广的即时前置**。
 2. **Google Cloud Public CA (Google Trust Services / GTS) RFC 8555 EAB 双轨架构全面闭环**：
-   - **配额模型根本解耦**：Google Public CA 的签发配额基于 Google Cloud 项目（GCP Project）层级分配（每日数千张，控制台可一键扩额），**完全不按 eTLD+1 限制每周 50 张**，彻底解除了单主域 50 张/周的紧箍咒与 PSL 依赖；
+   - **配额模型根本解耦**：Google Public CA 的签发配额基于 Google Cloud 项目（GCP Project）层级分配（基于项目配额管理，控制台可弹性扩额），**完全不按 eTLD+1 限制每周 50 张**，彻底解除了单主域 50 张/周的紧箍咒与 PSL 依赖；
    - **原生根信任保障**：Google Trust Services 根证书（GTS Root R1~R4）在全平台各 OS 与移动端（iOS Safari/Android Chrome）原生信任，保证零告警公信绿锁；
    - **RFC 8555 §7.3.4 EAB 纯 Web Crypto 算法落地**：在 `cloudflare/eqt-drm-api/src/utils/acme.ts` 实现了 `computeExternalAccountBinding`，采用 HMAC-SHA256 对 `kid` 与 `hmacKey` 签名封装在 JWS 中；
    - **无感环境注入**：Worker `cert.ts` 和 `types.ts` 支持 `ACME_EAB_KID` 与 `ACME_EAB_HMAC_KEY`。生产环境仅需在 `wrangler.toml` 切换 `ACME_DIRECTORY_URL = "https://dv.acme-v02.api.pki.goog/directory"` 并注入 EAB Secret，即可实现代码级双轨切换；
@@ -1862,6 +1862,7 @@ assert(typeof base64UrlDecode('abc') === 'object', // :308 输入是【合法】
         render();
     });
     ```
+    > 💡 **演进说明（N1 交叉引用）**：上述代码块为 v1.36.90 时的历史版本（使用普通对象字面量构建白名单，存在被 `__proto__`/`constructor` 等原型链继承属性穿透的隐患；闭环效益中“绝不拼装”的绝对断言已被第十七轮探针证伪）；该实现已于 §11.30（v1.36.91）全面加固为 `Object.freeze(Object.assign(Object.create(null), ...))` 无原型隔离字典与严格类型守卫。
 - **闭环效益**：
   1. 当前后端仅发射 `node_key_mismatch`（`app.go:2159`），严格命中 `tls_key_mismatch_msg`（7 语齐备），字典命中率 100%；
   2. 即使未来后端传入未知 `reason`，白名单未命中时亦安全回退至合法的 `tls_key_mismatch_msg` 键，绝不拼装出缺失词条的非法 key，彻底杜绝 7 语用户降级为硬编码中文。
@@ -1955,9 +1956,10 @@ assert(typeof base64UrlDecode('abc') === 'object', // :308 输入是【合法】
     | `'constructor'` | `true` | `undefined`（无原型） | `'tls_key_mismatch_msg'` | **安全回退到 7 语译文** |
     | `'toString'` / `'valueOf'` | `true` | `undefined`（无原型） | `'tls_key_mismatch_msg'` | **安全回退到 7 语译文** |
     | `'unknown_reason'` | `true` | `undefined` | `'tls_key_mismatch_msg'` | 安全回退到 7 语译文 |
-    | `''` / `undefined` / `null` | `false` | 未执行 / `undefined` | `'tls_key_mismatch_msg'` | 安全回退到 7 语译文 |
+    | `''`（空字符串） | `true` | `undefined` | `'tls_key_mismatch_msg'` | 安全回退到 7 语译文 |
+    | `undefined` / `null`（缺失字段） | `false` | 短路未执行 | `'tls_key_mismatch_msg'` | 安全回退到 7 语译文 |
     | `{}` / `[]`（恶意非字符串注入） | `false` | 短路 | `'tls_key_mismatch_msg'` | 安全回退到 7 语译文 |
-  - 实测证明：无论是常规未知 reason、原型特殊键（`__proto__`, `constructor`）还是非字符串异常注入，100% 严格回退至 `'tls_key_mismatch_msg'`，绝无任何穿透至 `payload.message` 的可能。
+  - 实测证明：无论是常规未知 reason、原型特殊键（`__proto__`, `constructor`）还是非字符串异常注入，100% 严格回退至 `'tls_key_mismatch_msg'`，绝无经 reason 取值非预期穿透至 `payload.message` 的可能（在极端异常如 i18n 字典缺失时，仍按第二节定界诚实保留其作为底层防御性兜底）。
 
 ##### 二、M2 定界：客观记录当前白名单单映射特性与防御性兜底定位
 - **现状与职责定界**：
@@ -2035,6 +2037,43 @@ assert(typeof base64UrlDecode('abc') === 'object', // :308 输入是【合法】
 > 🏁 **阶段决议（第十八轮独立复核 · 对 `50d99d0e`）**：M1 **真实闭环**（原型穿透经穷举探针消除）、M2 定界**诚实**、§11.30 引文**逐字属实**、EAB wire 注入经反向探针**可证伪**、零退化、版本双面一致，**予以放行，无阻断项**。记录 **N1**（低危；§11.28 未随 §11.30 同步，M3 按实例非类别修复）、**N2/N3**（提示；§11.30 实测列失真与同节自相矛盾）、**G1~G4**（GTS runbook：配额数字无据且与机制文档矛盾 / 漏列 fail-loud 配置 / `gcloud beta` / 四处重复）。**GTS EAB 路线技术合理、架构契合、无需改码，可与现有文档结合——且已在结合中。**
 >
 > **重复计数**：「文档/命名声称超出实现」已连续 **九轮**复发（F16 → G1/G2 → H1/H2/H3 → I1/I4 → J1 → K1 → L1 → M1 → **N1/G1**）。**第十八轮新特征**：① 缺陷已完全退出"核心能力"层，仅剩**历史节次同步遗漏**与**新增部署文档的对外数字**；② **G1 是本战线首次由"新增部署手册"引入不可验证的量化承诺**，提示核查范围须自机制文档扩展至 `docs/deploy/` 全量。新增技能红线 **㉑**（编译型套件的反向探针须经构建脚本运行）与 **㉒**（对外部署文档的量化/时效声明须外部核验并标注来源）。
+
+---
+
+#### 11.32 第十八轮演进：N1~N3 与 G1~G4 全量落地、部署手册校准与历史节次彻底对齐（v1.36.92 · 2026-09-12）
+
+针对审查员在 §11.31 中提出的第十八轮复核意见（N1~N3 及 G1~G4），工程团队全面落实历史节次全量扫描与交叉引用补齐、实测探针表真实化、部署手册前置依赖与命令校准及全仓配额表述归一收敛：
+
+##### 一、历史节次全局对齐与探针精度收敛（N1~N3 闭环）
+1. **N1 落地（全量扫描历史被取代代码块并补齐交叉引用）**：
+   - 不仅在 §11.26 补全演进说明，更对 §11.28 代码块全面追加演进交叉引用批注，明确指出 §11.28 的普通字面量白名单已被证明存在原型链继承穿透隐患，其“绝不拼装”绝对断言已被探针证伪，指引读者直接查阅 §11.30 的无原型字典实现；
+   - 彻底践行“按类别（Category）而非按实例（Instance）修复”，消除文档半旧半新隐患。
+2. **N2 落地（实测探针表格逐字段保真）**：
+   - 在 §11.30 探针表中将混杂的 `''` 与 `undefined`/`null` 拆分两行；
+   - 真实呈现 `typeof '' === 'string'` 为 `true`，而 `REASON_KEY_MAP['']` 为 `undefined` 进而短路安全回退的精确语义。
+3. **N3 落地（消除 M1 与 M2 之间的措辞冲突）**：
+   - 将 §11.30 M1 结尾的绝对断言“绝无任何穿透至 `payload.message`”修正为“绝无经 `reason` 取值非预期穿透至 `payload.message` 的可能”，与 M2 中诚实保留的“在极端异常如 i18n 字典未加载时作为底层防御性兜底”保持完全自洽。
+
+##### 二、GTS EAB 部署实操手册精准校准（G1~G3 闭环）
+1. **G1 落地（剔除未经核验的配额猜测）**：
+   - 彻底删除 `docs/deploy/google-cloud-publicca-eab-runbook.md` 中“每日可签发数万张”等无据量化数字，客观修改为“突破 Let's Encrypt 对单个主域未加入 Mozilla PSL 时每周 50 张的速率限制，具体配额以 GCP 项目实际 Quotas 及配额申请为准，上线前经 Staging 真实标定”。
+2. **G2 落地（补齐 Fail-Loud 必需的基础 ACME 凭证与端点依赖）**：
+   - 在部署手册第二章前明确增加“前置依赖条件”，清晰列明切换至 GTS 是对现有 RFC 8555 协议栈的增强，必须前置就绪持久化账户私钥 `ACME_ACCOUNT_KEY`（防止 500 `acme_misconfigured` 快速失败）以及权威双机 `ACME_DNS_API_ENDPOINTS`、`ACME_DNS_API_TOKEN`。
+3. **G3 落地（对齐 gcloud 官方命令规范）**：
+   - 将创建命令精准纠偏为 `gcloud beta publicca external-account-keys create`，并附带 `gcloud components install beta` 环境安装指引。
+
+##### 三、全仓 GTS EAB 描述权威归一与冲突消除（G4 闭环）
+- 依据 Rule 7（冲突择一，绝不平均），全仓涉及 GTS 配额的叙述全面去除了“数千张”等无据数字，统一收敛为“基于 GCP 项目配额管理，可在 Google Cloud 控制台弹性申请扩额，并在上线前经 Staging 真实标定”，与部署实操手册口径保持全局 100% 严密自洽。
+
+---
+
+> 🏁 **阶段决议（第十八轮演进 · N1~N3 与 G1~G4 全量工程闭环与 v1.36.92 发布）**：
+> 1. **历史节次全局对齐（N1）**：§11.28 补齐演进交叉引用，历史代码块与最新实现界限分明；
+> 2. **探针表与自相矛盾纠偏（N2/N3）**：§11.30 探针表空字符串实测精确化，M1 措辞与 M2 兜底定义完全统一；
+> 3. **部署手册全面校准（G1~G3）**：GTS runbook 消除夸大配额、补齐 Fail-Loud 前置依赖并接入 `gcloud beta`；
+> 4. **全仓叙述归一（G4）**：消除四处文档配额数字打架，统一以部署手册为准；
+> 5. **版本号双面一致递增**：升级至 **`v1.36.92`**。
+
 
 
 

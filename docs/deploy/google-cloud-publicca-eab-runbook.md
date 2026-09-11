@@ -2,7 +2,7 @@
 
 > **方案目标**：通过接入 **Google Trust Services (Google Public CA)** 的 RFC 8555 ACME 签发链路，从根本上突破 Let's Encrypt 对单个主域未加入 Mozilla PSL 时 **每周 50 张证书的硬性配额瓶颈**。  
 > **核心优势**：
-> - **配额极高**：由 Google Cloud 组织项目 API 配额管理（每秒多张，每日可签发数万张），不再受单主域 50 张/周限制；
+> - **突破配额瓶颈**：通过 Google Cloud 项目维度分配签发配额，突破 Let's Encrypt 对单个主域未加入 Mozilla PSL 时每周 50 张的速率限制（具体配额以 GCP 项目实际 Quotas 及配额申请为准，上线前经 Staging 真实标定）；
 > - **全球原生公信信任**：GTS Root R1~R4 内置于 Windows、macOS、Linux、iOS、Android 以及 Chrome、Safari、Firefox、Edge 等所有现代操作系统与浏览器中，100% 呈现原生安全绿锁；
 > - **完全免费**：Google Public CA 提供的 DV 单域/通配符证书完全免费；
 > - **RFC 8555 标准兼容**：除初次注册账户时需携带一次性 EAB (External Account Binding) 外，其余 DNS-01 验证与证书签发流程与现有机制 100% 兼容。
@@ -11,7 +11,7 @@
 
 ## 一、 Google Cloud 控制台 3 分钟获取 EAB 凭证（无需本地安装 gcloud）
 
-由于该操作需要绑定您的 Google Cloud 账号，您无需在本地机器或服务器安装任何软件，直接使用 Google Cloud 网页自带的 **Cloud Shell** 即可：
+由于该操作需要绑定您的 Google Cloud 账号，您无需在本地机器或服务器安装任何软件，直接使用 Google Cloud 网页自带的 **Cloud Shell** 即可（若在本地机器执行，请确保先运行 `gcloud components install beta`）：
 
 ### 步骤 1：打开并登录 Google Cloud 控制台
 1. 在浏览器中打开 [Google Cloud Console](https://console.cloud.google.com/) 并登录您的 Google 账号（例如 `leeyelon@gmail.com`）；
@@ -21,7 +21,7 @@
 
 ### 步骤 2：激活 Cloud Shell（云端网页终端）
 1. 点击控制台右上角导航栏的 **"Activate Cloud Shell"（激活 Cloud Shell）** 图标（命令行终端图标 `>_`）；
-2. 页面底部将弹出一个已经自带 `gcloud` 且已完成认证的交互式终端窗口。
+2. 页面底部将弹出一个已经自带 `gcloud`（含 beta 组件）且已完成认证的交互式终端窗口。
 
 ---
 
@@ -33,8 +33,8 @@
 # 1. 启用 Google Public Certificate Authority 服务 API
 gcloud services enable publicca.googleapis.com
 
-# 2. 生成 External Account Binding (EAB) 凭据对
-gcloud publicca external-account-keys create
+# 2. 生成 External Account Binding (EAB) 凭据对（当前在 gcloud beta 组件中提供）
+gcloud beta publicca external-account-keys create
 ```
 
 **命令输出示例**：
@@ -45,13 +45,18 @@ keyId: 876543210fedcba... (一串 32 字符的 Key ID)
 
 > ⚠️ **安全警告与时效限制**：
 > - `b64MacKey` 是敏感的 HMAC 签名密钥，**仅在生成时显示一次**，请立刻复制并妥善保存；
-> - 该密钥必须在 **7 天内** 完成初次 ACME 账户注册。一旦在 Worker 或 Certbot 中成功注册并绑定账户后，该 ACME 账户便**永久有效**，后续签发证书无需再次生成 EAB。
+> - 该密钥必须在 **7 天内** 完成初次 ACME 账户注册，且该密钥仅能绑定**单一持久 ACME 账户**。一旦在 Worker 中成功注册并持久化账户私钥（`ACME_ACCOUNT_KEY`）后，该账户便永久有效，后续签发证书无需再次生成 EAB。
 
 ---
 
 ## 二、 Cloudflare Worker（云端控制面）环境变量接入
 
-获取到 `keyId` 和 `b64MacKey` 后，仅需在 Cloudflare Worker 中配置 3 个变量即可将发证引擎平滑切换为 Google Trust Services：
+### 0. 前置依赖条件（全局 ACME 基础配置，缺失将直接 500 Fail-Loud）
+切换至 Google Public CA 是对现有 RFC 8555 协议栈的增强。在配置 EAB 之前，必须确保 Cloudflare Worker 已经就绪以下基础基础设施凭证（`cert.ts:935-938` 强制断言）：
+1. **`ACME_ACCOUNT_KEY` (Secret)**：Worker 的持久化 ECDSA P-256 账户私钥 JWK（GTS EAB 仅在首次创建账户时绑定此私钥，之后永久复用；若缺失直接报 500 `acme_misconfigured`）；
+2. **`ACME_DNS_API_ENDPOINTS` 与 `ACME_DNS_API_TOKEN` (Vars / Secret)**：权威双机 DNS-01 质询 API 代理通道与 Bearer Token。
+
+在上述基础配置具备后，仅需在 Cloudflare Worker 中补充配置以下 3 个 EAB 相关变量，即可将发证引擎无缝切换为 Google Trust Services：
 
 ### 1. 本地测试或配置测试环境（`wrangler.toml`）
 在 `cloudflare/eqt-drm-api/wrangler.toml` 的对应环境（`[env.test.vars]` 或 `[vars]`）中指定：
