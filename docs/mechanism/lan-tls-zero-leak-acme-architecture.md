@@ -2074,6 +2074,53 @@ assert(typeof base64UrlDecode('abc') === 'object', // :308 输入是【合法】
 > 4. **全仓叙述归一（G4）**：消除四处文档配额数字打架，统一以部署手册为准；
 > 5. **版本号双面一致递增**：升级至 **`v1.36.92`**。
 
+---
+
+#### 11.33 权威 DNS API 官方主域迁移：全面接入 eqt.net.im 与双机端到端实证（v1.36.93 · 2026-09-12）
+
+针对系统权威 DNS API 长期使用第三方测试域名（`301098.xyz`）的遗留问题，工程团队全面实施向官方主域 `eqt.net.im` 的基础设施平滑迁移，完成 Cloudflare 控制台 DNS 配置、双机 Caddy 证书签发与 Bearer API 真实端到端读写验证：
+
+##### 一、Cloudflare 控制台 DNS 记录配置（浏览器调试端口直连驱动）
+1. **A 记录注入（仅 DNS / 灰云模式）**：
+   - `ns1-dns.eqt.net.im` $\to$ `128.241.227.181`（权威双机节点 1）；
+   - `ns2-dns.eqt.net.im` $\to$ `103.232.92.220`（权威双机节点 2）；
+2. **第一性原理架构保障**：
+   - 维持“仅 DNS（灰云）”以直连 VPS 80/443 端口，规避 CDN WAF 超时与干扰；
+   - 该解析属于 Cloudflare 官方顶级托管，与子域委托（`direct.eqt.net.im`）解耦，绝无任何 DNS Glue 循环依赖。
+
+##### 二、权威双机 Caddy 官方证书签发与反向代理就绪
+1. **ns1 节点升级（128.241.227.181）**：
+   - 消除全局 `acme_dns` 干扰，使用 TLS-ALPN-01 自动化协议栈；
+   - Caddy 秒级成功获取并激活 Let's Encrypt 官方证书，支持 `https://ns1-dns.eqt.net.im` 与老域名双轨共存。
+2. **ns2 节点升级（103.232.92.220）**：
+   - 配置 `ns2-dns.eqt.net.im` 并通过 HTTP-01 验证顺利完成 Let's Encrypt 证书签发与部署。
+
+##### 三、端到端真机 API 验证实测记录
+- **ns1 质询写入与释放验证**：
+  ```bash
+  curl -s -X POST -H "Authorization: Bearer <token>" -d '{"record":"_acme-challenge.testnode.direct.eqt.net.im.","value":"testval"}' https://ns1-dns.eqt.net.im/acme/challenge
+  # => {"ok":true,"record":"_acme-challenge.testnode.direct.eqt.net.im.","ttl":3600,"value":"testval"}
+  curl -s -X DELETE ... https://ns1-dns.eqt.net.im/acme/challenge?record=...
+  # => {"ok":true,"record":"_acme-challenge.testnode.direct.eqt.net.im."}
+  ```
+- **ns2 质询写入与释放验证**：
+  ```bash
+  curl -s -X POST ... https://ns2-dns.eqt.net.im/acme/challenge
+  # => {"ok":true,"record":"_acme-challenge.testnode.direct.eqt.net.im.","ttl":3600,"value":"testval"}
+  curl -s -X DELETE ... https://ns2-dns.eqt.net.im/acme/challenge?record=...
+  # => {"ok":true,"record":"_acme-challenge.testnode.direct.eqt.net.im."}
+  ```
+- **Worker 配置收敛**：
+  - `wrangler.toml` 全面升级为 `ACME_DNS_API_ENDPOINTS = "https://ns1-dns.eqt.net.im,https://ns2-dns.eqt.net.im"`，彻底完成官方主域平滑迁移。
+
+---
+
+> 🏁 **阶段决议（第十九轮演进 · 官方主域迁移全量闭环与 v1.36.93 发布）**：
+> 1. **官方主域统一归口**：权威 DNS API 通道由 `301098.xyz` 全量平滑迁移至 `eqt.net.im`；
+> 2. **真实证书下发与验证**：双机均已签发 Let's Encrypt 公信证书，Bearer Token 鉴权读写 100% 实测通过；
+> 3. **版本号双面一致递增**：升级至 **`v1.36.93`**。
+
+
 
 
 
