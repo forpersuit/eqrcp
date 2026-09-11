@@ -1120,5 +1120,60 @@ Worker 与双机权威 DNS 节点的交互使用现有的 `/acme/challenge` 端�
 > 2. **解除 PSL 早期阻断，公信生产双轨就绪**：打破了必须等待 Mozilla PSL 合并（需 2,000~3,000 实例证明）的传统思维定势，全面打通 Google Cloud Public CA (GTS) RFC 8555 EAB 双轨集成。生产环境既可由 Let's Encrypt 豁免护航，更可通过 Google Public CA 直接开放万级公网用户专属公信绿锁置备；
 > 3. **全链路门禁坚固**：Worker 流水线在 CI 与本地离线测试均具备 `tsc --noEmit` 强类型约束，客户端具备系统根信任锚全链路拦截防护，架构兼具极致安全、高可用与海量扩展性。
 
+---
+
+#### 11.15 第十轮独立复核：TOFU 绑定与 GTS EAB 落地（对 `d212137a` + `6a617d91` + `5eacc36f`）
+
+> **复核时间**：2026-09-11
+> **复核基线（本地实测）**：`npm run typecheck` 退出码 0；`npm run test:cert:offline` → **55 passed / 0 failed**；`npm run test:acme:offline` → **18 passed / 0 failed**；`go test ./pkg/cert` → ok。
+> **复核性质**：不采信 §11.13/§11.14 自述与提交信息，逐条锚定源码并以探针反向证伪。
+
+**一、确认闭环（代码事实）**
+
+| 项 | 代码锚点 | 复核结论 |
+|---|---|---|
+| TOFU 绑定表 | `schema.sql` `node_public_keys(node_id PK, public_key_sha256, device_id, first_bound_at, last_seen_at)` + `cert.ts:30-53` 动态建表 | ✅ 表与索引真实存在 |
+| 异钥阻断 | `cert.ts:866-878`：`SELECT public_key_sha256` → 不等则 403 `node_key_mismatch` | ✅ **探针验证可证伪**：将不等比较中性化为 `pubKeyFingerprint !== pubKeyFingerprint` 后，`T20.2` 立即转红（`54 passed, 1 failed`，退出码 1）；还原后工作区干净 |
+| 三层限频 | Node 3/24h（`:690`）、IP 10/24h（`:714-733`，排除 `127.0.0.1`/`unknown`）、生产全局 40/7d（`:736-757`，仅 `ENVIRONMENT==='production' && acmeRequested` 生效） | ✅ 逻辑成立（第三层当前为**死代码**，见 F17） |
+| EAB 算法 | `acme.ts` `computeExternalAccountBinding`：protected `{alg:'HS256', kid, url}`、payload = 账户公钥 JWK、签名 = HMAC-SHA256 over `${protected}.${payload}` | ✅ 与 RFC 8555 §7.3.4 逐字吻合；`T4.5` 与 Node `crypto.createHmac` 交叉等值验证 |
+| EAB 接线 | `cert.ts:984-993` 仅当 `ACME_EAB_KID && ACME_EAB_HMAC_KEY` 同时存在时注入，随后 `initAccount` | ✅ 注入点正确（但零测试覆盖，见 F16） |
+| 正向收敛 | `provisioner.go:425` `--cert/--key` 输出 `[SECURITY-NOTICE]`；`sync-certs-from-vps.sh` 增加 DEPRECATED 横幅 | ✅ 与 §11.6 路径 1 边界、Phase 4 下线口径一致 |
+
+**二、新增发现**
+
+**F12（重要 · 永久锁死风险）——TOFU 无解绑路径，而客户端会静默重生私钥。**
+- **代码事实**：`node_id` 由硬件指纹确定性派生（`pkg/server/hardware.go` `sha256(uuid:cpu:disk)[:12]`），**重装系统、迁移同机均不变**；而 `pkg/cert/provisioner.go:392-102` 的 `LoadOrGenerateDeviceKey` 在 `privkey.pem` **缺失或解析失败时静默生成新密钥对**。二者叠加：用户一旦丢失/损坏 `~/.config/eqt/certs/<node-id>/`（或换机但沿用同一硬件特征），同一 `node_id` 将携带**新公钥**提交 → 服务端**永久**返回 403 `node_key_mismatch`。
+- **无恢复路径（已全库检索）**：`cert.ts` 中 `node_public_keys` 仅有 `SELECT`/`INSERT`/`UPDATE last_seen_at`，**无解绑、无重绑、无管理端点**（`:555` 的 `DELETE` 是 ACME TXT 质询清理，非密钥绑定）。
+- **用户可见后果**：客户端 403 落入 `provisioner.go:643` 的**通用** `ErrGatewayFailed` 分支（未针对 `node_key_mismatch` 分类），无专门日志与可操作提示；`silentProvisionDeviceTLSCert` 每次启动重试 → 永久停留在"局域网 TLS 正在后台准备中"，且每次重试继续消耗 Node 级频控额度。
+- **建议**：① 服务端补受控重绑路径（如 `device_id` 一致时的管理解绑端点，或带二次验证的 `rebind`）；② 客户端在私钥**缺失/解析失败**时显式告警（当前静默重建恰是触发锁死的根因）；③ 403 `node_key_mismatch` 增加专门错误分类与结构化日志。
+
+**F13（中 · 绑定非原子）——首次绑定为 `check` 与 `ctx.waitUntil(write)` 分离。**
+- **代码事实**：`cert.ts:866` 先 `SELECT`，`:891` 的 `INSERT` 包在 `ctx.waitUntil(...)` 中，**在响应返回后才落库**。首次请求（无既有行）不受任何阻断，签发照常执行；两个并发的首次请求可**各自通过 `SELECT` 并各自签发**，`node_id` 主键仅令后写者 `INSERT` 失败——而该失败仅 `console.error`（`:897`），**不影响已签发证书**。即"首次使用信任"在最需要它的首请求时刻并不原子。
+- **测试盲区**：`T20` 以 `await ctx.drain()` 串行化两次请求，**恰好掩盖了该竞态**。
+- **建议**：改为 `INSERT ... ON CONFLICT DO NOTHING` 后再 `SELECT` 比对（原子 check-and-set），或签发前 `await` 写入完成。
+
+**F14（中）——绑定先于签发、失败不回收。** 绑定点位于签发引擎之前，且写入为异步；若签发因 ACME 配置错误 / 网络异常而失败，该 `node_id` 已与本次公钥绑定。与 F12 叠加即"一次失败的首置备 + 客户端后续重生密钥 = 永久锁死"。
+
+**F15（中 · fail-open 未声明）——绑定校验整体降级为告警。** `cert.ts:857-905` 整块 `try/catch` 仅 `console.warn`：D1 不可用或查询抛错时，**绑定校验被静默跳过，签发继续执行**。属可用性优先的有意取舍，但文档未声明该降级，与 Rule 12（Fail loud）存在张力。建议至少在响应头或审计日志中显式记录降级事件。
+
+**F16（文档口径夸大 · Rule 12）——所宣称的测试覆盖大于实测。**
+- §11.13 称"新增 T20.1~T20.4 与 T21.1~T21.3"；实测仅 **T20.1 / T20.2 / T21.1 / T21.2（共 4 条）**。**第三层"生产全局 40 次/周熔断"无任何测试**（该分支仅在 `production && acmeRequested` 成立时进入，离线 mock 未构造）。
+- §11.14 称 T4.1~T4.5 覆盖"非法 Base64URL 拒绝、`initAccount` EAB payload 注入"；实测 **T4.1–T4.5 仅验证 `computeExternalAccountBinding` 的 JWS 结构与 HMAC 等值**，**无非法 Base64URL 用例，亦无一条经过 `initAccount` 的 EAB 注入用例**。即 `cert.ts → AcmeClient.create(eab) → initAccount → payload.externalAccountBinding` 这条**生产接线零覆盖**——若 `eab` 选项在传递链中丢失，现有 18 项仍全绿。
+- 另：`tests/acme-offline.js:240` 仍传旧邮箱 `admin@eqt.net.im`，与 §11.14 "全库邮箱对齐" 的表述不一致。
+
+**F17（口径 · 能力就位 ≠ 生产就绪）——GTS 未启用，生产仍是原状。** `wrangler.toml:79` 测试环境仍指向 **Let's Encrypt** `acme-v02.api.letsencrypt.org`，**未切换至 GTS**；生产 `[vars]`（`:18-38`）仍**无任何 ACME 字段**；GCP 项目、EAB Secret、生产真机验收均未产出。故 §11.14 与 🏁 的"双轨生产就绪 / 秒级双轨切换 / 直接开放万级公网用户"应校准为**代码路径就绪、待 GCP 配置与生产验收**。（GTS 免 eTLD+1 限制的配额模型结论本身正确，是解除 PSL 依赖的正确方向。）
+
+**F18（提示 · 轮次编号冲突）**：本文档元信息与 §11.13/§11.14 使用"第八轮/第九轮"命名，与 `docs/bugs/2026-09-11-review-attachment-policy-and-typecheck-gates.md` 中审查方的"第八轮 = `8d8bce11`、第九轮 = `954dfa6e`"指代不同，跨文档追溯易混。建议机制文档改用"路线 B 第 N 次落地"或统一附日期。
+
+**F19（提示 · 个人邮箱入库）**：`ACME_EMAIL` 由 `admin@eqt.net.im` 改为 `leeyelon@gmail.com`，并同步写入公开仓库（`wrangler.toml`、配额豁免申请表）。CA 侧确需可达邮箱，但请确认该个人邮箱公开可接受；如否则建议改用角色邮箱 + 转发。
+
+**三、复核结论**
+
+- **TOFU 与 EAB 的实现本体正确**：异钥 403 经探针确认真实可证伪；EAB 算法与 RFC 8555 §7.3.4 及 Node 密码学实现交叉一致；三项门禁（`tsc`、55/0、18/0）本地复现全绿。
+- **F12 为本轮最重要的工程风险**：它把"防冒名"的防线反向变成了"防合法设备恢复"的单点，且触发条件（用户清理缓存、换机、磁盘损坏）在日常运维中并不罕见，属**先于公网放量必须处置**项。
+- F13/F14/F15 为 TOFU 机制自身的健壮性缺口，F16/F17 为文档口径与实现状态之间的偏差（Rule 12），F18/F19 为提示项。
+- 放行口径不变：**生产公信链路的开启仍取决于外部 CA 配置与真机验收**（现多出 GTS 一条可选路径），代码层不构成新的放行阻断。
+
+
 
 

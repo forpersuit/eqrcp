@@ -252,3 +252,12 @@ WantedBy=multi-user.target
 > - **三层立体防刷体系**：Node-ID 每日上限 3 次 + 单 IP 每日上限 10 次 + 生产环境全局周上限 40 次（在 50 张硬顶前预留安全缓冲），杜绝黑客脚本轮换 node_id 耗尽全网配额；
 > - **Fail-Soft 生产安全降级**：生产环境在未配置 ACME 凭证时安全回退自签 CA，Go 客户端通过根信任锚校验静默拒绝非法证书并维持局域网普通 HTTP，严禁为追求绿锁而妥协安全信任链；
 > - **Google Cloud Public CA (GTS) EAB 平行接驳**：已在 `acme.ts` 中根据 RFC 8555 §7.3.4 原生实现 HMAC-SHA256 EAB 算法，彻底摆脱单主域 50 张/周限额，具备与 Let's Encrypt 双活灾备能力；实操手册归档于 [`docs/deploy/google-cloud-publicca-eab-runbook.md`](file:///home/yelon/develop/me/eqrcp/docs/deploy/google-cloud-publicca-eab-runbook.md)。
+
+> **审查红线（第十一轮沉淀 · Rule 9/12/13）**：⑬ **TOFU 绑定与 CA 双轨的落地判据**（对 `d212137a`/`6a617d91` 的复核，详见机制文档 §11.15）：
+> - **🔴 绑定必须可逆，否则防线反噬**：`node_id` 由硬件指纹**确定性**派生（重装/换机不变），而 `LoadOrGenerateDeviceKey` 在私钥缺失/损坏时**静默重生**密钥。若 TOFU 只写不解绑，用户清理缓存、换机或磁盘损坏即触发**同 node_id + 新公钥 → 永久 403 `node_key_mismatch`**，且客户端 403 落入通用 `ErrGatewayFailed`、每次启动静默重试。**判据：任何"首次绑定"必须同时给出解绑/重绑路径，并让客户端在被拒时有可操作提示与专门错误分类（F12）。**
+> - **绑定必须原子**：`SELECT` 与 `ctx.waitUntil(INSERT)` 分离 → 并发首请求可各自通过校验并各自签发，主键冲突仅 `console.error`。须改 `INSERT ... ON CONFLICT DO NOTHING` 后 `SELECT` 比对，或签发前 `await` 落库（F13）。测试若以 `ctx.drain()` 串行化，则**恰好掩盖竞态**——此类"我为了让测试通过而 drain"的写法本身即是盲区信号。
+> - **绑定不得先于签发失败而无回收**：绑定点位于签发前，签发失败（ACME 500/网络）后 node 已被占用，与上一条叠加即成永久锁死（F14）。
+> - **fail-open 必须显式声明**：D1 异常时当前实现"跳过绑定校验并继续签发"（仅 `console.warn`）。属可用性取舍但不能沉默——须在审计日志/响应中记录降级（F15）。
+> - **测试覆盖须与文档口径逐条对齐（Rule 12）**：本轮声称 T20.1~T20.4 / T21.1~T21.3 / T4.1~T4.5 覆盖非法 Base64URL 与 `initAccount` 注入，实测仅 T20.1–2、T21.1–2、T4.1–5 且**生产全局熔断与 EAB 接线零覆盖**。"新增 N 项断言"必须与仓库内实际断言 ID 一致。
+> - **能力就位 ≠ 已启用**：GTS EAB 代码路径就绪，但 `wrangler.toml` 仍指向 Let's Encrypt、生产 `[vars]` 无 ACME 字段、GCP/EAB Secret 未注入。表述"双轨生产就绪"须附带"待 GCP 配置与真机验收"的边界（F17）。
+> - **公开仓库的联络邮箱**：`ACME_EMAIL` 已改为个人 Gmail 并入库，CA 侧需可达邮箱属事实，但入库前须确认公开可接受（F19）。
