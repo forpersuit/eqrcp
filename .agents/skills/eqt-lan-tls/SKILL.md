@@ -245,3 +245,9 @@ WantedBy=multi-user.target
 > **审查红线（第八轮沉淀 · Rule 9/12）**：⑩ **“测试驱动生产函数”仍须核对调用点与适配器**——① 测试锁住函数体，**锁不住装配**：若调用方（`App.svelte`）改回内联实现或漏调，测试不转红（无 DOM/host runner）；② 以 `as any` 适配桥接边界会使新契约**不参与编译期校验**（“有类型而无校验”）；③ 依赖本地钩子（`.git/hooks/pre-commit`，不受版本控制）的新逻辑，**必须重跑 `scripts/install-hooks.sh`** 方在其他环境生效，否则静默失效。✅ ① ② ③ 已于 `954dfa6e` 闭环（Case 10 静态装配锁 + `TransferUpdatePayload = TransferEvent` 零 `as any` + 钩子模板内嵌自暂存）。
 
 > **审查红线（第九轮沉淀 · Rule 9/12）**：⑪ **“反向证伪”必须覆盖装配层与路径守卫**——⑩ 的前两项由 `954dfa6e` 的 Case 10 以**源码静态断言**闭环（探针：还原内联拼接 / 重命名 `applyBatchDownloadCancelled(` 均转红），但静态锁自身仍有三处需警惕：① `fs.existsSync` 守卫使路径失配时**静默跳过**（违 Rule 12，须 `assert(false)` 化）；② `String.includes()` 子串匹配只命中 `id: 'dl-` / `"dl-` / `` `dl-`` 三种字面量，注释即假阳、变体即假阴，属提示锁而非形式化保证；③ 测试文件内的 `// @ts-ignore` 与生产侧的 `as any` 同属类型逃逸，**勿以“端到端零逃逸”泛指**。另：构建脚本剥离 `git add` 后，钩子模板中新注入的环境变量须核对是否存在真实读取点，避免留死变量。
+>
+> **审查红线（第十轮沉淀 · Rule 1/13/14）**：⑫ **“无泄漏 ACME 生产适配与防刷防御标准”**：
+> - **PSL 门槛与过渡期豁免**：Mozilla PSL PRIVATE 分区存在 2,000~3,000+ 独立子域/客户实例的证明门槛，未达规模前不可将生产放量押注在 PSL 立即合并；在 Let's Encrypt 官方 Rate Limit Exemption 审批完成前，注册域维持每周 50 张硬限制；
+> - **TOFU 公钥强绑定（首次使用信任）**：`POST /api/v1/cert/provision` 仅凭 CSR POPO 验签不足以防伪造，必须在 D1 记录 `node_id -> public_key_sha256` 首次强绑定；若后续请求公钥不匹配，直接 403 `node_key_mismatch` 阻断；
+> - **三层立体防刷体系**：Node-ID 每日上限 3 次 + 单 IP 每日上限 10 次 + 生产环境全局周上限 40 次（在 50 张硬顶前预留安全缓冲），杜绝黑客脚本轮换 node_id 耗尽全网配额；
+> - **Fail-Soft 生产安全降级**：生产环境在未配置 ACME 凭证时安全回退自签 CA，Go 客户端通过根信任锚校验静默拒绝非法证书并维持局域网普通 HTTP，严禁为追求绿锁而妥协安全信任链。
