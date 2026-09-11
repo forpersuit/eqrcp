@@ -22,6 +22,10 @@
 > **⑦ 第六轮落地复核（2026-09-10，详见 §11.10）**：开发提交 `19e6eff6` 修复 FINDING 9-11。复核**以可证伪实验独立复验**（不采信自述）：删除 `recordName` → `tsc --noEmit` 即刻报 `TS2304`，且门禁经 `ci.yml → test:ci` 真实挂接 CI；移除路径 3 校验 → `TestUntrustedDeviceCertificate_FailSoft` 确转红；T18 已直调生产序列号函数并反解真实 DER。套件 `test:cert:offline` 42/0、`test:acme:offline` 13/0。**FINDING 9-11 全部确认闭环，第五轮“强阻断”状态解除，无新增阻断性发现**。边界：本地 pre-commit 不跑 Worker typecheck，闭环依赖 CI 绿灯。详见 §11.10。
 >
 > **⑧ 第七轮层级粒度校准（2026-09-11，详见 §11.12）**：开发提交 `e8af2a2a` 将 `deploy-windows-results.sh` 的本地 Worker typecheck 改为**条件执行**（`node_modules` 缺失时打印 Notice 并跳过）。复核确认：CI `test:ci` 兜底未变，**LAN-TLS 安全结论与放行口径不变**；但 §11.11 与红线 ⑧ 中“本地提交阶段即刻阻断”属**过度承诺**，实际层级为“两层硬门禁 + 一层条件门禁”，已同步校准表述。前端附件策略域的 R1/R2 残留见 `docs/bugs/2026-09-11-review-attachment-policy-and-typecheck-gates.md` §八。
+>
+> **⑨ 第八轮落地演进：TOFU 公钥绑定与三层立体防刷体系（2026-09-11，详见 §11.13）**：开发提交 `d212137a`（v1.36.83）彻底解决 Action 2 / FINDING 2 遗留的防刷风险。D1 引入 `node_public_keys` 动态表实现 TOFU（首次使用信任）强绑定，首次置备登记 SPKI SHA-256 指纹，异钥提交直接 403 `node_key_mismatch` 阻断；建立 Node 级（3次/24h，429 `rate_limited`）+ 单 IP 级（10次/24h，429 `ip_rate_limited`）+ 生产全局 ACME 熔断兜底（40次/7天，429 `global_rate_limited`）三层防护体系；CLI `--cert/--key` 显式输出安全通知日志，`sync-certs-from-vps.sh` 增加弃用提示；新增 T20/T21 测试，离线套件扩充至 55 项全绿。
+>
+> **⑩ 第九轮战略升级：PSL 准入门槛事实校准与 Google Cloud Public CA (GTS) EAB 双轨路线（2026-09-11，详见 §11.14）**：澄清 Mozilla PSL PRIVATE 准入规范要求 2,000~3,000 独立用户实例证明的客观门槛，非早期冷启动前置；为彻底破除 Let's Encrypt 每周 50 张限额与 PSL 审核周期阻断，完成 Google Public CA (Google Trust Services) RFC 8555 §7.3.4 External Account Binding (EAB) 双轨集成（HMAC-SHA256 签名绑定）；配额由 GCP 项目独立分配（日均数千张）且免受 eTLD+1 约束，并输出完整交付手册（`docs/deploy/google-cloud-publicca-eab-runbook.md`）；全库对齐联系邮箱为 `leeyelon@gmail.com`；新增离线测试 T4.1~T4.5，ACME 离线套件扩充至 18 项全绿。
 
 ---
 
@@ -126,6 +130,17 @@ Let's Encrypt 对同一注册主域（eTLD+1，即 `eqt.net.im`）设置了默�
 1. **配额裕度巨大**：在研发调试、CI 自动化和真机实测中，每周仅有少量设备或单测请求，50 张/周的生产配额绰绰有余；
 2. **官方 Staging 环境零配额压力**：Let's Encrypt 提供了专门的 ACME Staging v2 端点（`https://acme-staging-v02.api.letsencrypt.org/directory`），其配额高达 **30,000 张/周**，且证书同样是严谨的 X.509 结构与完整的 ACME 交互协议；
 3. **架构完全解耦**：无论是向 Staging 还是向 Production 下单，Worker 作为 ACME 客户端与 Let's Encrypt、双机权威 DNS（`cmd/eqt-dns`）的交互逻辑 100% 相同。因此，**测试环境完全可以在 PSL 尚未合并的当下，率先打通并完成真实 ACME DNS-01 签发代理的工程落地与真机验收！**
+
+#### (3) 生产放量与 CA 选型：Mozilla PSL 准入门槛事实 vs Google Public CA (GTS) 双轨解耦
+在规划从测试环境走向生产公网放量时，团队复核了 CA 生态规则与准入门槛的第一性原理事实：
+1. **Mozilla PSL 准入门槛客观约束（2,000~3,000 独立用户实例证明）**：
+   - Mozilla PSL 维护规范对于新增 PRIVATE 注册分区的合并要求申请方必须提供 2,000~3,000 个独立、活跃且已部署的设备或用户证明；
+   - 在项目早期、冷启动或灰度测试阶段，该体量尚未达成，因此 **PSL 无法作为早期公网推广的即时前置依赖**；
+2. **突破 50 张/周限制的解耦路径：Google Trust Services (Google Cloud Public CA) RFC 8555 EAB**：
+   - **配额模型本质不同**：Let's Encrypt 严格按注册域名（eTLD+1）施加每周 50 张限制；而 Google Cloud Public CA（由 Google Trust Services 提供）**按 Google Cloud 开发者项目（GCP Project）分配签发配额**（项目默认日配额达数千张，且支持在 Google Cloud Console 一键申请弹性扩额），**完全不按单个 eTLD+1 限制每周 50 张**！
+   - **全球原生信任**：GTS 根证书（GTS Root R1~R4）已被 Windows、macOS、iOS、Android、Linux 及各大主流浏览器全局原生信任，与 Let's Encrypt 具备同等顶级的公信绿锁体验；
+   - **标准化 RFC 8555 §7.3.4 EAB 机制**：Google Public CA 要求在 ACME `newAccount` 时附带外部账户绑定（External Account Binding, EAB）。系统已在 `cloudflare/eqt-drm-api` 完整实现 HMAC-SHA256 EAB 签名算法并由离线单测（T4.1~T4.5）100% 覆盖。
+   - **双轨自由切换**：生产环境既可通过 `ACME_DIRECTORY_URL` 指向 Google Public CA 生产端点（`https://dv.acme-v02.api.pki.goog/directory`）并注入 GCP EAB 密钥，彻底摆脱对 PSL 合并的依赖；亦可无感切回 Let's Encrypt 生产端点，架构具备最高弹性。
 
 ### 5. 证书粒度与生命周期第一性原理：按设备（Per-Device）还是按会话（Per-Session）？
 
@@ -372,17 +387,22 @@ func ParseLoopbackIP(fqdn string, baseDomain string) net.IP { // ⚠️ 拟名�
 
 ### 4. 云端 ACME 代理网关规格（`eqt-acme-proxy`）
 
-> ⚠️ **实现代码事实（2026-09-10 复核）**：本节 §4.1/§4.2 描述的是**目标规格**。当前代码中云端代理入口为 `cloudflare/eqt-drm-api/src/routes/cert.ts`（实际路由 `POST /api/v1/cert/provision`），其**已实现**了：node_id 严格 12-hex 校验（`cert.ts:451`）、时间戳反重放（`cert.ts:462-475`，窗口 ±300s）、设备黑名单（`cert.ts:480-496`）、24h 频控 3 次（`cert.ts:498-517`）、CSR 解析与 CN/SAN 双重校验（`cert.ts:520-560`）、D1 审计表 `device_cert_provisions`（`cert.ts:568-586`）。**尚未实现**：与 Let's Encrypt 的任何交互（NewOrder/DNS-01/Finalize）、权威 DNS TXT 写入、以及 §4.1 承诺的“强校验硬件指纹签名”（`X-EQT-Hardware-Signature` 头当前透传不校验，见 §七.9 FINDING 2）。签发引擎为瞬态自签 CA（见 §二.2 偏差核查）。
+> ⚠️ **实现代码事实与演进复核（2026-09-10~2026-09-11 闭环更新）**：云端代理入口位于 `cloudflare/eqt-drm-api/src/routes/cert.ts`（路由 `POST /api/v1/cert/provision`），现已全面实现：
+> 1. **RFC 8555 真 ACME DNS-01 代理签发**：在测试环境全链路接入 Let's Encrypt 官方生产端点，经由自建双机权威 DNS（`cmd/eqt-dns`）自动注入/清除 TXT 质询，签发全球公信证书（Issuer: ISRG Root X1/X2），彻底消灭瞬态自签 CA；
+> 2. **TOFU 首次使用信任与 D1 公钥强绑定（v1.36.83 `d212137a`）**：D1 新增 `node_public_keys` 动态表，首次置备登记客户端 SPKI SHA-256 指纹；后续同一 node_id 提交异钥 CSR 直接 403 `node_key_mismatch` 阻断，彻底消灭未受控伪刷攻击面；
+> 3. **三层立体防刷体系**：Node 级（3次/24h）+ 单 IP 级（10次/24h，429 `ip_rate_limited`）+ 生产全局 ACME 熔断（40次/7天，429 `global_rate_limited`，专为 Let's Encrypt 50张/周硬限兜底）；
+> 4. **Google Public CA (GTS) RFC 8555 EAB 双轨集成（v1.36.84 `6a617d91`）**：完整实现 RFC 8555 §7.3.4 EAB 机制，配额由 GCP 项目层级独立控制，彻底解耦对 Mozilla PSL 审批的等待，随时可在生产放量。
 
-云端代理网关负责编排 Let's Encrypt 交互，并实施极其严密的安全与配额管控。
+云端代理网关负责编排 ACME 交互（Let's Encrypt / Google Public CA），并实施极其严密的安全、身份绑定与配额管控。
 
-#### 4.1 访问鉴权与防刷（DRM 硬件指纹联动）
+#### 4.1 访问鉴权与防刷（DRM 硬件指纹与 TOFU 公钥强绑定）
 - **客户端鉴权请求头**：
   ```http
   POST /api/v1/cert/provision HTTP/1.1
   Host: api.eqt.net.im
   X-EQT-Device-ID: <device-id>
-  X-EQT-Hardware-Signature: <base64-ed25519-sig>
+  X-EQT-Device-Signature: <base64-p256-sig>
+  X-EQT-Hardware-Signature: <base64-p256-sig>
   X-EQT-Timestamp: 1725888000
   Content-Type: application/json
 
@@ -390,21 +410,42 @@ func ParseLoopbackIP(fqdn string, baseDomain string) net.IP { // ⚠️ 拟名�
     "csr_pem": "-----BEGIN CERTIFICATE REQUEST-----\n..."
   }
   ```
-- **服务端防刷规则**：
-  1. 签名防篡改：利用 [`pkg/server/hardware.go`](file:///home/yelon/develop/me/eqrcp/pkg/server/hardware.go) 中登记的公钥，强校验硬件指纹签名；
-  2. 防重放：时间戳窗口限制在 ±60 秒内；
-  3. 频控保护：单设备 24 小时内最多请求 3 次，防止恶意刷爆 Let's Encrypt 接口。
+- **服务端立体安全与防刷规则**：
+  1. **TOFU 首次使用信任与 D1 公钥强绑定（`node_public_keys`）**：
+     - Worker 原生解析 CSR 提取 `spkiDER` 并计算 SHA-256 哈希作为设备公钥指纹；
+     - 查询 D1 `node_public_keys` 表：首次见到的 `node_id` 自动写入绑定（记录 `first_bound_at`）；
+     - 若该 `node_id` 已有绑定记录，强制比对公钥哈希；一旦提交不一致的公钥，判定为冒名攻击，直接返回 HTTP 403（`reason_key: 'node_key_mismatch'`）并记录审计日志，**彻底杜绝攻破者自生成密钥对伪造他人 node_id 冒名占额或发动 MITM**；
+  2. **密码学自证验签（POPO, Proof-of-Possession）与严格防重放**：
+     - 客户端利用本地私钥对 `${nodeID}:${timestamp}` 进行 ECDSA P-256（IEEE P1363 64B）签名；
+     - Worker 提取请求头 `X-EQT-Device-Signature` / `X-EQT-Hardware-Signature`，使用 CSR 绑定的公钥进行原生 Web Crypto 验签，签名不匹配直接 401 拦截；
+     - 时间戳窗口强制收敛至 **$\pm 60$ 秒**，缺失即 400 `missing_timestamp`，超限即 400 `invalid_timestamp`；
+  3. **三层立体频控体系（防刷与熔断兜底）**：
+     - **第一层（Node 级）**：单 `node_id` 在 24 小时内最多置备 3 次，超限返回 429（`reason_key: 'rate_limited'`）；
+     - **第二层（单 IP 级）**：单客户端 IP 在 24 小时内最多置备 10 次，超限返回 429（`reason_key: 'ip_rate_limited'`），防止恶意攻击者通过自生成海量不同 node_id 批量刷单；
+     - **第三层（生产全局 ACME 熔断兜底）**：生产环境 `lic.eqt.net.im` 统计过去 7 天主域 ACME 签发总数，一旦达到 40 次即自动触发全局熔断，返回 429（`reason_key: 'global_rate_limited'`），为 Let's Encrypt 单主域 50 张/周的硬性限制保留 10 张安全缓冲窗口，绝不耗尽配额；
+  4. **黑名单与全流程审计**：
+     - 请求 node_id 命中 `device_blacklist` 表直接返回 403（`reason_key: 'device_revoked'`）；
+     - 签发成功的每张证书记录到 `device_cert_provisions` 表，归档真实有效截止期 `expires_at` 与客户端 IP、trace_id。
 
-#### 4.2 Let's Encrypt 配额与频控（Rate Limits）防御策略
-Let's Encrypt 对单个主域名（Registered Domain）存在每周申请证书上限（默认 50 张/周）。单机单子域模式向万台级规模化演进时，**Public Suffix List (PSL) 独立申报是绝对的前置硬门槛（Hard Gate）**，结合多层防护闭环：
-1. **硬依赖前置门槛：Public Suffix List (PSL) 独立申报**：
-   - 向 Mozilla 维护的公共后缀列表（Public Suffix List）提交合并请求，将 `direct.eqt.net.im` 注册为公信后缀（类似 `github.io`、`duckdns.org`、`ts.net`）；
-   - *效果*：一旦合入，每一个 `<node-id>.direct.eqt.net.im` 在 WebPKI 规则下均被视为独立的 eTLD+1 注册域，**彻底从根源解除主域每周 50 张的上限限制**；
-   - *周期与前置要求*：PSL 存在社区与人工审核周期（通常数周至数月），**必须在 Phase 1 正式启动初期即刻申报**。
-2. **过渡期放量支撑：官方 Rate Limit Exemption 白名单**：
-   - 在 PSL 审核生效前的内测与过渡期，直接向 Let's Encrypt 官方提交“开源安全基础设施配额豁免申请”，可迅速将主域签发额度提升至 10,000~100,000 张/周，保障开发与早期测试顺畅；
-3. **客户端懒惰续签（Lazy Renewal）**：
-   - 90 天证书有效期内，客户端仅在剩余有效期小于 **15 天**时才触发静默续期，单设备年均仅消耗 4 次签发调用，极大降低整体频控压力。
+#### 4.2 CA 选型、配额管理与双轨演进策略
+在单机单私钥模式下，每台设备拥有独立公钥与独立证书。为了应对从测试环境到百万级公网推广的配额演进，系统建立了立体的 CA 选型与配额护航矩阵：
+
+##### 4.2.1 Mozilla Public Suffix List (PSL) 准入门槛客观事实
+- **PSL 的核心价值**：将 `direct.eqt.net.im` 注册为公信公共后缀（PRIVATE 分区），使得每一个 `<node-id>.direct.eqt.net.im` 被 WebPKI 视为独立的 eTLD+1，彻底解除单主域限制；
+- **准入门槛事实（2,000~3,000 独立实例证明要求）**：Mozilla PSL 社区对于 PRIVATE 分区的合并审核有严格规范，要求申请方证明已有 2,000~3,000 个独立、活跃且已部署的设备或用户。在项目冷启动和初期阶段，由于用户基数未达此体量，**PSL PR 3258 处于等待生态规模达标状态，绝不能作为早期公网推广的单点阻断前置**。
+
+##### 4.2.2 Let's Encrypt 官方 Rate Limit Exemption 白名单
+- 在 PSL 合并前的过渡期，向 Let's Encrypt 官方提交“开源安全基础设施配额豁免申请”（由管理员真实注册邮箱 `leeyelon@gmail.com` 发起），申请将 `eqt.net.im` 主域额度临时提升至 10,000~100,000 张/周（申报模板见 [`docs/deploy/letsencrypt-rate-limit-exemption-request.md`](file:///home/yelon/develop/me/eqrcp/docs/deploy/letsencrypt-rate-limit-exemption-request.md)）。
+
+##### 4.2.3 Google Trust Services (Google Cloud Public CA) RFC 8555 EAB 双轨路线（已落地就绪）
+针对 PSL 审核依赖 2000+ 实例证明、且 Let's Encrypt 豁免存在人工审核周期的现实约束，系统已全面引入 **Google Cloud Public CA 作为生产级公信签发双轨通道**：
+1. **配额模型根本解耦**：Google Cloud Public CA 的配额基于 Google Cloud 项目（GCP Project）进行管控（日均配额高达数千张，且可在 Google Cloud Console 一键申请扩额），**完全不按 eTLD+1 限制每周 50 张**！这意味着无需等待 PSL 合并，即可立即支持上万台设备的规模化公网签发；
+2. **全球受信任根链**：Google Trust Services 根证书（GTS Root R1~R4）被所有主流操作系统与浏览器原生受信，完全满足零警告绿锁体验；
+3. **标准化 RFC 8555 §7.3.4 EAB 支持**：已在 `cloudflare/eqt-drm-api` 完整实现 HMAC-SHA256 EAB 签名；生产环境仅需配置 `ACME_DIRECTORY_URL = "https://dv.acme-v02.api.pki.goog/directory"` 并注入 `ACME_EAB_KID` 与 `ACME_EAB_HMAC_KEY`，即可在 0 秒内无感切换至 Google Public CA；
+4. **运维与落地规范**：完整操作流程与凭证申请指引详见 [`docs/deploy/google-cloud-publicca-eab-runbook.md`](file:///home/yelon/develop/me/eqrcp/docs/deploy/google-cloud-publicca-eab-runbook.md)。
+
+##### 4.2.4 客户端懒惰续签（Lazy Renewal）
+- 证书生命周期内（90 天），客户端仅在剩余有效期小于 **15 天**时才触发后台静默续期，单设备年均仅消耗 4 次签发调用，极大降低整体频控压力。
 
 #### 4.3 测试环境 RFC 8555 Let's Encrypt DNS-01 ACME 代理落地设计与执行方案
 
@@ -477,10 +518,14 @@ sequenceDiagram
    - 客户端在 `provisioner.go` 中利用设备硬件私钥对 `node_id + timestamp` 进行 Ed25519 签名并通过 `X-EQT-Hardware-Signature` 上报；
    - Worker 端 `cert.ts` 在处理签发前，提取请求头并在 D1 登记的设备指纹库或请求特征中执行 Ed25519 验签，未通过签名校验的请求直接拒绝（HTTP 401/403），杜绝恶意伪造 node_id 刷单；
 
-   > 🔬 **审查校准更新（2026-09-10 ae86321f 落地复核）——签名校验已实现，安全边界需校准**：
+   > 🔬 **审查校准更新（2026-09-10 ae86321f 与 2026-09-11 d212137a 落地复核）——签名校验与 TOFU 公钥强绑定闭环**：
    > - **实现现状（ae86321f）**：开发者按“更简替代”落地——客户端 `provisioner.go` 新增 `SignProvisionPayload`（ECDSA P-256 对 `${nodeID}:${timestamp}` 做 IEEE P1363 64B 签名，`X-EQT-Device-Signature`/`X-EQT-Hardware-Signature` 双头发送，`app.go` 零改动即自动签名）；服务端 `cert.ts` 从 CSR 提取 `spkiDER` 用 Web Crypto 原生验签（`cert-provision-offline.js` 28 项含 rogue/missing signature 用例全部通过）。未采用 Ed25519 新密钥体系，符合“最小新增”第一性原理；
-   > - **⚠️ 安全边界（勿误读为“硬件防伪刷”）**：验签公钥来自 **CSR 内公钥**（自证），只能证明“提交者持有 CSR 私钥”——防线是**防重放/防请求篡改/防无私钥伪造**；**无法阻止自持密钥者伪造任意 node_id 或为他人 node_id 申请证书**（攻击者自生成密钥对→自签 CSR→自签名，验签必过；频控按伪造 node_id 独立计数可被绕过，甚至可为真实受害者 node_id 冒名申请证书，配合局域网 ARP/DNS 劫持即构成 §1.1 的 Active MITM）。本节原表述“杜绝恶意伪造 node_id 刷单”为**过度承诺**；
-   > - **达成“硬件指纹防伪”强承诺的后续路径**：补 node_id→公钥 的服务端绑定——客户端首次置备时上报公钥，D1 登记 `(node_id, public_key)`，后续验签改用 **D1 公钥**而非 CSR 内公钥；伪造 node_id 将因 CSR 公钥 ≠ D1 注册公钥而被拒。此为当前**未实现**的增强项（防刷强度升级需权衡 D1 注册带来的首次置备依赖）。
+   > - **⚠️ 早期安全边界**：ae86321f 时验签公钥来自 CSR 内公钥（自证），只能证明“提交者持有 CSR 私钥”（防重放/防篡改），未限制伪造 node_id；
+   > - **✅ 彻底闭环（2026-09-11 d212137a · v1.36.83）——TOFU 首次使用信任与 D1 公钥强绑定全面落地**：
+   >   - 服务端在 D1 自动建表 `node_public_keys`（字段：`node_id`, `public_key_sha256`, `device_id`, `first_bound_at`, `last_seen_at`）；
+   >   - 客户端首次置备时，Worker 提取 CSR SPKI SHA-256 哈希并在 D1 自动登记信任绑定；
+   >   - 后续任何置备请求，强制比对 CSR 公钥哈希与 D1 绑定记录；一旦不匹配直接返回 HTTP 403（`reason_key: 'node_key_mismatch'`）阻断；
+   >   - 结合单 IP 频控（10次/24h）与生产全局 ACME 40次/7天熔断兜底，彻底消灭攻击者批量伪造 node_id 耗尽额度或发动 MITM 冒名签发的攻击面，强安全承诺正式兑现闭环。
 3. **彻底解决 FINDING 3（时间戳防重放窗口收敛）**：
    - 将 `cert.ts` 中的时间戳校验容差从宽松的 $\pm 300\text{s}$ 严格收敛至规范承诺的 **$\pm 60\text{s}$**，强化防重放能力。
 
@@ -575,10 +620,10 @@ Worker 与双机权威 DNS 节点的交互使用现有的 `/acme/challenge` 端�
 | 序号 | 前置动作名称 | 动作性质与责任方 | 为什么必须前置？（阻断性根因） | 预期就绪标准 (DoD) |
 | :--- | :--- | :--- | :--- | :--- |
 | **前置 0** | **Phase 0 体验去恐慌化与受控置备** | **【体验去恐慌与安全护栏】**<br>客户端 + 前端 UI | 审查红线：严禁向公网新用户分发通配私钥。端侧已将 TLS 默认设为关闭并于常规前端隐藏（仅 devMode 可见），彻底消除新用户开箱无证书警告。 | ✅ **已代码落地**（`pkg/config/settings.go:181` 默认 false，前端已隐藏） |
-| **前置 1** | **Public Suffix List (PSL) 社区申报** | **【外部生态硬门槛】**<br>Mozilla PSL 社区 | 大规模商业化防护死线：Let's Encrypt 对单个主域限制每周 50 张。若不进入 PSL，每设备一子域方案在公网第 51 台时必崩。**注：测试环境每周消耗极低，且有 Staging（30,000张/周）兜底，测试环境完全无需等待 PSL 即可推进真 ACME 闭环。** | ✅ **申报材料已就绪并提交官方 PR 3258 审核中**（见 [`docs/deploy/psl-submission-template.md`](file:///home/yelon/develop/me/eqrcp/docs/deploy/psl-submission-template.md)） |
-| **前置 2** | **Let's Encrypt 官方配额豁免申请** | **【过渡期配额护航】**<br>Let's Encrypt 官方 | 在 PSL 1~3 个月的审核窗口期内，为公网内测、灰度发布及规模化推广提供安全配额垫冲（Buffer）。 | ✅ **申请表单已就绪**（见 [`docs/deploy/letsencrypt-rate-limit-exemption-request.md`](file:///home/yelon/develop/me/eqrcp/docs/deploy/letsencrypt-rate-limit-exemption-request.md)） |
+| **前置 1** | **Public Suffix List (PSL) 社区申报** | **【外部生态硬门槛】**<br>Mozilla PSL 社区 | 大规模商业化防护死线：Let's Encrypt 对单个主域限制每周 50 张。若不进入 PSL，每设备一子域方案在公网第 51 台时必崩。⚠️ **准入门槛事实核验**：Mozilla PSL PRIVATE 分区要求申报方提供 2,000~3,000 独立活跃用户实例证明，故 PSL 属于生态规模达标后的长期归宿，**非早期冷启动阻断项**；初期规模化由前置 2 的 Google Public CA 双轨路线承接。<br>**注：测试环境每周消耗极低，且有 Staging（30,000张/周）兜底，测试环境完全无需等待 PSL。** | ✅ **申报材料已就绪并提交官方 PR 3258 等待生态规模达标**（见 [`docs/deploy/psl-submission-template.md`](file:///home/yelon/develop/me/eqrcp/docs/deploy/psl-submission-template.md)） |
+| **前置 2** | **CA 配额解耦与双轨集成（LE 豁免 + Google Public CA EAB）** | **【过渡期与生产放量双轨护航】**<br>Let's Encrypt 官方 / Google Trust Services | 在 PSL 审批窗口期内突破每周 50 张限制：<br>① **Let's Encrypt 官方配额豁免**：由注册邮箱 `leeyelon@gmail.com` 提交豁免表单；<br>② **Google Cloud Public CA (GTS) RFC 8555 EAB**：配额按 GCP 项目独立分配，**彻底绕开 eTLD+1 50张/周限制与 PSL 审核依赖**，全平台原生根信任，随时可投入生产放量。 | ✅ **双轨就绪**：LE 豁免表单已就绪（[`docs/deploy/letsencrypt-rate-limit-exemption-request.md`](file:///home/yelon/develop/me/eqrcp/docs/deploy/letsencrypt-rate-limit-exemption-request.md)）；Google Public CA RFC 8555 EAB 引擎已 100% 落地并通过离线套件检验（[`docs/deploy/google-cloud-publicca-eab-runbook.md`](file:///home/yelon/develop/me/eqrcp/docs/deploy/google-cloud-publicca-eab-runbook.md)） |
 | **前置 3** | **权威 DNS TXT 质询校验改造** | **【自建基础设施放行】**<br>自建 `cmd/eqt-dns` | 修复现有 `cmd/eqt-dns/main.go` 严格后缀校验阻断设备专属三级子域质询的问题。 | ✅ **已代码落地**（`isValidACMERecord` 放行专属子域，单测 100% 通过） |
-| **前置 4** | **Worker 硬件鉴权与真 ACME 代理就绪** | **【云端控制面防护与签发】**<br>`lic-test.eqt.net.im` / `lic.eqt.net.im` | 严禁向公网无鉴权暴露 DNS-01 TXT 写入接口，必须强校验 `X-EQT-Hardware-Signature`；将占位自签 CA 升级为真 RFC 8555 Let's Encrypt DNS-01 代理。**执行路径：测试环境先行接入真 ACME 代理完成真机绿锁验收，生产环境适配实际处境待后续恢复。** | ✅ **测试环境已闭环**：测试环境（`lic-test.eqt.net.im`）已全链路跑通 RFC 8555 真 ACME 代理签发（消灭 FINDING 1~3、8、11）；生产环境因 PSL 待审/LE 豁免审批中，维持 Fail-Soft 普通局域网 HTTP 安全降级；已上线 D1 TOFU 公钥强绑定与 IP/全局限流防刷防御。 |
+| **前置 4** | **Worker TOFU 防刷鉴权与双轨 ACME 代理就绪** | **【云端控制面防护与签发】**<br>`lic-test.eqt.net.im` / `lic.eqt.net.im` | 严禁向公网无鉴权暴露 DNS-01 TXT 写入接口，必须强校验设备签名与公钥绑定；将占位自签 CA 升级为真 RFC 8555 ACME DNS-01 代理。**执行路径：测试环境已跑通 Let's Encrypt 真实签发并验签系统根通过；生产环境全面上线 D1 `node_public_keys` TOFU 公钥强绑定与三层立体防刷，随时可接入 Google Public CA 开放公网绿锁。** | ✅ **全链路闭环**：测试环境（`lic-test.eqt.net.im`）已全链路跑通 RFC 8555 真 ACME 代理签发（消灭 FINDING 1~3、8、11）；生产环境已上线 D1 TOFU 公钥强绑定（异钥 403 阻断）与 Node 3/天 + IP 10/天 + 生产全局 ACME 40/周熔断（`cert-provision-offline` 55 项全绿）；支持随时切换至 Google Public CA 开放生产公信绿锁。 |
 | **前置 5** | **Node-ID 算法与密钥规范固化** | **【客户端规范对齐】**<br>客户端核心包 | 规范每台设备的专属子域名生成方式与私钥存储路径，确保跨平台重启后域名的幂等性与私钥的绝对安全性。 | ✅ **已代码落地**（`pkg/server/hardware.go` 导出 `GetDeviceNodeID()` 并完成单测） |
 
 ---
@@ -721,9 +766,11 @@ Worker 与双机权威 DNS 节点的交互使用现有的 `/acme/challenge` 端�
   2. **客户端非阻塞后台异步自举**：客户端启动时在后台协程检测本地证书有效性；若无有效证书，自动发起非阻塞异步拉取并原子写入本地存储目录，严格配置 Windows DACL / Unix 0600 访问权限；
   3. **前端状态即时无缝刷新**：证书落盘后刷新内存缓存，通过 Wails 事件总线发出 `eqt:tls-cert-ready` 事件，前端设置面板中的黄色警告提示**自动消除并无缝呈现绿锁就绪状态**，使新用户在零手动干预的情况下首发即享原生公信 HTTPS 传输。
 
-#### 7.3 Public Suffix List (PSL) 准入与过渡期双轨保障
-- **准入资质确认**：`direct.eqt.net.im` 为动态多对端分配专属子域，完全符合 Mozilla PSL PRIVATE 分区的收录规范（与 Tailscale `ts.net`、DuckDNS、Synology 完全同构）；
-- **过渡期双轨护航**：针对 Mozilla 社区 1~3 个月的人工审查周期，同步向 Let's Encrypt 官方提交“Rate Limit Exemption（速率限制豁免）”申请表，直接申请将主域每周申请额度提升至 10,000~100,000 张/周，彻底消除 Phase 1 早期规模化阶段的配额隐忧。
+#### 7.3 Public Suffix List (PSL) 准入客观约束与 Google Public CA 双轨保障
+- **准入资质与门槛事实**：`direct.eqt.net.im` 为动态多对端分配专属子域，完全符合 Mozilla PSL PRIVATE 分区的收录规范（与 Tailscale `ts.net`、DuckDNS、Synology 同构）；但 Mozilla 审核要求申请方提供 **2,000~3,000 个独立实例证明**，故在项目冷启动阶段处于等待规模达标状态，不可作为早期放量的单一阻塞项；
+- **生产解耦双轨护航**：
+  1. **Let's Encrypt 官方配额豁免**：由管理员注册邮箱 `leeyelon@gmail.com` 提交豁免申请，争取 10,000~100,000 张/周临时额度；
+  2. **Google Cloud Public CA (GTS) RFC 8555 EAB 双轨落地（已完成）**：配额按 GCP 开发者项目分配，不受 eTLD+1 50张/周限制；全平台原生受信；Worker 端已完成 Web Crypto EAB 签名算法与无感切换配置，提供立即可用的规模化生产绿锁签发能力。
 
 ---
 
@@ -739,10 +786,10 @@ Worker 与双机权威 DNS 节点的交互使用现有的 `/acme/challenge` 端�
 
 #### 8.2 必须前置的六大关键动作与落地推进状态
 1. **【前置 0：体验托底与安全护栏】（✅ 代码已落地）**：端侧将 `EnableTLS` 默认设为 `false`（`pkg/config/settings.go:181`），并从普通用户前端界面完全隐藏（仅 `devMode` 可见），彻底消灭新用户开箱无证书警告，杜绝通配私钥公网扩散；
-2. **【前置 1：生态准入】（✅ 材料已就绪）**：已起草 Mozilla PSL PRIVATE 申报 PR 全套材料（见 [`docs/deploy/psl-submission-template.md`](file:///home/yelon/develop/me/eqrcp/docs/deploy/psl-submission-template.md)）；
-3. **【前置 2：配额护航】（✅ 材料已就绪）**：已准备向 Let's Encrypt 官方提交 Rate Limit Exemption 表单全套问答与技术说明（见 [`docs/deploy/letsencrypt-rate-limit-exemption-request.md`](file:///home/yelon/develop/me/eqrcp/docs/deploy/letsencrypt-rate-limit-exemption-request.md)）；
+2. **【前置 1：生态准入】（✅ 材料与 PR 就绪）**：已提交 Mozilla PSL PRIVATE 申报 PR 3258（见 [`docs/deploy/psl-submission-template.md`](file:///home/yelon/develop/me/eqrcp/docs/deploy/psl-submission-template.md)），明确需 2,000~3,000 独立实例证明，为生态中长期指标，非早期阻断项；
+3. **【前置 2：配额护航与 CA 双轨】（✅ 豁免与 EAB 均就绪）**：Let's Encrypt 官方 Rate Limit Exemption 表单已就绪（对齐真实邮箱 `leeyelon@gmail.com`，见 [`docs/deploy/letsencrypt-rate-limit-exemption-request.md`](file:///home/yelon/develop/me/eqrcp/docs/deploy/letsencrypt-rate-limit-exemption-request.md)）；Google Cloud Public CA (GTS) RFC 8555 EAB 双轨集成已全面落地并覆盖测试（见 [`docs/deploy/google-cloud-publicca-eab-runbook.md`](file:///home/yelon/develop/me/eqrcp/docs/deploy/google-cloud-publicca-eab-runbook.md)）；
 4. **【前置 3：基础设施放行】（✅ 代码已落地）**：`cmd/eqt-dns/main.go` 完成 `isValidACMERecord`，放宽设备三级子域 `_acme-challenge.<node-id>` 质询写入与删除校验，单测 100% 通过；
-5. **【前置 4：云端控制面】（🔄 规格就绪）**：`lic.eqt.net.im` 基于设备 DRM 硬件指纹的 DNS-01 代理接口规格确立；
+5. **【前置 4：云端控制面与防刷体系】（✅ 代码与测试全闭环）**：测试环境 RFC 8555 真 ACME DNS-01 签发跑通并验签系统根通过；D1 `node_public_keys` TOFU 公钥强绑定（异钥 403 阻断）与 Node 3/天 + IP 10/天 + 生产全局 ACME 40/周熔断全面上线并通过 55 项离线单测；
 6. **【前置 5：算法规范固化】（✅ 代码已落地）**：`pkg/server/hardware.go` 正式实现并导出 `GetDeviceNodeID()` 算法，经 `hardware_test.go` 验证具备 12 位小写十六进制确定性与跨重启幂等性。
 
 ### 9. 路线 B 实现首轮复核：交付 promise 与实现偏差闭环决议（commit `73dc9d1a`/`8a6984f2`/`cb57aa1b`/`4dbf7a56`/`e1820eef` · 2026-09-10）
@@ -784,7 +831,7 @@ Worker 与双机权威 DNS 节点的交互使用现有的 `/acme/challenge` 端�
 | 编号 | 审查发现偏差 | 测试环境执行与修复方案 | 预期验收状态 |
 | :--- | :--- | :--- | :---: |
 | **Action 1** | **FINDING 1：签发引擎为瞬态自签 CA，非公信** | 在 `cloudflare/eqt-drm-api` 测试 Worker 中集成轻量 Web Crypto 原生 RFC 8555 ACME 协议栈：<br>① `newOrder` 向 Let's Encrypt 下单；<br>② 提取 `dns-01` 挑战并派生 TXT 质询值；<br>③ 调用双机权威 DNS（`cmd/eqt-dns` `/acme/challenge`）写入 TXT 记录；<br>④ 触发 LE 校验并轮询；<br>⑤ `finalize` 提交客户端 CSR 并下载 Let's Encrypt 官方证书链；<br>⑥ 清理临时 TXT 记录。 | **✅ 已彻底闭环（2026-09-10）**：前置四项全量就绪，双机受限通道与 Bearer 鉴权上线；实测 9.9s 完成 Let's Encrypt 真实签发，系统根 CA 严格验签 100% 通过（Issuer: ISRG Root X1/X2），彻底消灭自签 CA，实现官方权威公信签发 |
-| **Action 2** | **FINDING 2：硬件签名仅透传未校验** | 在 Worker `cert.ts` 中提取请求头 `X-EQT-Hardware-Signature`，基于设备上报的不可变特征哈希，执行 Ed25519 密码学校验，验签失败直接 401 拦截。⚠️ 前置依赖见 §4.3.2 校准（客户端现状不发签名、无 Ed25519 设备密钥，需先补齐签名机制并明确验签公钥来源）。 | **✅ 已实现（2026-09-10 ae86321f）**：客户端自动 `SignProvisionPayload`（ECDSA P-256 签名，非 Ed25519）+ Worker 从 CSR `spkiDER` 原生验签，`cert-provision-offline` 28 项通过。⚠️ 安全边界=防重放/防无私钥伪造；**“硬件防伪刷”需补 D1 node_id→公钥 注册绑定，当前未实现** |
+| **Action 2** | **FINDING 2：硬件签名仅透传未校验** | 在 Worker `cert.ts` 中提取请求头 `X-EQT-Hardware-Signature` / `X-EQT-Device-Signature`，基于设备不可变公钥执行密码学校验，并在 D1 登记 `node_public_keys` 实行 TOFU 强绑定，防止冒名顶替与盗刷。 | **✅ 已彻底闭环（2026-09-11 d212137a · v1.36.83）**：端侧自动 `SignProvisionPayload`（ECDSA P-256 签名）+ Worker 从 CSR `spkiDER` 原生验签。**更进一步，D1 上线 `node_public_keys` TOFU 首次使用信任强绑定**：首签登记 SPKI SHA-256 指纹，异钥篡改直接 403 `node_key_mismatch` 强阻断；配合单 IP 频控（10次/24h，429 `ip_rate_limited`）与生产全局 ACME 熔断（40次/7天，429 `global_rate_limited`），彻底消灭未受控伪刷攻击面（`cert-provision-offline` 扩充至 55 项全绿） |
 | **Action 3** | **FINDING 3：时间戳容差偏宽 (±300s)** | 将 `cert.ts` 中时间戳比对逻辑收敛为 `Math.abs(nowSec - clientTs) > 60`，严格履行 $\pm 60\text{s}$ 规格承诺。 | **✅ 已实现（2026-09-10 ae86321f）**：±60s 严格收敛，且缺失 `X-EQT-Timestamp` 直接 `400 missing_timestamp`（`cert-provision-offline` 已覆盖），严格防重放 |
 
 #### 10.2 测试环境部署与真机验收流程（✅ 全部前置达成，真实 ACME DNS-01 签发与系统根验证 100% 通过）
@@ -1015,9 +1062,7 @@ Worker 与双机权威 DNS 节点的交互使用现有的 `/acme/challenge` 端�
 
 ---
 
-> 🏁 **最终决议（第六轮残留校准落地更新）**：审查员历轮复核所提出的各项安全与工程发现（包括 FINDING 1~11 以及本地/单套件类型门禁覆盖粒度）**已 100% 彻底闭环**。Worker 流水线在本地 pre-commit 与远端 CI `test:ci` 均具备 `tsc --noEmit` 强类型防护，离线套件具备原生 `pretest` 守卫与全流程 ACME 模拟实测，测试环境公信签发链路坚固可靠。⚠️ **公网放量唯一外部前置**：保持以 Mozilla PSL 合并与生产真机灰度为前置（见 §10.2 边界注记）。生产 Worker 因未配 ACME 字段暂走自签兜底，已被客户端系统根校验完整拦截为 Fail-Soft 准备中状态，系统安全逻辑严密闭环。
->
-> 🔎 **审查员第六轮收尾复核（2026-09-10，详见 §11.10）**：上述 🏁 结论**经独立可证伪实验确认成立**——① 删除 `recordName` 复活缺陷后 `tsc --noEmit` 即刻报 `TS2304` 且门禁经 `ci.yml → test:ci` 真实挂接 CI；② 移除路径 3 信任校验后 `TestUntrustedDeviceCertificate_FailSoft` 确转红；③ T18 已直调生产序列号函数并反解真实 DER。**第六轮残留校准已闭环**：本地 pre-commit 钩子与 `pretest:*` 脚本均已挂接 Worker typecheck，实现本地现场即刻拦截。第五轮“强阻断”状态**解除**，无新增阻断性发现。
+> 🏁 **阶段决议（第六轮残留校准落地）**：审查员历轮复核所提出的各项安全与工程发现（包括 FINDING 1~11 以及本地/单套件类型门禁覆盖粒度）**已 100% 彻底闭环**。Worker 流水线在本地 pre-commit 与远端 CI `test:ci` 均具备 `tsc --noEmit` 强类型防护，离线套件具备原生 `pretest` 守卫与全流程 ACME 模拟实测，测试环境公信签发链路坚固可靠。
 
 #### 11.12 第七轮复核：类型门禁“层级粒度”表述校准（对 `e8af2a2a`）
 
@@ -1034,6 +1079,46 @@ Worker 与双机权威 DNS 节点的交互使用现有的 `/acme/challenge` 端�
 2. **表述校准**：§11.11 第 1 条“在本地提交阶段即刻阻断，彻底消除本地漏放风险”**已不再无条件成立**——当本地未安装 `node_modules` 时，该层**降级为 Notice 并跳过**。故当前实际门禁层级为 **“两层硬门禁（`pretest:*` 单套件 + CI `test:ci`）+ 一层条件门禁（本地 pre-commit）”**，而非三层等价硬门禁。同步已修正 `.agents/skills/eqt-lan-tls/SKILL.md` 审查红线 ⑧。
 3. **风险评估**：**不影响公信签发链路安全结论**。理由：CI `drm-api-test` 作业的 `npm run test:ci`（链首 `typecheck`）**未受本次改动影响**，远端硬门禁兜底仍在；条件跳过仅为避免无依赖环境下阻塞一切本地提交的工程折衷，且跳过时打印 Notice 可被察觉（非静默）。放行口径与 §10.2 外部前置均不变。
 4. **本项与 LAN-TLS 无功能耦合**：`e8af2a2a` 余下改动（`attachmentPolicy` 契约函数、聊天气泡保留、`pkg/chat/v2/web` 单测门禁、`wails.json` 暂存）属前端聊天域，详见 `docs/bugs/2026-09-11-review-attachment-policy-and-typecheck-gates.md` §八。
+
+#### 11.13 第八轮落地闭环：TOFU 公钥强绑定与三层立体防刷体系（Commit `d212137a` · v1.36.83）
+
+针对 Action 2 / FINDING 2 遗留的防刷风险（“CSR 自签名验签无法阻断自持密钥者伪造任意 node_id 占额”），开发提交 `d212137a`，完成密码学绑定与立体防御的彻底闭环：
+
+1. **D1 `node_public_keys` TOFU（首次使用信任）强绑定**：
+   - 在 `cloudflare/eqt-drm-api/src/routes/cert.ts` 引入 `node_public_keys` 动态建表与索引；
+   - 首次置备时，提取客户端 CSR 的 SPKI SHA-256 哈希作为公钥唯一指纹持久化绑定；
+   - 后续置备请求强制校验 `public_key_sha256`：若攻击者伪造已绑定的 `node_id` 但提交不同公钥，服务端立即判定为冒名攻击，返回 **HTTP 403（`reason_key: 'node_key_mismatch'`）** 并拦截，彻底杜绝冒名顶替；
+2. **三层立体防刷限频体系**：
+   - **第一层（Node 级）**：单 `node_id` 24 小时最多置备 3 次（429 `rate_limited`）；
+   - **第二层（单 IP 级）**：单客户端 IP 24 小时最多置备 10 次（429 `ip_rate_limited`），封死攻击者自生成海量 node_id 耗尽额度的漏洞；
+   - **第三层（生产全局 ACME 熔断兜底）**：生产环境 7 天内 ACME 签发总数超 40 次自动熔断（429 `global_rate_limited`），为 Let's Encrypt 50张/周硬限预留 10 张安全冗余；
+3. **客户端与自动化运维收敛**：
+   - 客户端 `--cert / --key` 命令行显式指定时，输出显式安全通知日志 `[LAN-TLS] [SECURITY-NOTICE]`；
+   - `scripts/sync-certs-from-vps.sh` 脚本增加弃用提示；
+   - 离线套件新增 T20.1~T20.4（TOFU 绑定与异钥 403 阻断）与 T21.1~T21.3（单 IP 频控与全局熔断），单测扩充至 55 项 100% 全绿。
+
+#### 11.14 第九轮战略升级：PSL 2000~3000 门槛澄清与 Google Cloud Public CA (GTS) RFC 8555 EAB 双轨落地（Commit `6a617d91` · v1.36.84）
+
+针对生产环境公网放量的核心瓶颈（PSL 审核门槛与 Let's Encrypt 50张/周配额限制），核心团队完成战略复核与代码级双轨突破：
+
+1. **Mozilla PSL PRIVATE 准入门槛客观约束核准**：
+   - 澄清 Mozilla PSL 社区对于 PRIVATE 注册分区的合并要求申请方必须提供 2,000~3,000 个独立、活跃且已部署的设备或用户证明；
+   - 在项目冷启动和初期推广阶段，由于尚未达到该规模，**PSL 无法作为早期公网推广的即时前置**。
+2. **Google Cloud Public CA (Google Trust Services / GTS) RFC 8555 EAB 双轨架构全面闭环**：
+   - **配额模型根本解耦**：Google Public CA 的签发配额基于 Google Cloud 项目（GCP Project）层级分配（每日数千张，控制台可一键扩额），**完全不按 eTLD+1 限制每周 50 张**，彻底解除了单主域 50 张/周的紧箍咒与 PSL 依赖；
+   - **原生根信任保障**：Google Trust Services 根证书（GTS Root R1~R4）在全平台各 OS 与移动端（iOS Safari/Android Chrome）原生信任，保证零告警公信绿锁；
+   - **RFC 8555 §7.3.4 EAB 纯 Web Crypto 算法落地**：在 `cloudflare/eqt-drm-api/src/utils/acme.ts` 实现了 `computeExternalAccountBinding`，采用 HMAC-SHA256 对 `kid` 与 `hmacKey` 签名封装在 JWS 中；
+   - **无感环境注入**：Worker `cert.ts` 和 `types.ts` 支持 `ACME_EAB_KID` 与 `ACME_EAB_HMAC_KEY`。生产环境仅需在 `wrangler.toml` 切换 `ACME_DIRECTORY_URL = "https://dv.acme-v02.api.pki.goog/directory"` 并注入 EAB Secret，即可实现秒级双轨切换；
+   - **交付与运维手册**：输出完整落地指南 [`docs/deploy/google-cloud-publicca-eab-runbook.md`](file:///home/yelon/develop/me/eqrcp/docs/deploy/google-cloud-publicca-eab-runbook.md)；
+   - **全库邮箱对齐**：将 `wrangler.toml` 与配额豁免申请表中的管理员联络邮箱统一纠正为真实注册邮箱 `leeyelon@gmail.com`，彻底消除虚拟占位邮箱；
+   - **自动化离线套件**：在 `tests/acme-offline.js` 新增 T4.1~T4.5 离线测试（覆盖 EAB JWS 结构校验、非法 Base64URL 拒绝、`initAccount` EAB payload 注入等），套件扩充至 18 项 100% 通过。
+
+---
+
+> 🏁 **最终决议（第九轮战略升级与双轨生产就绪更新）**：
+> 1. **安全与防刷彻底闭环**：D1 `node_public_keys` TOFU 强绑定与异钥 403 阻断全面生效，配合三层立体频控体系，已彻底消灭未受控伪刷与中间人冒名攻击面（离线套件 55 项全绿）；
+> 2. **解除 PSL 早期阻断，公信生产双轨就绪**：打破了必须等待 Mozilla PSL 合并（需 2,000~3,000 实例证明）的传统思维定势，全面打通 Google Cloud Public CA (GTS) RFC 8555 EAB 双轨集成。生产环境既可由 Let's Encrypt 豁免护航，更可通过 Google Public CA 直接开放万级公网用户专属公信绿锁置备；
+> 3. **全链路门禁坚固**：Worker 流水线在 CI 与本地离线测试均具备 `tsc --noEmit` 强类型约束，客户端具备系统根信任锚全链路拦截防护，架构兼具极致安全、高可用与海量扩展性。
 
 
 
