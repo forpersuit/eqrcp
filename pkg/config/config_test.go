@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 
 	"eqt/pkg/application"
@@ -183,5 +184,37 @@ func TestNewReadsMode(t *testing.T) {
 	}
 	if cfg.Mode != "dev" {
 		t.Fatalf("Mode = %q, want dev", cfg.Mode)
+	}
+}
+
+func TestLegacyConfigMigration(t *testing.T) {
+	tempHome := t.TempDir()
+	legacyDir := filepath.Join(tempHome, ".local", "eqt")
+	if err := os.MkdirAll(legacyDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	legacyConfig := filepath.Join(legacyDir, "config.yml")
+	if err := os.WriteFile(legacyConfig, []byte("port: 8888\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	targetDir := filepath.Join(tempHome, ".config", "eqt")
+
+	migrateLegacyOnce = sync.Once{}
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempHome)
+	defer func() {
+		os.Setenv("HOME", oldHome)
+		migrateLegacyOnce = sync.Once{}
+	}()
+
+	maybeMigrateLegacyConfig(targetDir)
+
+	targetConfig := filepath.Join(targetDir, "config.yml")
+	data, err := os.ReadFile(targetConfig)
+	if err != nil {
+		t.Fatalf("expected migrated config.yml at %s, got err: %v", targetConfig, err)
+	}
+	if !strings.Contains(string(data), "port: 8888") {
+		t.Fatalf("unexpected content in migrated config: %s", string(data))
 	}
 }

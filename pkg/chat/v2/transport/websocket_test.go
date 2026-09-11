@@ -11,6 +11,7 @@ import (
 
 	"eqt/pkg/chat/v2/diag"
 	"eqt/pkg/chat/v2/protocol"
+	"eqt/pkg/config"
 
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
@@ -179,11 +180,7 @@ func TestWebSocketCommandLog(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// 3. Verify the file exists and has correct content
-	dir, err := os.UserCacheDir()
-	if err != nil {
-		dir = os.TempDir()
-	}
-	logFilePath := filepath.Join(dir, "eqt", "session-room-token", "device-test-log-peer.log")
+	logFilePath := filepath.Join(config.DefaultLogsDir(), "session-room-token", "device-test-log-peer.log")
 	defer func() {
 		_ = os.Remove(logFilePath)
 		_ = os.Remove(filepath.Dir(logFilePath))

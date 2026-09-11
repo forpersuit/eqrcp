@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"eqt/pkg/application"
 	"eqt/pkg/logger"
@@ -177,6 +178,51 @@ func GetViperInstance(app application.App) *viper.Viper {
 // DefaultConfigDir returns the unified base application data and configuration directory.
 // Priority order:
 // 1. EQT_CONFIG_DIR env var (primarily for test isolation and custom directory overrides)
+var migrateLegacyOnce sync.Once
+
+// maybeMigrateLegacyConfig copies configuration files from legacy ~/.local/eqt to the new targetDir
+// if the target directory does not yet contain configuration files.
+func maybeMigrateLegacyConfig(targetDir string) {
+	migrateLegacyOnce.Do(func() {
+		home, err := os.UserHomeDir()
+		if err != nil || home == "" {
+			return
+		}
+		legacyDir := filepath.Join(home, ".local", "eqt")
+		if filepath.Clean(legacyDir) == filepath.Clean(targetDir) {
+			return
+		}
+		fi, err := os.Stat(legacyDir)
+		if err != nil || !fi.IsDir() {
+			return
+		}
+		// If target dir already exists with config.yml, no migration needed
+		if _, err := os.Stat(filepath.Join(targetDir, "config.yml")); err == nil {
+			return
+		}
+		entries, err := os.ReadDir(legacyDir)
+		if err != nil {
+			return
+		}
+		_ = os.MkdirAll(targetDir, 0755)
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			src := filepath.Join(legacyDir, entry.Name())
+			dst := filepath.Join(targetDir, entry.Name())
+			if _, err := os.Stat(dst); os.IsNotExist(err) {
+				if data, err := os.ReadFile(src); err == nil {
+					_ = os.WriteFile(dst, data, 0644)
+				}
+			}
+		}
+	})
+}
+
+// DefaultConfigDir returns the unified base application data and configuration directory.
+// Priority order:
+// 1. EQT_CONFIG_DIR env var (primarily for test isolation and custom directory overrides)
 // 2. Standard user config directory via os.UserConfigDir():
 //   - Windows: %APPDATA%\eqt (e.g. C:\Users\<user>\AppData\Roaming\eqt)
 //   - Linux/POSIX: ~/.config/eqt (or $XDG_CONFIG_HOME/eqt)
@@ -189,17 +235,18 @@ func DefaultConfigDir() string {
 	if envDir := os.Getenv("EQT_CONFIG_DIR"); envDir != "" {
 		return envDir
 	}
+	var target string
 	if dir, err := os.UserConfigDir(); err == nil && dir != "" {
-		return filepath.Join(dir, "eqt")
+		target = filepath.Join(dir, "eqt")
+	} else if home, err := os.UserHomeDir(); err == nil && home != "" {
+		target = filepath.Join(home, ".config", "eqt")
+	} else if current, err := user.Current(); err == nil && current.HomeDir != "" {
+		target = filepath.Join(current.HomeDir, ".config", "eqt")
+	} else {
+		target = filepath.Join(".", "eqt")
 	}
-	home, err := os.UserHomeDir()
-	if err == nil && home != "" {
-		return filepath.Join(home, ".config", "eqt")
-	}
-	if current, err := user.Current(); err == nil && current.HomeDir != "" {
-		return filepath.Join(current.HomeDir, ".config", "eqt")
-	}
-	return filepath.Join(".", "eqt")
+	maybeMigrateLegacyConfig(target)
+	return target
 }
 
 // DefaultLogsDir returns the unified directory for application logs (xxx/eqt/logs).

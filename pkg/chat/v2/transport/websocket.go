@@ -13,6 +13,7 @@ import (
 	"eqt/pkg/chat/v2/protocol"
 	"eqt/pkg/chat/v2/session"
 	"eqt/pkg/chat/v2/transfer"
+	"eqt/pkg/config"
 
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
@@ -423,11 +424,7 @@ func (h *WebSocketHandler) writeClientLog(token string, peer string, text string
 		logDir = h.logDir()
 	}
 	if logDir == "" {
-		dir, err := os.UserCacheDir()
-		if err != nil {
-			dir = os.TempDir()
-		}
-		logDir = filepath.Join(dir, "eqt")
+		logDir = config.DefaultLogsDir()
 	}
 
 	sessionLogDir := logDir
