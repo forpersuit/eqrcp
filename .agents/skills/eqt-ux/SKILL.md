@@ -363,7 +363,9 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
 - **覆盖边界（勿过度承诺）**：
   - 门禁**仅覆盖 `pkg/chat/v2/web`**；`desktop/gui/frontend`（`main.js` 桥接宿主）**无任何 test 脚本**（package.json 仅有 dev/build/preview），其 `postMessage` 发送端零覆盖——桥接测试只能落在 iframe 契约层。
   - 断言必须触达真实分支：仅对纯函数传入 `undefined` 再断言 `===false` 属**恒真式**（同义反复，Rule 9），无法锁定任何 UI 行为。**正解是抽取生产函数并由测试直接驱动**（`attachmentPolicy.ts` 的 `applyDownloadCancelled` / `applyBatchDownloadCancelled` 即范例），使测试桩化 side-effect 回调并断言其载荷；改变生产函数任一字段即转红。
-  - 抽取“契约函数”后须**全量收敛调用点**：`resolveDownloadTransferId` 已于 `8d8bce11` 达 **13/13**，全仓手写 `'dl-' + …` 归零。**但**测试锁住的是函数体、**锁不住装配**——`App.svelte` 的委托若被改回内联，测试仍全绿（宿主侧无 runner，无法覆盖）。
-  - 适配器**不得用 `as any` 越过新契约**：`App.svelte` 现以 `updateTransfer(u as any)` 适配，使 `TransferUpdatePayload` 在真正的桥接边界不参与编译期校验，形成“有类型而无校验”的假象。应将适配签名对齐 `chatActions.updateTransfer` 的真实入参类型。
-- **环境依赖**：`.git/hooks/pre-commit` 为**本地不受版本控制**的文件，仅由 `scripts/install-hooks.sh` 生成。凡改动该脚本（如注入 `EQT_PRE_COMMIT_CONTEXT=1` 以限定 `wails.json` 自暂存），**必须重跑 `scripts/install-hooks.sh`**，否则新逻辑在其他环境静默失效。
+  - 抽取“契约函数”后须**全量收敛调用点**：`resolveDownloadTransferId` 已于 `8d8bce11` 达 **13/13**，全仓手写 `'dl-' + …` 归零。**装配层**另由 `attachmentPolicy.test.ts` Case 10 锁定——读取 `App.svelte` 源码强断言“必须调用 `applyDownloadCancelled(` / `applyBatchDownloadCancelled(`、严禁手写 `id: 'dl-` 拼接”。经双探针实测（还原为内联拼接 / 重命名函数）均 `EXIT=1`（Rule 9 真闭环）。
+  - **⚠️ 装配锁的两个已知弱点（勿过度承诺）**：① Case 10 以 `if (fs.existsSync(appSveltePath))` 包裹断言，`App.svelte` 路径失配时**静默跳过**（Rule 12 违例，应改 `assert(false)` fail-loud）；② 断言为 `includes()` 子串匹配——注释/死代码中出现 `id: 'dl-` 即假阳，`'dl-' + msgId` 变体则假阴。它是”防漂移提示锁“，非形式化保证。
+  - 适配器**不得用 `as any` 越过新契约**：`App.svelte` 已（`954dfa6e`）以 `TransferUpdatePayload = TransferEvent` 对齐桥接签名并彻底剔除 `as any`，`npm run check` 0 error 佐证其参与编译期校验。**注意**：`attachmentPolicy.test.ts` 首三行仍有 3× `// @ts-ignore`（`node --experimental-strip-types` 无类型环境的既有手段），故测试侧**非**零类型逃逸，仅生产侧为零。
+- **环境依赖**：`.git/hooks/pre-commit` 为**本地不受版本控制**的文件，仅由 `scripts/install-hooks.sh` 生成。凡改动该脚本，**必须重跑 `scripts/install-hooks.sh`**，否则新逻辑在其他环境静默失效。（`954dfa6e` 起 `wails.json` 自暂存逻辑已从构建脚本 `deploy-windows-results.sh` 迁入钩子模板——该变量 `EQT_PRE_COMMIT_CONTEXT` 目前仅写无读，属可清理死变量。）
+- **文档单一事实源**：钩子/部署说明同时存在于 `AGENTS.md`、`GEMINI.md`、`CLAUDE.md`。`954dfa6e` 仅更新前两者，`CLAUDE.md` 的 “Manual Windows acceptance deployment” 仍误指 `install-hooks.sh`（应为 `deploy-windows-results.sh`）。**改动此类说明时须三处同改**，否则即漂移。
 - **通用判据**（与 `eqt-lan-tls` 审查红线 ⑧ 同源）：任何“门禁 / 校验”声明，须锚定到**会真实运行的流水线调用点（文件:行）**，而非脚本定义处。

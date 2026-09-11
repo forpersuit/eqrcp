@@ -279,6 +279,33 @@ const isCancelledFile = (file|image) && ((ulTx && ulTx.state==='cancelled') || (
 
 至此，提示级残留项 R5–R7 全部通过第一性原则工程手段实现真闭环。跨进程装配边界不仅在纯函数与数据流层面具备双向可证伪单测，更在组件装配层面具备防漂移锁；编译期类型系统实现端到端零 `as any` 逃逸；构建部署与版本暂存的职责分界彻底理顺。
 
+---
+
+## 十二、第九轮独立复核（对 `954dfa6e` · 2026-09-11）
+
+> 复核方独立复现，不采信提交说明与 §十一 自述。方法：读源码 + 探针注入反向证伪 + 门禁实测。
+
+### 12.1 R5–R7 闭环判定
+
+| 项 | 声称 | 独立证伪结果 | 判定 |
+| --- | --- | --- | --- |
+| **R5** 装配层防漂移锁 | `attachmentPolicy.test.ts` 用例 10 读 `App.svelte` 源码断言装配调用 | **探针 E**：将某处调用还原为内联 `id: 'dl-' + messageId + '-' + peer` → `EXIT=1`，报 `App.svelte MUST NOT contain handwritten dl- transfer ID concatenation`；**探针 F**：将 `applyBatchDownloadCancelled(` 重命名为 `...X(` → `EXIT=1`，报 `App.svelte MUST assemble applyBatchDownloadCancelled`。两次还原后 `git diff --stat` 为空。 | ✅ 真闭环（装配改回内联实现确会转红） |
+| **R6** 编译期零 `as any` | `TransferUpdatePayload = TransferEvent` 类型别名，`App.svelte` 桥接去 `as any` | `npm run check` → `COMPLETED 111 FILES 0 ERRORS 2 WARNINGS 1 FILES_WITH_PROBLEMS`，`CHECK_EXIT=0`。桥接处若类型不符 svelte-check 必然报错。 | ✅ 类型安全（2 warnings 非本期引入） |
+| **R7** 构建/暂存职责分界 | 构建脚本剥离 `git add`；暂存逻辑内嵌于钩子模板 | 已安装 `.git/hooks/pre-commit` 实测含暂存块（`git diff --quiet ... wails.json` → `git add`）；`deploy-windows-results.sh` 中已无 `git add`。 | ✅ 真闭环 |
+| 版本一致性 | v1.36.82 双面同提交 | `pkg/version/version.go` = `v1.36.82`；`desktop/gui/wails.json` `productVersion` = `1.36.82`，同一提交 `954dfa6e`。 | ✅ 一致 |
+
+### 12.2 新残留（提示级，不影响本期目标）
+
+- **N1 · `existsSync` 静默跳空（Rule 12）**：用例 10 以 `if (fs.existsSync(appSveltePath))` 包裹全部断言。若 `App.svelte` 被移动/改名（或测试文件挪位致相对路径失配），该用例**不报错、直接跳过**——"测试全绿"不再等价于"装配已锁定"。建议路径缺失时 `assert(false, ...)` 显式失败，使装配锁 fail-loud。
+- **N2 · 子串匹配为启发式**：断言基于 `appCode.includes(...)`，只精确命中 `id: 'dl-`、`id: "dl-`、`id: \`dl-` 三种形态；一处注释/死代码中出现 `id: 'dl-` 亦会满足（假阳），而 `'dl-' + msgId` 等变体则漏检（假阴）。作为"防漂移提示锁"够用，但不宜表述为"形式化保证"。
+- **N3 · 测试侧 `@ts-ignore` 逃逸**：`attachmentPolicy.test.ts` 首三行保留 3× `// @ts-ignore`，与刚从生产侧清除的 `as any` 属同类"绕过类型系统"手段，仅位置不同（测试 vs 生产）。可接受（`node --experimental-strip-types` 无类型环境），但记录在案以免日后被误读为"端到端零逃逸"。
+- **N4 · `EQT_PRE_COMMIT_CONTEXT` 已成死变量**：`rg` 全仓仅剩写入点 `scripts/install-hooks.sh:22`，无任何读取点。属可清理残留（不影响行为）。
+- **N5 · 三份近重复文档漂移**：`954dfa6e` 同步更新了 `AGENTS.md` 与 `GEMINI.md`（拆分 "Git hooks installation" 与 "Manual Windows acceptance deployment"，并补充"更新钩子后须重跑 `install-hooks.sh`"），但 **`CLAUDE.md` 未同步**——其 "Manual Windows acceptance deployment" 段仍指向 `scripts/install-hooks.sh`，与既有事实（部署脚本为 `deploy-windows-results.sh`）不符，且缺钩子重装指引。建议以 `AGENTS.md` 为单一事实源，另两份引用之。
+
+### 12.3 复核结论
+
+R5–R7 三项提示级残留均经独立探针反向证伪，**确认真闭环**；本期核心目标（跨进程装配边界可证伪锁定、编译期零 `as any` 逃逸、构建/暂存职责分界）达成。新增 N1–N5 均为提示级：其中 **N5（文档三向漂移）建议随下次文档改动一并收敛**，N1/N3 建议在后续迭代中以 fail-loud 与类型归一化收口。至此附件策略全链条（纯函数 → 数据流 → 组件装配）具备双向可证伪覆盖。
+
 
 
 
