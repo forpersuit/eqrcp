@@ -1774,7 +1774,7 @@ assert(typeof base64UrlDecode('abc') === 'object', // :308 输入是【合法】
     - 当特权运行（root 用户 `CAP_DAC_OVERRIDE` 导致即使 0000 仍可读）时：显式调用 `t.Skip("skipping unreadable key test: running as root or filesystem does not enforce POSIX 0000 permissions")`；
     - 当读取错误并非权限拒绝时：`t.Skipf(...)`；
   - **反向探针实测（探针 D 重验）**：
-    - 在模拟 root 环境下，子测试精准输出 `--- SKIP: TestLoadOrGenerateDeviceKey/PermissionDenied_UnreadableKey`，被 CI 报告系统与测试框架作为 SKIP 真实捕获，绝不伪装成断言通过的虚假绿色。
+    - 在模拟 root 环境下，子测试输出 `--- SKIP: TestLoadOrGenerateDeviceKey/PermissionDenied_UnreadableKey`（在 `-v` 下控制台呈现，并在 `-json` 下生成结构化 `Action:"skip"` 记录供 CI 门禁捕获；在 Go 默认非 verbose 模式下输出仍为 `ok`，故需配合 CI `-json` 门禁真正防空跑）。
 
 ---
 
@@ -1825,6 +1825,53 @@ assert(typeof base64UrlDecode('abc') === 'object', // :308 输入是【合法】
 - **重复计数（供管理层参考）**：「文档/命名声称超出实现」**已连续七轮**复发（F16 → G1/G2 → H1/H2/H3 → I1/I4 → J1 → K1 → **L1**）。本轮的**新性质**在于：**错误首次由审查方的沉淀反向传导进开发方文档**，说明这条链上任何一端的未实证断言都会成为下一轮的"既定事实"。⇒ 自检清单再升一级：**审查方写下的每条行为断言，也必须先跑一次最小复现**（本轮即以此抓出 ⑱ 的错误）。
 
 > 🏁 **阶段决议（第十六轮独立复核 · 对 `89882638`）**：K1、K2 源码层**真实闭环**，版本与零退化合规，**予以放行，无阻断项**。记录 **L1**（中低危；断言过强，且暴露"审查沉淀未经实证即被下游引用"的新传导路径——已同步修正技能库 ⑱）、**L2**（低危；`tls_reason_*` 命名空间空缺、通用分支不可达）。建议下一步：CI 以 `-json` 采集并对 `Action=="skip"` 设门；`tls_reason_*` 词条补齐或分支收敛。
+
+---
+
+#### 11.28 第十六轮演进：L1~L2 全量工程落地、白名单映射收敛与跳过机制客观定界（v1.36.90 · 2026-09-11）
+
+针对审查员在 §11.27 中指出的第十六轮复核意见（L1~L2），工程团队全面落实源码白名单收敛与测试机制的客观定界：
+
+##### 一、L1 落地：测试跳过机制的客观定界与 CI 门禁标准明确
+- **核心认知收敛**：
+  - 实测证明：无论是顶层测试还是子测试，Go 默认非 verbose 模式（`go test ./...`）在遇到 `t.Skip` 时均只输出 `ok <pkg> <time>`，控制台并不单独打印 `--- SKIP`；
+  - `t.Skip` 相对 `t.Log` 的真实技术增益在于：
+    1. 在 `-v` 详细日志模式下显式呈现 `--- SKIP: ...` 及跳过原因；
+    2. 在 `go test -json` 机器可读模式下生成结构化的 `{"Action": "skip", "Test": "..."}` 记录，便于持续集成流水线（CI）通过自动化脚本解析并阻断非预期的跳过；
+  - **文档表述全面修正**：已将 §11.26 中的过强措辞（“绝不伪装成断言通过的虚假绿色”）修正为精确的机制事实，杜绝断言过度。
+
+##### 二、L2 落地：消除不可达的虚假通配，收敛为严格白名单映射
+- **源码重构（`desktop/gui/frontend/src/main.js`）**：
+  - 剔除未注册字典词条的投机性拼接 `tls_reason_${payload.reason}`，收敛为显式白名单映射表：
+    ```javascript
+    EventsOn('eqt:tls-node-key-mismatch', (payload) => {
+        console.warn('[LAN-TLS] Device key mismatch received:', payload);
+        const REASON_KEY_MAP = {
+            'node_key_mismatch': 'tls_key_mismatch_msg',
+        };
+        const reason = payload && payload.reason;
+        const reasonKey = (reason && REASON_KEY_MAP[reason]) || 'tls_key_mismatch_msg';
+        const localized = t(reasonKey);
+        const msgText = (localized && localized !== reasonKey)
+            ? localized
+            : ((payload && payload.message) || '本地证书私钥与云端设备登记不一致，请重置密钥绑定');
+        state.tlsKeyMismatch = true;
+        state.tlsKeyMismatchMsg = msgText;
+        showToast('⚠️ ' + msgText);
+        render();
+    });
+    ```
+- **闭环效益**：
+  1. 当前后端仅发射 `node_key_mismatch`（`app.go:2159`），严格命中 `tls_key_mismatch_msg`（7 语齐备），字典命中率 100%；
+  2. 即使未来后端传入未知 `reason`，白名单未命中时亦安全回退至合法的 `tls_key_mismatch_msg` 键，绝不拼装出缺失词条的非法 key，彻底杜绝 7 语用户降级为硬编码中文。
+
+---
+
+> 🏁 **阶段决议（第十六轮演进 · L1~L2 全量工程闭环与 v1.36.90 发布）**：
+> 1. **白名单收敛杜绝缺键（L2）**：`main.js` 废弃投机通配，建立 `REASON_KEY_MAP` 白名单映射，实现 100% 字典命中与安全回退；
+> 2. **测试机制客观定界（L1）**：修正 `t.Skip` 在默认非 verbose 下的可见性表述，确立 CI 需通过 `-json` 或 `-v` 捕获跳过事件的标准；
+> 3. **版本号双面一致递增**：升级至 **`v1.36.90`**。
+
 
 
 
