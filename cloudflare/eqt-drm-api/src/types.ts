@@ -44,6 +44,10 @@ export interface Env {
   ACME_DNS_API_TOKEN?: string;
   /** Optional contact email for ACME account registration */
   ACME_EMAIL?: string;
+  /** Optional RFC 8555 External Account Binding Key ID (required for Google Trust Services / GTS) */
+  ACME_EAB_KID?: string;
+  /** Optional RFC 8555 External Account Binding HMAC Key (Base64URL encoded) */
+  ACME_EAB_HMAC_KEY?: string;
 }
 
 export interface DownloadRecord {

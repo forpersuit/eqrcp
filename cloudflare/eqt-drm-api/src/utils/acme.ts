@@ -92,6 +92,52 @@ export interface AcmeAuthorization {
   }>;
 }
 
+export interface ExternalAccountBindingOptions {
+  keyId: string;
+  macKey: string; // Base64 or Base64URL encoded HMAC-SHA256 key from CA
+}
+
+/**
+ * Computes RFC 8555 Section 7.3.4 External Account Binding (EAB) JWS
+ * for Certificate Authorities requiring EAB (e.g. Google Trust Services / GTS Public CA).
+ */
+export async function computeExternalAccountBinding(
+  eab: ExternalAccountBindingOptions,
+  accountPublicJwk: JwkKey,
+  newAccountUrl: string
+): Promise<{
+  protected: string;
+  payload: string;
+  signature: string;
+}> {
+  const protectedHeader = {
+    alg: 'HS256',
+    kid: eab.keyId,
+    url: newAccountUrl
+  };
+  const protectedB64 = base64UrlEncode(JSON.stringify(protectedHeader));
+  const payloadB64 = base64UrlEncode(JSON.stringify(accountPublicJwk));
+
+  const rawKey = base64UrlDecode(eab.macKey);
+  const hmacKey = await crypto.subtle.importKey(
+    'raw',
+    rawKey,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+
+  const dataToSign = new TextEncoder().encode(`${protectedB64}.${payloadB64}`);
+  const sigBuf = await crypto.subtle.sign('HMAC', hmacKey, dataToSign);
+  const signatureB64 = base64UrlEncode(new Uint8Array(sigBuf));
+
+  return {
+    protected: protectedB64,
+    payload: payloadB64,
+    signature: signatureB64
+  };
+}
+
 export class AcmeClient {
   private directoryUrl: string;
   private directory?: AcmeDirectory;
@@ -100,6 +146,7 @@ export class AcmeClient {
   private accountUrl?: string;
   private nonce?: string;
   private customFetch: typeof fetch;
+  private eab?: ExternalAccountBindingOptions;
 
   constructor(opts: {
     directoryUrl: string;
@@ -107,12 +154,14 @@ export class AcmeClient {
     publicJwk: JwkKey;
     accountUrl?: string;
     customFetch?: typeof fetch;
+    eab?: ExternalAccountBindingOptions;
   }) {
     this.directoryUrl = opts.directoryUrl;
     this.accountKey = opts.accountKey;
     this.publicJwk = opts.publicJwk;
     this.accountUrl = opts.accountUrl;
     this.customFetch = opts.customFetch || globalThis.fetch.bind(globalThis);
+    this.eab = opts.eab;
   }
 
   static async create(opts: {
@@ -121,6 +170,7 @@ export class AcmeClient {
     accountUrl?: string;
     customFetch?: typeof fetch;
     allowTransientAccountKey?: boolean;
+    eab?: ExternalAccountBindingOptions;
   }): Promise<AcmeClient> {
     const dirUrl = opts.directoryUrl || 'https://acme-staging-v02.api.letsencrypt.org/directory';
 
@@ -147,7 +197,8 @@ export class AcmeClient {
         accountKey: privKey,
         publicJwk,
         accountUrl: opts.accountUrl,
-        customFetch: opts.customFetch
+        customFetch: opts.customFetch,
+        eab: opts.eab
       });
     }
 
@@ -170,7 +221,8 @@ export class AcmeClient {
         accountKey: keyPair.privateKey,
         publicJwk,
         accountUrl: opts.accountUrl,
-        customFetch: opts.customFetch
+        customFetch: opts.customFetch,
+        eab: opts.eab
       });
     }
 
@@ -279,6 +331,13 @@ export class AcmeClient {
     };
     if (contactEmail) {
       payload.contact = [`mailto:${contactEmail}`];
+    }
+    if (this.eab) {
+      payload.externalAccountBinding = await computeExternalAccountBinding(
+        this.eab,
+        this.publicJwk,
+        dir.newAccount
+      );
     }
 
     const res = await this.postSigned(dir.newAccount, payload);

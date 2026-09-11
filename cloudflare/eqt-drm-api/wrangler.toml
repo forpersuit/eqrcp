@@ -78,5 +78,5 @@ PADDLE_PRICE_ID_PLUS_LIFETIME = "pri_01kyhmkv4ppj10r4cdgw3sv48p"
 # RFC 8555 ACME 代理签发配置 (测试环境接入 Let's Encrypt 官方签发)
 ACME_DIRECTORY_URL = "https://acme-v02.api.letsencrypt.org/directory"
 ACME_DNS_API_ENDPOINTS = "https://ns1-dns.301098.xyz,https://ns2-dns.301098.xyz"
-ACME_EMAIL = "admin@eqt.net.im"
+ACME_EMAIL = "leeyelon@gmail.com"
 

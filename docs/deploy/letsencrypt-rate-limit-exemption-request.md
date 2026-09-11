@@ -8,7 +8,7 @@
 ## 一、 官方申请表单问答草案
 
 ### 1. Basic Information
-- **Contact Email**: security@eqt.net.im / forpersuit@gmail.com
+- **Contact Email**: leeyelon@gmail.com
 - **Organization / Project Name**: EQT Project (https://eqt.net.im)
 - **Primary Domain**: `direct.eqt.net.im` (parent: `eqt.net.im`)
 - **ACME Account ID / URI**: `https://acme-v02.api.letsencrypt.org/acme/acct/3704177676`
@@ -72,7 +72,7 @@
 
 将本文档 **§一《官方申请表单问答草案》** 的内容逐项复制至表单对应输入框中：
 
-1. **Your Email Address**：填写 `security@eqt.net.im` 或核心运维人员的正式企业/项目邮箱；
+1. **Your Email Address**：填写 `leeyelon@gmail.com`；
 2. **Organization / Project**：填写 `EQT Project (https://eqt.net.im)`；
 3. **Domain(s) Needing Exemption**：填写 `direct.eqt.net.im`（同时注明父域 `eqt.net.im`）；
 4. **ACME Production Account ID/URI**：粘贴步骤 1 获取的生产账户 URI；

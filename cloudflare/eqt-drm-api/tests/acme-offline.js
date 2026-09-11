@@ -18,6 +18,7 @@ const {
   base64UrlDecode,
   computeJWKThumbprint,
   computeDns01ChallengeValue,
+  computeExternalAccountBinding,
   AcmeClient
 } = require(compiledPath);
 
@@ -265,6 +266,36 @@ async function runTests() {
     // 5. Download Certificate
     const certChain = await client.downloadCertificate(finalizedOrder.certificate);
     assert(certChain.includes('BEGIN CERTIFICATE'), 'T3.8: Successfully downloaded certificate chain');
+  }
+
+  // Test 4: External Account Binding (EAB) RFC 8555 Section 7.3.4 (Google Public CA / GTS)
+  {
+    const jwk = {
+      kty: 'EC',
+      crv: 'P-256',
+      x: 'f83OJ3D2xFNTLKEfuegtkIIgldVWtQHV6XgwqMtGTGQ',
+      y: 'x_daQauqmfeedvdqq6NVnkG0oKaGentWhQ64dd6x4Gw'
+    };
+    const eab = {
+      keyId: 'test-google-eab-keyid-12345',
+      macKey: 'dGVzdC1obWFjLXNoYTI1Ni1rZXktZm9yLWVhYi1iaW5kaW5n' // base64 key
+    };
+    const newAccountUrl = 'https://dv.acme-v02.api.pki.goog/acme/new-account';
+
+    const binding = await computeExternalAccountBinding(eab, jwk, newAccountUrl);
+    assert(binding && binding.protected && binding.payload && binding.signature, 'T4.1: computeExternalAccountBinding returns JWS structure');
+
+    // Decode and verify protected header
+    const decodedHeader = JSON.parse(Buffer.from(base64UrlDecode(binding.protected)).toString('utf8'));
+    assert(decodedHeader.alg === 'HS256', 'T4.2: EAB protected header alg is HS256');
+    assert(decodedHeader.kid === eab.keyId, 'T4.3: EAB protected header kid matches keyId');
+    assert(decodedHeader.url === newAccountUrl, 'T4.4: EAB protected header url matches newAccountUrl');
+
+    // Verify HMAC-SHA256 signature
+    const hmac = crypto.createHmac('sha256', Buffer.from(base64UrlDecode(eab.macKey)));
+    hmac.update(`${binding.protected}.${binding.payload}`);
+    const expectedSig = base64UrlEncode(hmac.digest());
+    assert(binding.signature === expectedSig, 'T4.5: EAB HMAC-SHA256 signature is cryptographically valid and matches Node.js crypto');
   }
 
   console.log(`\nResults: ${passed} passed, ${failed} failed`);

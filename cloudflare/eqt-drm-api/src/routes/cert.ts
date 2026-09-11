@@ -981,10 +981,16 @@ export async function handleCertRoutes(
         return await fetch(input, init);
       };
 
+      const eabOpts = (env.ACME_EAB_KID && env.ACME_EAB_HMAC_KEY) ? {
+        keyId: env.ACME_EAB_KID,
+        macKey: env.ACME_EAB_HMAC_KEY
+      } : undefined;
+
       const acmeClient = await AcmeClient.create({
         directoryUrl: env.ACME_DIRECTORY_URL || 'https://acme-v02.api.letsencrypt.org/directory',
         accountKeyJWK: env.ACME_ACCOUNT_KEY,
-        customFetch: acmeCustomFetch
+        customFetch: acmeCustomFetch,
+        eab: eabOpts
       });
       if (env.ACME_EMAIL) {
         await acmeClient.initAccount(env.ACME_EMAIL);
