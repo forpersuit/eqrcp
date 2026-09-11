@@ -1336,3 +1336,68 @@ assert(typeof base64UrlDecode('abc') === 'object', // :308 输入是【合法】
 > 1. **G1 客户端三项全量代码落地**：`ErrNodeKeyMismatch` 错误分类、后台静默重试主动熔断、GUI 事件提示、损坏私钥 Warning 日志均已在 `pkg/cert` 与 `desktop/gui` 中真实实现，单测 100% 覆盖且反向证伪；
 > 2. **G3/G4/G5 测试加固完成**：消灭死变量，引入 RFC 7515 权威向量，实现 Fail-Clean 优雅断言链，清理全部残留邮箱；
 > 3. **版本号合规递增**：客户端防御功能增强，版本号由 `v1.36.84` 升级为 `v1.36.85`。
+
+---
+
+#### 11.19 第十二轮独立复核（对 `b0e2680f` · v1.36.85 · 2026-09-11）
+
+复核方式遵循 Rule 9/12：**不采信 commit message 与 §11.18 的自述**，逐条比对源码真实符号、并以「删除被测生产逻辑后测试是否转红」的探针独立证伪。
+
+##### 一、正向核对：确已落地且可证伪（✅）
+
+| 编号 | 声明内容 | 复核结论 | 证据 |
+| --- | --- | --- | --- |
+| G1-a | `ErrNodeKeyMismatch` 专有错误定义 | **✅ 属实** | `pkg/cert/provisioner.go:467` `ErrNodeKeyMismatch = errors.New("node public key does not match cloud registration")` |
+| G1-b | 403 + `reason_key=="node_key_mismatch"` 精确映射 | **✅ 属实且可证伪** | `provisioner.go:648-649`；**探针**：将 `"node_key_mismatch"` 改为 `"node_key_mismatch__PROBE_DISABLED"` 后，`TestRequestDeviceCertificate_NodeKeyMismatch` 转红（`provisioner_test.go:557: expected error to wrap ErrNodeKeyMismatch, got: ... HTTP 403: node public key mismatch...`）→ 该测试确非空转，**G1「文档有源码无」的历史问题已真实闭合** |
+| G1-c | `errors.Is` 拦截 + `[CRITICAL]` 日志 + 提前 return | **✅ 属实** | `desktop/gui/app.go:2148-2163`：`logger.Warning` + `wailsruntime.LogWarning` + `EventsEmit` + `return`（早于 fail-soft 分支 `:2166-2173`） |
+| G3 | 移除死变量 `threwInvalidB64`，T4.6 改用 RFC 7515 Appendix C 向量做字节精确断言 | **✅ 死变量确已移除，断言形态升级属实**（但覆盖面声明不实，见 H3） | `tests/acme-offline.js:300-304`；输出比对精确到 `\r\n` 与每个字节 |
+| G4 | T4.7c 接入可选链达成 Fail-Clean | **✅ 属实** | `tests/acme-offline.js:340` `assert(capturedAccountPayload?.externalAccountBinding?.signature, ...)`，上游失败时为布尔假而非 `TypeError` |
+| G5 | mock `contact` 邮箱统一为 `leeyelon@gmail.com` | **✅ 属实** | `tests/acme-offline.js:125` |
+| — | 版本号双面一致递增 | **✅ 属实** | `pkg/version/version.go:12` `v1.36.85` + `desktop/gui/wails.json:15` `"productVersion": "1.36.85"`（`v` 前缀有无符合各自约定） |
+| — | 零退化（既有行为未被破坏） | **✅ 属实** | `test:cert:offline` **56 passed, 0 failed**；`test:acme:offline` **22 passed, 0 failed**；`go test ./pkg/cert` ok；`go build ./...` 通过 |
+
+##### 二、本轮新增发现（H1~H5）
+
+**H1（中危 · 交付面缺失）：`eqt:tls-node-key-mismatch` 事件零订阅，用户侧不可见。**
+
+- §11.18 §一.2 声称「向上层 GUI **派发专用事件**，携带提示文案」，语义指向「向设置界面输出可操作引导文案」（§11.17 G1 原始诉求）。
+- 实测：`rg -n "tls-node-key-mismatch"`（排除 `*.min.js`）全仓仅 **2 处命中**——机制文档 `:1308` 与本仓发射点 `desktop/gui/app.go:2157`，**前端 `EventsOn` 订阅数为 0**。
+- 对照：同期全部兄弟事件在 `desktop/gui/frontend/src/main.js` 均有订阅——`chat-download-progress:5781`、`agent-status:5795`、`eqt:tray-command:6675`、`eqt:crash-report-pending:6694`、`eqt:dev-mode-changed:6696`、`eqt:tls-cert-ready:6706`、`eqt:install-update-error:6713`。
+- **用户可见后果**：Wails `EventsEmit` 在无订阅者时为**静默空操作**。私钥失配用户仍只会停留在「局域网 TLS 正在后台准备中」，唯一线索是需主动展开的 Wails 日志面板，**与 G1 诉求的「可操作引导」相差一个前端订阅**。
+- **修复方向**：在 `main.js` 增加 `EventsOn('eqt:tls-node-key-mismatch', handler)`，按项目规范以**应用内系统消息**（追加至聊天消息列表）呈现引导文案，**禁止**使用浏览器级 alert。
+
+**H2（中危 · 覆盖面与自述不符）：Warning 仅覆盖「文件存在但损坏」分支，缺文件分支仍静默重生。**
+
+- `provisioner.go:99` 的 Warning 位于 `if data, err := os.ReadFile(keyPath); err == nil {`（`:87` 开、`:100` 闭）**内部**；`os.ReadFile` 返回 `err != nil`（**文件缺失**）时直接落至步骤 2「生成新密钥」，**无任何日志**（`:102-132` 仅有一条 `[INFO] Generated new ...` 成功日志）。
+- 而 F12 的真实触发场景恰是**缓存被清理 / 全新安装 / 目录被删**（即文件缺失），非「文件损坏」。
+- 故 §11.18 §一.3 与 `:1310` 的「**彻底消灭『静默重生』**」及正文「损坏/**缺失**」措辞**超出实现**——本次仅做到「损坏可见」，缺失路径的静默重生依然存在。这是 F16 型「文档措辞超出实现」在本轮的**再次复发**。
+- **次级缺口（Rule 9）**：新增的损坏密钥单测（`provisioner_test.go:99-109`）断言的是「**生成了新密钥对**」（`priv1.PublicKey.Equal(&priv3.PublicKey)` 为假），**并未断言 Warning 日志**——即删除 `:99` 那行 Warning，该测试**仍全绿**。故「显式 Warning」本身**无可证伪锁**。
+- **修复方向**：① 在缺文件分支补一条等价的可见日志（区分「首次生成」与「丢失后重生」）；② 使 Warning 可通过注入 `log` 输出目标被断言，或至少以表格测试覆盖两种丢失形态。
+
+**H3（中危 · 断言覆盖面声明不实）：RFC 7515 向量不含 `-`/`_`，base64url 专属路径仍零覆盖。**
+
+- §11.18 §三（`:1322`）声称该向量「**内含 `-` 与 `_` 等 base64url 特征字符**」。**程序化核验为假**：该向量长 **94** 字符，`-`/`_`/`+`/`/`/`=` **五类字符命中数均为 0**（`94 % 4 = 2`，即它是一条**待补填充、但不含 url-safe 替换字符**的样例）。
+- **探针 A（移除 `-`/`_` 归一化）**：将 `acme.ts:26` 改为 `let b64 = str;`（删除 `.replace(/-/g,'+').replace(/_/g,'/')`）后，`test:acme:offline` **仍 22 passed / 0 failed**，T4.6 依旧全绿。
+- **探针 B（移除填充补齐）**：删除 `acme.ts:27` 的 `while (b64.length % 4) b64 += '=';` 后，套件**仍 22 passed / 0 failed**，T4.6 依旧全绿。
+- **结论**：T4.6 对「精确还原字节流（含 `\r\n`）」是有效的（若解码结果漂移确会转红），但对它**名字与文档所声称的 base64url 合规性零牙齿**——`base64UrlDecode` 中**唯二**的 url-safe 专属逻辑（`-`/`_` 替换、缺失填充补齐）均可被删除而套件全绿。故 §11.18 `:1323`「**若输入或算法存在任何字节级漂移，断言立刻转红**」为**过度声明**。
+- **生产运行时旁路（附带）**：`wrangler.toml` 未声明 `compatibility_flags = ["nodejs_compat"]`（`:1-5`），而测试恒运行于 Node，`acme.ts:28` 的 `typeof Buffer !== 'undefined'` **恒为真**——`atob(b64)` 兜底分支在**任何现有用例中不可达**（全仓无 `delete global.Buffer`）。探针 B 之所以不转红，正是 Node `Buffer.from(...,'base64')` 对缺填充的宽容所致；该宽容性**不能外推**到 Worker 的 `atob` 路径。
+- **修复方向**：增补两条**真含 `-`/`_`** 的用例（如 url-safe 编码 `b'\xfb\xff' → "-_8"` 与 `b'\xff\xfe\xfd' → "__79"`），并各配一条**缺填充**输入的用例；对 `atob` 分支以显式桩（临时令 `Buffer` 不可见）驱动一次。
+
+**H4（提示 · 措辞强于机制）：单次调用无「重试」可言，「熔断」收益限于单进程生命周期。**
+
+- `silentProvisionDeviceTLSCert` 全仓**仅一处调用**：`app.go:264` `go a.silentProvisionDeviceTLSCert()`（GUI 启动时各一次）；函数内**无** ticker/循环重入。
+- 因此 `:2151` 文案「**已终止后台静默重试**」与 §11.18 §一.2「**永久终止本次后台重试**」「杜绝无意义消耗频控」在语义上强于实现：失配分支与 fail-soft 分支**均为 `return`**，实质差异仅在**日志级别（CRITICAL/Warning vs FAIL-SOFT/Info）与事件派发**；所谓「重试」实际发生于**应用重启**，进程重启后仍会再次发起并消耗 Node 级频控（3/24h）。
+- 该措辞本身不易误导用户，故列为提示；若要名副其实，应在**持久化层面**记录失配并在此后启动时短路（与 F12 `/rebind` 蓝图合流）。
+
+**H5（提示 · 轮次编号不一致）：技能红线的「第十二轮」与机制文档的编号错位。**
+
+- `.agents/skills/eqt-lan-tls/SKILL.md:265` 标注「⑭ 审查红线（**第十二轮**沉淀）……详见机制文档 **§11.17**」，而 §11.17 标题自述为「**第十一轮**独立复核」。同一事件在两份交付物中编号相差一轮。
+- 与 §11.18 §五（`:1331`）「各轮次记录严格统一遵照『第 N 轮演进』格式」的自述形成轻微自相矛盾。建议以机制文档为准统一。
+
+##### 三、本轮放行结论
+
+- **可放行**：G1 的错误分类与 403 映射（含可证伪单测）、G3 死变量清理、G4 可选链、G5 邮箱统一、版本双面一致性、零退化（56/0、22/0、Go ok）均已独立验证为真。**本轮无阻断项。**
+- **须收敛的表述**：H1「事件已派发 ⇒ 已有用户引导」、H2「彻底消灭静默重生」、H3「任何字节级漂移都转红」三处属**同源的『能力边界表述超出实现边界』**（与 §11.15 F16、§11.17 G1/G2 同型，已是**第三次复发**）。判据应固化为：**凡「彻底 / 消灭 / 任何」级措辞，必须给出对应的反向探针记录**，无探针即降级为「阶段方案」。
+- **工程建议优先级**：H1（一个前端订阅即可补齐用户闭环）> H3（两条用例即可锁死 base64url 路径）> H2（补缺失分支日志 + 断言）> H4 > H5。
+
+> 🏁 **阶段决议（第十二轮独立复核 · 对 `b0e2680f`）**：本轮客户端 G1 加固**真实落地且经反向证伪**，Worker 与 Go 套件零退化，**予以放行**；同时记录 H1~H5，其中 H1/H2/H3 为文档措辞与实现边界的三处偏差，须在下一轮以探针或前端订阅方式收敛，不得以「已闭环」结案。
