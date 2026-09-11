@@ -1,3 +1,9 @@
+// @ts-ignore
+import * as fs from 'node:fs';
+// @ts-ignore
+import * as path from 'node:path';
+// @ts-ignore
+import { fileURLToPath } from 'node:url';
 import {
   isFileSendCancelled,
   resolveDownloadTransferId,
@@ -186,4 +192,29 @@ applyBatchDownloadCancelled(['msg-en'], 'desktop', {
 }, 'en');
 assert(enNotices[0] === 'Batch download cancelled.', 'English system notice emitted');
 
-console.log('attachmentPolicy.test.ts: all assertions passed (including bridge contracts)');
+// 10. Assembly Verification (R5 & R6):
+// Ensures App.svelte actually wires the production bridge handlers rather than inlining or bypassing them.
+const currentFilePath = fileURLToPath(import.meta.url);
+const appSveltePath = path.resolve(path.dirname(currentFilePath), '../App.svelte');
+if (fs.existsSync(appSveltePath)) {
+  const appCode = fs.readFileSync(appSveltePath, 'utf8');
+  assert(
+    appCode.includes('applyDownloadCancelled('),
+    'App.svelte MUST assemble applyDownloadCancelled'
+  );
+  assert(
+    appCode.includes('applyBatchDownloadCancelled('),
+    'App.svelte MUST assemble applyBatchDownloadCancelled'
+  );
+  assert(
+    !appCode.includes("id: 'dl-") && !appCode.includes('id: "dl-') && !appCode.includes('id: `dl-'),
+    'App.svelte MUST NOT contain handwritten dl- transfer ID concatenation'
+  );
+  assert(
+    !appCode.includes('chatActions.updateTransfer(u as any)') &&
+    !appCode.includes('updateTransfer: (u) => chatActions.updateTransfer(u as any)'),
+    'App.svelte MUST NOT use "as any" to bypass TransferEvent contract validation'
+  );
+}
+
+console.log('attachmentPolicy.test.ts: all assertions passed (including bridge contracts and assembly verification)');

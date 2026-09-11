@@ -20,22 +20,10 @@ export function resolveDownloadTransferId(messageId: string, peer = 'desktop'): 
   return 'dl-' + messageId + '-' + (peer || 'desktop');
 }
 
-export interface TransferUpdatePayload {
-  id: string;
-  state: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
-  progress: number;
-  speed: number;
-  error: string;
-  messageId?: string;
-  clientId?: string;
-  fileName?: string;
-  bytesDone?: number;
-  bytesTotal?: number;
-  percent?: number;
-}
+export type TransferUpdatePayload = TransferEvent;
 
 export interface DownloadBridgeActions {
-  updateTransfer: (update: TransferUpdatePayload) => void;
+  updateTransfer: (update: TransferEvent) => void;
   cancelTransfer?: (transferId: string) => void;
   addSystemNotice?: (notice: string) => void;
 }

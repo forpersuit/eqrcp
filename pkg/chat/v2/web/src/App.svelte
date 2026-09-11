@@ -360,7 +360,7 @@
       if (!messageId) return;
       const peer = client ? client['clientPeer'] : 'desktop';
       applyDownloadCancelled(messageId, peer, {
-        updateTransfer: (u) => chatActions.updateTransfer(u as any),
+        updateTransfer: (u) => chatActions.updateTransfer(u),
         cancelTransfer: (tid) => { if (client) client.cancelTransfer(tid); }
       });
     } else if (event.data.type === 'download-batch-cancelled') {
@@ -368,7 +368,7 @@
       const ids: string[] = event.data.messageIds || [];
       const peer = client ? client['clientPeer'] : 'desktop';
       applyBatchDownloadCancelled(ids, peer, {
-        updateTransfer: (u) => chatActions.updateTransfer(u as any),
+        updateTransfer: (u) => chatActions.updateTransfer(u),
         cancelTransfer: (tid) => { if (client) client.cancelTransfer(tid); },
         addSystemNotice: (notice) => chatActions.addSystemMessage(notice)
       }, currentLang);

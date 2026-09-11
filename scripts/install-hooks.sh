@@ -20,6 +20,12 @@ root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 echo "=== eqt pre-commit: deploy Windows acceptance artifacts ==="
 EQT_PRE_COMMIT_CONTEXT=1 "$root_dir/scripts/deploy-windows-results.sh"
+
+# Pre-commit boundary: if version sync modified wails.json, stage it alongside version.go
+if [[ -f "$root_dir/desktop/gui/wails.json" ]] && ! git -C "$root_dir" diff --quiet "$root_dir/desktop/gui/wails.json" 2>/dev/null; then
+  git -C "$root_dir" add "$root_dir/desktop/gui/wails.json"
+fi
+
 echo "=== eqt pre-commit completed ==="
 EOF
 

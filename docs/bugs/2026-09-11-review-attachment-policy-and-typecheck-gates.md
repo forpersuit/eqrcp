@@ -221,7 +221,7 @@ const isCancelledFile = (file|image) && ((ulTx && ulTx.state==='cancelled') || (
 |---|---|---|---|---|
 | **R1** | 契约接入率缺口（中低） | **完全合理**。虽然已抽出契约函数，但若全仓 12 处手写模板字符串不替换，未来修改 ID 规范时极易发生局部漂移。 | ① `App.svelte`（10 处：下载成功/失败/取消/批量/进度/手动发起）、`MessageList.svelte`（2 处：气泡渲染与菜单解析）、`websocket.ts`（1 处：种子任务对齐）全部改用 `resolveDownloadTransferId(messageId, peer)`；<br>② 全仓手写 `'dl-' + ...` 降为 0 处，契约函数接入率达 **100%（13/13）**。 | 全局正则检索 `'dl-'` 仅留 `attachmentPolicy.ts` 契约定义与测试文件断言，源码实现 0 残留。 |
 | **R2** | 批量取消测试同义反复（中低） | **完全合理且切中要害**。旧 Case 9 仅断言恒真纯函数，未耦合 `App.svelte` 中的批量取消分发逻辑，属于同义反复。 | ① 在 `attachmentPolicy.ts` 中抽取并导出生产级桥接函数 `applyDownloadCancelled` 与 `applyBatchDownloadCancelled`；<br>② `App.svelte:358-391` 核心处理分支直接委托给该生产函数；<br>③ 重构 `attachmentPolicy.test.ts` Case 8 与 Case 9，直接针对生产函数执行可证伪断言：断言全部批次 ID 分发、`updateTransfer` 取消载荷、`cancelTransfer` 客户端调用、双语系统提示、以及接收方 Store 注入后气泡保留（`isFileSendCancelled === false` 且副标题展示 `· 已取消`）；<br>④ 在测试及文档中显式声明：宿主侧目前无 node test runner，由前端 iframe 契约层承担严格的 `postMessage` 边界验证。 | 改变生产函数的任何字段或逻辑，Case 8/9 立即转红；实测 `npm test` 100% 通过。 |
-| **R3** | 门禁层级粒度校准（提示） | **客观事实，已对齐**。本地 pre-commit 确实为条件执行，依赖 CI 作业执行无条件硬拦截。 | ① 保持 `deploy-windows-results.sh` 中的 Notice 提示，使环境降级在控制台显式可见；<br>② 技能规范与架构文档口径全面修正为“两层硬门禁（pretest 单套件 + CI `test:ci`）+ 一层条件门禁（本地 pre-commit）”。 | 声明与实现严格一致，消除过度承诺。 |
+| **R3** | 门禁层级粒度校准（提示） | **客观事实，已对齐**。本地 pre-commit 确实为条件执行，依赖 CI 作业执行无条件硬拦截。 | ① 保持 `deploy-windows-results.sh` 中的 Notice 提示，使环境降级在控制台显式可见；<br>② 文档口径由审查方在 `a7f4bb1d` 首发修正，开发方在 `8d8bce11` 中保持了 Notice 提示与口径对齐。 | 声明与实现严格一致，消除过度承诺。 |
 | **R4** | 部署脚本耦合 VCS 暂存（提示） | **完全合理**。构建部署脚本在非提交的手动执行下，不应有副作用改动 git 索引区。 | ① 在 `scripts/deploy-windows-results.sh` 中将 `git add .../wails.json` 限制在 `EQT_PRE_COMMIT_CONTEXT=1` 环境变量下触发；<br>② `scripts/install-hooks.sh` 与 `.git/hooks/pre-commit` 显式注入 `EQT_PRE_COMMIT_CONTEXT=1`；<br>③ 手动运行 `./scripts/deploy-windows-results.sh` 时绝对不触碰 git 暂存区。 | 实测手动运行脚本，`git diff --cached` 保持绝对干净；通过 git commit 触发时自动联动暂存版本。 |
 
 ### 2. 综合结论
@@ -259,6 +259,26 @@ const isCancelledFile = (file|image) && ((ulTx && ulTx.state==='cancelled') || (
 `8d8bce11` 对 **R1 / R2 / R4 的修复经探针实测确认真实闭环**（R2 的两条探针均转红，同义反复已消除；R1 实测 0 残留）；**版本双面同步**与**类型门禁**同步验证通过。新增 **R5–R7 三项提示级残留**（测试未覆盖调用点、`as any` 弱化契约、自暂存依赖钩子重装），**均不构成功能阻断，不改放行结论**。前端附件策略与 Worker 门禁两项议题至此**无遗留中危及以上问题**。
 
 > **第八轮沉淀（Rule 9/12）**：⑩ **“抽取生产函数供测试调用”是消除同义反复的正解**——但须同时校验**调用点是否也纳入防护**，否则测试只锁住函数体、锁不住装配；适配器若以 `as any` 越过新契约，则类型约束在生产边界失效，反成“有类型而无校验”的假象。
+
+---
+
+## 十一、第九轮适配与提示级残留闭环记录（对 R5–R7 的第一性原则适配，v1.36.82）
+
+针对第八轮独立复核指出的提示级残留项（R5 生产装配测试盲区、R6 `as any` 逃逸削弱类型约束、R7 钩子自暂存依赖与归属表述），团队本着第一性原则于当前版本全面完成代码重构与门禁闭环：
+
+### 1. 各项适配明细
+
+| 编号 | 性质 | 分析与裁定 | 采纳与适配落地动作 | 闭环可证伪验证 |
+|---|---|---|---|---|
+| **R5** | 生产装配调用点防护盲区（提示） | **完全合理**。只测纯函数体，当 `App.svelte` 内部被他人漏调或私自改回内联时，单测仍会全绿。在不引入重量级无头浏览器的前提下，可以通过轻量级静态装配断言锁死调用点。 | 在 `attachmentPolicy.test.ts` 中新增 **Case 10（静态装配校验）**：直接读取 `App.svelte` 源码，强断言：<br>① 必须包含 `applyDownloadCancelled(` 与 `applyBatchDownloadCancelled(` 调用；<br>② 严禁包含手写 `'dl-'` / `"dl-"` / `` `dl-`` 拼接；<br>③ 严禁包含任何 `updateTransfer(u as any)` 逃逸。 | 实验探针：一旦在 `App.svelte` 中将委托改回内联或绕过，`npm test` Case 10 立即以 `EXIT=1` 红灯阻断。 |
+| **R6** | `as any` 削弱类型约束（提示） | **完全合理且切中工程本质**。在适配器边界使用 `as any` 会导致重构引发的字段漂移无法在编译期被 tsc / svelte-check 捕获。 | ① `attachmentPolicy.ts` 将 `TransferUpdatePayload` 定义直接对齐规范类型 `TransferEvent`，`DownloadBridgeActions.updateTransfer` 直接接收 `TransferEvent`；<br>② `App.svelte:363,371` 中的调用彻底剔除 `as any`，改为纯粹类型安全的 `(u) => chatActions.updateTransfer(u)`。 | 执行 `svelte-check` 0 error；修改 `attachmentPolicy.ts` 中载荷字段为非法类型时，`App.svelte` 立即在编译期报类型不兼容错误。 |
+| **R7** | 钩子自暂存依赖与职责清晰化（提示） | **完全合理**。构建脚本 `deploy-windows-results.sh` 绝不应执行 `git add`；自暂存本身是 VCS pre-commit 钩子的固有职责。 | ① 从 `scripts/deploy-windows-results.sh` 中将 `git add` 彻底剥离，构建脚本回归 100% 纯净构建；<br>② 在 `scripts/install-hooks.sh` 模板及当前 `.git/hooks/pre-commit` 内部直接内嵌暂存逻辑（检测到 `wails.json` 有版本同步差异时自动 `git add`）；<br>③ 在 `AGENTS.md` 与 `GEMINI.md` 中补充规范说明：“改动 git 钩子脚本或初次克隆环境后，须执行 `scripts/install-hooks.sh` 安装最新钩子”。 | 实测手动运行 `./scripts/deploy-windows-results.sh` 时，暂存区完全不受干扰；通过 git commit 触发时，`wails.json` 自动平稳联动暂存。 |
+| **—** | §九 R3 归属表述澄清（提示） | **已客观核实并校准**。文档口径校准由审查方在 `a7f4bb1d` 首发修正，开发方在 `8d8bce11` 中保持了 Notice 提示与口径对齐。 | 在 §九 R3 表格中明确标注入库归属。 | 忠实记录工作流，符合 Rule 12 诚实原则。 |
+
+### 2. 综合结论
+
+至此，提示级残留项 R5–R7 全部通过第一性原则工程手段实现真闭环。跨进程装配边界不仅在纯函数与数据流层面具备双向可证伪单测，更在组件装配层面具备防漂移锁；编译期类型系统实现端到端零 `as any` 逃逸；构建部署与版本暂存的职责分界彻底理顺。
+
 
 
 

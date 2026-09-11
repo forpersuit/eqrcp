@@ -35,10 +35,18 @@ GOOS=windows GOARCH=amd64 go build -o eqt.exe .
 GOOS=windows GOARCH=amd64 go build -ldflags -H=windowsgui -o eqt-launcher.exe ./cmd/eqt-launcher
 ```
 
-Manual Windows acceptance deployment:
+Git hooks installation:
 
 ```sh
 scripts/install-hooks.sh
+```
+
+Run `scripts/install-hooks.sh` whenever git hooks are updated or after cloning. The pre-commit hook automatically runs acceptance checks and stages synchronized files (e.g. `wails.json`).
+
+Manual Windows acceptance deployment:
+
+```sh
+scripts/deploy-windows-results.sh
 ```
 
 The deployment script closes `eqt.exe`, `eqt-launcher.exe`, and `eqt-desktop.exe`, then writes fresh Windows artifacts to `E:\developer\results` on Windows or `/mnt/e/developer/results` under WSL/Linux. Use `EQT_RESULTS_DIR` only when the acceptance directory is intentionally different.
