@@ -1696,4 +1696,46 @@ assert(typeof base64UrlDecode('abc') === 'object', // :308 输入是【合法】
 > 4. **载荷与本地化分层解耦（J4）**：事件载荷注入标准 `reason` 错误码；
 > 5. **版本号双面一致递增**：升级至 **`v1.36.88`**。
 
+---
+
+#### 11.25 第十五轮独立复核（对 `0d44d575` · v1.36.88 · 2026-09-11）
+
+审查方法：对 J1~J4 逐条构造对照——引文类用**脚本逐字比对源文件**（非目测），行为类用**反向探针**（删掉声称锁定的逻辑或用输入模拟退化环境，观察是否转红/是否仍绿）。
+
+##### 一、正面确认表
+
+| 项 | 声称 | 独立核验 | 结论 |
+|---|---|---|---|
+| J1-a | §11.22/§11.24 的 7 语译文为代码原值 | 脚本比对 `i18n.js`：**14/14 处引文（7 语 × 2 节）逐字一致** | **真实闭环** |
+| J1-b | `normalizeBase64Url` 代码块还原为单行 | 文档块与 `acme.ts:25-29` 逐字一致（含 2 空格缩进） | **真实闭环** |
+| J2 | ⑬ 更正为「第十轮沉淀」，⑬~⑰ 全局对齐 | `SKILL.md` 现为 ⑬第十轮 / ⑭第十一轮 / ⑮第十二轮 / ⑯第十三轮 / ⑰第十四轮，与 §11.15/§11.17/§11.19/§11.21/§11.23 一一对应 | **真实闭环** |
+| J3-a | 读失败断言保留且可证伪 | 探针 C 静默 `[WARNING] Failed to read...` ⇒ `TestLoadOrGenerateDeviceKey` **转红** | **断言完好** |
+| J3-b | root/ACL 场景「消除虚假绿色」 | 探针 D 模拟读成功 ⇒ **默认 `go test` 输出仅 `ok`**，Notice 需 `-v` 才可见 | **部分闭环（见 K2）** |
+| J4-a | 事件载荷补齐 `reason` 机器码 | `app.go:2159` 已含 `"reason": "node_key_mismatch"` | 属实 |
+| J4-b | 前端「严格根据 `reason` 查找 i18n 词条」 | `main.js` **零处消费 `payload.reason`**（全文件 4 处 `reason` 均为 `PromiseRejectionEvent.reason` 的无关命中） | **声称不实（见 K1）** |
+| 版本 | `v1.36.88` 双面 | `version.go:12` = `v1.36.88`、`wails.json:15` = `1.36.88` | 属实 |
+| 零退化 | 套件全绿 | `go test ./pkg/cert` ok；本次未触及 Worker 源码 | 属实 |
+
+##### 二、反向探针记录
+
+- **探针 C（读失败断言）**：注释掉 `provisioner.go:101` 的 `[WARNING] Failed to read private key at` ⇒ `--- FAIL: TestLoadOrGenerateDeviceKey (provisioner_test.go:167)`，捕获日志仅余 `[INFO] Generated new ECDSA P-256 private key`。⇒ 断言在加固后**依然可证伪**，J3 的核心价值未退化。
+- **探针 D（模拟特权环境）**：将守卫改为 `testReadErr = nil`（等价于 root 下 `ReadFile` 成功）⇒
+  - `go test ./pkg/cert -run TestLoadOrGenerateDeviceKey`（默认）输出：`ok eqt/pkg/cert 0.011s`——**无任何提示**；
+  - 加 `-v` 才显示 `provisioner_test.go:173: Notice: skipping unreadable key test ...` 与 `--- PASS`。
+  ⇒ 在 J3 恰恰要覆盖的那个环境下，**默认测试输出仍是"纯净绿色"**。
+- 探针后源码已还原，`git diff --stat` 为空，`go test ./pkg/cert` 复绿。
+
+##### 三、本轮新发现（K 系列）
+
+- **K1（中危 · 声称超出实现，同型第六轮复发）**：§11.24 第四节明确宣称「**前端（GUI）**：严格根据 `reason` 查找 `i18n.js` 中的 7 语本地化词条进行多语言呈现；`payload.message` 仅充当最底层的 fallback」。实测 `desktop/gui/frontend/src/main.js` 的 `eqt:tls-node-key-mismatch` 处理器**完全未读取 `payload.reason`**，仍按 `t('tls_key_mismatch_msg')` → `payload.message` → 硬编码中文的**既有顺序**取值。后端新增 `reason` 字段属实且无害，但前端消费路径**不存在**，「分层解耦/职责定界」目前是**纸面契约**。⇒ 应记为「后端已加字段、前端未接线」；补齐方式是让处理器以 `payload.reason` 为键查表，或在文档将该句降级为「**拟定的**职责边界」。
+- **K2（低危 · J3 部分闭环）**：跳过分支（root / `CAP_DAC_OVERRIDE` / 非 POSIX ACL 文件系统）仅调用 `t.Log`。依 Go 语义，`t.Log` 输出**只在测试失败或加 `-v` 时**呈现（探针 D 已实证），故默认 `go test ./...` 仍报 `ok`，未真正「消除虚假绿色」。建议改用 **`t.Skip`**——非 verbose 模式下会打印 `--- SKIP: TestLoadOrGenerateDeviceKey`，才是名副其实的显式退化声明。
+
+##### 四、本轮放行结论
+
+- **可放行，无阻断项**：J1（14 处引文逐字一致）与 J2（⑬~⑰ 全局对齐）**真实闭环**；J3 断言**强度保留**（探针 C 转红）；版本双面一致；`go test ./pkg/cert` 全绿、零退化。
+- **须收敛项**：**K1**（前端未消费 `reason`，§11.24「职责定界」为纸面陈述）、**K2**（root 场景跳过仅 `t.Log`，默认输出仍绿；建议 `t.Skip`）。
+- **重复计数（供管理层参考）**：「文档/命名声称超出实现」**已连续六轮**复发（F16 → G1/G2 → H1/H2/H3 → I1/I4 → J1 → **K1**）。值得注意的拐点：**J1 曾被指为「引文不实」，本轮开发方已把引文修到逐字精确（14/14），却在前端职责这一条上再次写入未实现的断言**——说明仅靠「粘贴实测原值」的自检仍不足，**须同时核对每条新增描述对应的代码路径是否存在**（`rg` 该符号的**消费点**，而非仅其定义点）。
+
+> 🏁 **阶段决议（第十五轮独立复核 · 对 `0d44d575`）**：J1、J2 **真实闭环**；J3 断言强度保留但跳过路径仍为默认可见性盲区；J4 后端字段落地、前端消费**未接线**。版本与零退化合规，**予以放行**。记录 K1（中危）、K2（低危），建议下一轮：前端以 `reason` 为键查表 + 跳过分支改 `t.Skip`。
+
 
