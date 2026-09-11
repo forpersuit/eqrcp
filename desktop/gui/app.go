@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"eqt/cmd"
@@ -1257,19 +1256,11 @@ func (a *App) AppInfo() AppInfo {
 	}
 	nodeID := server.GetDeviceNodeID()
 	hasValidCert := cert.HasValidCertificateForNode("", "", nodeID)
-	var certIssuer, certExpiry string
+	var certExpiry string
 	if hasValidCert {
 		if devCert, err := cert.GetDeviceCertificate(nodeID); err == nil {
 			if expiry, err := cert.GetCertificateExpiry(devCert); err == nil {
 				certExpiry = expiry.Format("2006-01-02 15:04")
-			}
-			if len(devCert.Certificate) > 0 {
-				if parsed, err := x509.ParseCertificate(devCert.Certificate[0]); err == nil {
-					certIssuer = parsed.Issuer.CommonName
-					if certIssuer == "" && len(parsed.Issuer.Organization) > 0 {
-						certIssuer = parsed.Issuer.Organization[0]
-					}
-				}
 			}
 		}
 	}
@@ -1284,7 +1275,6 @@ func (a *App) AppInfo() AppInfo {
 		LogPath:         logPath,
 		IsTest:          server.IsTestBuild(),
 		HasValidTLSCert: hasValidCert,
-		TLSCertIssuer:   certIssuer,
 		TLSCertExpiry:   certExpiry,
 		TLSNodeID:       nodeID,
 	}
@@ -2136,17 +2126,8 @@ func (a *App) silentProvisionDeviceTLSCert() {
 	// 2. Check if a valid certificate already exists and has > 15 days of validity left
 	if devCert, err := cert.GetDeviceCertificate(nodeID); err == nil {
 		if expiry, err := cert.GetCertificateExpiry(devCert); err == nil && time.Until(expiry) > 15*24*time.Hour {
-			issuer := "Unknown CA"
-			if len(devCert.Certificate) > 0 {
-				if parsed, err := x509.ParseCertificate(devCert.Certificate[0]); err == nil {
-					issuer = parsed.Issuer.CommonName
-					if issuer == "" && len(parsed.Issuer.Organization) > 0 {
-						issuer = parsed.Issuer.Organization[0]
-					}
-				}
-			}
-			msg := fmt.Sprintf("[LAN-TLS] Local dedicated certificate is active for nodeID=%s (issuer=%s, expiresAt=%s, %d days remaining)",
-				nodeID, issuer, expiry.Format("2006-01-02 15:04"), int(time.Until(expiry).Hours()/24))
+			msg := fmt.Sprintf("[LAN-TLS] Local dedicated certificate is active for nodeID=%s (status=ready, expiresAt=%s, %d days remaining)",
+				nodeID, expiry.Format("2006-01-02 15:04"), int(time.Until(expiry).Hours()/24))
 			if a.logger != nil {
 				a.logger.Info(msg)
 			}
@@ -2213,17 +2194,8 @@ func (a *App) silentProvisionDeviceTLSCert() {
 		return
 	}
 
-	issuer := "Unknown CA"
-	if len(res.Certificate.Certificate) > 0 {
-		if parsed, err := x509.ParseCertificate(res.Certificate.Certificate[0]); err == nil {
-			issuer = parsed.Issuer.CommonName
-			if issuer == "" && len(parsed.Issuer.Organization) > 0 {
-				issuer = parsed.Issuer.Organization[0]
-			}
-		}
-	}
-	successMsg := fmt.Sprintf("[LAN-TLS-PROVISION] [SUCCESS] Dedicated certificate ready for nodeID=%s (issuer=%s, expiresAt=%s)",
-		res.NodeID, issuer, res.ExpiresAt.Format("2006-01-02 15:04"))
+	successMsg := fmt.Sprintf("[LAN-TLS-PROVISION] [SUCCESS] Dedicated certificate ready for nodeID=%s (status=ready, expiresAt=%s)",
+		res.NodeID, res.ExpiresAt.Format("2006-01-02 15:04"))
 	if a.logger != nil {
 		a.logger.Info(successMsg)
 	}

@@ -943,7 +943,7 @@ export async function handleCertRoutes(
         });
       }
 
-      console.log(`[LAN-TLS-PROVISION] [ACME] Starting RFC 8555 Let's Encrypt DNS-01 issuance for nodeID=${cleanNode}...`);
+      console.log(`[LAN-TLS-PROVISION] [ACME] Starting RFC 8555 DNS-01 certificate issuance for nodeID=${cleanNode}...`);
       const endpoints = env.ACME_DNS_API_ENDPOINTS.split(',').map(s => s.trim()).filter(Boolean);
       const dnsToken = env.ACME_DNS_API_TOKEN;
 
