@@ -315,6 +315,8 @@ WantedBy=multi-user.target
 > - **M1（低危）对象字面量不是白名单**：`const MAP = { k: v }; MAP[reason]` 对 `reason ∈ {'__proto__','constructor','toString','valueOf','hasOwnProperty'}` 会返回 `Object.prototype` 的继承属性（truthy 且**非字符串**），从而**穿透**「未命中即回退」守卫。Node 实测 `reason='__proto__'` ⇒ `reasonKey` 退化为原型对象 ⇒ **反而走 `payload.message`**，与「安全回退至合法键」的绝对断言相反。⇒ 严格查表须用 **`Object.prototype.hasOwnProperty.call(MAP, reason)`**、**`Object.create(null)`** 建表或 **`Map`**；**凡「一律 / 绝不 / 彻底」级守卫断言，反向探针输入域必须含原型键边界**。
 > - **M2（提示）恒等映射 = 零影响**：当映射表仅一条且其值等于兜底值时，查表结果恒定 ⇒ 该字段对输出**零影响**，其后端伴随字段（`payload.message`）**无可达消费点**（Node 探针 4/4 `usedBackendMessage=false`）。⇒ 称「路由」前先自问：当前输入域下是否存在**输出不同**的两个分支？否则应注明「恒等映射」或删除死回退。
 > - **M3（低危）就地更正须同步代码块**：对历史节次做就地文字更正时，若其代码块仍是被取代的旧实现，须补交叉引用，否则读者会取用已废弃范式。**历史节与其代码块是一对，改其一须改其二。**
+> - **✅ M1~M3 闭环落实（v1.36.91 · 2026-09-11）**：M1 在 `main.js` 中将白名单重构为无原型对象 `Object.freeze(Object.assign(Object.create(null), { 'node_key_mismatch': 'tls_key_mismatch_msg' }))` 并追加 `typeof reason === 'string'` 守卫，语义探针实证覆盖 `'__proto__'`/`'constructor'`/`'toString'` 等全部原型边界输入，100% 安全回退到默认本地化键；M2 在机制文档客观定界当前白名单单映射特性与 `payload.message` 的防御性兜底定位；M3 在 §11.26 代码块下补齐演进交叉引用说明；版本号双面递增至 `v1.36.91`。
+
 
 
 

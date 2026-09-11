@@ -6716,11 +6716,11 @@ EventsOn('eqt:tls-cert-ready', async () => {
 
 EventsOn('eqt:tls-node-key-mismatch', (payload) => {
     console.warn('[LAN-TLS] Device key mismatch received:', payload);
-    const REASON_KEY_MAP = {
+    const REASON_KEY_MAP = Object.freeze(Object.assign(Object.create(null), {
         'node_key_mismatch': 'tls_key_mismatch_msg',
-    };
+    }));
     const reason = payload && payload.reason;
-    const reasonKey = (reason && REASON_KEY_MAP[reason]) || 'tls_key_mismatch_msg';
+    const reasonKey = (typeof reason === 'string' && REASON_KEY_MAP[reason]) || 'tls_key_mismatch_msg';
     const localized = t(reasonKey);
     const msgText = (localized && localized !== reasonKey)
         ? localized

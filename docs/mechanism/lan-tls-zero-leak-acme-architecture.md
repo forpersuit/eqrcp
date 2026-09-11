@@ -1763,6 +1763,7 @@ assert(typeof base64UrlDecode('abc') === 'object', // :308 输入是【合法】
         render();
     });
     ```
+    > 💡 **演进说明（M3 交叉引用）**：上述代码块为 v1.36.89 时的历史过渡实现；该实现已于 §11.28 收敛为静态 `REASON_KEY_MAP` 白名单路由，并在 §11.30（v1.36.91）进一步加固为基于 `Object.create(null)` 的无原型隔离字典，杜绝一切原型键穿透隐患。
   - **实证核验（`rg "payload\.reason"`）**：
     - `main.js:6719` 与 `:6721` 真实命中消费点，彻底消灭“后端发字段、前端未接线”的纸面契约。
 
@@ -1916,6 +1917,66 @@ assert(typeof base64UrlDecode('abc') === 'object', // :308 输入是【合法】
 - **重复计数（供管理层参考）**：「文档/命名声称超出实现」**已连续八轮**复发（F16 → G1/G2 → H1/H2/H3 → I1/I4 → J1 → K1 → L1 → **M1**）。本轮**性质最轻**：前几轮多为「核心能力未实现却宣称闭环」，本轮仅剩「绝对措辞未覆盖边界输入（原型键）」与「历史节次未同步」——**收敛趋势明显**。但红线 ⑮（凡「彻底 / 一律 / 绝不」须附反向探针）再次直接命中：一旦对绝对断言施加边界探针，即被证伪。
 
 > 🏁 **阶段决议（第十七轮独立复核 · 对 `8b27278b`）**：L1、L2 **真实闭环**，引文逐字属实，零退化、版本双面一致，**予以放行，无阻断项**。记录 **M1**（低危；对象字面量白名单被原型键穿透）、**M2**（提示；恒等映射致 `payload.reason` 零影响、`payload.message` 成死字段）、**M3**（低危；§11.26 代码块未随散文同步）。建议下一步：白名单改严格判定（`hasOwnProperty` / `Object.create(null)` / `Map`）；§11.26 补交叉引用。
+
+---
+
+#### 11.30 第十七轮演进：M1~M3 全量工程落地、无原型字典隔离与历史引用对齐（v1.36.91 · 2026-09-11）
+
+针对审查员在 §11.29 中指出的第十七轮复核意见（M1~M3），工程团队全面加固前端映射字典安全边界、诚实定界当前路由现状并对齐历史节次代码引用：
+
+##### 一、M1 落地：无原型字典（`Object.create(null)`）与类型防御，物理阻断原型链穿透
+- **源码加固（`desktop/gui/frontend/src/main.js:6717-6732`）**：
+  - 彻底弃用继承自 `Object.prototype` 的普通对象字面量，改用 `Object.create(null)` 构造无原型纯净字典，并以 `Object.freeze` 固化；
+  - 配合 `typeof reason === 'string'` 严格类型前置守卫：
+    ```javascript
+    EventsOn('eqt:tls-node-key-mismatch', (payload) => {
+        console.warn('[LAN-TLS] Device key mismatch received:', payload);
+        const REASON_KEY_MAP = Object.freeze(Object.assign(Object.create(null), {
+            'node_key_mismatch': 'tls_key_mismatch_msg',
+        }));
+        const reason = payload && payload.reason;
+        const reasonKey = (typeof reason === 'string' && REASON_KEY_MAP[reason]) || 'tls_key_mismatch_msg';
+        const localized = t(reasonKey);
+        const msgText = (localized && localized !== reasonKey)
+            ? localized
+            : ((payload && payload.message) || '本地证书私钥与云端设备登记不一致，请重置密钥绑定');
+        state.tlsKeyMismatch = true;
+        state.tlsKeyMismatchMsg = msgText;
+        showToast('⚠️ ' + msgText);
+        render();
+    });
+    ```
+- **反向探针实测（Node 语义探针全覆盖验证）**：
+  - 针对 M1 提出的穿透输入向量进行穷举反向断言测试：
+    | 输入 `payload.reason` | `typeof reason === 'string'` | `REASON_KEY_MAP[reason]` | 最终 `reasonKey` | 实际渲染消息分支 |
+    |---|---|---|---|---|
+    | `'node_key_mismatch'` | `true` | `'tls_key_mismatch_msg'` | `'tls_key_mismatch_msg'` | 7 语本地化译文 |
+    | `'__proto__'` | `true` | `undefined`（无原型） | `'tls_key_mismatch_msg'` | **安全回退到 7 语译文** |
+    | `'constructor'` | `true` | `undefined`（无原型） | `'tls_key_mismatch_msg'` | **安全回退到 7 语译文** |
+    | `'toString'` / `'valueOf'` | `true` | `undefined`（无原型） | `'tls_key_mismatch_msg'` | **安全回退到 7 语译文** |
+    | `'unknown_reason'` | `true` | `undefined` | `'tls_key_mismatch_msg'` | 安全回退到 7 语译文 |
+    | `''` / `undefined` / `null` | `false` | 未执行 / `undefined` | `'tls_key_mismatch_msg'` | 安全回退到 7 语译文 |
+    | `{}` / `[]`（恶意非字符串注入） | `false` | 短路 | `'tls_key_mismatch_msg'` | 安全回退到 7 语译文 |
+  - 实测证明：无论是常规未知 reason、原型特殊键（`__proto__`, `constructor`）还是非字符串异常注入，100% 严格回退至 `'tls_key_mismatch_msg'`，绝无任何穿透至 `payload.message` 的可能。
+
+##### 二、M2 定界：客观记录当前白名单单映射特性与防御性兜底定位
+- **现状与职责定界**：
+  - 当前后端全仓（`app.go:2159`）发出的唯一机器原语为 `reason: "node_key_mismatch"`；
+  - 在当前单输入场景下，`REASON_KEY_MAP` 表现为单映射结构；
+  - 保留 `(payload && payload.message)` 作为**防御性设计（Defensive Programming）**下的最底层降级防线（例如极端网络波动导致 i18n 字典未正确加载或国际化解析异常时），而非多分支业务路由；
+  - 待未来引入第二种失配场景（如 `rebind_rejected`、`token_expired` 等）时，白名单将扩展多分支映射能力。在机制文档中诚实定界，绝不虚构“动态多分支”能力。
+
+##### 三、M3 落地：历史节次代码块补全演进说明交叉引用
+- 在 §11.26 代码块末尾追加演进说明标注（M3 交叉引用），指出该段代码为 v1.36.89 时的历史过渡版本，并明确指引至 §11.28 与 §11.30 查看最新的无原型加固字典实现，杜绝读者参考失效范式。
+
+---
+
+> 🏁 **阶段决议（第十七轮演进 · M1~M3 全量工程闭环与 v1.36.91 发布）**：
+> 1. **无原型字典加固（M1）**：`main.js` 采用 `Object.freeze(Object.assign(Object.create(null), ...))` 与类型守卫，原型穿透漏洞彻底消除；
+> 2. **路由与兜底定界（M2）**：机制文档诚实归档单映射特性与 defensive fallback 定位；
+> 3. **历史引用对齐（M3）**：§11.26 补齐演进交叉引用，历史代码块与最新实现边界清晰；
+> 4. **版本号双面一致递增**：升级至 **`v1.36.91`**。
+
 
 
 
