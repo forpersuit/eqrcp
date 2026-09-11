@@ -1977,6 +1977,65 @@ assert(typeof base64UrlDecode('abc') === 'object', // :308 输入是【合法】
 > 3. **历史引用对齐（M3）**：§11.26 补齐演进交叉引用，历史代码块与最新实现边界清晰；
 > 4. **版本号双面一致递增**：升级至 **`v1.36.91`**。
 
+---
+
+#### 11.31 第十八轮独立复核：M1~M3 闭环核验、GTS EAB 结合性评估与历史节次同步遗漏（对 `50d99d0e` · v1.36.91 · 2026-09-11）
+
+本节由独立审查方出具，对开发方 `50d99d0e`（M1~M3 工程落地）做实证复核，并一并评估 `docs/deploy/google-cloud-publicca-eab-runbook.md` 的合理性与既有文档结合性。
+
+##### 一、正向确认（逐条可复现）
+
+| 项 | 开发方声称 | 独立复核结论 | 证据 |
+|---|---|---|---|
+| M1 无原型字典 | `Object.create(null)` 物理阻断原型穿透 | **✅ 属实** | Node 语义探针穷举：`__proto__` / `constructor` / `toString` / `valueOf` / `hasOwnProperty` / `unknown_reason` / `''` / `null` / `undefined` / `{}` / `[]` **全部**解析为 `tls_key_mismatch_msg`，无一穿透 |
+| M2 定界诚实 | `payload.message` 为防御性兜底 | **✅ 属实** | 探针实测：仅当 i18n 字典未加载（`localized === reasonKey`）时该分支可达，平时 100% 走 7 语译文——与 M2 段描述一致 |
+| M3 交叉引用 | §11.26 代码块补演进说明 | **⚠️ 部分属实** | 标注确已加（doc:1766），但**仅覆盖 §11.26**；§11.28 同样被取代却无标注（见 N1） |
+| 引文保真（红线 ⑰） | §11.30 代码块 == `main.js` | **✅ 属实** | `cmp_block.py` 逐字比对：§11.30 代码块与 `main.js:6717-6732` **16/16 行完全一致** |
+| GTS EAB 实现 | `acme.ts` 依 RFC 8555 §7.3.4 原生落地 | **✅ 属实** | `computeExternalAccountBinding`（`acme.ts:106-125`）protected header `{alg:'HS256',kid,url}` + JWK payload；`acme.ts:341` 真实调用；T4.5 与 Node `crypto` **交叉验证签名** |
+| EAB 已接入真实路径 | 注入 `newAccount` 载荷 | **✅ 属实** | **反向探针**：移除 `acme.ts:339-346` 的 EAB 注入 ⇒ `T4.7b`/`T4.7c` **转红**（24→22 passed） |
+| 零退化 | — | **✅ 属实** | `go test ./pkg/cert -count=1` → `ok`；`acme-offline` **24/0**；`cert-provision-offline` **56/0** |
+| 版本双面 | v1.36.91 | **✅ 属实** | `pkg/version/version.go:12` = `v1.36.91`；`desktop/gui/wails.json` = `1.36.91` |
+
+##### 二、独立探针记录（含一次审查方自身的假阴性）
+
+1. **Node 语义探针（复算 §11.30 表格）**：以无原型字典重建查表语义，`'node_key_mismatch'` 命中 `tls_key_mismatch_msg`；全部原型键与非法输入均落 `undefined` ⇒ 安全回退。**M1 的真实闭环成立。**
+2. **T4.7 反向探针**：删除 `acme.ts` 中 `if (this.eab) { payload.externalAccountBinding = ... }` 整段后重建并运行，`T4.7b`（wire 载荷含 EAB）、`T4.7c`（EAB 签名有效）**双双转红** ⇒ 该用例**非空转**，EAB 确经真实调用路径注入。
+3. **⚠️ 方法学告警（本条为审查方失误，已自纠并沉淀为红线 ㉑）**：首次探针直接以 `node tests/acme-offline.js` 运行，**未重建 bundle**——该套件 `require('tests/compiled/acme.js')`（构建产物，未被 git 跟踪），故编辑源码后仍报 `24/0` 全绿，**假阴性**。经 `npm run test:acme:offline`（内含 esbuild 重建）重跑后 T4.7b/c 正确转红。⇒ **凡"反射型 / 编译型"测试套件，反向探针必须经项目构建脚本运行；直接 `node <test.js>` 会静默测试陈旧产物并给出假阴性。**
+
+##### 三、GTS EAB 结合性评估（回应"是否合理、能否与现有结合"）
+
+**结论：技术路线合理，与现有架构天然契合且无需改码即可切换，已在结合中；但 runbook 有 4 处须修正。**
+
+**(1) 外部事实核验**（独立检索，非采信 runbook 自述）
+
+| runbook 声称 | 核验结论 |
+|---|---|
+| 目录 URL `https://dv.acme-v02.api.pki.goog/directory` | **✅ 属实**（staging 为 `dv.acme-v02.test-api.pki.goog`） |
+| EAB 密钥须 **7 天内**完成初次注册 | **✅ 属实**；补充：该密钥**只能注册一个 ACME 账户**，注册后即失效 |
+| 支持通配符 | **✅ 属实**（DNS-01 路径） |
+| `gcloud publicca external-account-keys create` | **⚠️ 官方参考列为 `gcloud beta publicca external-account-keys`**（缺 `beta`） |
+| "每秒多张，每日可签发数万张" | **❌ 无公开来源支撑**，且与机制文档"日均数千张"矛盾（见 G1） |
+
+**(2) 架构契合性（关键判据）**：GTS EAB 的语义是**一个密钥绑定一个 ACME 账户**。本系统 `AcmeClient` 强制要求 `env.ACME_ACCOUNT_KEY`（`cert.ts:991`；缺失即 500 fail-loud，`acme.ts:234` 注释 "ensure consistent account identity (fail loud)"），即**全局单一持久账户**，与 GTS 模型**天然吻合**——不存在 per-device 账户扇出，也就无需 per-device EAB。⇒ runbook 的"配置一份 `keyId` + 一份 HMAC secret"在架构上**正确且充分**。
+
+**(3) 既有文档结合性**：机制文档 §11.14 / §4.2.3 / §7.3 / 前置 2 已多处引用该 runbook，二者**已经结合**；但存在 G4 的四处重复且数字不一致问题。
+
+##### 四、本轮发现
+
+- **N1（低危 · 历史节次同步遗漏）**：§11.30 的 M3 交叉引用**只补在 §11.26**，而 §11.28 的代码块（`const REASON_KEY_MAP = {` 对象字面量形式 + `(reason && REASON_KEY_MAP[reason])`）同样已被 §11.30 的无原型字典取代，且 §11.28 散文含**已被 M1 证伪的绝对断言**（"即使未来后端传入未知 `reason`…绝不拼装出缺失词条的非法 key"），却**无任何标注**。⇒ M3 是**按"实例"而非"类别"修复**：读者若落至 §11.28，会取到含原型穿透漏洞的范式并读到已被证伪的断言。建议对**所有**含被取代代码块的历史节次统一补交叉引用。
+- **N2（提示 · 实测表含非实测值）**：§11.30 探针表将 `'' / undefined / null` 合并为一行并标 `typeof reason === 'string'` = `false`；Node 实测 `''` 为 `true`（`undefined`/`null` 才是 `false`）。**结果列（安全回退）仍正确**，仅"实测"列失真。
+- **N3（提示 · 同节自相矛盾）**：§11.30 一、M1 段末称"**绝无任何穿透至 `payload.message` 的可能**"，而同节二、M2 段却将 `payload.message` 保留为"i18n 字典未正确加载"时的降级防线。探针实测：字典未加载时 `localized === reasonKey` ⇒ `payload.message` **确实可达**。⇒ M2 的定界诚实，**M1 的"绝无"措辞过度**；建议改为"绝无经 `reason` 取值穿透的可能（i18n 字典缺失时仍按第二节定界走 `payload.message` 兜底）"。
+- **G1（中低危 · 对外数字无据且自相矛盾）**：runbook 称 GTS 配额"每秒多张，每日可签发数万张"，机制文档 §11.14/§4.2.3/§7.3 称"日均数千张"——**同一事实两处相差约 10 倍，且均无公开来源支撑**。⇒ 属"量化声明超出可验证事实"的同型问题在**新增部署文档**中的再现。建议删除具体数字，改为"以 GCP 项目配额为准，上线前经 staging 实测标定"。
+- **G2（低危 · 配置项漏列）**：runbook 称"仅需配置 3 个变量"，但 `cert.ts:935-938` 要求 `ACME_ACCOUNT_KEY`，否则返回 500 `acme_misconfigured`；DNS-01 还需 `ACME_DNS_API_ENDPOINTS` / `ACME_DNS_API_TOKEN`。按 runbook 字面操作会撞 500。建议补前提说明。
+- **G3（提示）**：`gcloud publicca` 应为 `gcloud beta publicca`。
+- **G4（提示 · 文档重复）**：机制文档 line 28 / §4.2.3 / §7.3 / 前置 2 四处重复叙述 GTS EAB，且数字不一致。建议收敛为**单一权威节 + 交叉引用**（Rule 7：冲突须择一，不可平均）。
+
+##### 五、阶段决议
+
+> 🏁 **阶段决议（第十八轮独立复核 · 对 `50d99d0e`）**：M1 **真实闭环**（原型穿透经穷举探针消除）、M2 定界**诚实**、§11.30 引文**逐字属实**、EAB wire 注入经反向探针**可证伪**、零退化、版本双面一致，**予以放行，无阻断项**。记录 **N1**（低危；§11.28 未随 §11.30 同步，M3 按实例非类别修复）、**N2/N3**（提示；§11.30 实测列失真与同节自相矛盾）、**G1~G4**（GTS runbook：配额数字无据且与机制文档矛盾 / 漏列 fail-loud 配置 / `gcloud beta` / 四处重复）。**GTS EAB 路线技术合理、架构契合、无需改码，可与现有文档结合——且已在结合中。**
+>
+> **重复计数**：「文档/命名声称超出实现」已连续 **九轮**复发（F16 → G1/G2 → H1/H2/H3 → I1/I4 → J1 → K1 → L1 → M1 → **N1/G1**）。**第十八轮新特征**：① 缺陷已完全退出"核心能力"层，仅剩**历史节次同步遗漏**与**新增部署文档的对外数字**；② **G1 是本战线首次由"新增部署手册"引入不可验证的量化承诺**，提示核查范围须自机制文档扩展至 `docs/deploy/` 全量。新增技能红线 **㉑**（编译型套件的反向探针须经构建脚本运行）与 **㉒**（对外部署文档的量化/时效声明须外部核验并标注来源）。
+
 
 
 

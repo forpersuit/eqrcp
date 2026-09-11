@@ -317,6 +317,14 @@ WantedBy=multi-user.target
 > - **M3（低危）就地更正须同步代码块**：对历史节次做就地文字更正时，若其代码块仍是被取代的旧实现，须补交叉引用，否则读者会取用已废弃范式。**历史节与其代码块是一对，改其一须改其二。**
 > - **✅ M1~M3 闭环落实（v1.36.91 · 2026-09-11）**：M1 在 `main.js` 中将白名单重构为无原型对象 `Object.freeze(Object.assign(Object.create(null), { 'node_key_mismatch': 'tls_key_mismatch_msg' }))` 并追加 `typeof reason === 'string'` 守卫，语义探针实证覆盖 `'__proto__'`/`'constructor'`/`'toString'` 等全部原型边界输入，100% 安全回退到默认本地化键；M2 在机制文档客观定界当前白名单单映射特性与 `payload.message` 的防御性兜底定位；M3 在 §11.26 代码块下补齐演进交叉引用说明；版本号双面递增至 `v1.36.91`。
 
+> **审查红线（第十八轮沉淀 · Rule 9/12 · 对 `50d99d0e` 的复核，详见机制文档 §11.31）**：
+> - **㉑（方法学）编译型 / 反射型测试套件的反向探针，必须经项目构建脚本运行**：EQT 的 `tests/acme-offline.js` 等套件 `require('tests/compiled/<x>.js')`（esbuild 产物，**未被 git 跟踪**）。直接 `node tests/acme-offline.js` 会**静默测试陈旧 bundle**——本轮审查方据此跑出过**假阴性**（探针改了 `src/utils/acme.ts` 却仍报 24/0 全绿）。正确姿势：`npm run test:acme:offline`（脚本内含 `esbuild --bundle`）或手动先重建再运行。**凡探针结果"未如预期转红"时，第一步须先排除"测的不是当前源码"。**
+> - **㉒（覆盖面）`docs/deploy/` 对外部署手册中的量化 / 时效 / URL 声明，须外部核验并标注来源**：第十八轮首次在**新增部署手册**（`google-cloud-publicca-eab-runbook.md`）发现不可验证的量化承诺——"每秒多张，每日可签发数万张"无公开来源，且与机制文档"日均数千张"**相差约 10 倍**。核查范围须自 `docs/mechanism/` 扩展至 `docs/deploy/` 全量。可核验项（ACME 目录 URL、EAB 7 天时效、通配符支持）与不可核验项（配额数字）须**分别对待**：前者须核对真值，后者**不得写入对外文档**，应改为"以项目配额为准，上线前实测标定"。
+> - **✅ 本轮确认属实项**：M1 无原型字典经穷举语义探针（含 `__proto__`/`constructor`/`toString`/`valueOf`/`hasOwnProperty`/`{}`/`[]`）**全部安全回退**；§11.30 代码块与 `main.js:6717-6732` **16/16 逐字一致**（红线 ⑰）；EAB `computeExternalAccountBinding` 符合 RFC 8555 §7.3.4（`acme.ts:106-125`）且经 `acme.ts:341` 真实注入，**反向探针 T4.7b/c 转红**；`go test ./pkg/cert -count=1`、`acme-offline` 24/0、`cert-provision-offline` 56/0 全绿；版本双面 `v1.36.91` 一致。
+> - **⚠️ 新发现项**：**N1**（低危）§11.30 的 M3 交叉引用**只补 §11.26**，§11.28 代码块同样被取代且其散文含已被 M1 证伪的绝对断言，却无标注——**M3 按"实例"而非"类别"修复**，历史节次同步须扫描**全部**被取代代码块；**N2/N3**（提示）§11.30 探针表 `''` 行 `typeof` 误标、同节 M1「绝无穿透至 `payload.message`」与 M2「保留为字典未加载兜底」自相矛盾（该路径探针实测**可达**）。
+> - **⚠️ 复发计数**：「文档/命名声称超出实现」已连续 **九轮**复发（F16 → G1/G2 → H1/H2/H3 → I1/I4 → J1 → K1 → L1 → M1 → **N1/G1**）。缺陷已退出"核心能力"层，仅剩**历史节次同步**与**新增部署文档的对外数字**；第十八轮新特征是核查面从 `docs/mechanism/` 外溢至 `docs/deploy/`。
+> - **🔗 GTS EAB 结合性结论**：Google Trust Services EAB 路线**技术合理、架构契合**——GTS 语义为「一个 EAB 密钥绑定一个 ACME 账户」，与本系统**全局单一持久账户**（`ACME_ACCOUNT_KEY`，`cert.ts:991` / fail-loud `acme.ts:234`）天然吻合，**无需改码即可切换**；机制文档 §11.14/§4.2.3/§7.3/前置 2 已引用该 runbook，**已在结合**。须修正：runbook 漏列 fail-loud 必需的 `ACME_ACCOUNT_KEY` 与 DNS-01 端点、`gcloud publicca` 应为 `gcloud beta publicca`、四处重复叙述宜收敛为单一权威节。
+
 
 
 
