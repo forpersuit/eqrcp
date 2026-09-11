@@ -1738,4 +1738,50 @@ assert(typeof base64UrlDecode('abc') === 'object', // :308 输入是【合法】
 
 > 🏁 **阶段决议（第十五轮独立复核 · 对 `0d44d575`）**：J1、J2 **真实闭环**；J3 断言强度保留但跳过路径仍为默认可见性盲区；J4 后端字段落地、前端消费**未接线**。版本与零退化合规，**予以放行**。记录 K1（中危）、K2（低危），建议下一轮：前端以 `reason` 为键查表 + 跳过分支改 `t.Skip`。
 
+---
+
+#### 11.26 第十五轮演进：K1~K2 全量工程落地、前端 reason 接线与 t.Skip 消除虚假绿色（v1.36.89 · 2026-09-11）
+
+针对审查员在 §11.25 中指出的第十五轮复核意见（K1~K2），工程团队全面落实源码消费接线与显式测试退化声明：
+
+##### 一、K1 落地：前端 `payload.reason` 真正接线消费与本地化查表
+- **源码落地（`desktop/gui/frontend/src/main.js`）**：
+  - 在 `eqt:tls-node-key-mismatch` 事件处理器中，接入 `payload.reason` 真实消费逻辑：
+    ```javascript
+    EventsOn('eqt:tls-node-key-mismatch', (payload) => {
+        console.warn('[LAN-TLS] Device key mismatch received:', payload);
+        const reasonKey = (payload && payload.reason === 'node_key_mismatch')
+            ? 'tls_key_mismatch_msg'
+            : ((payload && payload.reason) ? `tls_reason_${payload.reason}` : 'tls_key_mismatch_msg');
+        const localized = t(reasonKey);
+        const msgText = (localized && localized !== reasonKey)
+            ? localized
+            : ((payload && payload.message) || '本地证书私钥与云端设备登记不一致，请重置密钥绑定');
+        state.tlsKeyMismatch = true;
+        state.tlsKeyMismatchMsg = msgText;
+        showToast('⚠️ ' + msgText);
+        render();
+    });
+    ```
+  - **实证核验（`rg "payload\.reason"`）**：
+    - `main.js:6719` 与 `:6721` 真实命中消费点，彻底消灭“后端发字段、前端未接线”的纸面契约。
+
+##### 二、K2 落地：子测试架构与 `t.Skip` 消除特权环境下的虚假绿色
+- **源码加固（`pkg/cert/provisioner_test.go`）**：
+  - 将第 5 步非 NotExist 读取失败独立包装为子测试 `t.Run("PermissionDenied_UnreadableKey", func(t *testing.T) { ... })`；
+  - 将原 `t.Log` 替换为显式 **`t.Skip`**：
+    - 当 `os.Chmod(keyPath, 0000)` 不被环境支持时：`t.Skipf(...)`；
+    - 当特权运行（root 用户 `CAP_DAC_OVERRIDE` 导致即使 0000 仍可读）时：显式调用 `t.Skip("skipping unreadable key test: running as root or filesystem does not enforce POSIX 0000 permissions")`；
+    - 当读取错误并非权限拒绝时：`t.Skipf(...)`；
+  - **反向探针实测（探针 D 重验）**：
+    - 在模拟 root 环境下，子测试精准输出 `--- SKIP: TestLoadOrGenerateDeviceKey/PermissionDenied_UnreadableKey`，被 CI 报告系统与测试框架作为 SKIP 真实捕获，绝不伪装成断言通过的虚假绿色。
+
+---
+
+> 🏁 **阶段决议（第十五轮演进 · K1~K2 全量工程闭环与 v1.36.89 发布）**：
+> 1. **前端消费点真实接线（K1）**：`main.js` 真正读取并消费 `payload.reason` 进行 i18n 字典路由，前后端分层解耦契约名实相符；
+> 2. **消除测试虚假绿色（K2）**：权限异常测试抽离为独立子测试并接入 `t.Skip`，特权环境下显式声明跳过原因；
+> 3. **版本号双面一致递增**：升级至 **`v1.36.89`**。
+
+
 

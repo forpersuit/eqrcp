@@ -145,33 +145,32 @@ func TestLoadOrGenerateDeviceKey(t *testing.T) {
 	logBuf.Reset()
 
 	// 5. Read error (non-NotExist error: permission denied triggers WARNING)
-	if err := os.Chmod(keyPath, 0000); err != nil {
-		t.Logf("Notice: chmod 0000 not supported in current environment: %v", err)
-	} else {
+	t.Run("PermissionDenied_UnreadableKey", func(t *testing.T) {
+		if err := os.Chmod(keyPath, 0000); err != nil {
+			t.Skipf("skipping: chmod 0000 not supported in current environment: %v", err)
+		}
 		defer os.Chmod(keyPath, 0600)
 		_, testReadErr := os.ReadFile(keyPath)
-		if testReadErr != nil {
-			// Ensure error is a real permission rejection
-			if !errors.Is(testReadErr, fs.ErrPermission) && !os.IsPermission(testReadErr) {
-				t.Logf("Notice: unexpected read error type: %v", testReadErr)
-			}
-			priv5, err := LoadOrGenerateDeviceKey(nodeID)
-			_ = os.Chmod(keyPath, 0600) // Restore for teardown
-			if err != nil {
-				t.Fatalf("unexpected failure on unreadable key: %v", err)
-			}
-			if priv5 == nil {
-				t.Fatalf("expected valid key to be generated")
-			}
-			if !strings.Contains(logBuf.String(), "[WARNING] Failed to read private key at") {
-				t.Errorf("expected warning in log for read error, got: %s", logBuf.String())
-			}
-		} else {
+		if testReadErr == nil {
 			// Read succeeded despite chmod 0000 (e.g. running as root / CAP_DAC_OVERRIDE / Windows filesystem ACLs)
 			_ = os.Chmod(keyPath, 0600)
-			t.Log("Notice: skipping unreadable key test (running as root or filesystem does not enforce POSIX 0000 permissions)")
+			t.Skip("skipping unreadable key test: running as root or filesystem does not enforce POSIX 0000 permissions")
 		}
-	}
+		if !errors.Is(testReadErr, fs.ErrPermission) && !os.IsPermission(testReadErr) {
+			t.Skipf("skipping: unexpected read error type (not fs.ErrPermission): %v", testReadErr)
+		}
+		priv5, err := LoadOrGenerateDeviceKey(nodeID)
+		_ = os.Chmod(keyPath, 0600) // Restore for teardown
+		if err != nil {
+			t.Fatalf("unexpected failure on unreadable key: %v", err)
+		}
+		if priv5 == nil {
+			t.Fatalf("expected valid key to be generated")
+		}
+		if !strings.Contains(logBuf.String(), "[WARNING] Failed to read private key at") {
+			t.Errorf("expected warning in log for read error, got: %s", logBuf.String())
+		}
+	})
 }
 
 func TestGenerateDeviceCSR(t *testing.T) {
