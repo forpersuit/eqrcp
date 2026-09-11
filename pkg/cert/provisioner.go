@@ -97,6 +97,16 @@ func LoadOrGenerateDeviceKey(nodeID string) (*ecdsa.PrivateKey, error) {
 			}
 		}
 		log.Printf("[LAN-TLS-KEY] [WARNING] Existing private key at %s is corrupted or invalid, generating new key (may cause cloud node_key_mismatch if already registered)", keyPath)
+	} else if !os.IsNotExist(err) {
+		log.Printf("[LAN-TLS-KEY] [WARNING] Failed to read private key at %s: %v, generating new key", keyPath, err)
+	} else {
+		// Key file does not exist. Check if certificates exist (indicating key was deleted/lost after prior setup)
+		certPath := filepath.Join(dir, "fullchain.pem")
+		if _, certErr := os.Stat(certPath); certErr == nil {
+			log.Printf("[LAN-TLS-KEY] [WARNING] Private key at %s is missing while fullchain.pem exists, generating new key (may cause cloud node_key_mismatch until re-bound)", keyPath)
+		} else {
+			log.Printf("[LAN-TLS-KEY] [INFO] Private key at %s not found (initial setup), generating new key", keyPath)
+		}
 	}
 
 	// 2. Generate a new ECDSA P-256 private key

@@ -297,11 +297,29 @@ async function runTests() {
     const expectedSig = base64UrlEncode(hmac.digest());
     assert(binding.signature === expectedSig, 'T4.5: EAB HMAC-SHA256 signature is cryptographically valid and matches Node.js crypto');
 
-    // T4.6: base64UrlDecode strictly complies with RFC 7515 Appendix C standard test vector
-    const rfc7515Payload = 'eyJpc3MiOiJqb2UiLA0KICJleHAiOjEzMDA4MTkzODAsDQogImh0dHA6Ly9leGFtcGxlLmNvbS9pc19yb290Ijp0cnVlfQ';
-    const expectedJson = '{"iss":"joe",\r\n "exp":1300819380,\r\n "http://example.com/is_root":true}';
-    const decodedRfcBytes = base64UrlDecode(rfc7515Payload);
-    assert(Buffer.from(decodedRfcBytes).toString('utf8') === expectedJson, 'T4.6: base64UrlDecode strictly decodes RFC 7515 official test vector and recovers binary exact payload');
+    // T4.6a: base64UrlDecode properly normalizes URL-safe - and _ characters and completes missing padding
+    // Binary: [0xfb, 0xef, 0xfe, 0xfd] -> Base64: ++/+/Q== -> Base64URL: --_-_Q (len=6, missing 2 padding '=', contains both - and _)
+    const urlSafeSample = '--_-_Q';
+    const expectedBytes = new Uint8Array([0xfb, 0xef, 0xfe, 0xfd]);
+    const decodedUrlSafe = base64UrlDecode(urlSafeSample);
+    assert(Buffer.from(decodedUrlSafe).equals(Buffer.from(expectedBytes)), 'T4.6a: base64UrlDecode converts URL-safe -_ characters and completes missing padding to exact binary');
+
+    // T4.6b: Probe-locked: atob fallback path works when Buffer is undefined (Worker runtime simulation)
+    const origBuffer = global.Buffer;
+    let atobSuccess = false;
+    try {
+      // @ts-ignore
+      delete global.Buffer;
+      const atobDecoded = base64UrlDecode(urlSafeSample);
+      atobSuccess = (atobDecoded.length === 4 &&
+        atobDecoded[0] === 0xfb && atobDecoded[1] === 0xef &&
+        atobDecoded[2] === 0xfe && atobDecoded[3] === 0xfd);
+    } catch {
+      atobSuccess = false;
+    } finally {
+      global.Buffer = origBuffer;
+    }
+    assert(atobSuccess, 'T4.6b: base64UrlDecode via atob fallback strictly normalizes -_ and decodes correctly in non-Buffer environment');
 
     // T4.7: Wire test: AcmeClient with eab option injects externalAccountBinding into newAccount payload
     let capturedAccountPayload = null;

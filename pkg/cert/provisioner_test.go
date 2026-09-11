@@ -1,6 +1,7 @@
 package cert
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -11,6 +12,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"log"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -68,6 +70,11 @@ func TestLoadOrGenerateDeviceKey(t *testing.T) {
 
 	nodeID := "testnode1234"
 
+	// Capture log output to lock warning assertions (falsifiable per Rule 9)
+	var logBuf bytes.Buffer
+	log.SetOutput(&logBuf)
+	defer log.SetOutput(os.Stderr)
+
 	// 1. First generation: creates new key file
 	priv1, err := LoadOrGenerateDeviceKey(nodeID)
 	if err != nil {
@@ -76,6 +83,10 @@ func TestLoadOrGenerateDeviceKey(t *testing.T) {
 	if priv1 == nil || priv1.Curve != elliptic.P256() {
 		t.Fatalf("expected valid P-256 private key")
 	}
+	if !strings.Contains(logBuf.String(), "[INFO] Private key at") {
+		t.Errorf("expected initial setup log to contain '[INFO] Private key at', got: %s", logBuf.String())
+	}
+	logBuf.Reset()
 
 	// Verify file permissions
 	keyPath := filepath.Join(tempHome, ".config", "eqt", "certs", nodeID, "privkey.pem")
@@ -106,6 +117,29 @@ func TestLoadOrGenerateDeviceKey(t *testing.T) {
 	}
 	if priv3 == nil || priv1.PublicKey.Equal(&priv3.PublicKey) {
 		t.Fatalf("expected new key pair to be generated when existing key file is corrupted")
+	}
+	if !strings.Contains(logBuf.String(), "[WARNING] Existing private key at") {
+		t.Errorf("expected warning in log for corrupted key, got: %s", logBuf.String())
+	}
+	logBuf.Reset()
+
+	// 4. Missing key when fullchain exists (F12 root cause: cache cleaned or key lost)
+	certPath := filepath.Join(tempHome, ".config", "eqt", "certs", nodeID, "fullchain.pem")
+	if err := os.WriteFile(certPath, []byte("EXISTING_CERT_PLACEHOLDER"), 0644); err != nil {
+		t.Fatalf("failed to write dummy fullchain.pem: %v", err)
+	}
+	if err := os.Remove(keyPath); err != nil {
+		t.Fatalf("failed to remove key file: %v", err)
+	}
+	priv4, err := LoadOrGenerateDeviceKey(nodeID)
+	if err != nil {
+		t.Fatalf("failed to regenerate key when key is missing: %v", err)
+	}
+	if priv4 == nil {
+		t.Fatalf("expected valid regenerated key")
+	}
+	if !strings.Contains(logBuf.String(), "[WARNING] Private key at") || !strings.Contains(logBuf.String(), "is missing while fullchain.pem exists") {
+		t.Errorf("expected warning in log for missing key when certificate exists, got: %s", logBuf.String())
 	}
 }
 

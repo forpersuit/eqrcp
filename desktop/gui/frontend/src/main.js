@@ -2404,6 +2404,8 @@ function renderSettingsPanel() {
                             <span>${t('enable_tls_desc')}</span>
                             ${state.appInfo?.hasValidTLSCert ?
                                 `<span style="display: block; font-size: 11px; color: var(--accent-success, #67c23a); margin-top: 3px;">${escapeHTML(t('tls_cert_ready') || '官方公信 TLS 已就绪')}</span>` :
+                                state.tlsKeyMismatch ?
+                                `<span style="display: block; font-size: 11px; color: var(--accent-danger, #ef4444); margin-top: 3px;">⚠️ ${escapeHTML(state.tlsKeyMismatchMsg || '本地证书私钥与云端设备登记不一致，请重置密钥绑定')}</span>` :
                                 `<span style="display: block; font-size: 11px; color: var(--text-muted, #94a3b8); margin-top: 3px;">ℹ️ ${escapeHTML(t('tls_cert_preparing') || '局域网 TLS 正在后台准备中（首次启动或离线时将以局域网标准模式保障传输）')}</span>`}
                         </div>
                         <div class="setting-control-stack">
@@ -6707,6 +6709,15 @@ EventsOn('eqt:tls-cert-ready', async () => {
     try {
         state.appInfo = await GetAppInfo();
     } catch (_) {}
+    render();
+});
+
+EventsOn('eqt:tls-node-key-mismatch', (payload) => {
+    console.warn('[LAN-TLS] Device key mismatch received:', payload);
+    const msgText = (payload && payload.message) || t('tls_key_mismatch_msg') || '本地证书私钥与云端设备登记不一致，请重置密钥绑定';
+    state.tlsKeyMismatch = true;
+    state.tlsKeyMismatchMsg = msgText;
+    showToast('⚠️ ' + msgText);
     render();
 });
 

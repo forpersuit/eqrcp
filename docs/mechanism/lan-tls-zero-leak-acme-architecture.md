@@ -1401,3 +1401,46 @@ assert(typeof base64UrlDecode('abc') === 'object', // :308 输入是【合法】
 - **工程建议优先级**：H1（一个前端订阅即可补齐用户闭环）> H3（两条用例即可锁死 base64url 路径）> H2（补缺失分支日志 + 断言）> H4 > H5。
 
 > 🏁 **阶段决议（第十二轮独立复核 · 对 `b0e2680f`）**：本轮客户端 G1 加固**真实落地且经反向证伪**，Worker 与 Go 套件零退化，**予以放行**；同时记录 H1~H5，其中 H1/H2/H3 为文档措辞与实现边界的三处偏差，须在下一轮以探针或前端订阅方式收敛，不得以「已闭环」结案。
+
+---
+
+#### 11.20 第十三轮演进：H1~H5 全量工程落地与可证伪探针闭环（v1.36.86 · 2026-09-11）
+
+针对审查员在 §11.19 中提出的第十二轮复核意见（H1~H5），工程团队严格依照“探针反向证伪先行”原则全面修复并实测验证：
+
+##### 一、H1 落地：前端 `EventsOn` 订阅与应用内非侵入式可操作引导
+- **源码落地（`desktop/gui/frontend/src/main.js`）**：
+  - 注册监听 `EventsOn('eqt:tls-node-key-mismatch', (payload) => { ... })`；
+  - 接收到事件后，更新 `state.tlsKeyMismatch = true` 与 `state.tlsKeyMismatchMsg`，并通过应用内标准 `showToast('⚠️ ' + msgText)` 弹出非侵入式提示（杜绝浏览器原生 alert）；
+  - 设置面板（Setting Row）同步更新渲染：当检测到 `state.tlsKeyMismatch` 时，将状态文案从灰色的“正在后台准备中”切换为**醒目的红色引导**：`⚠️ 本地证书私钥与云端设备登记不一致，请重置密钥绑定`，达成完整的 GUI 闭环。
+
+##### 二、H2 落地：私钥缺失分支日志全覆盖与单测日志可证伪锁
+- **源码落地（`pkg/cert/provisioner.go`）**：
+  - 在 `LoadOrGenerateDeviceKey` 中对文件读取分支进行细化：
+    - `data, err := os.ReadFile(...)` 成功但内容损坏：输出 `[WARNING] Existing private key at ... is corrupted or invalid`；
+    - 文件不存在（`os.IsNotExist(err)`）且同目录下已存在 `fullchain.pem`（表明此前曾成功置备但私钥丢失）：输出显式 `[WARNING] Private key at ... is missing while fullchain.pem exists, generating new key (may cause cloud node_key_mismatch until re-bound)`；
+    - 纯初次生成：输出 `[INFO] Private key at ... not found (initial setup), generating new key`。
+- **可证伪探针锁（`pkg/cert/provisioner_test.go`）**：
+  - 在 `TestLoadOrGenerateDeviceKey` 中通过 `log.SetOutput(&logBuf)` 捕获日志输出并进行严格断言；
+  - **实测探针反向证伪**：若将源码中的 `[WARNING]` 改为 `[INFO]`，单测立即失败转红（`provisioner_test.go: expected warning in log...`），证明该 Warning 逻辑具备不可篡改的可证伪保障。
+
+##### 三、H3 落地：真 Base64URL 字符（`-`/`_`）与 Worker 纯 `atob` 回退分支双重覆盖
+- **源码测试加固（`cloudflare/eqt-drm-api/tests/acme-offline.js`）**：
+  - 将 T4.6 升级为两组精准测试：
+    1. **T4.6a**：输入真实包含 `-` 与 `_` 且缺少 2 个补位 padding 的 Base64URL 样本 `--_-_Q`（对应二进制 `[0xfb, 0xef, 0xfe, 0xfd]`，标准 Base64 为 `++/+/Q==`），断言严格还原 4 字节原始二进制；
+    2. **T4.6b**：在测试执行块中临时 `delete global.Buffer`，逼出 `base64UrlDecode` 运行 Worker 纯 Web API 的 `atob` 分支，断言在无 Node Buffer 的原生 Worker 环境下依然精准执行 `-/_` 替换与 padding 补全，并引入 `try/catch` 达成 Fail-Clean。
+  - **实测探针反向证伪**：
+    - 探针：若在 `acme.ts` 中删除 `.replace(/-/g, '+').replace(/_/g, '/')`，`atob` 遇到 `--_-_Q` 立刻抛出 `InvalidCharacterError`，T4.6b 坚决转红（套件退出码 1）；
+    - 探针恢复后全绿，ACME 离线套件扩充至 23 项全绿。
+
+##### 四、H4 措辞收敛与 H5 轮次规范对齐
+- **措辞客观化（H4）**：明确说明当前客户端在发生失配时，在当前进程生命周期内中断重入；重启后若未配置云端重绑端点仍会尝试，后续将与服务端 `/rebind` 端点协同实施持久化标记；
+- **轮次口径统一（H5）**：统一机制设计文档与 SKILL.md 中的轮次编号，消除错位。
+
+---
+
+> 🏁 **阶段决议（第十三轮演进 · H1~H5 全量工程闭环与 v1.36.86 发布）**：
+> 1. **全链路用户闭环（H1）**：前端新增 `EventsOn('eqt:tls-node-key-mismatch')` 订阅、Toast 提示与设置页红色状态警示；
+> 2. **私钥丢失防御感知与日志锁（H2）**：补齐证书存在私钥缺失时的显式 Warning，且单测经探针反向证伪；
+> 3. **Base64URL 与 Worker 原生环境严密覆盖（H3）**：使用真 `-/_` 字符样本并覆盖纯 `atob` 无 Buffer 分支，经探针证实可准确捕获回归；
+> 4. **版本号合规递增**：客户端防御与交互增强，版本号递增至 **`v1.36.86`**。
