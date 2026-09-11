@@ -75,8 +75,9 @@ TELEGRAM_CHAT_ID = "1880182104"
 # Paddle Sandbox 测试价格 ID (Sandbox 环境)
 PADDLE_PRICE_ID_PLUS_YEARLY = "pri_01kxymxqngex49tg65wb0701pc"
 PADDLE_PRICE_ID_PLUS_LIFETIME = "pri_01kyhmkv4ppj10r4cdgw3sv48p"
-# RFC 8555 ACME 代理签发配置 (测试环境接入 Let's Encrypt 官方签发)
-ACME_DIRECTORY_URL = "https://acme-v02.api.letsencrypt.org/directory"
+# RFC 8555 ACME 代理签发配置 (测试环境接入 Google Trust Services / Google Public CA 官方签发)
+ACME_DIRECTORY_URL = "https://dv.acme-v02.api.pki.goog/directory"
+ACME_EAB_KID = "b160e386be328f849159219f87cae8a5"
 ACME_DNS_API_ENDPOINTS = "https://ns1-dns.eqt.net.im,https://ns2-dns.eqt.net.im"
-ACME_EMAIL = "leeyelon@gmail.com"
+ACME_EMAIL = "forpersuit@gmail.com"
 

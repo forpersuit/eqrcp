@@ -326,6 +326,8 @@ WantedBy=multi-user.target
 > - **🔗 GTS EAB 结合性结论**：Google Trust Services EAB 路线**技术合理、架构契合**——GTS 语义为「一个 EAB 密钥绑定一个 ACME 账户」，与本系统**全局单一持久账户**（`ACME_ACCOUNT_KEY`，`cert.ts:991` / fail-loud `acme.ts:234`）天然吻合，**无需改码即可切换**；机制文档 §11.14/§4.2.3/§7.3/前置 2 已引用该 runbook，**已在结合**。须修正：runbook 漏列 fail-loud 必需的 `ACME_ACCOUNT_KEY` 与 DNS-01 端点、`gcloud publicca` 应为 `gcloud beta publicca`、四处重复叙述宜收敛为单一权威节。
 > - **✅ N1~N3 与 G1~G4 闭环落实（v1.36.92 · 2026-09-12）**：N1 在 §11.28 代码块补全演进交叉引用批注，实现历史节次全量对齐；N2 在 §11.30 探针表中将 `''` 拆分并保真呈现其实测语义（`typeof === 'string'` 为 `true`，查表 `undefined` 安全回退）；N3 修正 M1 措辞消除与 M2 字典未加载兜底定义的冲突；G1 消除 GTS runbook 中夸大无据的配额数字并客观定界；G2 补齐 GTS 接入前置必需的持久化账户私钥 `ACME_ACCOUNT_KEY` 与权威 DNS API 依赖说明；G3 纠偏命令为 `gcloud beta publicca external-account-keys create`；G4 全仓收敛 GTS 配额叙述，彻底消除四处文档数字打架；版本号双面递增至 `v1.36.92`。
 > - **✅ 权威 DNS API 官方主域迁移落地（v1.36.93 · 2026-09-12）**：在 Cloudflare 为 `eqt.net.im` 注入 `ns1-dns`/`ns2-dns` 灰云 A 记录；双机 Caddy 成功签发并激活 Let's Encrypt 官方证书；端到端 Bearer Token API 读写/清理实测 100% 通过；Worker `wrangler.toml` 全量收敛为官方域名端点。
+> - **✅ Google Public CA (GTS EAB) 真机绑定与首张证书签发全通（v1.36.94 · 2026-09-12）**：在 GCP 项目中激活 `publicca.googleapis.com` 并获取 EAB 凭据；通过 Web Crypto HMAC-SHA256 完成真机绑定并激活 Google Trust Services 账户；通过 `verify-gts-eab-live.js` 完整走通创建订单、DNS-01 质询注入、Google DNS 秒级校验、CSR Finalize、首张 WR1 公信证书（90天）签发与自动清理全流程；版本号双面递增至 `v1.36.94`。
+
 
 
 

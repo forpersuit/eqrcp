@@ -37,6 +37,7 @@
     "test:cert:offline": "npx esbuild src/routes/cert.ts --bundle --alias:cloudflare:sockets=./tests/mocks/cloudflare-sockets-stub.js --outfile=tests/compiled/cert.js --platform=node --format=cjs && node tests/cert-provision-offline.js",
     "pretest:acme:offline": "npm run typecheck",
     "test:acme:offline": "npx esbuild src/utils/acme.ts --bundle --outfile=tests/compiled/acme.js --platform=node --format=cjs && node tests/acme-offline.js",
+    "test:gts:live": "node tests/verify-gts-eab-live.js",
     "test:website-review": "node tests/verify-website-review-fixes.mjs",
     "typecheck": "tsc --noEmit",
     "test:offline": "npm run typecheck && npm run test:env-guard && npm run test:schema-cache:offline && npm run test:abuse:offline && npm run test:utils:offline && npm run test:d1-retry:offline && npm run test:admin:metrics:offline && npm run test:health:offline && npm run test:subscription:offline && npm run test:portal:offline && npm run test:portal:toggle:offline && npm run test:zero-payment:offline && npm run test:sandbox:offline && npm run test:dev-devices:offline && npm run test:daily-usage:offline && npm run test:telemetry:offline && npm run test:cert:offline && npm run test:acme:offline && npm run test:website-review",

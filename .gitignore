@@ -43,6 +43,8 @@ docs/img/venv/
 .env.*.local
 # 测试环境配置(含 secrets,不入库;wrangler --env test 对应)
 .env.test
+.dev.vars
+.dev.vars.*
 
 # Log files
 *.log
@@ -87,3 +89,4 @@ docs/img/transparent1.jpg
 /certs/
 /eqt-dev
 /bin/
+.gts-account-key.json

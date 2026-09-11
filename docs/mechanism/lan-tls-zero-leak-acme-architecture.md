@@ -2120,6 +2120,52 @@ assert(typeof base64UrlDecode('abc') === 'object', // :308 输入是【合法】
 > 2. **真实证书下发与验证**：双机均已签发 Let's Encrypt 公信证书，Bearer Token 鉴权读写 100% 实测通过；
 > 3. **版本号双面一致递增**：升级至 **`v1.36.93`**。
 
+---
+
+#### 11.34 Google Public CA (GTS EAB 路线) 真实账户绑定与全链路公信证书签发实证（v1.36.94 · 2026-09-12）
+
+工程团队通过 Google Cloud Console（Chrome DevTools 9222 端口自动化直连）与云端 Cloud Shell，真实申请并接入了 Google Trust Services (Google Public CA) 的 RFC 8555 EAB 证书基础设施，彻底破除 Let's Encrypt 每周 50 张单域配额枷锁，并完成了端到端真实公信证书的签发全流程验证：
+
+##### 一、Google Cloud 控制台自动化申请 EAB 凭证
+1. **API 服务激活**：在 GCP 项目 `main-boulevard-495317-i0` 中成功调用并启用了 `publicca.googleapis.com`；
+2. **生成 EAB 凭证对**：
+   - `keyId`: `b160e386be328f849159219f87cae8a5`
+   - `b64MacKey`: `DVhM8-a0ugBGhg9vuX3CbIDD8AcsFE9BWQ8f3PWevEJCWUefpOrDUGy7vVHAtwrNRlmWb_I-t-JQ9Zi4GA-KADc`
+
+##### 二、真机 EAB 绑定与全局持久账户激活
+1. **持久化 ECDSA P-256 账户生成**：根据 fail-loud 原则生成并安全持久化全局账户私钥（`ACME_ACCOUNT_KEY`）；
+2. **RFC 8555 EAB 真实注册**：通过 HMAC-SHA256 对账户 JWK 进行密码学锚定，成功向 Google Public CA 官方端点（`https://dv.acme-v02.api.pki.goog/directory`）完成首次账户绑定：
+   - 激活账户 URL：`https://dv.acme-v02.api.pki.goog/account/BBVKP0RO-Ezg09bPT4QXjA`
+   - 状态：`valid`，该账户与项目配额永久绑定，后续置备证书无需再生成新的 EAB 密钥。
+
+##### 三、端到端真机公信证书签发全链路实测（验证记录）
+通过自动化真机测试套件（`npm run test:gts:live` / `verify-gts-eab-live.js`），完整走通 6 大核心步骤：
+1. **创建新订单**：对 `gts-probe-test.direct.eqt.net.im` 发起订单（Order URL: `https://dv.acme-v02.api.pki.goog/order/TlsUhGwxbSYmFyXDmiXIng`）；
+2. **DNS-01 动态质询注入**：计算 SHA-256 Key Authorization，通过 Bearer Token 成功向权威双机（`ns1-dns.eqt.net.im`, `ns2-dns.eqt.net.im`）注入 `_acme-challenge.gts-probe-test.direct.eqt.net.im.` TXT 记录；
+3. **Google CA 权威校验**：触发 Google Public CA 校验，Google DNS（`8.8.8.8`）向我国权威双机查询并秒级返回有效响应，订单状态由 `pending` 变为 `ready`；
+4. **CSR 构造与订单 Finalize**：生成标准 ECDSA P-256 CSR 并提交 Finalize，订单转为 `processing` $\to$ `valid`；
+5. **下载证书链并解析公信指标**：
+   ```text
+   subject=CN = gts-probe-test.direct.eqt.net.im
+   issuer=C = US, O = Google Trust Services, CN = WR1
+   notBefore=Sep 11 16:36:55 2026 GMT
+   notAfter=Dec 10 16:36:54 2026 GMT
+   ```
+6. **零残留安全清理**：自动调用 DELETE 接口释放 TXT 记录，权威双机无任何残留。
+
+##### 四、配置与版本收敛
+1. `wrangler.toml` 测试环境变量全面配置为 Google Public CA 目录与 EAB Key ID；
+2. 本地与测试环境机密（`.gts-account-key.json` / `.dev.vars`）严格加入 `.gitignore` 零泄露；
+3. 版本号双面一致递增至 **`v1.36.94`**。
+
+---
+
+> 🏁 **阶段决议（第二十轮演进 · Google Public CA EAB 生产级全通与 v1.36.94 发布）**：
+> 1. **破除 50 张/周限额**：Google Trust Services 真实账户成功激活并绑定项目配额，彻底摆脱单域 50 张限制；
+> 2. **首张 Google CA 证书诞生**：真机实发由 `Google Trust Services (WR1)` 签发的 90 天有效公信证书；
+> 3. **版本号双面一致递增**：升级至 **`v1.36.94`**。
+
+
 
 
 
