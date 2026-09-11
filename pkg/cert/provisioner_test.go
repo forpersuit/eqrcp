@@ -779,3 +779,50 @@ func TestUntrustedDeviceCertificate_FailSoft(t *testing.T) {
 		t.Errorf("expected HasValidCertificate to return true for trusted legacy wildcard cert")
 	}
 }
+
+func TestGetDeviceCertDir_LegacyFallbackAndMigration(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+
+	nodeID := "legacynode99"
+	legacyDir := filepath.Join(tempHome, ".config", "eqt", "certs", nodeID)
+	if err := os.MkdirAll(legacyDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	legacyKey := filepath.Join(legacyDir, "privkey.pem")
+	if err := os.WriteFile(legacyKey, []byte("legacy-p256-key-data"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Set unified target config dir
+	targetConfigDir := filepath.Join(tempHome, "appdata", "eqt")
+	t.Setenv("EQT_CONFIG_DIR", targetConfigDir)
+
+	// Call GetDeviceCertDir
+	dir, err := GetDeviceCertDir(nodeID)
+	if err != nil {
+		t.Fatalf("GetDeviceCertDir failed: %v", err)
+	}
+
+	expectedTargetDir := filepath.Join(targetConfigDir, "certs", nodeID)
+	if dir != expectedTargetDir {
+		t.Fatalf("GetDeviceCertDir = %q, want %q", dir, expectedTargetDir)
+	}
+
+	// Verify the private key was migrated to expectedTargetDir with 0600 permissions
+	migratedKey := filepath.Join(expectedTargetDir, "privkey.pem")
+	data, err := os.ReadFile(migratedKey)
+	if err != nil {
+		t.Fatalf("expected migrated key at %s, got error: %v", migratedKey, err)
+	}
+	if string(data) != "legacy-p256-key-data" {
+		t.Fatalf("migrated key content mismatch, got: %s", string(data))
+	}
+	fi, err := os.Stat(migratedKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode().Perm() != 0600 {
+		t.Fatalf("expected 0600 permissions on migrated key, got: %o", fi.Mode().Perm())
+	}
+}

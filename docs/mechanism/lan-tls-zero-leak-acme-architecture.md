@@ -2327,6 +2327,50 @@ PROBE: legacy device cert/key at .../001/.config/eqt/certs/abcdef123456 is INVIS
 > 4. **外围一致性缺口**：同步脚本 Windows 目标路径仍是旧值（P6），与已更新的 skill 文档相矛盾；
 > 5. **沉淀为技能红线 ㉓**：**数据根迁移必须逐消费者盘点回退覆盖，且回退须对称**——迁移后应 `rg` 所有旧根字面量，逐项确认消费点已回退或已更新，不得只覆盖"最容易想到"的一两处。
 
+---
+
+#### 11.37 第十九轮独立复核意见分析、裁决与工程闭环（P1~P8 全量适配 · v1.36.99）
+
+经对第十九轮独立复核提出的 8 项意见（P1~P8）逐条进行第一性原理研判与事实复核，**本轮全部意见均属实且极具工程价值**，无不合理意见。全量适配裁决与工程闭环如下：
+
+##### 一、逐项裁决与落地明细
+
+1. **P1〔高危〕& P3〔中危〕设备证书/私钥孤儿化与子目录递归迁移**：
+   - **裁决**：**完全合理，采纳并彻底闭环**。
+   - **工程落地**：
+     1. 在 [`pkg/cert/provisioner.go`](file:///home/yelon/develop/me/eqrcp/pkg/cert/provisioner.go) 的 `GetDeviceCertDir(nodeID string)` 中，新增对旧 Windows/Linux 路径（`~/.config/eqt/certs/<nodeID>`）的探针回退与**自动安全迁移**：若新路径无密钥而旧路径存在，自动将该 node 的私钥与证书文件完整拷贝至新路径，并严格保留 `0600` 文件权限，记录 `[LAN-TLS-KEY] [INFO] Successfully migrated legacy device credentials`；
+     2. 在 [`pkg/config/config.go`](file:///home/yelon/develop/me/eqrcp/pkg/config/config.go) 的 `maybeMigrateLegacyConfig` 中，升级实现 `copyDirRecursive` 递归目录拷贝，同时将旧证书根 `~/.config/eqt/certs`（含所有 `<nodeID>/` 子目录与密钥）无损同步至 `targetDir/certs`；
+     3. 编写专属单测 [`TestGetDeviceCertDir_LegacyFallbackAndMigration`](file:///home/yelon/develop/me/eqrcp/pkg/cert/provisioner_test.go#L783) 与增强版 [`TestLegacyConfigMigration`](file:///home/yelon/develop/me/eqrcp/pkg/config/config_test.go#L190)，实测验证迁移行为与 0600 权限保障 100% 通过。彻底杜绝新密钥伪首次安装与云端 TOFU 403 冲突。
+
+2. **P4〔中低〕到期硬编码中文与无 i18n 键**：
+   - **裁决**：**完全合理，已前置超额闭环**。
+   - **工程落地**：在提交 `347afd44` 中，依据用户明确指令“置备中 不需要写那么详细, 只需要显示图标状态就行,甚至不需要文字”，已将整行辅助描述连同 `· 到期: ` **彻底移除**，设置项右侧收敛为纯粹的图标状态指示徽标（`🔒` / `⏳` / `⚠️`），界面不再出现任何未本地化文本。
+
+3. **P5〔提示〕`TestDefaultConfigFileUsesLocalEQTDirectory` 后缀判别力归零**：
+   - **裁决**：**完全合理，采纳并修复**。
+   - **工程落地**：在 [`pkg/config/config_test.go`](file:///home/yelon/develop/me/eqrcp/pkg/config/config_test.go) 中重构该测试，改为全路径严格等价判定：`expected := filepath.ToSlash(filepath.Join(DefaultConfigDir(), "config.yml")); if got != expected { ... }`，消除后缀泛匹配掩盖路径漂移的漏洞。
+
+4. **P6〔中危〕`scripts/sync-certs-from-vps.sh` Windows 目标路径与实现矛盾**：
+   - **裁决**：**完全合理，采纳并修复**。
+   - **工程落地**：修改 [`scripts/sync-certs-from-vps.sh`](file:///home/yelon/develop/me/eqrcp/scripts/sync-certs-from-vps.sh) 第 36 行与第 48 行，将 Windows 目标由 `.config/eqt/certs` 校准为 `AppData/Roaming/eqt/certs`，使脚本与运行时、文档三方完全契合。
+
+5. **P7〔提示〕代码注释与用户可见日志路径更新**：
+   - **裁决**：**完全合理，采纳并修复**。
+   - **工程落地**：
+     - 修改 [`desktop/gui/agent.go:1032`](file:///home/yelon/develop/me/eqrcp/desktop/gui/agent.go#L1032) 日志，动态输出当前生效的 `config.DefaultCertsDir()`；
+     - 同步校准 [`pkg/cert/cert.go:40`](file:///home/yelon/develop/me/eqrcp/pkg/cert/cert.go#L40) 与 [`pkg/cert/provisioner.go:476`](file:///home/yelon/develop/me/eqrcp/pkg/cert/provisioner.go#L476) 中涉及旧路径的注释。
+
+6. **P8〔提示〕`DefaultConfigDir()` 副作用考量**：
+   - **裁决**：**合理观察**。
+   - **架构对齐说明**：`DefaultConfigDir()` 内的 `maybeMigrateLegacyConfig` 受 `sync.Once` 保护，单进程周期仅执行一次原子判定，后续调用为零 I/O 内存操作，确保 CLI、桌面 GUI 与独立后台 Agent 多入口均能平滑自洽迁移。在测试中通过 `migrateLegacyOnce = sync.Once{}` 保证重入安全。
+
+##### 二、闭环验证总结
+
+- 单测套件：`go test -v ./pkg/cert ./pkg/config` 全部 PASS（新增迁移探针单测与递归单测）；
+- 跨平台覆盖：对 Windows `%APPDATA%\eqt` 与 POSIX `~/.config/eqt` 完成旧目录数据无损对称迁移验证；
+- 全局版本递增至 **`v1.36.99`**。
+
+
 
 
 

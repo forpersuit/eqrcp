@@ -1029,7 +1029,7 @@ func (agent *desktopAgent) runTask(task AgentTask) error {
 	cfg.KeepAlive = true
 	cfg.Secure = desktopSettings.EnableTLS
 	if cfg.Secure && !cert.HasValidCertificateForNode(cfg.TlsCert, cfg.TlsKey, server.GetDeviceNodeID()) {
-		agent.log.Infof("runTask: LAN-TLS is enabled in settings, but no valid TLS certificate is available in ~/.config/eqt/certs. Gracefully falling back to plain HTTP.")
+		agent.log.Infof("runTask: LAN-TLS is enabled in settings, but no valid TLS certificate is available in %s. Gracefully falling back to plain HTTP.", config.DefaultCertsDir())
 		cfg.Secure = false
 	}
 	srv, err := server.New(&cfg)

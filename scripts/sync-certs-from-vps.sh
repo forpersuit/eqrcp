@@ -33,7 +33,7 @@ echo "✓ Successfully installed certificates in ${LOCAL_CERT_DIR}"
 if grep -qi microsoft /proc/version 2>/dev/null; then
     target_win_user="${EQT_WIN_USER:-${USER:-}}"
     if [ -n "${target_win_user}" ] && [ -d "/mnt/c/Users/${target_win_user}" ]; then
-        win_cert_dir="/mnt/c/Users/${target_win_user}/.config/eqt/certs"
+        win_cert_dir="/mnt/c/Users/${target_win_user}/AppData/Roaming/eqt/certs"
         mkdir -p "${win_cert_dir}"
         cp -f "${LOCAL_CERT_DIR}/fullchain.pem" "${win_cert_dir}/fullchain.pem"
         cp -f "${LOCAL_CERT_DIR}/privkey.pem" "${win_cert_dir}/privkey.pem"
@@ -45,7 +45,7 @@ if grep -qi microsoft /proc/version 2>/dev/null; then
             has_metadata=true
         fi
         
-        win_privkey_winpath="C:\\Users\\${target_win_user}\\.config\\eqt\\certs\\privkey.pem"
+        win_privkey_winpath="C:\\Users\\${target_win_user}\\AppData\\Roaming\\eqt\\certs\\privkey.pem"
         acl_hardened=false
         if command -v icacls.exe >/dev/null 2>&1 && icacls.exe "${win_privkey_winpath}" /inheritance:r /grant:r "${target_win_user}:(R)" >/dev/null 2>&1; then
             acl_hardened=true

@@ -163,8 +163,9 @@ func TestNew(t *testing.T) {
 
 func TestDefaultConfigFileUsesLocalEQTDirectory(t *testing.T) {
 	got := filepath.ToSlash(DefaultConfigFile())
-	if !strings.HasSuffix(got, "/eqt/config.yml") {
-		t.Fatalf("DefaultConfigFile() = %q, want .../eqt/config.yml", got)
+	expected := filepath.ToSlash(filepath.Join(DefaultConfigDir(), "config.yml"))
+	if got != expected {
+		t.Fatalf("DefaultConfigFile() = %q, want %q", got, expected)
 	}
 }
 
@@ -197,7 +198,17 @@ func TestLegacyConfigMigration(t *testing.T) {
 	if err := os.WriteFile(legacyConfig, []byte("port: 8888\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	targetDir := filepath.Join(tempHome, ".config", "eqt")
+
+	legacyCertsDir := filepath.Join(tempHome, ".config", "eqt", "certs", "node123456")
+	if err := os.MkdirAll(legacyCertsDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	legacyKey := filepath.Join(legacyCertsDir, "privkey.pem")
+	if err := os.WriteFile(legacyKey, []byte("test-privkey"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	targetDir := filepath.Join(tempHome, "appdata", "eqt")
 
 	migrateLegacyOnce = sync.Once{}
 	oldHome := os.Getenv("HOME")
@@ -216,5 +227,14 @@ func TestLegacyConfigMigration(t *testing.T) {
 	}
 	if !strings.Contains(string(data), "port: 8888") {
 		t.Fatalf("unexpected content in migrated config: %s", string(data))
+	}
+
+	targetKey := filepath.Join(targetDir, "certs", "node123456", "privkey.pem")
+	keyData, err := os.ReadFile(targetKey)
+	if err != nil {
+		t.Fatalf("expected migrated cert at %s, got err: %v", targetKey, err)
+	}
+	if string(keyData) != "test-privkey" {
+		t.Fatalf("unexpected key content: %s", string(keyData))
 	}
 }

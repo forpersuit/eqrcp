@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"encoding/binary"
 	"image"
+	"image/color"
 	"image/png"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
 )
@@ -54,16 +56,7 @@ func readPNG(path string) image.Image {
 }
 
 func resize(src image.Image, size int) image.Image {
-	dst := image.NewNRGBA(image.Rect(0, 0, size, size))
-	bounds := src.Bounds()
-	for y := 0; y < size; y++ {
-		for x := 0; x < size; x++ {
-			sx := bounds.Min.X + x*bounds.Dx()/size
-			sy := bounds.Min.Y + y*bounds.Dy()/size
-			dst.Set(x, y, src.At(sx, sy))
-		}
-	}
-	return dst
+	return resizeTo(src, size, size)
 }
 
 func resizeToWidth(src image.Image, width int) image.Image {
@@ -78,14 +71,81 @@ func resizeToWidth(src image.Image, width int) image.Image {
 	return resizeTo(src, width, height)
 }
 
-func resizeTo(src image.Image, width, height int) image.Image {
-	dst := image.NewNRGBA(image.Rect(0, 0, width, height))
+func resizeTo(src image.Image, dstW, dstH int) image.Image {
+	dst := image.NewNRGBA(image.Rect(0, 0, dstW, dstH))
 	bounds := src.Bounds()
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
-			sx := bounds.Min.X + x*bounds.Dx()/width
-			sy := bounds.Min.Y + y*bounds.Dy()/height
-			dst.Set(x, y, src.At(sx, sy))
+	srcW := float64(bounds.Dx())
+	srcH := float64(bounds.Dy())
+
+	xScale := srcW / float64(dstW)
+	yScale := srcH / float64(dstH)
+
+	for dy := 0; dy < dstH; dy++ {
+		sy0 := float64(bounds.Min.Y) + float64(dy)*yScale
+		sy1 := sy0 + yScale
+		syMin := int(math.Floor(sy0))
+		syMax := int(math.Ceil(sy1))
+		if syMin < bounds.Min.Y {
+			syMin = bounds.Min.Y
+		}
+		if syMax > bounds.Max.Y {
+			syMax = bounds.Max.Y
+		}
+
+		for dx := 0; dx < dstW; dx++ {
+			sx0 := float64(bounds.Min.X) + float64(dx)*xScale
+			sx1 := sx0 + xScale
+			sxMin := int(math.Floor(sx0))
+			sxMax := int(math.Ceil(sx1))
+			if sxMin < bounds.Min.X {
+				sxMin = bounds.Min.X
+			}
+			if sxMax > bounds.Max.X {
+				sxMax = bounds.Max.X
+			}
+
+			var sumR, sumG, sumB, sumA, totalWeight float64
+
+			for sy := syMin; sy < syMax; sy++ {
+				top := math.Max(sy0, float64(sy))
+				bottom := math.Min(sy1, float64(sy+1))
+				hOverlap := bottom - top
+				if hOverlap <= 0 {
+					continue
+				}
+
+				for sx := sxMin; sx < sxMax; sx++ {
+					left := math.Max(sx0, float64(sx))
+					right := math.Min(sx1, float64(sx+1))
+					wOverlap := right - left
+					if wOverlap <= 0 {
+						continue
+					}
+
+					weight := wOverlap * hOverlap
+					r, g, b, a := src.At(sx, sy).RGBA()
+					sumR += float64(r) * weight
+					sumG += float64(g) * weight
+					sumB += float64(b) * weight
+					sumA += float64(a) * weight
+					totalWeight += weight
+				}
+			}
+
+			if totalWeight > 0 && sumA > 0 {
+				avgA := sumA / totalWeight
+				avgR := (sumR / totalWeight) / avgA * 255.0
+				avgG := (sumG / totalWeight) / avgA * 255.0
+				avgB := (sumB / totalWeight) / avgA * 255.0
+				finalA := avgA / 65535.0 * 255.0
+
+				dst.SetNRGBA(dx, dy, color.NRGBA{
+					R: uint8(math.Min(255, math.Max(0, math.Round(avgR)))),
+					G: uint8(math.Min(255, math.Max(0, math.Round(avgG)))),
+					B: uint8(math.Min(255, math.Max(0, math.Round(avgB)))),
+					A: uint8(math.Min(255, math.Max(0, math.Round(finalA)))),
+				})
+			}
 		}
 	}
 	return dst

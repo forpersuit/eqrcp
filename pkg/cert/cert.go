@@ -37,7 +37,7 @@ func FormatDirectDomain(ipStr string) string {
 
 // GetCertificate returns a tls.Certificate.
 // If customCert and customKey are specified, they are read from disk.
-// Otherwise, it checks the local cache (~/.config/eqt/certs).
+// Otherwise, it checks the local cache (DefaultCertsDir or legacy fallback).
 func GetCertificate(customCert, customKey string) (tls.Certificate, error) {
 	cert, _, err := GetActiveCertificate(customCert, customKey, "")
 	return cert, err

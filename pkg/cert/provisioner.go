@@ -63,13 +63,56 @@ func FormatDirectDomainWithNode(ipStr string, nodeID string) string {
 
 // GetDeviceCertDir returns the directory path where certificate and private key
 // for the given node ID are stored (xxx/eqt/certs/<node-id>).
+// If the target directory does not yet contain credentials but a legacy directory
+// (~/.config/eqt/certs/<node-id>) exists with privkey.pem, it automatically migrates
+// the credentials to the unified directory while preserving 0600 file modes.
 func GetDeviceCertDir(nodeID string) (string, error) {
 	baseDir := config.DefaultCertsDir()
 	cleanNode := strings.ToLower(strings.TrimSpace(nodeID))
 	if cleanNode == "" {
 		return baseDir, nil
 	}
-	return filepath.Join(baseDir, cleanNode), nil
+	targetDir := filepath.Join(baseDir, cleanNode)
+
+	// Check if target directory already has credentials
+	targetKey := filepath.Join(targetDir, "privkey.pem")
+	if _, err := os.Stat(targetKey); err == nil {
+		return targetDir, nil
+	}
+
+	// Fallback check: look in legacy ~/.config/eqt/certs/<cleanNode>
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		legacyDir := filepath.Join(home, ".config", "eqt", "certs", cleanNode)
+		if filepath.Clean(legacyDir) != filepath.Clean(targetDir) {
+			legacyKey := filepath.Join(legacyDir, "privkey.pem")
+			if _, err := os.Stat(legacyKey); err == nil {
+				// Migrate legacy device credentials to targetDir automatically
+				if err := os.MkdirAll(targetDir, 0700); err == nil {
+					if entries, readErr := os.ReadDir(legacyDir); readErr == nil {
+						for _, entry := range entries {
+							if entry.IsDir() {
+								continue
+							}
+							src := filepath.Join(legacyDir, entry.Name())
+							dst := filepath.Join(targetDir, entry.Name())
+							if data, readErr := os.ReadFile(src); readErr == nil {
+								perm := os.FileMode(0644)
+								if strings.HasSuffix(entry.Name(), ".pem") || strings.HasSuffix(entry.Name(), ".key") {
+									perm = 0600
+								}
+								_ = os.WriteFile(dst, data, perm)
+							}
+						}
+						log.Printf("[LAN-TLS-KEY] [INFO] Successfully migrated legacy device credentials for node %s from %s to %s",
+							cleanNode, legacyDir, targetDir)
+					}
+				}
+				return targetDir, nil
+			}
+		}
+	}
+
+	return targetDir, nil
 }
 
 // LoadOrGenerateDeviceKey loads the ECDSA P-256 private key for nodeID from disk,
@@ -430,7 +473,7 @@ func HasValidDeviceCertificate(nodeID string) bool {
 // GetActiveCertificate resolves the active TLS certificate with the following priority:
 // 1. Explicit customCert and customKey flags (if both provided);
 // 2. Device-specific certificate for nodeID (if valid and unexpired);
-// 3. Legacy wildcard certificate in ~/.config/eqt/certs (if valid and unexpired).
+// 3. Legacy wildcard certificate in DefaultCertsDir() or legacy fallback (if valid and unexpired).
 // Returns the tls.Certificate, the resolved active nodeID (empty string for legacy wildcard), and any error.
 func GetActiveCertificate(customCert, customKey, nodeID string) (tls.Certificate, string, error) {
 	// 1. Explicit custom paths (developer debug override)

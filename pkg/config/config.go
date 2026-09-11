@@ -180,41 +180,58 @@ func GetViperInstance(app application.App) *viper.Viper {
 // 1. EQT_CONFIG_DIR env var (primarily for test isolation and custom directory overrides)
 var migrateLegacyOnce sync.Once
 
-// maybeMigrateLegacyConfig copies configuration files from legacy ~/.local/eqt to the new targetDir
-// if the target directory does not yet contain configuration files.
+func copyDirRecursive(srcDir, dstDir string) error {
+	entries, err := os.ReadDir(srcDir)
+	if err != nil {
+		return err
+	}
+	_ = os.MkdirAll(dstDir, 0755)
+	for _, entry := range entries {
+		src := filepath.Join(srcDir, entry.Name())
+		dst := filepath.Join(dstDir, entry.Name())
+		if entry.IsDir() {
+			_ = copyDirRecursive(src, dst)
+			continue
+		}
+		if _, err := os.Stat(dst); os.IsNotExist(err) {
+			if data, err := os.ReadFile(src); err == nil {
+				perm := os.FileMode(0644)
+				if strings.HasSuffix(entry.Name(), ".pem") || strings.HasSuffix(entry.Name(), ".key") {
+					perm = 0600
+				}
+				_ = os.WriteFile(dst, data, perm)
+			}
+		}
+	}
+	return nil
+}
+
+// maybeMigrateLegacyConfig copies configuration files and certificates from legacy locations
+// (~/.local/eqt for config, ~/.config/eqt/certs for TLS certificates) to targetDir
+// if the target directory does not yet contain them.
 func maybeMigrateLegacyConfig(targetDir string) {
 	migrateLegacyOnce.Do(func() {
 		home, err := os.UserHomeDir()
 		if err != nil || home == "" {
 			return
 		}
-		legacyDir := filepath.Join(home, ".local", "eqt")
-		if filepath.Clean(legacyDir) == filepath.Clean(targetDir) {
-			return
-		}
-		fi, err := os.Stat(legacyDir)
-		if err != nil || !fi.IsDir() {
-			return
-		}
-		// If target dir already exists with config.yml, no migration needed
-		if _, err := os.Stat(filepath.Join(targetDir, "config.yml")); err == nil {
-			return
-		}
-		entries, err := os.ReadDir(legacyDir)
-		if err != nil {
-			return
-		}
-		_ = os.MkdirAll(targetDir, 0755)
-		for _, entry := range entries {
-			if entry.IsDir() {
-				continue
-			}
-			src := filepath.Join(legacyDir, entry.Name())
-			dst := filepath.Join(targetDir, entry.Name())
-			if _, err := os.Stat(dst); os.IsNotExist(err) {
-				if data, err := os.ReadFile(src); err == nil {
-					_ = os.WriteFile(dst, data, 0644)
+
+		// 1. Migrate config from legacy ~/.local/eqt
+		legacyConfigDir := filepath.Join(home, ".local", "eqt")
+		if filepath.Clean(legacyConfigDir) != filepath.Clean(targetDir) {
+			if _, err := os.Stat(filepath.Join(targetDir, "config.yml")); os.IsNotExist(err) {
+				if fi, err := os.Stat(legacyConfigDir); err == nil && fi.IsDir() {
+					_ = copyDirRecursive(legacyConfigDir, targetDir)
 				}
+			}
+		}
+
+		// 2. Migrate certs from legacy ~/.config/eqt/certs
+		legacyCertsDir := filepath.Join(home, ".config", "eqt", "certs")
+		targetCertsDir := filepath.Join(targetDir, "certs")
+		if filepath.Clean(legacyCertsDir) != filepath.Clean(targetCertsDir) {
+			if fi, err := os.Stat(legacyCertsDir); err == nil && fi.IsDir() {
+				_ = copyDirRecursive(legacyCertsDir, targetCertsDir)
 			}
 		}
 	})
