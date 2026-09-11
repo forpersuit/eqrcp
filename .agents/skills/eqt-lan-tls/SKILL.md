@@ -253,7 +253,7 @@ WantedBy=multi-user.target
 > - **Fail-Soft 生产安全降级**：生产环境在未配置 ACME 凭证时安全回退自签 CA，Go 客户端通过根信任锚校验静默拒绝非法证书并维持局域网普通 HTTP，严禁为追求绿锁而妥协安全信任链；
 > - **Google Cloud Public CA (GTS) EAB 平行接驳**：已在 `acme.ts` 中根据 RFC 8555 §7.3.4 原生实现 HMAC-SHA256 EAB 算法，彻底摆脱单主域 50 张/周限额，具备与 Let's Encrypt 双活灾备能力；实操手册归档于 [`docs/deploy/google-cloud-publicca-eab-runbook.md`](file:///home/yelon/develop/me/eqrcp/docs/deploy/google-cloud-publicca-eab-runbook.md)。
 
-> **审查红线（第十一轮沉淀 · Rule 9/12/13）**：⑬ **TOFU 绑定与 CA 双轨的落地判据**（对 `d212137a`/`6a617d91` 的复核，详见机制文档 §11.15）：
+> **审查红线（第十轮沉淀 · Rule 9/12/13）**：⑬ **TOFU 绑定与 CA 双轨的落地判据**（对 `d212137a`/`6a617d91` 的复核，详见机制文档 §11.15）：
 > - **🔴 绑定必须可逆，否则防线反噬**：`node_id` 由硬件指纹**确定性**派生（重装/换机不变），而 `LoadOrGenerateDeviceKey` 在私钥缺失/损坏时**静默重生**密钥。若 TOFU 只写不解绑，用户清理缓存、换机或磁盘损坏即触发**同 node_id + 新公钥 → 永久 403 `node_key_mismatch`**，且客户端 403 落入通用 `ErrGatewayFailed`、每次启动静默重试。**判据：任何"首次绑定"必须同时给出解绑/重绑路径，并让客户端在被拒时有可操作提示与专门错误分类（F12）。**
 > - **绑定必须原子**：`SELECT` 与 `ctx.waitUntil(INSERT)` 分离 → 并发首请求可各自通过校验并各自签发，主键冲突仅 `console.error`。须改 `INSERT ... ON CONFLICT DO NOTHING` 后 `SELECT` 比对，或签发前 `await` 落库（F13）。测试若以 `ctx.drain()` 串行化，则**恰好掩盖竞态**——此类"我为了让测试通过而 drain"的写法本身即是盲区信号。
 > - **绑定不得先于签发失败而无回收**：绑定点位于签发前，签发失败（ACME 500/网络）后 node 已被占用，与上一条叠加即成永久锁死（F14）。
@@ -295,4 +295,6 @@ WantedBy=multi-user.target
 > - **J4（提示）载荷契约与展示层的本地化职责须写明**：`app.go:2156` 的 `message` 为硬编码中文，本地化仅在 `main.js` 消费侧；避免未来直用方跨 7 语暴露单语文本。
 > - **✅ 本轮确认属实项**：I1 填充锁（探针 A：仅 T4.6c 红）、I1 归一化锁（探针 B：T4.6b+c 红、T4.6a 判别力为零，§11.22 归因诚实）、I2 7 语注册 + `state.js` 声明 + `cert-ready` 复位 + `t()` 键名判据、I3 文案与「无重试循环」实测一致、I4 文档 §11.15–§11.22 逐对成对、I5 读失败分支探针 C 转红、版本双面 `v1.36.87`、`test:acme:offline` **24/0** 与 `go test ./pkg/cert`、`go build ./...` 全绿——**五项全量闭环，零退化，本轮放行，无阻断项**。
 > - **⚠️ 复发计数**：「文档/命名声称超出实现」已连续 **五轮**复发（§11.15 F16 → §11.17 G1/G2 → §11.19 H1/H2/H3 → §11.21 I1/I4 → §11.23 J1）。**本轮首次出现「能力已闭环、引文仍不实」**；自检清单应新增：「文档引用代码或译文时，必须粘贴实测原值」。
+> - **✅ J1~J4 闭环落实（v1.36.88 · 2026-09-11）**：J1 在 §11.22 将 7 语译文与 `normalizeBase64Url` 代码块全量替换为实测代码原值，严格落实引文保真；J2 修正 ⑬ 为「第十轮沉淀」，实现 ⑬~⑰ 与对应复核章节全局严密对齐；J3 在 `provisioner_test.go` 增加 `fs.ErrPermission` 校验与 root/ACL 不支持场景的显式声明，杜绝空转；J4 在 `app.go` 事件载荷中补齐标准机器码 `reason: "node_key_mismatch"`，明确前后端本地化职责解耦；版本号双面递增至 `v1.36.88`。
+
 

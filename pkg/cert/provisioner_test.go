@@ -12,6 +12,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log"
 	"math/big"
 	"net/http"
@@ -144,9 +145,16 @@ func TestLoadOrGenerateDeviceKey(t *testing.T) {
 	logBuf.Reset()
 
 	// 5. Read error (non-NotExist error: permission denied triggers WARNING)
-	if err := os.Chmod(keyPath, 0000); err == nil {
-		// Verify if chmod 0000 makes it unreadable for current process
-		if _, testReadErr := os.ReadFile(keyPath); testReadErr != nil {
+	if err := os.Chmod(keyPath, 0000); err != nil {
+		t.Logf("Notice: chmod 0000 not supported in current environment: %v", err)
+	} else {
+		defer os.Chmod(keyPath, 0600)
+		_, testReadErr := os.ReadFile(keyPath)
+		if testReadErr != nil {
+			// Ensure error is a real permission rejection
+			if !errors.Is(testReadErr, fs.ErrPermission) && !os.IsPermission(testReadErr) {
+				t.Logf("Notice: unexpected read error type: %v", testReadErr)
+			}
 			priv5, err := LoadOrGenerateDeviceKey(nodeID)
 			_ = os.Chmod(keyPath, 0600) // Restore for teardown
 			if err != nil {
@@ -159,7 +167,9 @@ func TestLoadOrGenerateDeviceKey(t *testing.T) {
 				t.Errorf("expected warning in log for read error, got: %s", logBuf.String())
 			}
 		} else {
+			// Read succeeded despite chmod 0000 (e.g. running as root / CAP_DAC_OVERRIDE / Windows filesystem ACLs)
 			_ = os.Chmod(keyPath, 0600)
+			t.Log("Notice: skipping unreadable key test (running as root or filesystem does not enforce POSIX 0000 permissions)")
 		}
 	}
 }

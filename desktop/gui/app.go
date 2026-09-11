@@ -2156,6 +2156,7 @@ func (a *App) silentProvisionDeviceTLSCert() {
 				wailsruntime.LogWarning(a.ctx, warnMsg)
 				wailsruntime.EventsEmit(a.ctx, "eqt:tls-node-key-mismatch", map[string]any{
 					"node_id": nodeID,
+					"reason":  "node_key_mismatch",
 					"message": "本地证书私钥与云端设备登记不一致，请重置密钥绑定",
 				})
 			}

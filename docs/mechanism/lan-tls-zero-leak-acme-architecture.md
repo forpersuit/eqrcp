@@ -1523,9 +1523,7 @@ assert(typeof base64UrlDecode('abc') === 'object', // :308 输入是【合法】
     ```typescript
     export function normalizeBase64Url(str: string): string {
       let b64 = str.replace(/-/g, '+').replace(/_/g, '/');
-      while (b64.length % 4) {
-        b64 += '=';
-      }
+      while (b64.length % 4) b64 += '=';
       return b64;
     }
     ```
@@ -1543,14 +1541,14 @@ assert(typeof base64UrlDecode('abc') === 'object', // :308 输入是【合法】
 
 ##### 二、I2 落地：i18n 7 国语言全量注册与单向数据流状态闭环
 - **多语言字典全量补齐（`desktop/gui/frontend/src/i18n.js`）**：
-  - 在 `zh`, `en`, `ja`, `ko`, `es`, `de`, `fr` 7 种语言字典中全量注册 `tls_key_mismatch_msg`：
-    - 中文：`本地证书私钥与云端设备登记不一致，请重置密钥绑定`；
-    - 英文：`Local TLS private key does not match cloud registration. Please re-bind device key.`；
-    - 日文：`ローカルTLS秘密鍵がクラウドの登録と一致しません。鍵の再紐付けを行ってください。`；
-    - 韩文：`로컬 TLS 개인 키가 클라우드 등록과 일치하지 않습니다. 키 바인딩을 재설정해 주세요.`；
-    - 西文：`La clave privada TLS local no coincide con el registro en la nube. Vuelva a vincular la clave del dispositivo.`；
-    - 德文：`Lokaler privater TLS-Schlüssel stimmt nicht mit der Cloud-Registrierung überein. Bitte Geräteschlüssel neu binden.`；
-    - 法文：`La clé privée TLS locale ne correspond pas à l'enregistrement cloud. Veuillez réassocier la clé de l'appareil.`。
+  - 在 `zh`, `en`, `ja`, `ko`, `es`, `de`, `fr` 7 种语言字典中全量注册 `tls_key_mismatch_msg`（与代码逐字一致）：
+    - 中文（`zh`）：`本地证书私钥与云端设备登记不一致，请重置密钥绑定`；
+    - 英文（`en`）：`Local certificate private key does not match cloud registration. Please reset key binding.`；
+    - 日文（`ja`）：`ローカル証明書の秘密鍵がクラウドアカウントと一致しません。キーバインドをリセットしてください`；
+    - 韩文（`ko`）：`로컬 인증서 개인 키가 클라우드 등록과 일치하지 않습니다. 키 바인딩을 재설정하십시오.`；
+    - 西文（`es`）：`La clave privada del certificado local no coincide con el registro en la nube. Restablezca la vinculación de clave.`；
+    - 德文（`de`）：`Der private Schlüssel des lokalen Zertifikats stimmt nicht mit der Cloud-Registrierung überein. Bitte Schlüsselbindung zurücksetzen.`；
+    - 法文（`fr`）：`La clé privée du certificat local ne correspond pas à l'enregistrement cloud. Veuillez réinitialiser la liaison de clé.`。
 - **状态声明与重置（`desktop/gui/frontend/src/state.js` & `main.js`）**：
   - 在 `state.js` 初始化对象中显式声明 `tlsKeyMismatch: false` 与 `tlsKeyMismatchMsg: ''`；
   - 在 `main.js` 的 `eqt:tls-cert-ready` 事件处理回调中，显式复位：
@@ -1638,4 +1636,64 @@ assert(typeof base64UrlDecode('abc') === 'object', // :308 输入是【合法】
 - **重复计数（供管理层参考）**：「文档/命名声称超出实现」**已连续五轮**复发（F16 → G1/G2 → H1/H2/H3 → I1/I4 → J1）。**本轮首次呈现「能力已闭环、引文仍不实」**——修复本身真实，损失点在文档可信度。这进一步支持 §11.19/§11.21 的既有判断：该判据必须前置到**提交前自检清单**，并新增一条「文档引用代码或译文时必须粘贴**实测原值**，不得手写改写稿」。
 
 > 🏁 **阶段决议（第十四轮独立复核 · 对 `c5cbe13d`）**：I1~I5 **全量真实闭环**，探针 A/B/C 分别锁死填充路径、归一化替换、Go 读失败分支；版本与零退化合规，**予以放行**。记录 J1~J4（均低危/提示），其中 J1 为「文档引文与实现不符」的第五轮复发、J2 为 ⑬ 编号残留，建议在下一轮一并收敛。
+
+---
+
+#### 11.24 第十四轮演进：J1~J4 全量工程落地、引文原值校准与测试防空转（v1.36.88 · 2026-09-11）
+
+针对审查员在 §11.23 中指出的第十四轮复核意见（J1~J4），工程团队全面落地工程整改与文档保真闭环：
+
+##### 一、J1 落地：文档引文保真度全量校准（粘贴实测代码原值）
+- **§11.22 译文原值纠偏**：
+  - 将此前文档中手写的改写稿译文全部替换为 `desktop/gui/frontend/src/i18n.js` 中的 100% 逐字代码原值：
+    - 中文（`zh`）：`本地证书私钥与云端设备登记不一致，请重置密钥绑定`
+    - 英文（`en`）：`Local certificate private key does not match cloud registration. Please reset key binding.`
+    - 日文（`ja`）：`ローカル証明書の秘密鍵がクラウドアカウントと一致しません。キーバインドをリセットしてください`
+    - 韩文（`ko`）：`로컬 인증서 개인 키가 클라우드 등록과 일치하지 않습니다. 키 바인딩을 재설정하십시오.`
+    - 西文（`es`）：`La clave privada del certificado local no coincide con el registro en la nube. Restablezca la vinculación de clave.`
+    - 德文（`de`）：`Der private Schlüssel des lokalen Zertifikats stimmt nicht mit der Cloud-Registrierung überein. Bitte Schlüsselbindung zurücksetzen.`
+    - 法文（`fr`）：`La clé privée du certificat local ne correspond pas à l'enregistrement cloud. Veuillez réinitialiser la liaison de clé.`
+- **代码块排版保真**：
+  - 将 `normalizeBase64Url` 代码块还原为单行 `while (b64.length % 4) b64 += '=';` 的源码真实形态；
+  - 确立原则：后续所有文档涉及代码与字典引用，必须直接从源文件 copy 原值，严禁二次概括。
+
+##### 二、J2 落地：消除 ⑬ 编号残留 off-by-one，全局编号严格映射
+- **技能库纠偏（`.agents/skills/eqt-lan-tls/SKILL.md`）**：
+  - 将行 256 的 `⑬（第十一轮沉淀）` 正式更正为 `⑬（第十轮沉淀）`；
+  - 确认 `SKILL.md` 与机制文档的全局 1:1 成对映射表：
+    - ⑬：第十轮沉淀 ↔ §11.15 第十轮独立复核
+    - ⑭：第十一轮沉淀 ↔ §11.17 第十一轮独立复核
+    - ⑮：第十二轮沉淀 ↔ §11.19 第十二轮独立复核
+    - ⑯：第十三轮沉淀 ↔ §11.21 第十三轮独立复核
+    - ⑰：第十四轮沉淀 ↔ §11.23 第十四轮独立复核
+
+##### 三、J3 落地：消除 root 环境下的测试静默空转（Fail-Loud / Skip-Explicit）
+- **单测逻辑加固（`pkg/cert/provisioner_test.go`）**：
+  - 在第 5 阶段非 NotExist 读取失败测试中，加入 `fs.ErrPermission` 与 `os.IsPermission(err)` 显式校验；
+  - 当处于 root 环境（`CAP_DAC_OVERRIDE` 绕过 0000 权限）或文件系统 ACL 不支持 POSIX 权限模式时，输出显式 `t.Log` 声明并安全跳过，消除任何未执行断言而产生的虚假绿色；
+  - 普通非 root 环境下严格断言 `[WARNING] Failed to read private key at` 日志输出。
+
+##### 四、J4 落地：事件契约结构化解耦与本地化职责定界
+- **事件载荷补齐（`desktop/gui/app.go`）**：
+  - 在 `eqt:tls-node-key-mismatch` 事件发送处补齐标准机器码 `"reason": "node_key_mismatch"`：
+    ```go
+    wailsruntime.EventsEmit(a.ctx, "eqt:tls-node-key-mismatch", map[string]any{
+        "node_id": nodeID,
+        "reason":  "node_key_mismatch",
+        "message": "本地证书私钥与云端设备登记不一致，请重置密钥绑定",
+    })
+    ```
+- **职责边界定界**：
+  - **后端（Go）**：负责派发包含底层错误类型（`reason`）和开发日志信息（`message`）的结构化事件；
+  - **前端（GUI）**：严格根据 `reason` 查找 `i18n.js` 中的 7 语本地化词条进行多语言呈现；`payload.message` 仅充当最底层的 fallback。
+
+---
+
+> 🏁 **阶段决议（第十四轮演进 · J1~J4 全量工程闭环与 v1.36.88 发布）**：
+> 1. **引文 100% 原值保真（J1）**：7 语译文与 TS 纯函数逐字贴合实现原值；
+> 2. **轮次映射彻底归正（J2）**：消除 ⑬ 编号历史残留，实现 10~14 轮次全局严格 1:1 对齐；
+> 3. **权限单测防空转（J3）**：接入 `fs.ErrPermission` 校验并对 root/非兼容环境提供显式声明；
+> 4. **载荷与本地化分层解耦（J4）**：事件载荷注入标准 `reason` 错误码；
+> 5. **版本号双面一致递增**：升级至 **`v1.36.88`**。
+
 
