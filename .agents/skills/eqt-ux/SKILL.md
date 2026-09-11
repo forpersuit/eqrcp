@@ -361,7 +361,9 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
 - **事实（2026-09-11 更新）**：`pkg/chat/v2/web/package.json` 的 `test` 脚本以链式 `node --experimental-strip-types …` 运行 8 个 `*.test.ts`；该脚本**已接入自动化门禁**——`ci.yml` 三处 web 作业均执行 `npm ci && npm test && npm run check && npm run build`（`:25-30`、`:59-64`、`:101-106`），`scripts/deploy-windows-results.sh:139`（pre-commit 路径）执行 `npm test && npm run build`。经独立探针验证：破坏生产逻辑（`return !!msg.uploading` → `return false`；契约前缀 `dl-` → `dlx-`）均使 `npm test` 转红（`EXIT=1`）。
 - **红线**：新增 `*.test.ts` 时，**不得**以“已加入 `npm test` 脚本链”宣称获得回归防护。必须确认存在**真实调用 `npm test` 的自动化门禁**（CI 作业或 pre-commit 脚本）；否则该测试仅在开发者手动执行时生效，防护力为零。
 - **覆盖边界（勿过度承诺）**：
-  - 门禁**仅覆盖 `pkg/chat/v2/web`**；`desktop/gui/frontend`（`main.js` 桥接宿主）**无任何 test 脚本**（package.json 仅有 dev/build/preview），其 `postMessage` 发送端零覆盖。
-  - 断言必须触达真实分支：仅对纯函数传入 `undefined` 再断言 `===false` 属**恒真式**（同义反复，Rule 9），无法锁定任何 UI 行为；锁定某分支须驱动该分支的可见效果（如桩化 `chatActions` 校验副作用）。
-  - 抽出“契约函数”后须**全量收敛调用点**：`resolveDownloadTransferId` 目前仅接入 1/13 处，`'dl-' + messageId + '-' + peer` 仍手写 12 处（`App.svelte:329,348,354,379,386,397,404,413,1335,1389`、`MessageList.svelte:441,1009`、`websocket.ts:445`），漂移风险未消除。
+  - 门禁**仅覆盖 `pkg/chat/v2/web`**；`desktop/gui/frontend`（`main.js` 桥接宿主）**无任何 test 脚本**（package.json 仅有 dev/build/preview），其 `postMessage` 发送端零覆盖——桥接测试只能落在 iframe 契约层。
+  - 断言必须触达真实分支：仅对纯函数传入 `undefined` 再断言 `===false` 属**恒真式**（同义反复，Rule 9），无法锁定任何 UI 行为。**正解是抽取生产函数并由测试直接驱动**（`attachmentPolicy.ts` 的 `applyDownloadCancelled` / `applyBatchDownloadCancelled` 即范例），使测试桩化 side-effect 回调并断言其载荷；改变生产函数任一字段即转红。
+  - 抽取“契约函数”后须**全量收敛调用点**：`resolveDownloadTransferId` 已于 `8d8bce11` 达 **13/13**，全仓手写 `'dl-' + …` 归零。**但**测试锁住的是函数体、**锁不住装配**——`App.svelte` 的委托若被改回内联，测试仍全绿（宿主侧无 runner，无法覆盖）。
+  - 适配器**不得用 `as any` 越过新契约**：`App.svelte` 现以 `updateTransfer(u as any)` 适配，使 `TransferUpdatePayload` 在真正的桥接边界不参与编译期校验，形成“有类型而无校验”的假象。应将适配签名对齐 `chatActions.updateTransfer` 的真实入参类型。
+- **环境依赖**：`.git/hooks/pre-commit` 为**本地不受版本控制**的文件，仅由 `scripts/install-hooks.sh` 生成。凡改动该脚本（如注入 `EQT_PRE_COMMIT_CONTEXT=1` 以限定 `wails.json` 自暂存），**必须重跑 `scripts/install-hooks.sh`**，否则新逻辑在其他环境静默失效。
 - **通用判据**（与 `eqt-lan-tls` 审查红线 ⑧ 同源）：任何“门禁 / 校验”声明，须锚定到**会真实运行的流水线调用点（文件:行）**，而非脚本定义处。

@@ -240,4 +240,6 @@ WantedBy=multi-user.target
 >
 > **审查红线（第六轮沉淀 · Rule 12/14/15）**：⑧ **静态类型门禁必须在“本地 pre-commit”、“单套件执行 pretest”与“远端 CI 流水线”三层全覆盖**——仅在 `package.json` 声明 `"typecheck"` 不等于有门禁。当前接线为 **“两层硬门禁 + 一层条件门禁”**：① **本地提交（条件门禁）**：`scripts/deploy-windows-results.sh` 注入 Worker `npm run typecheck`，`git commit` 触发 pre-commit 钩子时本地拦截 TS 错误；⚠️ 该层已改为**条件执行**——当 `cloudflare/eqt-drm-api/node_modules` 不存在时打印 Notice 并**跳过**（避免无依赖环境下阻塞一切提交），故不可宣称“本地必拦”；② **开发调试单套件（硬门禁）**：`package.json` 配置 `pretest:cert:offline` 与 `pretest:acme:offline` 生命周期钩子，单跑子用例自动前置 `tsc --noEmit`；③ **远端持续集成（硬门禁兜底）**：`.github/workflows/ci.yml` 运行 `npm run test:ci`（链首 `typecheck`）。任一层改动均须以**可证伪探针**（注入 TS 错误→观察该层是否转红）验证，禁止以配置文件存在代替实测。
 
-> **审查红线（第七轮沉淀 · Rule 9/12）**：⑨ **“抽契约函数”必须同步收敛全部调用点，且锁定测试必须驱动被测分支**——`resolveDownloadTransferId` 抽出后仅接入 1/13 处（余 12 处仍手写 `'dl-' + messageId + '-' + peer`），漂移风险未消除；且以纯函数传入 `undefined` 断言 `===false` 属**恒真式**，删除被测 UI 分支后测试仍全绿，不构成锁定。判据：测试须在**移除被测生产逻辑后转红**，否则为空转。
+> **审查红线（第七轮沉淀 · Rule 9/12）**：⑨ **“抽契约函数”必须同步收敛全部调用点，且锁定测试必须驱动被测分支**——`resolveDownloadTransferId` 抽出后曾仅接入 1/13 处（余 12 处手写 `'dl-' + messageId + '-' + peer`），且以纯函数传入 `undefined` 断言 `===false` 属**恒真式**，删除被测 UI 分支后测试仍全绿，不构成锁定。判据：测试须在**移除被测生产逻辑后转红**，否则为空转。✅ 该项已于 `8d8bce11` 闭环（13/13 全量收敛 + 生产函数抽取 + 双探针转红）。
+
+> **审查红线（第八轮沉淀 · Rule 9/12）**：⑩ **“测试驱动生产函数”仍须核对调用点与适配器**——① 测试锁住函数体，**锁不住装配**：若调用方（`App.svelte`）改回内联实现或漏调，测试不转红（无 DOM/host runner）；② 以 `as any` 适配桥接边界会使新契约**不参与编译期校验**（“有类型而无校验”）；③ 依赖本地钩子（`.git/hooks/pre-commit`，不受版本控制）的新逻辑，**必须重跑 `scripts/install-hooks.sh`** 方在其他环境生效，否则静默失效。

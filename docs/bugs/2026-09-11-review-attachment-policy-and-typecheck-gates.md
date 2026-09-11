@@ -228,5 +228,37 @@ const isCancelledFile = (file|image) && ((ulTx && ulTx.state==='cancelled') || (
 
 至此，R1–R4 全部完成代码与测试重构闭环。传输 ID 契约实现全仓 100% 收敛，跨进程批量取消逻辑通过生产函数抽取与严密单测消除了同义反复，自动化门禁与构建脚本职责边界清晰划定。
 
+---
+
+## 十、审查员第八轮独立复核（对 `8d8bce11`，2026-09-11，Rule 9/12/13）
+
+**方法**：同前——不采信 §九 自述，全部以**探针实测 + 源码检索**锚定。
+
+### 10.1 逐项验证结果
+
+| 项 | 独立验证动作与观测 | 判定 |
+|---|---|---|
+| **R1 契约全量收敛** | `rg "'dl-' \+|\"dl-\" \+|\`dl-"`（排除测试与契约定义）→ **0 命中**；13 处调用点全部改用 `resolveDownloadTransferId`（`App.svelte` 10、`MessageList.svelte` 2、`websocket.ts` 1）。 | ✅ **真闭环（100%）** |
+| **R2 消除同义反复** | 已抽取生产函数 `applyDownloadCancelled` / `applyBatchDownloadCancelled`，`App.svelte:359-391` 直接委托。**探针 C**：将 `applyDownloadCancelled` 的 `state:'cancelled'` 改为 `'failed'` → 断言 "updateTransfer transitions state to cancelled" 抛错、`EXIT=1`；**探针 D**：置空 `addSystemNotice` 分支 → 双语提示断言失败、`EXIT=1`。基线 `npm test` 8 套件全绿 `EXIT=0`；恢复后 `git diff --stat` 为空。 | ✅ **真闭环**（可证伪） |
+| **R3 门禁层级口径** | 技能与架构文档口径**当前已正确**（“两层硬门禁 + 一层条件门禁”）。 | ✅ 对齐（**归属见 10.2-③**） |
+| **R4 暂存职责隔离** | `deploy-windows-results.sh:125` 现以 `EQT_PRE_COMMIT_CONTEXT=1` 为落地前置；实测**已安装**的 `.git/hooks/pre-commit:8` 确含该环境变量。 | ✅ **真闭环**（边界见 10.2-④） |
+| **版本双面** | `version.go` 与 `wails.json` **同一提交**内同步为 `1.36.81`，无补偿提交；证明 R4 改造后 pre-commit 自暂存路径端到端可用。 | ✅ **验证通过** |
+| **类型门禁** | `npm run check`（svelte-check）→ `111 FILES 0 ERRORS 2 WARNINGS`，`exit 0`（2 warning 为既有 a11y 项，非本次引入）。 | ✅ |
+
+### 10.2 残留与提示（均非阻断）
+
+| 编号 | 等级 | 事实 | 建议 |
+|---|---|---|---|
+| **R5** | 提示 | **测试锁定的是生产函数，未锁定其调用点**。若日后有人把 `App.svelte` 的委托改回内联实现（或漏调 `applyBatchDownloadCancelled`），Case 8/9 仍全绿——因为宿主侧 `desktop/gui/frontend` 无 test runner（`package.json` 仅 `dev/build/preview`），且 iframe 侧无 DOM 测试。§九 已**显式声明**该局限（较此前“静默缺口”为诚实改进）。 | 可接受。若要闭环，需引入 DOM/组件测试运行器；当前由 `TransferUpdatePayload` 类型 + 单层委托将暴露面压到最小。 |
+| **R6** | 提示 | **`as any` 削弱了新契约的类型约束**。`App.svelte:363-372` 以 `chatActions.updateTransfer(u as any)` 适配，使 `TransferUpdatePayload` 在真正的桥接边界（`App.svelte`）**不参与编译期校验**——恰是本轮重构意图加固之处。 | 建议将适配签名对齐 `chatActions.updateTransfer` 的真实入参类型，去掉 `as any`；否则契约仅对测试可见。 |
+| **R7** | 提示 | **自暂存依赖钩子重装**。`.git/hooks/pre-commit` 不受版本控制，`EQT_PRE_COMMIT_CONTEXT=1` 仅由 `scripts/install-hooks.sh` 生成。其他环境若未重跑该脚本，`wails.json` 自动暂存将**静默失效**，版本偏斜可能回归（仅影响暂存便利，不影响版本值正确性）。 | 建议在 `CLAUDE.md`/技能中注明“改动钩子后须重跑 `scripts/install-hooks.sh`”，或将 `git add` 移入钩子本身（钩子属于本次改动的生成物，天然处于提交上下文）。 |
+| **—** | 提示 | **§九 R3 归属表述不清**：§九 称“技能规范与架构文档口径全面修正”为本提交动作，但 `8d8bce11` **未改动** `.agents/skills/eqt-lan-tls/SKILL.md` 与 `docs/mechanism/…md`（该修正实际由审查方在 `a7f4bb1d` 完成）。结论状态正确，仅归属宜澄清（Rule 12：不得为未在本提交内的工作背书）。 | 文案层面澄清即可。 |
+
+### 10.3 复核结论
+
+`8d8bce11` 对 **R1 / R2 / R4 的修复经探针实测确认真实闭环**（R2 的两条探针均转红，同义反复已消除；R1 实测 0 残留）；**版本双面同步**与**类型门禁**同步验证通过。新增 **R5–R7 三项提示级残留**（测试未覆盖调用点、`as any` 弱化契约、自暂存依赖钩子重装），**均不构成功能阻断，不改放行结论**。前端附件策略与 Worker 门禁两项议题至此**无遗留中危及以上问题**。
+
+> **第八轮沉淀（Rule 9/12）**：⑩ **“抽取生产函数供测试调用”是消除同义反复的正解**——但须同时校验**调用点是否也纳入防护**，否则测试只锁住函数体、锁不住装配；适配器若以 `as any` 越过新契约，则类型约束在生产边界失效，反成“有类型而无校验”的假象。
+
 
 
