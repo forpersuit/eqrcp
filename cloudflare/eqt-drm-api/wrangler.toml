@@ -29,6 +29,11 @@ TELEGRAM_CHAT_ID = "1880182104"
 # Paddle Live 生产价格 ID (Live 环境)
 PADDLE_PRICE_ID_PLUS_YEARLY = "pri_01kydyzmn1pc29npe377dxtq96"
 PADDLE_PRICE_ID_PLUS_LIFETIME = "pri_01kyd2nbsmg44rjmvf4vbetgwj"
+# RFC 8555 ACME 代理签发配置 (接入 Google Trust Services / Google Public CA 官方签发)
+ACME_DIRECTORY_URL = "https://dv.acme-v02.api.pki.goog/directory"
+ACME_EAB_KID = "b160e386be328f849159219f87cae8a5"
+ACME_DNS_API_ENDPOINTS = "https://ns1-dns.eqt.net.im,https://ns2-dns.eqt.net.im"
+ACME_EMAIL = "forpersuit@gmail.com"
 
 routes = [
   { pattern = "lic.eqt.net.im", custom_domain = true }

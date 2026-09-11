@@ -327,6 +327,8 @@ WantedBy=multi-user.target
 > - **✅ N1~N3 与 G1~G4 闭环落实（v1.36.92 · 2026-09-12）**：N1 在 §11.28 代码块补全演进交叉引用批注，实现历史节次全量对齐；N2 在 §11.30 探针表中将 `''` 拆分并保真呈现其实测语义（`typeof === 'string'` 为 `true`，查表 `undefined` 安全回退）；N3 修正 M1 措辞消除与 M2 字典未加载兜底定义的冲突；G1 消除 GTS runbook 中夸大无据的配额数字并客观定界；G2 补齐 GTS 接入前置必需的持久化账户私钥 `ACME_ACCOUNT_KEY` 与权威 DNS API 依赖说明；G3 纠偏命令为 `gcloud beta publicca external-account-keys create`；G4 全仓收敛 GTS 配额叙述，彻底消除四处文档数字打架；版本号双面递增至 `v1.36.92`。
 > - **✅ 权威 DNS API 官方主域迁移落地（v1.36.93 · 2026-09-12）**：在 Cloudflare 为 `eqt.net.im` 注入 `ns1-dns`/`ns2-dns` 灰云 A 记录；双机 Caddy 成功签发并激活 Let's Encrypt 官方证书；端到端 Bearer Token API 读写/清理实测 100% 通过；Worker `wrangler.toml` 全量收敛为官方域名端点。
 > - **✅ Google Public CA (GTS EAB) 真机绑定与首张证书签发全通（v1.36.94 · 2026-09-12）**：在 GCP 项目中激活 `publicca.googleapis.com` 并获取 EAB 凭据；通过 Web Crypto HMAC-SHA256 完成真机绑定并激活 Google Trust Services 账户；通过 `verify-gts-eab-live.js` 完整走通创建订单、DNS-01 质询注入、Google DNS 秒级校验、CSR Finalize、首张 WR1 公信证书（90天）签发与自动清理全流程；版本号双面递增至 `v1.36.94`。
+> - **✅ 生产与测试 Worker 双域全量部署上线（v1.36.95 · 2026-09-12）**：向 Cloudflare Worker 生产与测试双环境全量同步 Google Public CA 凭证密钥；成功发布 `lic.eqt.net.im` 与 `lic-test.eqt.net.im`；原生 Go 客户端 `RequestDeviceCertificate` 真机通过双网关置备实测，分别耗时 12.48s 与 16.82s 秒级获签 Google 90 天公信证书；版本号双面递增至 `v1.36.95`。
+
 
 
 

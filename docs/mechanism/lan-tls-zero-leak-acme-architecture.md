@@ -2165,6 +2165,46 @@ assert(typeof base64UrlDecode('abc') === 'object', // :308 输入是【合法】
 > 2. **首张 Google CA 证书诞生**：真机实发由 `Google Trust Services (WR1)` 签发的 90 天有效公信证书；
 > 3. **版本号双面一致递增**：升级至 **`v1.36.94`**。
 
+---
+
+#### 11.35 生产与测试 Worker 双域全量部署上线：Go 客户端原生端到端置备实证（v1.36.95 · 2026-09-12）
+
+为了让用户在 Windows / macOS / Linux 客户端与手机端开箱即用体验无限制的 Google Public CA 绿锁，工程团队已全面推进云端网关的上线发布，并使用原生 Go 运行时完成了生产与测试双网关的端到端真实置备验证：
+
+##### 一、生产与测试双环境 Worker 部署与机密注入
+1. **机密全量同步**：向 Cloudflare Worker 生产环境（`eqt-drm-api`）与测试环境（`eqt-drm-api-test`）注入持久化凭证：
+   - `ACME_ACCOUNT_KEY`：Google Trust Services 永久绑定之账户私钥 JWK；
+   - `ACME_EAB_HMAC_KEY`：Google Cloud 项目 EAB HMAC 密钥；
+   - `ACME_DNS_API_TOKEN`：权威双机 DNS-01 API 授权 Token；
+2. **云端发布生效**：
+   - 生产环境：`lic.eqt.net.im` 部署就绪（Version ID: `98ca8291-6410-4ff7-a60d-bf5544cf400a`）；
+   - 测试环境：`lic-test.eqt.net.im` 部署就绪（Version ID: `6f9d54cc-f887-4a47-998a-73cb7f81b410`）；
+   - 双网关健康探针状态为 `healthy`。
+
+##### 二、原生 Go 客户端（RequestDeviceCertificate）双网关真机置备实测
+使用 `pkg/cert/provisioner.go` 标准生产代码执行真机静默置备：
+1. **生产网关实测（lic.eqt.net.im）**：
+   - 节点：`a1b2c3d4e5f6`
+   - 耗时：**12.48 秒** 秒级签发
+   - 状态：HTTP 200，成功返回 5483 字节公信证书链（有效期至 `2026-12-10`），`IsNew: true`；
+2. **测试网关实测（lic-test.eqt.net.im）**：
+   - 节点：`b2c3d4e5f601`
+   - 耗时：**16.82 秒** 秒级签发
+   - 状态：HTTP 200，成功返回 5483 字节公信证书链（有效期至 `2026-12-10`），`IsNew: true`。
+
+##### 三、架构闭环与 Windows 全新验证就绪
+1. Windows 客户端无论是默认连接生产 `lic.eqt.net.im` 还是通过环境变量连接测试网关，均能在启动时自动完成 Google Trust Services 证书置备；
+2. 本地清理 `%APPDATA%\eqt` 后即可触发完整全新流程验证；
+3. 版本号双面一致递增至 **`v1.36.95`**。
+
+---
+
+> 🏁 **阶段决议（第二十一轮演进 · 生产双环境 Worker 全量发布与 v1.36.95 发布）**：
+> 1. **双网关生产就绪**：`lic.eqt.net.im` 与 `lic-test.eqt.net.im` 均已部署 GTS EAB 发证引擎；
+> 2. **原生 Go 客户端真实验收**：`RequestDeviceCertificate` 在 12 秒内完成全自动化公信证书置备；
+> 3. **版本号双面一致递增**：升级至 **`v1.36.95`**。
+
+
 
 
 
