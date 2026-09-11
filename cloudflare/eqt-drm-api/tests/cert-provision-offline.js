@@ -891,6 +891,38 @@ async function runTests() {
     const blockedResp = await handleCertRoutes(blockedReq, { DB: db }, ctx, new URL(blockedReq.url), {});
     const blockedData = await blockedResp.json();
     assert(blockedResp.status === 429 && blockedData.reason_key === 'ip_rate_limited', 'T21.2: 11th request from same IP blocked with 429 ip_rate_limited');
+
+    // T21.3: Third-tier rate limit: Global production ACME 40/week ceiling
+    const prodAcctKey = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+    const prodAcctJwk = prodAcctKey.privateKey.export({ format: 'jwk' });
+    const prodEnv = {
+      DB: db,
+      ENVIRONMENT: 'production',
+      ACME_DIRECTORY_URL: 'https://acme.test/directory',
+      ACME_DNS_API_ENDPOINTS: 'https://ns1.test,https://ns2.test',
+      ACME_DNS_API_TOKEN: 'secret-dns-token',
+      ACME_ACCOUNT_KEY: JSON.stringify(prodAcctJwk)
+    };
+    // Pre-seed rate_limits with 40 hits for 'cert_provision:global_acme'
+    const globalKey = 'cert_provision:global_acme';
+    db._rateLimits.set(globalKey, { count: 40, window_start: new Date().toISOString() });
+
+    const globalNode = 'bb0000000001';
+    const { csrPEM: globalCsr, privateKey: globalPriv } = generateTestCSR(globalNode);
+    const globalSig = signNodePayload(globalPriv, globalNode, nowTs);
+    const globalReq = new Request('http://api.test/api/v1/cert/provision', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-EQT-Timestamp': String(nowTs),
+        'X-EQT-Device-Signature': globalSig,
+        'CF-Connecting-IP': '198.51.100.99'
+      },
+      body: JSON.stringify({ node_id: globalNode, csr_pem: globalCsr })
+    });
+    const globalResp = await handleCertRoutes(globalReq, prodEnv, ctx, new URL(globalReq.url), {});
+    const globalData = await globalResp.json();
+    assert(globalResp.status === 429 && globalData.reason_key === 'global_rate_limited', 'T21.3: Production ACME request blocked with 429 global_rate_limited after 40 issuances/week');
   }
 
   console.log(`\nResults: ${passed} passed, ${failed} failed`);

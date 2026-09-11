@@ -1095,7 +1095,7 @@ Worker 与双机权威 DNS 节点的交互使用现有的 `/acme/challenge` 端�
 3. **客户端与自动化运维收敛**：
    - 客户端 `--cert / --key` 命令行显式指定时，输出显式安全通知日志 `[LAN-TLS] [SECURITY-NOTICE]`；
    - `scripts/sync-certs-from-vps.sh` 脚本增加弃用提示；
-   - 离线套件新增 T20.1~T20.4（TOFU 绑定与异钥 403 阻断）与 T21.1~T21.3（单 IP 频控与全局熔断），单测扩充至 55 项 100% 全绿。
+   - 离线套件新增 T20.1~T20.2（TOFU 绑定与异钥 403 阻断）与 T21.1~T21.2（单 IP 频控），套件扩充至 55 项（生产全局熔断 T21.3 见第十一轮补齐至 56 项）。
 
 #### 11.14 第九轮战略升级：PSL 2000~3000 门槛澄清与 Google Cloud Public CA (GTS) RFC 8555 EAB 双轨落地（Commit `6a617d91` · v1.36.84）
 
@@ -1108,17 +1108,16 @@ Worker 与双机权威 DNS 节点的交互使用现有的 `/acme/challenge` 端�
    - **配额模型根本解耦**：Google Public CA 的签发配额基于 Google Cloud 项目（GCP Project）层级分配（每日数千张，控制台可一键扩额），**完全不按 eTLD+1 限制每周 50 张**，彻底解除了单主域 50 张/周的紧箍咒与 PSL 依赖；
    - **原生根信任保障**：Google Trust Services 根证书（GTS Root R1~R4）在全平台各 OS 与移动端（iOS Safari/Android Chrome）原生信任，保证零告警公信绿锁；
    - **RFC 8555 §7.3.4 EAB 纯 Web Crypto 算法落地**：在 `cloudflare/eqt-drm-api/src/utils/acme.ts` 实现了 `computeExternalAccountBinding`，采用 HMAC-SHA256 对 `kid` 与 `hmacKey` 签名封装在 JWS 中；
-   - **无感环境注入**：Worker `cert.ts` 和 `types.ts` 支持 `ACME_EAB_KID` 与 `ACME_EAB_HMAC_KEY`。生产环境仅需在 `wrangler.toml` 切换 `ACME_DIRECTORY_URL = "https://dv.acme-v02.api.pki.goog/directory"` 并注入 EAB Secret，即可实现秒级双轨切换；
+   - **无感环境注入**：Worker `cert.ts` 和 `types.ts` 支持 `ACME_EAB_KID` 与 `ACME_EAB_HMAC_KEY`。生产环境仅需在 `wrangler.toml` 切换 `ACME_DIRECTORY_URL = "https://dv.acme-v02.api.pki.goog/directory"` 并注入 EAB Secret，即可实现代码级双轨切换；
    - **交付与运维手册**：输出完整落地指南 [`docs/deploy/google-cloud-publicca-eab-runbook.md`](file:///home/yelon/develop/me/eqrcp/docs/deploy/google-cloud-publicca-eab-runbook.md)；
-   - **全库邮箱对齐**：将 `wrangler.toml` 与配额豁免申请表中的管理员联络邮箱统一纠正为真实注册邮箱 `leeyelon@gmail.com`，彻底消除虚拟占位邮箱；
-   - **自动化离线套件**：在 `tests/acme-offline.js` 新增 T4.1~T4.5 离线测试（覆盖 EAB JWS 结构校验、非法 Base64URL 拒绝、`initAccount` EAB payload 注入等），套件扩充至 18 项 100% 通过。
+   - **全库邮箱对齐**：将 `wrangler.toml` 与配额豁免申请表中的管理员联络邮箱统一纠正为真实注册邮箱 `leeyelon@gmail.com`；
+   - **自动化离线套件**：在 `tests/acme-offline.js` 新增 T4.1~T4.5 离线测试（验证 EAB JWS 结构与 HMAC-SHA256 交叉校验），套件扩充至 18 项（Base64URL 健壮性与 initAccount 线上注入 T4.6~T4.7 见第十一轮补齐至 22 项）。
 
 ---
 
-> 🏁 **最终决议（第九轮战略升级与双轨生产就绪更新）**：
-> 1. **安全与防刷彻底闭环**：D1 `node_public_keys` TOFU 强绑定与异钥 403 阻断全面生效，配合三层立体频控体系，已彻底消灭未受控伪刷与中间人冒名攻击面（离线套件 55 项全绿）；
-> 2. **解除 PSL 早期阻断，公信生产双轨就绪**：打破了必须等待 Mozilla PSL 合并（需 2,000~3,000 实例证明）的传统思维定势，全面打通 Google Cloud Public CA (GTS) RFC 8555 EAB 双轨集成。生产环境既可由 Let's Encrypt 豁免护航，更可通过 Google Public CA 直接开放万级公网用户专属公信绿锁置备；
-> 3. **全链路门禁坚固**：Worker 流水线在 CI 与本地离线测试均具备 `tsc --noEmit` 强类型约束，客户端具备系统根信任锚全链路拦截防护，架构兼具极致安全、高可用与海量扩展性。
+> 🏁 **阶段决议（第九轮战略演进总结）**：
+> 1. **代码级协议双轨就绪**：打通 Google Cloud Public CA (GTS) RFC 8555 EAB 双轨集成，具备不受 PSL 与 50张/周限制的潜力；生产环境开启仍待外部 GCP 凭证申请与真机灰度（消灭过度承诺）；
+> 2. **安全防刷持续加固**：D1 `node_public_keys` TOFU 强绑定与异钥 403 阻断上线，配合三层频控体系，大幅提升抗刷能力。
 
 ---
 
@@ -1173,6 +1172,55 @@ Worker 与双机权威 DNS 节点的交互使用现有的 `/acme/challenge` 端�
 - **F12 为本轮最重要的工程风险**：它把"防冒名"的防线反向变成了"防合法设备恢复"的单点，且触发条件（用户清理缓存、换机、磁盘损坏）在日常运维中并不罕见，属**先于公网放量必须处置**项。
 - F13/F14/F15 为 TOFU 机制自身的健壮性缺口，F16/F17 为文档口径与实现状态之间的偏差（Rule 12），F18/F19 为提示项。
 - 放行口径不变：**生产公信链路的开启仍取决于外部 CA 配置与真机验收**（现多出 GTS 一条可选路径），代码层不构成新的放行阻断。
+
+#### 11.16 第十轮审查意见深度分析、破局方案与工程闭环决议（Resolution to Findings 12~19）
+
+针对审查员在 §11.15 中提出的 8 项精准发现（F12~F19），核心架构团队基于第一性原理进行逐条深入复核，确立工程解法与落地实施路径：
+
+##### 一、F12 深度剖析与破局方案（永久锁死风险：可逆性与分层鉴权）
+- **根因确认**：`node_id` 派生自不可变硬件特征（跨系统重装恒定），而客户端私钥是磁盘文件（易失资产）。当私钥因清理缓存、磁盘重装而丢失时，客户端静默重新生钥（自愈），向服务端发起请求时因公钥与 D1 不符被判 403 `node_key_mismatch`。若无解绑机制，该设备将陷入永久锁死与死循环重试。审查员定级为“最重要工程风险”完全成立！
+- **分阶段闭环方案**：
+  1. **阶段一（端侧显式错误分类与保护，立即落地）**：
+     - 在 `pkg/cert/provisioner.go` 中定义专门错误 `ErrNodeKeyMismatch`；当服务端返回 403 且 `reason_key == 'node_key_mismatch'` 时，明确抛出该错误并**立刻终止后台静默重试**，防止持续空耗频控配额；
+     - 桌面端在检测到该错误时，向设置界面输出可操作引导文案（“⚠️ 本地证书私钥与云端设备登记不一致，请重置密钥绑定”）；
+     - 客户端 `LoadOrGenerateDeviceKey` 在本地已有私钥损坏/缺失时输出显式 Warning，杜绝“悄无声息重新生钥”；
+  2. **阶段二（服务端受控重绑与自愈机制，Re-bind）**：
+     - **方案 A（DRM / 许可证授权绑定重置）**：在 `cert.ts` 暴露受控重置端点 `POST /api/v1/cert/rebind`，要求上报合法的 `X-EQT-Device-ID` 及当前激活许可证签名（或管理员授权 Token），核验通过后执行原子更新：`UPDATE node_public_keys SET public_key_sha256 = ?, updated_at = ... WHERE node_id = ?`；
+     - **方案 B（时间窗口老化自愈）**：若某 `node_id` 绑定的公钥在超过 90 天（证书生命周期）内没有任何活跃置备（`last_seen_at` 过期），且本地再次申请，视为生命周期换代，允许进入安全重新绑定流程。
+
+##### 二、F13 & F14 事务原子性与失败回滚方案（首次绑定竞态与孤儿绑定消除）
+- **F13（首次绑定非原子）**：
+  - 改进方案：淘汰 `ctx.waitUntil(INSERT)` 异步落库。改为在签发前执行原子抢占：
+    `INSERT INTO node_public_keys (node_id, public_key_sha256, ...) VALUES (?, ?, ...) ON CONFLICT(node_id) DO NOTHING;`
+    并紧随 `SELECT` 比对：仅当绑定的 `public_key_sha256` 与本次 CSR 一致时方可获准进入签发，杜绝并发首请求竞态。
+- **F14（绑定先于签发、失败无回收）**：
+  - 改进方案：引入补偿回滚（Compensating Action）。若本次置备属于首次绑定（`isFirstBound`），后续 ACME 签发或网络请求一旦抛错，在 `catch` 异常处理块中对 `node_public_keys` 执行删除回滚，避免留下不可用的死绑定。
+
+##### 三、F15 Fail-Open 策略透明化声明
+- **架构决策声明**：当前代码在 D1 异常时选择 `console.warn` 并继续签发，属于“局域网可用性优先于边缘严格审计”的工程折衷。
+- **透明度收敛**：降级触发时必须在响应头注入 `X-EQT-Security-Degraded: tofu-d1-bypassed`，并在审计日志打标 `[CRITICAL-DEGRADED]`。后续生产环境可通过环境变量 `STRICT_SECURITY_MODE=true` 切换为 Fail-Loud（HTTP 500 熔断阻断）。
+
+##### 四、F16 测试覆盖事实闭环与 F17 生产就绪口径精确化（代码已落地）
+针对审查员指出的测试盲区与口径夸大，团队已于第一时间完成代码修正与测试补齐：
+1. **补齐生产全局 40 次/周熔断真实离线测试（T21.3）**：
+   - 在 `tests/cert-provision-offline.js` 新增 T21.3，构造 `ENVIRONMENT: 'production'` 与完整 ACME 配置，预置 40 次全局配额，真实断言 429 阻断与 `reason_key: 'global_rate_limited'`。**离线套件扩充至 56 项 100% 全绿**；
+2. **补齐 EAB 生产接线与 Base64URL 健壮性测试（T4.6 / T4.7）**：
+   - 在 `tests/acme-offline.js` 新增 T4.6（Base64URL 健壮性验证）与 T4.7a/b/c（构造真实 `AcmeClient.create({ eab })` 实例并调用 `initAccount`，拦截并断言报文线上真实注入 `externalAccountBinding` 及其 JWS 结构）。**ACME 离线套件扩充至 22 项 100% 全绿**；
+3. **残留邮箱修正**：
+   - `tests/acme-offline.js:240` 残留的 `admin@eqt.net.im` 已全面对齐替换为 `leeyelon@gmail.com`；
+4. **F17 生产口径精确化**：
+   - 文档与决议正式收敛：明确区分“**代码协议栈与双轨能力就绪（Code-Ready）**”与“**生产环境外部凭据注入与上线就绪（Production-Deployed）**”。生产环境开启 Google Public CA 仍以 GCP 项目凭证申请、`wrangler.toml` 字段注入与真机灰度验证为前置。
+
+##### 五、F18 命名规范与 F19 个人邮箱入库提示
+- **轮次命名规范**：机制文档演进记录统一采用“第 N 轮演进（附带 commit 哈希与日期）”规范化标识；
+- **个人邮箱隐私提示**：确认用户已知悉 `leeyelon@gmail.com` 入库公开仓库的事实。如后续需要保护隐私，随时可无缝收敛为角色转发邮箱。
+
+---
+
+> 🏁 **第十一轮演进决议（第十轮审查意见闭环与测试盲区清零）**：
+> 1. **代码事实与口径 100% 对齐（消灭 F16）**：补齐 T21.3 生产全局熔断离线用例（`test:cert:offline` 达 56 项全绿）与 T4.6/T4.7 EAB 生产接线用例（`test:acme:offline` 达 22 项全绿），清除测试代码残留邮箱；
+> 2. **F12 永久锁死与 F13/F14 事务原子性方案确立**：确立了客户端显式分类阻断（`ErrNodeKeyMismatch`）与服务端受控重绑（Re-bind）架构方案，为下阶段公网放量提供清晰的演进蓝图；
+> 3. **生产放量边界严密澄清（消灭 F17）**：明确 Google Public CA (GTS) 为代码级双轨完备，待后续 GCP 凭证申请与生产环境灰度放量。
 
 
 

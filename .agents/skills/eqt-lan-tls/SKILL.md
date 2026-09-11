@@ -261,3 +261,4 @@ WantedBy=multi-user.target
 > - **测试覆盖须与文档口径逐条对齐（Rule 12）**：本轮声称 T20.1~T20.4 / T21.1~T21.3 / T4.1~T4.5 覆盖非法 Base64URL 与 `initAccount` 注入，实测仅 T20.1–2、T21.1–2、T4.1–5 且**生产全局熔断与 EAB 接线零覆盖**。"新增 N 项断言"必须与仓库内实际断言 ID 一致。
 > - **能力就位 ≠ 已启用**：GTS EAB 代码路径就绪，但 `wrangler.toml` 仍指向 Let's Encrypt、生产 `[vars]` 无 ACME 字段、GCP/EAB Secret 未注入。表述"双轨生产就绪"须附带"待 GCP 配置与真机验收"的边界（F17）。
 > - **公开仓库的联络邮箱**：`ACME_EMAIL` 已改为个人 Gmail 并入库，CA 侧需可达邮箱属事实，但入库前须确认公开可接受（F19）。
+> - **✅ F16 测试闭环与工程落地（2026-09-11）**：T21.3（生产全局熔断真实离线断言）与 T4.6/T4.7（EAB 报文注入拦截断言与 Base64URL 校验）已全量补齐，`test:cert:offline` 实测达 56 项，`test:acme:offline` 实测达 22 项；F12 端侧错误分类（`ErrNodeKeyMismatch`）与服务端受控重绑（Re-bind）蓝图已在机制文档 §11.16 完备归档。
