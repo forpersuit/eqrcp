@@ -1222,6 +1222,75 @@ Worker 与双机权威 DNS 节点的交互使用现有的 `/acme/challenge` 端�
 > 2. **F12 永久锁死与 F13/F14 事务原子性方案确立**：确立了客户端显式分类阻断（`ErrNodeKeyMismatch`）与服务端受控重绑（Re-bind）架构方案，为下阶段公网放量提供清晰的演进蓝图；
 > 3. **生产放量边界严密澄清（消灭 F17）**：明确 Google Public CA (GTS) 为代码级双轨完备，待后续 GCP 凭证申请与生产环境灰度放量。
 
+---
+
+#### 11.17 第十一轮独立复核（对 `36704dbd` · 2026-09-11）
+
+> 复核方独立复现，不采信提交说明与 §11.16 自述。方法：源码检索 + 探针反向证伪 + 套件实跑。
+
+##### 一、确认真闭环（探针转红为证）
+
+| 项 | 独立验证动作与观测 | 判定 |
+| --- | --- | --- |
+| **F16a 生产全局熔断覆盖** | T21.3 构造 `ENVIRONMENT:'production'` + 完整 ACME 配置，预置 `cert_provision:global_acme = 40`。**探针**：将该层阈值 `40 → 100000`（`cert.ts:740`）→ `Results: 55 passed, 1 failed`，T21.3 转红。 | ✅ **真闭环（可证伪）** |
+| **F16b EAB 报文接线覆盖** | T4.7 以 `AcmeClient.create({ eab })` 真实实例化并拦截 `/new-account`。**探针**：将 `payload.externalAccountBinding` 赋值改为丢弃计算结果（`acme.ts:335`）→ T4.7b 转红。 | ✅ **真闭环（可证伪）** |
+| **用例计数属实** | `test:cert:offline` → **56 passed, 0 failed**；`test:acme:offline` → **22 passed, 0 failed**。 | ✅ 与声明一致 |
+| **无随机偶发** | T4.7 用 `allowTransientAccountKey`（每次 `generateKey` 随机账户密钥），连跑 5 次均 22/0；且 Node `Buffer.from(str,'base64')` 实测接受 `-`/`_`（宽松解码），载荷解码不因 base64url 字符而漂移。 | ✅ 稳定 |
+| **F17 口径收敛（诚实校准）** | §11.13 由「T20.1~4 / T21.1~3 / 55 项」校正为「T20.1~2 / T21.1~2 / 55 项」；§11.14「生产就绪 / 秒级双轨切换」降级为「代码级双轨切换」；末段「最终决议（双轨生产就绪）」降为「阶段决议」。`wrangler.toml` 生产 `[vars]`（`:18`）确无任何 ACME 字段。 | ✅ 过度承诺已撤除 |
+| **运行时零回归面** | 本提交仅改 `tests/*.js` + `docs/*.md` + 1 行 skill，**生产 src 零改动**。 | ✅ |
+
+##### 二、新增发现
+
+**G1（中危 · Rule 12 同型复发）：§11.16「阶段一（端侧显式错误分类与保护，立即落地）」三项零落地**
+
+该小节自称“立即落地”，逐条核对均为**未落地计划**：
+
+| 声称立即落地 | 源码事实 | 判定 |
+| --- | --- | --- |
+| `pkg/cert/provisioner.go` 定义 `ErrNodeKeyMismatch`，403 且 `reason_key=='node_key_mismatch'` 时抛出并终止重试 | `rg ErrNodeKeyMismatch` 全仓 **0 命中**；`provisioner.go:645` 仍将 403 归入泛化 `ErrGatewayFailed` | ❌ 未落地 |
+| 桌面端检测到该错误时输出可操作引导文案 | `rg "重置密钥绑定|node_key_mismatch"`（`desktop/`、`pkg/`）**0 命中** | ❌ 未落地 |
+| `LoadOrGenerateDeviceKey` 在私钥损坏/缺失时输出显式 Warning | `provisioner.go:79-102` 私钥缺失或解析失败后**直接静默 `ecdsa.GenerateKey`**，函数体无任何日志 | ❌ 未落地 |
+
+这正是上一轮 **F16（文档口径超出实现）在相邻章节的同型复发**（Rule 12）。建议将标题改为「阶段一（**待落地**）」，并把三条动作改写为待实施项，或补注计划版本号与落地提交。
+
+**G2（提示 · Rule 12）：「闭环」措辞覆盖到仅有蓝图的项**
+
+§11.16 标题含「工程**闭环**决议」，末段决议块题为「第十轮审查意见**闭环**与测试盲区清零」。但 F12（`/rebind` 端点）、F13（`INSERT … ON CONFLICT` 原子抢占）、F14（`isFirstBound` 补偿回滚）、F15（`STRICT_SECURITY_MODE` / `X-EQT-Security-Degraded` / `[CRITICAL-DEGRADED]`）在 `src/` 中**全部 0 命中**；本轮唯一真闭环的是 F16（外加 F17 的口径校准）。决议块第 2 条本身用词「方案确立」是诚实的，但块标题的「闭环」与之矛盾。建议收敛为「F16/F17 闭环；F12–F15 方案确立待落地」。
+
+**G3（低危 · Rule 9 近似恒真）：新增 T4.6 对“非法 Base64URL”零判别力**
+
+```js
+// T4.6: Invalid Base64URL error rejection test
+let threwInvalidB64 = false;                       // :301 赋值后永不读取（死变量，N4 同型）
+try { base64UrlDecode('invalid+base64=with/illegal$chars!'); }
+catch { threwInvalidB64 = true; }                  // :305
+assert(typeof base64UrlDecode('abc') === 'object', // :308 输入是【合法】base64url
+       'T4.6: base64UrlDecode safely processes base64url inputs');
+```
+
+- 注释声称「非法输入拒绝」，断言实为「**合法**输入 `'abc'` 可解码」，名实不符；
+- `base64UrlDecode`（`acme.ts:25-32`）恒返回 `Uint8Array`，`typeof` 恒为 `'object'` ⇒ 断言近似恒真；
+- **探针**：将 `:301-306` 非法输入整段删除后，T4.6 **仍绿**（22/0），证明该路径零覆盖；
+- 更深一层：`Buffer.from(b64,'base64')` 对非法字符是**宽松忽略、不抛错**，作者原假设“会抛错”被现实证伪后，结果被写入死变量而**静默丢弃**（Rule 12）。
+
+建议：删除 `threwInvalidB64`；断言改为覆盖非法输入的**实际可观测行为**（如非法串解码结果长度与合法串的差异），或如实更名为「合法 base64url 可解码」。
+
+**G4（提示 · 失败不洁）：T4.7c 在回归时抛未捕获异常，套件中断**
+
+`tests/acme-offline.js:338` 的 `capturedAccountPayload.externalAccountBinding.signature` 未做空值短路。**探针实测**：关闭注入后 T4.7b 转红，随即 T4.7c 抛 `TypeError: Cannot read properties of undefined`，进程以 `Unhandled test failure` **中断**，丢失 `Results: N passed, M failed` 汇总与后续用例计数。建议改用前置短路断言（如 `assert(capturedAccountPayload?.externalAccountBinding?.signature, …)`），保持 fail-clean，避免“红了却看不清”。
+
+**G5（提示 · 文档细节）**
+
+- §11.16 §四.3 称残留邮箱「已全面对齐」，但 `tests/acme-offline.js:125` 的 mock **响应体**仍为 `contact: ['mailto:admin@eqt.net.im']`（属 mock 响应，无功能影响）；其余 `admin@eqt.net.im` 均为 CF Access 管理白名单（`CF_ACCESS_ALLOWED_EMAILS`），系另一用途，非 ACME 字段，不应混计。
+- F18 声称将「统一采用第 N 轮演进（附带 commit 哈希与日期）」，但 §11.16 标题作「第十轮审查意见…」而末段决议块作「第十一轮演进决议」，同一节内轮次口径不一，且该标题未附 commit 哈希与日期（未自我遵守）。
+- T4 段 JWK 向量已更换，但同文件 Test 2（`:56-57`）仍用旧向量，两套并存（无功能影响，仅一致性瑕疵）。
+
+##### 三、复核结论
+
+`36704dbd` 对 **F16 的两处测试盲区补齐经探针反向证伪，确认真闭环**（T21.3 与 T4.7b 均可被生产逻辑回归转红，且 5/5 稳定无偶发）；**F17 的生产口径过度承诺已诚实撤除**，属正向校准；本轮**生产 src 零改动，无回归面**。
+
+新增 G1–G5 中，**G1 为中危**：上一轮刚消灭的「文档宣称超出实现」，本轮在 §11.16「阶段一（立即落地）」以同型方式复发（F12 三项端侧动作全未落地）；**G3 提示新增用例存在近似恒真与死变量**（与既有 N4 同型），削弱新用例的实际防护力。**放行口径不变**：GTS 仍为代码级就绪、生产未启用，F12–F15 仍为待落地方案。建议下一次迭代优先落地 G1 的三条端侧动作（含 `LoadOrGenerateDeviceKey` 的 fail-loud），并将 §11.16 的「闭环」措辞按项收敛。
+
 
 
 

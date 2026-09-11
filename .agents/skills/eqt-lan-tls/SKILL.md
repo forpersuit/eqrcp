@@ -262,3 +262,8 @@ WantedBy=multi-user.target
 > - **能力就位 ≠ 已启用**：GTS EAB 代码路径就绪，但 `wrangler.toml` 仍指向 Let's Encrypt、生产 `[vars]` 无 ACME 字段、GCP/EAB Secret 未注入。表述"双轨生产就绪"须附带"待 GCP 配置与真机验收"的边界（F17）。
 > - **公开仓库的联络邮箱**：`ACME_EMAIL` 已改为个人 Gmail 并入库，CA 侧需可达邮箱属事实，但入库前须确认公开可接受（F19）。
 > - **✅ F16 测试闭环与工程落地（2026-09-11）**：T21.3（生产全局熔断真实离线断言）与 T4.6/T4.7（EAB 报文注入拦截断言与 Base64URL 校验）已全量补齐，`test:cert:offline` 实测达 56 项，`test:acme:offline` 实测达 22 项；F12 端侧错误分类（`ErrNodeKeyMismatch`）与服务端受控重绑（Re-bind）蓝图已在机制文档 §11.16 完备归档。
+> - **⑭ 审查红线（第十二轮沉淀 · Rule 9/12）："方案"与"闭环"必须在标题层分家，新用例必须双向可证伪（对 `36704dbd` 的复核，详见机制文档 §11.17）**：
+>   - **G1（中危）「立即落地」不得用于未落地项**：§11.16「阶段一（立即落地）」的三条端侧动作（`ErrNodeKeyMismatch` 定义、桌面端引导文案、`LoadOrGenerateDeviceKey` fail-loud 警告）全仓 **0 命中**，是上一轮 F16（文档超出实现）的**同型复发**。写"立即落地/已落地/工程落地"前，必须以 `rg` 验证符号存在；否则写"待落地（计划）"。
+>   - **G2（提示）「闭环」措辞须按项收敛**：F12–F15 全为蓝图（`/rebind`、`ON CONFLICT`、`STRICT_SECURITY_MODE`、`X-EQT-Security-Degraded`、`isFirstBound` 均 0 命中），只有 F16/F17 真闭环。章节标题不得用「闭环决议」覆盖仅有方案的部分。
+>   - **G3（低危）新增用例必须能因被覆盖逻辑的回归而转红**：T4.6 名为"非法 Base64URL 拒绝"，实则断言**合法**输入 `typeof base64UrlDecode('abc')==='object'`（恒真），且 `threwInvalidB64` 赋值后**永不读取**（N4 同型死变量）；删掉整段非法输入 try/catch 后仍绿 ⇒ 零判别力。**新断言写完必须做"删掉它要保护的那段逻辑，用例是否转红"的反向验证**（falsification probe）。
+>   - **G4（提示）失败要 fail-clean**：T4.7c 未做空值短路，回归时抛 `TypeError` 使套件以 `Unhandled test failure` **中断**，丢失 `Results: N passed, M failed` 与后续用例计数。断言链上的多级取值须用可选链前置短路。
