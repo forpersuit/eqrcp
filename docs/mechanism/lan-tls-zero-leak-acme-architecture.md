@@ -1872,6 +1872,51 @@ assert(typeof base64UrlDecode('abc') === 'object', // :308 输入是【合法】
 > 2. **测试机制客观定界（L1）**：修正 `t.Skip` 在默认非 verbose 下的可见性表述，确立 CI 需通过 `-json` 或 `-v` 捕获跳过事件的标准；
 > 3. **版本号双面一致递增**：升级至 **`v1.36.90`**。
 
+---
+
+#### 11.29 第十七轮独立复核（对 `8b27278b` · v1.36.90 · 2026-09-11）
+
+审查方法：引文用**脚本逐字比对**（先按 markdown 列表公共缩进归一化，再与 `main.js` 函数体对照，非目测）；语义用 **Node 脚本复刻 handler 精确表达式**（stub `t()` 严格按 `i18n.js` 的 `|| key` 语义），穷举 `reason` 为 `node_key_mismatch` / 未知串 / 空串 / `undefined` / **`__proto__`** 等原型键，检视 `reasonKey` 取值域与 `payload.message` 是否可达。
+
+##### 一、正面确认表
+
+| 项 | 声称 | 独立核验 | 结论 |
+|---|---|---|---|
+| L1-a | §11.26「绝不伪装成虚假绿色」已修正 | 现文本 = 「`-v` 下控制台呈现 / `-json` 下生成 `Action:"skip"` / 默认非 verbose 仍为 `ok`」 | **与探针 D′ 结论逐字一致，真实闭环** |
+| L1-b | 确立 CI 需 `-json`/`-v` 设门 | skill ⑲ 与 §11.28 均写明该标准 | 属实 |
+| L2-a | 废除 `tls_reason_` 通配 | `rg` 全仓**源码 0 命中**（仅存于 §11.26/§11.27 的历史叙述与 skill 红线） | **真实闭环** |
+| L2-b | 未知 reason 回退至合法键 | 常规输入下均落回 `tls_key_mismatch_msg`（`i18n.js` **7 语齐备**） | 属实（原型键边界除外，见 M1） |
+| 引文 | §11.28 代码块为源码原值 | 脚本比对：**与 `main.js:6717-6732` 逐字一致（16/16 行）**，仅多一层 markdown 缩进 | **真实闭环（红线 ⑰ 通过）** |
+| 编号 | §11.28 与 §11.27 配对 | 二者均为「第十六轮」 | 属实 |
+| 版本 | `v1.36.90` 双面 | `version.go:12` = `v1.36.90`、`wails.json:15` = `1.36.90` | 属实 |
+| 零退化 | 唯一已发 reason 行为不变 | `node_key_mismatch` 路径输出与 v1.36.89 **完全一致** | 属实（Rule 13） |
+| 套件 | 全绿 | `go test ./pkg/cert -count=1` → `ok` | 属实 |
+
+##### 二、语义探针记录（Node 复刻 handler 精确表达式）
+
+| 输入 `reason` | `reasonKey` | `msgText` 来源 |
+|---|---|---|
+| `node_key_mismatch` | `tls_key_mismatch_msg` | 7 语译文 |
+| `some_future_reason`（未知） | `tls_key_mismatch_msg` | 7 语译文 |
+| `''` / `undefined`（缺字段） | `tls_key_mismatch_msg` | 7 语译文 |
+| **`__proto__`** | **`Object.prototype`（truthy 且非字符串）** | **`payload.message`** |
+
+⇒ 两项可证事实：① `REASON_KEY_MAP` 当前是**恒等映射**（唯一条目之值 == 兜底值），故 `reasonKey` 对一切常规输入恒为 `tls_key_mismatch_msg`；② `payload.message`（`app.go:2159` 仍在发送）在常规输入下**不可达**（探针 4/4 输入 `usedBackendMessage=false`）。
+
+##### 三、本轮新发现（M 系列）
+
+- **M1（低危 · 对象字面量白名单被原型键穿透，绝对断言被证伪）**：§11.28 称「即使未来后端传入**未知** `reason`，白名单未命中时亦**安全回退**至合法的 `tls_key_mismatch_msg` 键」。但 `REASON_KEY_MAP` 为**对象字面量**，其查找沿原型链命中继承属性：`REASON_KEY_MAP['__proto__']` 返回 `Object.prototype`（truthy 且**非字符串**），`'constructor'`/`'toString'`/`'valueOf'` 同理。Node 实测 `reason='__proto__'` ⇒ `reasonKey` 为原型对象 ⇒ `t()` 无从命中 ⇒ `localized === reasonKey` ⇒ **实际走 `payload.message`**，与「安全回退至 `tls_key_mismatch_msg`」相反。⇒ 该表**并非严格白名单**，绝对措辞不成立。**现实影响可忽略**（`reason` 由内部常量 `app.go:2159` 发出，无外部注入路径），但修法明确：改用 `Object.prototype.hasOwnProperty.call(REASON_KEY_MAP, reason)`、`Object.create(null)` 建表，或直接使用 `Map`。
+- **M2（提示 · 恒等映射 + 死回退）**：当前映射表仅一条且其值等于兜底值，故 `payload.reason` 对**输出零影响**、`payload.message` 这一后端字段**无任何可达消费点**——即 J4（v1.36.88）引入、§11.26/§11.27 描述为「最底层 fallback」的 `message`，在 v1.36.90 后已成**死字段**。§11.28「白名单**安全路由**」措辞暗示多分支选择能力，实为恒等。建议：要么在表旁注明「当前为恒等映射，待第二 reason 出现方可区分」，要么直接简化为常量并删除不可达回退。
+- **M3（低危 · 文档半旧半新）**：§11.26 的散文已在本次**就地更正**，但其**代码块仍是 v1.36.89 的旧实现**（含已删除的 `tls_reason_${payload.reason}` 通配），与当前 `main.js` 不符，且无指向 §11.28 的交叉引用。读者若取用 §11.26 的范式会得到已废弃写法。建议在 §11.26 代码块下补一行「（该实现已于 §11.28 收敛为 `REASON_KEY_MAP` 白名单）」。
+
+##### 四、本轮放行结论
+
+- **可放行，无阻断项**：**L1、L2 均于源码/文档层真实闭环**——§11.26 措辞已修正且与探针 D′ 结论逐字一致；`tls_reason_` 通配全仓清零；§11.28 代码块与 `main.js` **逐字一致**（红线 ⑰ 通过）；唯一已发 reason 行为零变化（Rule 13）；版本双面一致、`go test ./pkg/cert -count=1` 全绿。
+- **须收敛项**：**M1**（对象字面量白名单被 `__proto__`/`constructor` 穿透，「未知 reason 一律安全回退」的绝对断言被 Node 探针证伪；建议改 `hasOwnProperty`/`Object.create(null)`/`Map`）、**M2**（恒等映射 ⇒ `payload.reason` 零影响、`payload.message` 成死字段）、**M3**（§11.26 代码块半旧半新，缺交叉引用）。
+- **重复计数（供管理层参考）**：「文档/命名声称超出实现」**已连续八轮**复发（F16 → G1/G2 → H1/H2/H3 → I1/I4 → J1 → K1 → L1 → **M1**）。本轮**性质最轻**：前几轮多为「核心能力未实现却宣称闭环」，本轮仅剩「绝对措辞未覆盖边界输入（原型键）」与「历史节次未同步」——**收敛趋势明显**。但红线 ⑮（凡「彻底 / 一律 / 绝不」须附反向探针）再次直接命中：一旦对绝对断言施加边界探针，即被证伪。
+
+> 🏁 **阶段决议（第十七轮独立复核 · 对 `8b27278b`）**：L1、L2 **真实闭环**，引文逐字属实，零退化、版本双面一致，**予以放行，无阻断项**。记录 **M1**（低危；对象字面量白名单被原型键穿透）、**M2**（提示；恒等映射致 `payload.reason` 零影响、`payload.message` 成死字段）、**M3**（低危；§11.26 代码块未随散文同步）。建议下一步：白名单改严格判定（`hasOwnProperty` / `Object.create(null)` / `Map`）；§11.26 补交叉引用。
+
 
 
 
