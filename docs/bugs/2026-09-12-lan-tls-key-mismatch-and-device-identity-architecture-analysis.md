@@ -23,6 +23,7 @@
 13. [第四轮独立复核意见（针对 §12 终局落地规格 · 2026-09-12 · 基线 v1.36.103）](#13-第四轮独立复核意见针对-12-终局落地规格--2026-09-12--基线-v136103)
 14. [开发方终局裁定：跳出枝节博弈，确立端云极简自愈终局规格](#14-开发方终局裁定跳出枝节博弈确立端云极简自愈终局规格)
 15. [第五轮独立复核意见（针对 §14 终局裁定 · 2026-09-12 · 基线 v1.36.103）——兼本轮复审的终止声明](#15-第五轮独立复核意见针对-14-终局裁定--2026-09-12--基线-v136103兼本轮复审的终止声明)
+16. [实施指令单（§15.11 的工单化形式 · 交开发方落地）](#16-实施指令单1511-的工单化形式--交开发方落地)
 
 ---
 
@@ -1330,6 +1331,183 @@ if uuid == "" && cpu == "" && disk == "" {
 | V6 node_id 成分 | `sed -n '499,513p' hardware.go` | `GetDeviceFingerprintHashes()` → sha256，**与网卡无关** |
 | U7 闭环 | `rg -n "头名\|deviceIdHeader" <doc>` | `:408` 与 `:668` 均为 `X-EQT-Device-ID` ⇒ 已归位 |
 | 唯一调用点 | `rg -n 'RequestDeviceCertificate' --glob '*.go'` | 生产仅 `app.go:2171` |
+
+---
+
+## 16. 实施指令单（§15.11 的工单化形式 · 交开发方落地）
+
+> ⚠️ **本节不是新规格**，而是 §15.11 移交清单的可执行形式：每步给出**实测现状（行号 + 原文）**、目标 diff 骨架、验收命令与已知回归面。§15.11 的**终止声明依然有效**——本节之后本文档不再新增规格内容，直到出现可审的 diff。
+
+### 16.0 执行前提
+
+- **冻结项**（不得改动）：协议头名 `X-EQT-Device-ID`（客户端零改动）、`opts.DeviceID`/`opts.Signature` 传参惯例、项目"禁用浏览器级 alert/confirm"规则。
+- **执行顺序**：Step 1 → Step 2 → Step 3 → Step 4（Step 4 是删除，放最后，避免删掉仍在被引用的描述）。
+
+### 16.1 Step 1 — 客户端根因（`pkg/server/hardware.go`）
+
+**1a. 删除回退派生（`hardware.go:499-513`）**
+
+实测现状：
+
+```go
+	uuid, cpu, disk := GetDeviceFingerprintHashes()
+	// Fallback to AuthorityDeviceID if available and all fingerprints are empty
+	if uuid == "" && cpu == "" && disk == "" {
+		if authID := GetAuthorityDeviceID(); len(authID) >= 12 {
+			cachedNodeID = strings.ToLower(authID[:12])
+			return cachedNodeID
+		}
+	}
+
+	combined := fmt.Sprintf("%s:%s:%s", uuid, cpu, disk)
+	sum := sha256.Sum256([]byte(combined))
+	cachedNodeID = hex.EncodeToString(sum[:])[:12]
+	return cachedNodeID
+```
+
+目标：
+
+```go
+	uuid, cpu, disk := GetDeviceFingerprintHashes()
+	if uuid == "" && cpu == "" && disk == "" {
+		// 空指纹既不得派生、也不得缓存：一旦写入 cachedNodeID，
+		// 本进程将永久冻结在与机器无关的 nodeID 上，重试采集也无法纠正。
+		return ""
+	}
+
+	combined := fmt.Sprintf("%s:%s:%s", uuid, cpu, disk)
+	sum := sha256.Sum256([]byte(combined))
+	cachedNodeID = hex.EncodeToString(sum[:])[:12]
+	return cachedNodeID
+```
+
+> **关键**：**只删 `if authID…` 分支是不够的**——`combined` 仍会算出 `sha256("::")[:12]` = `71546855d627` 并写入 `cachedNodeID`。必须**提前 `return ""`**，否则常量照样落进缓存。
+
+**1b. 空值不缓存**：由 1a 的提前 return 天然满足（不写 `cachedNodeID`）。这也顺带消除 §15.6 的缓存污染问题。
+
+**1c. 重试（新增，仅限异步 provision 链）**
+
+- **落点**：`desktop/gui/app.go:2111 silentProvisionDeviceTLSCert`（其上游 `app.go:265` 为 `go a.silentProvisionDeviceTLSCert()`）内，调用 `provisionDeviceTLSCert(false)` **之前**。
+- **逻辑**：`GetDeviceNodeID() == ""` 时，重试 WMI 采集（最多 3 次，单次等待放宽至 1500ms），每次重试后重新调用 `GetDeviceNodeID()`；仍为空则放弃本次 provision（现有守卫会自然兜住）。
+- **严禁**：把重试写入 `GetDeviceFingerprintHashes()`（`hardware.go:247`，**5 个非测试调用点**，含 `license.go:223/372/622` 许可证链路）或 `GetDeviceNodeID()`（`hardware.go:485`，**含 `server.go:2451` 传输路径**）——那会让每次局域网传输最坏 **+4.5 秒**，并把 Wails 直绑的 `DevProvisionDeviceTLSCert`（`app.go:2102`）从秒级返回变成阻塞主线程。
+
+**1d. ✅ 无需实现（已存在）**：`app.go:2121-2123` 已有
+
+```go
+	nodeID := server.GetDeviceNodeID()
+	if nodeID == "" {
+		return false, fmt.Errorf("device node ID is empty")
+	}
+```
+
+⇒ §14.2.1 的"常量硬阻断铁律"在 provision 路径上**已经成立**，无需新增。
+
+**1e. 回归面（Rule 13，须逐项实测）**
+
+| `GetDeviceNodeID() == ""` 时的调用点 | 实际行为 | 判定 |
+| :--- | :--- | :--- |
+| `app.go:2121`（provision 入口） | 立即返回错误，**不发起任何网络请求** | ✅ 正是 §14.2.1 的目标 |
+| `agent.go:1031`（传输前证书检查） | `HasValidCertificateForNode(…, "")` → false ⇒ `cfg.Secure = false` ⇒ 降级 plain HTTP | ✅ 正是 §14.2.1 的"降级为标准 HTTP" |
+| `app.go:1255`（About 面板） | `hasValidCert = false` | ✅ 无副作用 |
+| `server.go:2451`（`New()` + `cfg.Secure`） | `GetActiveCertificate("",…, "")` 跳过专用证书分支（`provisioner.go:568` 的 `cleanNode != ""` 守卫），落到通配符回退；无通配符则 `New()` 返回错误 | ⚠️ 桌面端不会走到（`agent.go:1031` 已先置 `Secure=false`）；CLI 直用 `--secure` 时需实测 |
+| **存量回退 id 下签发的设备证书** | 空 nodeID 跳过专用证书分支 ⇒ 该证书**不再被命中，成为孤儿** | ⚠️ 必须处置，见 1f |
+
+**1f. 存量迁移（必须处理，否则本身即构成 Rule 13 回归）**
+
+磁盘上可能已存在 `GetDeviceCertDir(<回退id>)`（`<回退id>` 为 `71546855d627` 或 `authID[:12]`）且内含有效证书。Step 1 之后该目录不再被读取。处置方案（择一并在实现中**显式写明**）：
+
+- **(a) 启动探测并重命名**：存在回退 id 目录且其中证书有效 ⇒ 迁移为真实 nodeID 目录。**推荐**——不消耗 ACME 配额，且可逆。
+- (b) 探测到即删除并重新 provision——消耗一次配额（24h 限 3 次）。
+- (c) 保持可读——在 `GetActiveCertificate` 的空值分支外增加一次回退目录尝试（最省事，但把回退逻辑留在代码里，与 Step 1 的宗旨相悖）。
+
+### 16.2 Step 2 — 云端换绑开关（`cloudflare/eqt-drm-api/src/routes/cert.ts`）
+
+**现状（实测）**：`:866` 只 SELECT `public_key_sha256`；`:872` 判不等即于 `:874-882` 返回 403；全仓**零处**改写 `public_key_sha256`（唯一 UPDATE 是 `:883 SET last_seen_at`）。这是 TOFU 死锁的根因能力。
+
+**diff 骨架** —— 先把 `:866` 的 SELECT 一次取全（避免第二次查询）：
+
+```ts
+const existingKey = await env.DB.prepare(
+  `SELECT public_key_sha256, device_id FROM node_public_keys WHERE node_id = ?`
+).bind(cleanNode).first<{ public_key_sha256: string; device_id: string | null }>();
+```
+
+再在 `:872` 的不等分支内、**返回 403 之前**插入：
+
+```ts
+const boundDeviceId = existingKey.device_id || '';
+if (boundDeviceId && boundDeviceId === deviceIdHeader) {
+  // 同机私钥轮换（重装 / 清空 %APPDATA% / 误删私钥）：device_id 已证实为同一物理机
+  ctx.waitUntil((async () => {
+    try {
+      await env.DB.prepare(
+        `UPDATE node_public_keys SET public_key_sha256 = ?, last_seen_at = ? WHERE node_id = ?`
+      ).bind(pubKeyFingerprint, new Date().toISOString(), cleanNode).run();
+    } catch (_) {}
+  })());
+  // 不 return，继续走既有签发流程（绝不删除 403 分支本身）
+} else {
+  return new Response(/* 既有 403 响应，原样保留 */);
+}
+```
+
+**约束**：
+
+- 频控**已在该分支之前生效**（`cert.ts:696-712`：24h/3 次 + 429 + `Retry-After: 86400`）⇒ **不要再前置 30 天冷却**（§13 U4/T4：冷却压在"仅私钥重签"分支上只制造 429 死锁，无安全收益）。
+- **不得删除** `:883` 的 `last_seen_at` 更新。
+- **判定 C（历史 NULL 升级）不要实现**：Step 1 已使新数据永不为 NULL；而对存量 NULL 行"仅凭请求头即直接升级"，在 `device_id` 非机密的前提下是一个篡夺后门（§13 U2 已论证）。留待数据审计后单独决定。
+
+### 16.3 Step 3 — `device_id` 非空约束（`schema.sql:277`）
+
+```sql
+device_id         TEXT NOT NULL,     -- 由 DEFAULT NULL 改（新增约束，非"维持"）
+```
+
+⚠️ **实施注意**：D1 建基于 SQLite，**不支持** `ALTER TABLE ... ALTER COLUMN`。两条路：
+
+- **(甲) 应用层硬校验（推荐）**：不动表结构，在 `:891` 的 INSERT 前断言 `deviceIdHeader !== ''`，为空返回 400。**与 Step 2 天然自洽**——判定 A 要求 `boundDeviceId === deviceIdHeader`，空值永不通过；首绑亦拒绝空值 ⇒ 效果等同 `NOT NULL`，且零破坏性迁移。
+- (乙) 重建表 + 复制 + 改名（破坏性，需完整备份；仅在确需数据库层强约束时采用）。
+
+### 16.4 Step 4 — 删除死代码（净删除）
+
+Step 1 + Step 2 落地后，下列内容全部失效，应**从本文档删除**而非重写：
+
+- §12.2 轨道 B（软绑定 / NULL 绑定）全部设计；
+- §14.3.1 判定 C（历史 NULL 平滑升级）；
+- §14.5 中"轨道 B 配额 4 张/周"相关行；
+- §13 U1/U2、§15.3/V1/V2 中已由本工单覆盖的条目（改为指向本节）。
+
+### 16.5 验收（可直接粘贴）
+
+```sh
+# ① 空指纹不派生、不缓存
+go test ./pkg/server -run 'TestGetDeviceNodeID' -v
+
+# ② 云端确实存在换绑语句
+rg -n 'SET public_key_sha256' cloudflare/eqt-drm-api/src/routes/cert.ts
+
+# ③ 全量回归 + Worker 类型检查
+go test ./...
+cd cloudflare/eqt-drm-api && npm run typecheck
+```
+
+**必须新增的 Worker 换绑用例（Rule 9：须对原缺陷转红）**：
+
+1. 同一 `node_id` 先 INSERT `(device_id = D, key = K1)`，再以 `X-EQT-Device-ID: D` + `key = K2` 请求 ⇒ **期望 200，且库中 `public_key_sha256` 变为 K2**；
+2. 以 `X-EQT-Device-ID: E`（≠ D）+ `key = K2` 请求 ⇒ **期望 403**。
+
+⇒ **把 Step 2 的 diff 回退后，用例 1 必须失败**；若仍通过，则该用例无判别力，须重写。
+
+**传输路径耗时回归探针**（防 §15.5 的 +4.5s）：对 `server.go:2451` 所在的 `New()` 路径做基准测试，Step 1 前后 p95 耗时差须在噪声内。
+
+### 16.6 红线（本次实施期间不得触碰）
+
+1. 协议头名 `X-EQT-Device-ID` 不得改名；客户端协议头零改动。
+2. 重试**不得**放进 `GetDeviceFingerprintHashes()` / `GetDeviceNodeID()`（仅限异步 provision 链）。
+3. 不得为"兼容"保留任何全空回退或常量派生。
+4. 不得引入浏览器级 `alert()`/`confirm()`；用户可见提示一律走应用内通知。
+5. **Step 1 落地前必须先完成 1f 的存量证书处置**，否则老用户会丢证书。
+6. 改 Go struct 后须补提 Wails 绑定 `desktop/gui/frontend/wailsjs/go/models.ts`。
 
 
 
