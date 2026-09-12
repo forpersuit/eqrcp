@@ -16,6 +16,7 @@
 6. [离线传输与 Node ID 存在的必要性深度追问](#6-离线传输与-node-id-存在的必要性深度追问)
 7. [独立复核意见（2026-09-12 · 基线 v1.36.103）](#7-独立复核意见2026-09-12--基线-v136103)
 8. [开发方对审查意见的深度回应与闭环实施决议](#8-开发方对审查意见的深度回应与闭环实施决议)
+9. [第二轮独立复核意见（针对 §8 新增方案 · 2026-09-12 · 基线 v1.36.103）](#9-第二轮独立复核意见针对-8-新增方案--2026-09-12--基线-v136103)
 
 ---
 
@@ -463,4 +464,143 @@ sequenceDiagram
    - 代码层仅对代码整洁性问题（`provisioner.go` 重复注释）做清理，生产业务逻辑代码保持绝对稳定，不产生意外行为。
 2. **后续实施窗口预备**：
    - 当团队决定推进代码落地时，按照 [8.1](#81-针对-721-的深度反思与纠偏全盘否决匿名自动覆盖确立硬件权威设备身份认证式换绑-hardware-attested-rebinding-架构) 与 [8.2](#82-针对-722-的隐蔽缺陷治理落实设备指纹空值防呆消除常量坍缩与启动抖动) 规划的严密方案，分步实施 Worker 端认证换绑改造与端侧空值防呆。
+
+---
+
+## 9. 第二轮独立复核意见（针对 §8 新增方案 · 2026-09-12 · 基线 v1.36.103）
+
+> **复核范围**：第 8 章新增的「硬件权威设备身份认证式换绑 (Hardware-Attested Rebinding)」架构（§8.1）、空值防呆治理（§8.2）与逐项对齐清单（§8.3）。
+> **复核方法**：对 §8 点名的每个字段、表、头、常量执行 `rg` 存在性核验，并沿数据通路（客户端 → Worker → D1）逐跳取证。
+> **总体评价**：§8 对第 7 章的态度是坦诚的（明确作废 §5 匿名覆盖、7.2.1/7.2.2 自标为「理论架构已确立，待后续排期实施」，未再宣称闭环），方向正确。但 §8.1 的**技术论证前提与实现不符**，且其**安全承诺「彻底切断」覆盖不到自身流程图的全部分支**。
+
+### 9.1 结论摘要
+
+| 严重度 | 条目 | 影响 |
+| :--- | :--- | :--- |
+| 🔴 高 | **S1** §8.1.3 称 `device_id` 由「非公开物理指纹经私有哈希加密生成」，实际是**云端随机铸造的 opaque 值** | 论证依据错误，实现方会照此实现一个不存在的派生逻辑 |
+| 🔴 高 | **S3** §8.1 称「**彻底切断**了耗尽全局 40 次 ACME 额度的攻击路径」，但其流程图**首绑分支无任何校验**，且注册端点可无限铸造新 `device_id` | 绝对措辞超出方案覆盖面；R1 所指的全局配额 DoS **未被本方案关闭** |
+| 🟠 中高 | **S2** 提案的 `X-EQT-Device-ID` 头**已存在**（实际名为 `n`），数据通路已完成三分之二 | 「待后续排期实施」低估了既有基础，且改名会造成双头并存 |
+| 🟠 中 | **S4** 方案以 `device_id` 的**保密性**为安全前提，但全文未确立该不变量，而代码已将其明文展示 | 门禁可被现有展示面（About 面板）瓦解 |
+| 🟠 中 | **S5** 「换绑后仍自愈」未覆盖 `device_id` 自身会变化的场景（换系统盘 / 指纹不足 2 项） | 会造出与 §8 声称要消灭的**同型死锁** |
+| 🟡 低 | **S6** §8.3 把 7.2.4 的结论复述为「旧公钥云端**解绑**」，「解绑」仍是不存在的动作 | 实施规格重新种下同一误解 |
+
+---
+
+### 9.2 🔴 S1 — `device_id` 不是硬件派生值，而是云端随机铸造的 opaque 标识
+
+§8.1.3 原文：
+
+> 「除了公开的 12 字符 `node_id` 外，底层还维护着由非公开物理指纹（主板 UUID、CPU 序列号、硬盘序列号**经私有哈希加密**）生成的 32 字符权威标识 `device_id`」
+
+实测**取证**：
+
+1. **铸造点**——`cloudflare/eqt-drm-api/src/utils/device-registry.ts:143-144`：
+
+```ts
+  // 3. No match found -> Assign pure random device_id
+  const newDeviceId = generateRandomDeviceId();
+```
+
+即 `device_id` 是**服务端随机生成**的，**不是**由硬件指纹哈希派生。硬件与它的唯一关联是**匹配**（而非派生）——`device-registry.ts:41`：
+
+```ts
+  return countMatchingFingerprints(reqUuid, reqCpu, reqDisk, dbUuid, dbCpu, dbDisk) >= 2;
+```
+
+即「提交的指纹与库中记录在**至少 2 项非空**上相同」才复用旧 `device_id`，否则铸造新的。
+
+2. **客户端侧自述**——`pkg/server/hardware.go:362-363` 的函数注释即写明：
+
+> `// GetAuthorityDeviceID returns the **server-assigned** authoritative device_id.`
+> `// It prioritizes local certificate device_id ... or disk cached device_id from anonymous registration, or "" if unassigned.`
+
+3. **本文档 §2.1 自身**的表格写的是「**云端权威分配**（来自在线激活 `.lic` 凭证，或调用 `/api/v1/device/register` 匿名下发并本地落盘缓存）」。
+
+⇒ §8.1.3 的表述与**实现**、与**同文档 §2.1** 三方矛盾。**该错误不使结论失效**（`device_id` 确实不可猜、确实不公开），但它使**论证依据**失效：正确表述应为「`device_id` 是云端随机铸造的 opaque 值，通过 `device_registry.{uuid_hash,cpu_hash,disk_hash}` 与 **2-of-3 非空指纹匹配**间接锚定物理机」。若按 §8.1.3 原文施工，实现方会去构造「客户端硬件哈希派生 `device_id`」的流程——而客户端的硬件哈希（`uuid_hash`/`cpu_hash`/`disk_hash`）是**明文上报**给云端的（`hardware.go` 的 `RegisterDeviceOnline` 请求体），既不私有也不是 `device_id` 的来源。
+
+### 9.3 🟠 S2 — 提案的头已存在（名为 `n`），通路已完成三分之二
+
+§8.1.3 提出新增请求头 `X-EQT-Device-ID`。实测该机制**已经存在**，只是名字不同：
+
+| 环节 | 现状 | 位置 |
+| :--- | :--- | :--- |
+| 客户端发送 | 已发送，头名为 **`n`** | `pkg/cert/provisioner.go`：`httpReq.Header.Set("n", opts.DeviceID)` |
+| Worker 读取 | 已读取为 `deviceIdHeader` | `cert.ts`：`const n = request.headers.get('n') \|\| ''` |
+| 已用于黑名单 | 已使用 | `cert.ts:671` 附近的黑名单检查 |
+| 已落库 | 已写入 `node_public_keys.device_id` | `cert.ts:891-897` `INSERT ... (node_id, public_key_sha256, device_id, ...) VALUES (?,?,?,?,?)` bind `deviceIdHeader \|\| null` |
+| 表结构 | 已存在 | `schema.sql:277` `device_id TEXT DEFAULT NULL`（**文档引用准确** ✓） |
+
+**唯一缺失**：`cert.ts` 全文对 `device_id` **只写不比较**——`rg -n 'device_id' cert.ts` 的全部命中（19/31/37/43/671/699/721/744/891/1053/1086 行）都是表定义、日志或 INSERT，**没有任何一处把 `node_public_keys.device_id` 与请求头做等值比较**。
+
+⇒ 实施规格应写成：「在 `cert.ts:869-878` 的 mismatch 分支内，新增一次 `SELECT device_id FROM node_public_keys WHERE node_id = ?` 并与 `deviceIdHeader` 比对，通过后执行条件 `UPDATE`」；同时**沿用既有头名 `n`**（或若确要改名，须同步改 `provisioner.go` 并做双头兼容期），**不应引入一个从零实现的 `X-EQT-Device-ID`**，否则客户端旧版本（只发 `n`）会被全部判为「未带 Device-ID」而 403——**这是一次对存量用户的回归**（Rule 13）。
+
+### 9.4 🔴 S3 — 「彻底切断全局配额耗尽」不成立：首绑分支仍无校验
+
+§8.1 的安全优势第 3 条称：
+
+> 「单设备换绑设置 30 天冷却窗口，**彻底切断了**攻击者通过反复换绑耗尽全局 40 次 ACME 额度的攻击路径。」
+
+但 §8.1 **自己的流程图**中，`alt 未曾绑定 (首绑路径)` 分支只有一句 `INSERT INTO node_public_keys (...)`，**不含任何 `device_id` 校验或指纹一致性检查**；30 天冷却被写在 `else 已绑定但公钥不一致` 分支内部。同时：
+
+- **新 `device_id` 可无限免费获取**——`device-registry.ts:143-144`：凡指纹集合**不匹配**任何既有记录者，一律 `generateRandomDeviceId()` 铸造新号；
+- **注册频控的桶键包含提交内容本身**——`rate-limit.ts:145-164`：`buildDevRegKey(ip, uuidHash, cpuHash, diskHash)`，即**只要变造提交的哈希字符串即获得全新的计数桶**；且 `devRegBuckets` 是**进程内 `Map`**，在 Cloudflare Workers 的多 isolate 下**不共享**，天然弱于 D1 计数。
+
+⇒ 攻击者变造三个哈希字符串即可无限取号，进而获得无限个 `(node_id, device_id)` 对，每个新 `node_id` 走一次首绑 + 一次 ACME 签发，继续消耗 `cert.ts:738-750` 的全局 `40 次 / 7 天` 计数器，使全机队降级为明文 HTTP。**这正是第 7 章 R1 指出的同一问题，§8.1 声称已解决，但方案实际未触及首绑路径。** 修法须把限流主体下沉到首绑也覆盖的维度（例如对首绑同样要求指纹一致性证据、或对全局 ACME 预扣设严格的按 IP 段分摊），而非仅依赖换绑冷却。
+
+### 9.5 🟠 S4 — 以 `device_id` 保密性为前提，却未确立该不变量
+
+§8.1 的防劫持论证依赖：局域网攻击者「**无法获知**受害者机器的 32 位 `device_id`」。该论断要成立，`device_id` 必须是一个**机密值**，但文档全文未声明这一不变量，而现有代码已把它当**可展示的普通标识**使用：
+
+- `desktop/gui/frontend/src/main.js:2833`：About 面板**明文渲染** `state.status?.deviceID`（离线时才退化为 `------`）；
+- `pkg/server/license.go:753`、`pkg/server/chat_limiter.go:549-583`：上报/同步载荷中携带 `DeviceID`。
+
+⇒ 任何未来把 `device_id` 回显到 LAN 可达面、写进明文日志、或出现在客服截图/工单里的路径，都会把 §8.1 的等值校验**降级为无操作**。**建议**：(a) 在 §8.1 显式写入「`device_id` 为机密值」的不变量，并列为红线（禁止 LAN 面回显 / 禁止明文落日志）；(b) 展示层改用短标识——代码中**已有现成实现** `shortDeviceID`（`pkg/server/server.go:1759`）与 `sanitizeDeviceID`（同文件 1739 行）。
+
+### 9.6 🟠 S5 — `device_id` 自身会变化，该场景会重造同型死锁
+
+§8.1 承诺「合法用户即使格式化系统或清空目录…能够平滑完成证书换绑」。但 `device_id` 的**稳定性**依赖「**至少 2 项非空指纹**匹配」（`device-registry.ts:41`）。存在明确的破例路径：
+
+1. 用户更换系统盘 ⇒ `disk_hash` 改变；若此时 `cpu_hash` 本身为空——**这是本机实测的常态**（构建日志反复出现 `Retrieve CPU Serial finished ... (empty: true)`）——则仅余 1 项可比对；
+2. `countMatchingFingerprints` 达不到 2 ⇒ 匹配失败 ⇒ `device-registry.ts:143` 铸造**全新随机 `device_id`**；
+3. 该用户此时即便「硬件几乎未变」，也会被 §8.1 的门禁判为「与已绑定的 `device_id` 不符」而 403。
+
+⇒ 这与 §8 声称要消灭的「反人性死锁」**同型**。必须在设计中给出处置：例如换绑时接受「**指纹 2-of-3 匹配**」（`device_registry` 已有该能力）作为 `device_id` 等值之外的**替代证据**，而非仅依赖 `device_id` 相等。
+
+### 9.7 🟡 S6 — 「云端解绑」措辞不实（§8.3）
+
+§8.3 对齐表把 7.2.4 的处置复述为「旧证书停止续期、**旧公钥云端解绑**」。「解绑」是一个**不存在的动作**——`node_public_keys` 全仓无 `UPDATE public_key_sha256`、无 `DELETE`（见 §7.2.1 第 3 点），且 §8.1 的提案本身也**只新增了 `public_key_sha256` 的 UPDATE**，从未规划解除绑定。§3.2 正文的措辞（「停止续期并拒绝旧公钥」）是准确的，但 §8.3 作为**实施规格**会重新种下同一误解。
+
+### 9.8 ✅ 本轮核实属实项
+
+| §8 声明 | 核验结果 |
+| :--- | :--- |
+| `node_public_keys` 原生含 `device_id TEXT`，见 `schema.sql:277` | ✅ **准确**（该行即 `device_id TEXT DEFAULT NULL`） |
+| 见 `cert.ts:896`（INSERT 落 `device_id`） | ✅ **准确**（`deviceIdHeader \|\| null` 即在该行附近） |
+| `provisioner.go:67-68` 重复注释「✅ 代码已修复」 | ✅ **属实**（实测该处只剩 3 行正常注释，重复行已删） |
+| §5 已作废匿名覆盖并指向第 8 章 | ✅ 已加置顶「方案作废与纠偏声明」 |
+| §4.1 已补全两条隐蔽根因并标注 `legacyKeyExists` 守卫 | ✅ 已补为「路径 2 / 路径 3」，并注明 v1.36.103 基线已部分拦截 |
+| §6.2.3 已改为完整 FQDN（含 SAN 通配符） | ✅ 已按 `provisioner.go:277-288` 校准 |
+| §6.1 端口示例 | ✅ 已改为 `<random-port>` 并注明默认 0 随机绑定 |
+| §3.2 场景 3 已按 90 天窗口校准 | ✅ 已改为「无吊销端点、窗口至多 90 天」 |
+| §8.3 对未落地项标注「待后续排期实施」 | ✅ **未再宣称闭环**，诚实度较此前的「已闭环/彻底」措辞显著提升 |
+
+### 9.9 📈 复发计数与性质变化
+
+「文档声明与实现不符」连续 **十二轮**复发。本轮性质再次位移：**§8.3 已不再虚报落地状态**（明确标注"待排期"），问题转移到**技术论证的事实前提**（S1：`device_id` 的来源）与**绝对措辞超出方案覆盖面**（S3：「彻底切断」未涵盖首绑分支）。
+
+⇒ 审查此类「架构决议」章节时，除核验事实外，须固定追加两问：
+1. **方案里被当作"秘密"或"权威"的那个值，其来源与保密性是否已在代码中确立？**（S1/S4：`device_id` 既非硬件派生，也未被声明为机密）
+2. **方案声称"彻底"消除的某个风险，其流程图/伪码是否覆盖了全部分支？**（S3：首绑分支无校验）
+
+### 9.10 复核探针记录
+
+| 探针 | 命令/操作 | 实测结果 |
+| :--- | :--- | :--- |
+| `device_id` 铸造方式 | 读 `device-registry.ts:143-144` | `// Assign pure random device_id` + `generateRandomDeviceId()` |
+| 硬件与 `device_id` 的关联 | 读 `device-registry.ts:41` | `countMatchingFingerprints(...) >= 2`（2-of-3 匹配，非派生） |
+| 客户端是否已发该头 | `rg 'Header.Set\("n"'` | `pkg/cert/provisioner.go` 命中 |
+| Worker 是否读取 | `rg "headers.get\('n'\)"` | `cert.ts` 命中，赋给 `deviceIdHeader` |
+| `node_public_keys.device_id` 是否被比较 | `rg -n 'device_id' cert.ts` | 全部命中均为定义/日志/INSERT，**零处等值比较** |
+| 注册频控键构造 | 读 `rate-limit.ts:145-164` | `buildDevRegKey(ip, uuidHash, cpuHash, diskHash)`，进程内 `Map` |
+| 引用行号 | `sed -n '277p' schema.sql` / `sed -n '896p' cert.ts` | 两处引用**准确** |
 
