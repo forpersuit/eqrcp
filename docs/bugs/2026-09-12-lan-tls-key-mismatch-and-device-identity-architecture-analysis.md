@@ -18,6 +18,7 @@
 8. [开发方对审查意见的深度回应与闭环实施决议](#8-开发方对审查意见的深度回应与闭环实施决议)
 9. [第二轮独立复核意见（针对 §8 新增方案 · 2026-09-12 · 基线 v1.36.103）](#9-第二轮独立复核意见针对-8-新增方案--2026-09-12--基线-v136103)
 10. [开发方对第二轮独立复核意见的深度回应与终局工程实施决议](#10-开发方对第二轮独立复核意见的深度回应与终局工程实施决议)
+11. [第三轮独立复核意见（针对 §10 终局决议 · 2026-09-12 · 基线 v1.36.103）](#11-第三轮独立复核意见针对-10-终局决议--2026-09-12--基线-v136103)
 
 ---
 
@@ -521,19 +522,21 @@ sequenceDiagram
 
 ### 9.3 🟠 S2 — 提案的头已存在（名为 `n`），通路已完成三分之二
 
+> ⚠️ **本节已于 2026-09-12 更正（第三轮复核，见 [§11.1](#111--t1-更正我上一轮-93-的头名误判头自始即为-x-eqt-device-id)）**：下表所记的「头名为 `n`」**是错误的**。实测头名自始即为 **`X-EQT-Device-ID`**（`pkg/cert/provisioner.go:741`），全仓不存在名为 `n` 的请求头。本节结论的**方向**（不应另起新名、避免存量回归）仍然成立且反而更强——因为代码本来就用的就是 §8 所提议的那个名字。**以下原文保留以留痕，请勿据其实现**。
+
 §8.1.3 提出新增请求头 `X-EQT-Device-ID`。实测该机制**已经存在**，只是名字不同：
 
 | 环节 | 现状 | 位置 |
 | :--- | :--- | :--- |
-| 客户端发送 | 已发送，头名为 **`n`** | `pkg/cert/provisioner.go`：`httpReq.Header.Set("n", opts.DeviceID)` |
-| Worker 读取 | 已读取为 `deviceIdHeader` | `cert.ts`：`const n = request.headers.get('n') \|\| ''` |
-| 已用于黑名单 | 已使用 | `cert.ts:671` 附近的黑名单检查 |
-| 已落库 | 已写入 `node_public_keys.device_id` | `cert.ts:891-897` `INSERT ... (node_id, public_key_sha256, device_id, ...) VALUES (?,?,?,?,?)` bind `deviceIdHeader \|\| null` |
-| 表结构 | 已存在 | `schema.sql:277` `device_id TEXT DEFAULT NULL`（**文档引用准确** ✓） |
+| 客户端发送 | 已发送，头名为 **`n`**（❌ **误判，实为 `X-EQT-Device-ID`**） | `pkg/cert/provisioner.go`：`httpReq.Header.Set("n", opts.DeviceID)`（❌ 实际为 `:741` `Header.Set("X-EQT-Device-ID", ...)`） |
+| Worker 读取 | 已读取为 `deviceIdHeader` | `cert.ts:591`：`request.headers.get('X-EQT-Device-ID') \|\| ''` ✓ |
+| 已用于黑名单 | 已使用 | `cert.ts:672-679` 的黑名单检查 ✓ |
+| 已落库 | 已写入 `node_public_keys.device_id` | `cert.ts:896` `INSERT ... (node_id, public_key_sha256, device_id, ...)` bind `deviceIdHeader \|\| null` ✓ |
+| 表结构 | 已存在 | `schema.sql:277` `device_id TEXT DEFAULT NULL` ✓ |
 
-**唯一缺失**：`cert.ts` 全文对 `device_id` **只写不比较**——`rg -n 'device_id' cert.ts` 的全部命中（19/31/37/43/671/699/721/744/891/1053/1086 行）都是表定义、日志或 INSERT，**没有任何一处把 `node_public_keys.device_id` 与请求头做等值比较**。
+**唯一缺失**（此项判断仍成立）：`cert.ts` 全文对 `device_id` **只写不比较**——`rg -n 'device_id' cert.ts` 的全部命中（19/31/37/43/671/699/721/744/896/1057/1086 行）都是类型定义、日志或 INSERT，**没有任何一处把 `node_public_keys.device_id` 与请求头做等值比较**。
 
-⇒ 实施规格应写成：「在 `cert.ts:869-878` 的 mismatch 分支内，新增一次 `SELECT device_id FROM node_public_keys WHERE node_id = ?` 并与 `deviceIdHeader` 比对，通过后执行条件 `UPDATE`」；同时**沿用既有头名 `n`**（或若确要改名，须同步改 `provisioner.go` 并做双头兼容期），**不应引入一个从零实现的 `X-EQT-Device-ID`**，否则客户端旧版本（只发 `n`）会被全部判为「未带 Device-ID」而 403——**这是一次对存量用户的回归**（Rule 13）。
+⇒ 实施规格应写成：「在 `cert.ts:865-878` 的 mismatch 分支内，新增一次 `SELECT device_id FROM node_public_keys WHERE node_id = ?` 并与 `deviceIdHeader` 比对，通过后执行条件 `UPDATE`」；**头名一律沿用既有的 `X-EQT-Device-ID`，客户端零改动**。⚠️ 关键警示：**协议头本就不需要任何改动**——若实施方照 §10.2 的字面去 `cert.ts` 里新增对头 `n` 的读取，则永远匹配不上（客户端只发 `X-EQT-Device-ID`），换绑将 100% 被拒——**这正是它本想避免的那种存量回归，只是方向被反转了**。
 
 ### 9.4 🔴 S3 — 「彻底切断全局配额耗尽」不成立：首绑分支仍无校验
 
@@ -726,5 +729,133 @@ flowchart TD
    - 全部结论与终局工程规格已完整留痕沉淀于本文档中。
 2. **后续编码施工依据**：
    - 当项目启动针对 LAN-TLS 换绑与防刷治理的代码实施时，必须严格以本章（第 10 章）确立的工程规格施工，严禁偏离。
+
+---
+
+## 11. 第三轮独立复核意见（针对 §10 终局决议 · 2026-09-12 · 基线 v1.36.103）
+
+本轮的首要结论是**审查方自己的更正**：第 9 章 S2 判错了请求头名，而该错误已被 §8.3 与 §10.2 忠实吸收。除此之外，§10 的三处新增工程规格中存在两条会导致**存量用户被拒**的路径。全部结论均以 `rg`/逐行阅读取证。
+
+### 11.1 🔴 T1 —【更正我上一轮 §9.3 的头名误判】头自始即为 `X-EQT-Device-ID`
+
+**事实**：`pkg/cert/provisioner.go:740-741` 的原文是
+
+```go
+if opts.DeviceID != "" {
+    httpReq.Header.Set("X-EQT-Device-ID", opts.DeviceID)
+}
+```
+
+`git log -L 735,745:pkg/cert/provisioner.go` 显示该行自最初的引入提交 `4dbf7a56`（"Add cloud cert provision API and desktop silent provisioning"）起就是 `X-EQT-Device-ID`，`ae86321f` 亦未改名。`rg -n 'Header.Set\("n"'` 在全仓**零命中**（唯一命中是本文档 §9.3 自己的表格）。Worker 侧 `cert.ts:591` 读的也是 `request.headers.get('X-EQT-Device-ID')`。
+
+⇒ **§9.3 的 S2 判断（头名为 `n`、需在 `cert.ts` 补读 `n`）是错的**，已在该节加更正标注。**结论方向（不另起新名、避免存量回归）依然成立，且理由更强**：代码用的本来**就是** §8 提议的那个名字，因此协议头**不需要任何改动**。
+
+**错误已发生反向传导**，必须一并更正：
+
+| 位置 | 现在写的 | 应为 |
+| :--- | :--- | :--- |
+| §8.3 对齐表 7.2.1 行 | 「确立基于既有 **`n` 头**（`device_id`）的…架构」 | 基于既有 **`X-EQT-Device-ID`** 头 |
+| §10.2 标题与正文 | 「锁定既有请求头 **`n`**」「客户端已经在 `provisioner.go:375` 通过请求头 **`n`** 发送」 | 头名为 `X-EQT-Device-ID`，且发送点在 **`:740-741`**（`provisioner.go` 全文仅 800 行左右，`:375` 是另一处函数体） |
+| §10.2 实现规格 | 「沿用既有请求头名 `n`」 | 沿用 `X-EQT-Device-ID`，**客户端零改动** |
+
+⚠️ **为什么这不是文字游戏**：若实施方照 §10.2 字面去 `cert.ts` 新增对头 `n` 的读取，客户端只发 `X-EQT-Device-ID` ⇒ 比对恒不成立 ⇒ **换绑请求 100% 被拒**。§10.2 的**动机**是"规避存量版本回归"，而按其**字面**实现恰恰制造出一次更严重的回归（只是方向反转：不是客户端被拒，而是所有换绑被拒）。
+
+**方法学教训（并入技能红线）**：这是**同一失效模式的第二次发作**——第十六轮 L1 已实证「审查方自身未经实证的断言被开发文档忠实引用」，本轮再现且代价更高（直接进入实施规格）。⇒ 审查方给出的**每一个标识符、行号、符号名**，都必须有一条可复现的 `rg`/`sed` 取证记录，与结论分离存放；**不得凭记忆书写标识符**。
+
+### 11.2 🔴 T2 — §10.3 首绑门禁会把「免费档 + 指纹全空」用户挡在证书之外
+
+§10.3 决议 1 要求：首绑 `INSERT` 前「不仅校验请求头非空，还必须通过 D1 校验该 `device_id` 确实存在于 `device_registry` 中且状态正常」。
+
+**但该 `device_id` 对一类合法用户恒为空**：`device-registry.ts:63-69`
+
+```ts
+if (!uuid && !cpu && !disk) {
+  if (tier === 'free') {
+    return { device_id: '', tier_label: 'free', skipped: true };
+  }
+}
+```
+
+即**免费档在三项指纹全空时，注册端返回空 `device_id` 且不入库**。而"三项全空"正是本文档 §4.1 与 §8.2 反复论证的**真实运行态**：Windows 下 `cpu_hash` 常态为空（本次提交的构建日志中 `Retrieve CPU Serial ... (empty: true)` 再次出现），加上 `hardware.go:268-280` 的 **300ms 预计算超时**会直接返回 `"", "", ""`。
+
+⇒ 叠加 §10.3 门禁后：这类**合法免费用户**（1）注册拿不到 `device_id`；（2）`opts.DeviceID == ""` 时 `provisioner.go:740` 的 `if` 不成立，**请求根本不带该头**；（3）首绑门禁判定"未带 Device-ID" ⇒ **拒绝签发**。结果是：为治理攻击者而设的门禁，**先把 §8.2 承诺要保护的那批用户永久挡在证书之外**——一次典型的 Rule 13 回归，且落在本文档自己定义的"无需用户操作"的隐蔽路径上。
+
+**处置建议**：门禁的拒绝条件必须写成「**带了 `device_id` 但校验不通过** ⇒ 拒绝」，而「**未带/为空**」应走**独立的低配额通道**（例如按 IP + 指纹哈希计入一个独立的、比全局 40/7 天更严的首绑配额），而非直接 403。否则 §10.3 的门禁与其 §8.2 的空值治理目标自相矛盾。
+
+### 11.3 🟠 T3 — §10.4 维度 2 所依赖的数据通路不存在，§10.5 却标「✅ 机制已设计」
+
+§10.4 的维度 2 判定式是「`req.uuid_hash` 存在且等于原绑定 `device_id` 的历史 `uuid_hash`」。实测**这两个前提都不存在**：
+
+| 依赖项 | 实测 | 取证 |
+| :--- | :--- | :--- |
+| provision 请求携带 `uuid_hash` | **不存在** | `rg -n 'uuid_hash\|uuidHash\|cpuHash\|diskHash' cert.ts` → **零命中**；provision 请求只有 JSON body 与若干头 |
+| `node_public_keys` 存有 `uuid_hash` | **不存在** | `schema.sql:274-280` 仅 `node_id / public_key_sha256 / device_id / first_bound_at / last_seen_at` |
+
+⇒ 维度 2 需要**两处新增**：客户端在 provision 请求中新增指纹字段、以及云端经"旧 `device_id` → `device_registry.uuid_hash`"反查后再比对。这在逻辑上可行（`device_registry` 确有 `uuid_hash`），但**当前一处都未建**。§10.5 将 S5 标为「✅ 机制已设计」偏高——准确表述应为「**设计草案已提出，依赖两处新增数据通路，待实施**」（与 §8.3 对 7.2.1/7.2.2 诚实地写"待后续排期实施"保持同一标注口径）。
+
+### 11.4 🟠 T4 — §10.4 流程图把冷却期放在维度 1 之前，会把本文档要治的「重装死锁」换成「429 死锁」
+
+§10.4 的 mermaid 首步即 `CheckCooling`，冷却未过直接 `429 换绑过于频繁`，**先于**维度 1（`req.device_id === bound.device_id`）。§10.2 亦写「仅在比对一致**且满足冷却期**时，才允许执行更新」。
+
+**维度 1 恰是本文档 §1/§3.2 要治的原始病症**——用户清空默认目录 / 重装系统导致私钥灭失、而 `device_id` 未变。30 天冷却一压：用户 30 天内第二次重装或清目录即得 **429**，证书无法自愈。**理论上限虽仍是"不 403"，但用户侧观感与永久死锁无异**（且 429 的提示文案是否具备可操作性，文档未定义）。
+
+**关键**：冷却期对维度 1 **根本不提供任何安全增益**——局域网旁观者**无从得知** `device_id`，压根过不了维度 1；而维度 1 路径下的签发频次已被既有的**按节点 3 次/24 小时**限额覆盖（`cert.ts:703-705`）。⇒ 建议：**冷却期只约束维度 2 与维度 3**（即 `device_id` 发生变更的换绑），维度 1 走同机重签的既有节点限额。这同时把"自愈"与"防刷"两个目标彻底解耦。
+
+### 11.5 🟡 T5 — §10.1.2 的脱敏规格不可实施：`shortDeviceID` 未导出，且三处泄漏面只提了一处
+
+§10.1.2 要求「后端日志打印 `device_id` 必须**统一调用** `shortDeviceID`（`pkg/server/server.go:1759`）」。实测：
+
+- `shortDeviceID` **未导出**（小写），**仅 `pkg/server` 内部可用**：`rg -n 'shortDeviceID' --glob '*.go'` 的全部命中只有定义处 `server.go:1759`、同包调用 `server.go:1768`、以及一个同包测试。⇒ `pkg/cert`（provision 日志所在包）、`desktop/gui`（About 面板所在包）、以及 **Worker 侧的 TypeScript 日志（`cert.ts`）根本无法调用它**。规格应改为：导出该助手（或提供 `pkg/util` 版本）+ 对 TS 侧另立等价实现。
+- 规格另称"或使用现有的短标识工具"用于 **About 面板**——但那是 JS（`main.js`），**无法调用任何 Go 未导出函数**，需经 Wails 绑定或在前端截断。规格需要落到具体通道。
+
+**且"脱敏"若只遮蔽可见 span 并不成立**：About 面板同一处另有
+
+```js
+// main.js:2819-2820
+<button ... data-copy-text="${escapeAttr(state.status.deviceID)}" ...>
+```
+
+——**一键复制按钮**与 `user-select: text` 仍携带 32 位全量值，仅遮蔽 `main.js:2833` 的 `<span>` 不满足"禁止明文展示"。另有一处规格未提及的第三通道：`desktop/gui/app.go:2158` `DeviceID: server.GetAuthorityDeviceID()`（崩溃/诊断转储 `dump.Report.DeviceID`，`app.go:1910/1949`），**若该转储会被上传或导出，就是一个独立的泄漏面**。
+
+### 11.6 🟡 T6 — §8.3 的「旧公钥在云端被新公钥覆盖并失效」在基线仍是不存在的动作
+
+§8.3 的 7.2.4 行已按 S6 改为「旧证书停止续期、**旧公钥在云端被新公钥覆盖并失效**」。措辞较原「解绑」准确，但 `node_public_keys` 在当前基线**既无 `UPDATE public_key_sha256` 也无 `DELETE`**（全部命中仅 `SELECT` / `UPDATE last_seen_at` / `INSERT`），§10.2 的方案本身也把它列为**待实施的**「条件 `UPDATE`」。
+
+⇒ 该句作为**未来规格**可以接受，但混在"✅ 本文已修正"的行里易被读作**现状描述**。建议加两字限定：「（**计划新增** `UPDATE` 后）旧公钥在云端被新公钥覆盖并失效」。此条与 §10.2 的规格是同一件事的两处表述，应互相引用以免再次分叉。
+
+### 11.7 ✅ 本轮核实属实项（正向确认）
+
+| 开发方声明 | 取证 | 结论 |
+| :--- | :--- | :--- |
+| §8.1.3 已纠正 `device_id` 为「云端随机分配 + 2-of-3 指纹锚定」 | 读 §8.1.3 原文，已引 `device-registry.ts:41,143` | ✅ **纠偏属实**，S1 已闭环 |
+| §8.2 已撤回「彻底切断全局配额耗尽」 | 读 §8.2，现为「限制了单机换绑重签频次」并指向 §9.4/§10.3 | ✅ **绝对措辞已撤回**，S3 措辞项已闭环 |
+| §8.3 已按 S6 修正措辞 | 读 §8.3 7.2.4 行 | ✅ 已改（尚需 T6 的限定词） |
+| About 面板确为 32 位全量 `device_id` | `desktop/gui/agent.go:108` `server.GetDeviceStableID()` → `hardware.go:392-393` → `GetAuthorityDeviceID()` | ✅ 事实准确，S4 场景成立 |
+| `device_id` 本地存储在强权限目录 | `hardware.go:345-346` `MkdirAll(...,0700)` + `WriteFile(...,0600)` | ✅ 属实 |
+| §10.1.2「严禁在未加密内网报文中回显完整 `device_id`」当前是否已被违反 | `rg -n 'device_id\|DeviceID' pkg/chat/v2/ --glob '*.go'` → **零命中**；LAN 面不暴露 | ✅ **该红线当前未被违反**（但见 T5 的 `app.go:2158` 第三通道） |
+| §10.2 引用 `cert.ts:591` / `schema.sql:277` / `cert.ts:896` | `sed -n` 逐行实读 | ✅ 三处行号均**准确** |
+
+### 11.8 📈 复发计数与性质变化
+
+「文档声明与实现不符」连续 **十三轮**；其中**「审查方自身断言未经实证即被下游引用」为第二轮复发**（首例为第十六轮 L1）。
+
+本轮性质**第四次位移**，且方向值得警惕：§10 的**态度**是三轮中最坦诚的（明确区分"已订正"与"待实施"，并主动撤回绝对化措辞），但**技术细节的自洽性**出现新问题——不是"虚报已实现"，而是"**规格本身写错了标识符与前置数据通路**"。这类缺陷比虚报更难自查，因为文风是诚实的。⇒ 审查"实施规格"章节时固定追加三问：① **规格里点名的每个标识符/行号，是否有一条可复现的 `rg`/`sed` 取证？** ② **规格依赖的每个输入（`req.xxx`、表列），在当前代码里是否真的存在？** ③ **规格的拒绝分支，是否会把任一"合法但边界"的用户永久挡住？**
+
+### 11.9 复核探针记录
+
+| 结论 | 探针命令 | 观测 |
+| :--- | :--- | :--- |
+| T1 头名 | `rg -n 'Header.Set\("n"'` 全仓 | **零命中**（唯一命中是本文档 §9.3 表格自身） |
+| T1 头名（正向） | `rg -n 'Header.Set\("X-EQT-Device-ID"'` | `provisioner.go:741` 命中 |
+| T1 历史 | `git log -L 735,745:pkg/cert/provisioner.go` | 自 `4dbf7a56` 起即 `X-EQT-Device-ID` |
+| T2 免费档空 ID | `sed -n '62,70p' device-registry.ts` | `if (!uuid && !cpu && !disk) { if (tier === 'free') return { device_id: '' ... skipped: true } }` |
+| T2 空 ID 不发头 | `sed -n '740,741p' pkg/cert/provisioner.go` | `if opts.DeviceID != ""` 守卫 ⇒ 空值不发头 |
+| T3 指纹未上行 | `rg -n 'uuid_hash\|uuidHash\|cpuHash\|diskHash' cert.ts` | **零命中** |
+| T3 表列 | `sed -n '274,280p' schema.sql` | 无 `uuid_hash` 列 |
+| T5 助手可见性 | `rg -n 'shortDeviceID' --glob '*.go'` | 仅 `server.go:1759` 定义 + `:1768` 同包调用 + 1 处同包测试 |
+| T5 复制按钮 | `sed -n '2819,2820p' main.js` | `data-copy-text="${...state.status.deviceID}"` |
+| T5 第三通道 | `sed -n '2158p' desktop/gui/app.go` | `DeviceID: server.GetAuthorityDeviceID()` |
+| T6 无公钥覆盖/删除 | `rg -n 'UPDATE node_public_keys SET public_key_sha256\|DELETE FROM node_public_keys'` | **零命中**；`node_public_keys` 在 `cert.ts` 仅有 3 类语句：`SELECT`（`:866`）、`UPDATE ... SET last_seen_at`（`:883`）、`INSERT`（`:891`） |
+| 版本基线 | `rg -n 'version = ' pkg/version/version.go` | `:12` `version = "v1.36.103"`，与文档声称一致 |
 
 
