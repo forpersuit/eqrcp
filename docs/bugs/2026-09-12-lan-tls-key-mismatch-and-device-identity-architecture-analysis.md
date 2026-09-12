@@ -25,6 +25,7 @@
 15. [第五轮独立复核意见（针对 §14 终局裁定 · 2026-09-12 · 基线 v1.36.103）——兼本轮复审的终止声明](#15-第五轮独立复核意见针对-14-终局裁定--2026-09-12--基线-v136103兼本轮复审的终止声明)
 16. [实施指令单（§15.11 的工单化形式 · 交开发方落地）](#16-实施指令单1511-的工单化形式--交开发方落地)
 17. [开发方落地交付与自愈效果验收报告（2026-09-12 · 对应 §16 工单）](#17-开发方落地交付与自愈效果验收报告2026-09-12--对应-16-工单)
+18. [第六轮独立复核意见（针对 `cd9a1138` 落地 diff · 2026-09-12 · 基线 v1.36.104）——首次以代码 diff 为审查对象](#18-第六轮独立复核意见针对-cd9a1138-落地-diff--2026-09-12--基线-v136104首次以代码-diff-为审查对象)
 
 ---
 
@@ -1560,6 +1561,220 @@ cd cloudflare/eqt-drm-api && npm run typecheck
 6. **Wails 绑定模型**：本次未修改导出给前端的 Go struct，Wails 绑定完全一致（实测 ✅）。
 
 **交付结论**：LAN-TLS 密钥不一致与自愈换绑架构已按照工单全部实装并验证闭环，移交审查员审查！
+
+---
+
+## 18. 第六轮独立复核意见（针对 `cd9a1138` 落地 diff · 2026-09-12 · 基线 v1.36.104）——首次以代码 diff 为审查对象
+
+### 18.0 本轮的审查对象变了
+
+前五轮审查的是**章节**（可陈述面无限，每新增一章就产出新的可证伪陈述）；本轮审查的是 **commit `cd9a1138` 的代码 diff**（可陈述面有限，测试给确定答案）。这是 §15.11 终止声明的第一次执行。
+
+**核心结论分三句：**
+
+1. **§17 的六项验收声明，我逐条复跑，全部属实**——这是本线程第一次"开发方声称"与"审查方实测"零偏差（§18.2）。方向对了。
+2. **但 diff 本身引入了三个 🔴 级回归，其中两个使"比不改更差"**（§18.3 ~ §18.5）。三者同源：**这次修复把"没有身份"从"伪装成一个身份"改成了"合法地拒绝服务"，却没有为被拒绝的合法用户准备出路。**
+3. Step 1（客户端根因治理）**实现正确**，可以保留；Step 2 的**授权依据选错了**，Step 3 的**门禁开在了合法人群身上**，Step 1f 的**迁移方案在技术上会产生废证书**。建议只回滚 §18.3/§18.4/§18.5 三项，Step 1a/1b 与 §18.6 的重试落点保持不变。
+
+---
+
+### 18.1 复核取证的固定动作（本轮做了什么）
+
+| 动作 | 命令 | 结果 |
+| :--- | :--- | :--- |
+| 正向复跑全部验收 | `go build ./...`；`go test ./pkg/server ./pkg/cert`；`npm run test:offline`；`npm run typecheck` | 全部通过（数字见 §18.2） |
+| **反向探针 A**（空指纹缓存是否可恢复） | 临时内部包用例：置 `hasCached=true` 且三项为空，连续 3 轮 `GetDeviceNodeID()` + `InvalidateCachedNodeID()` | **CONFIRMED：3 轮全空，无恢复路径**（探针已删除，工作区已复原） |
+| **反向探针 B**（换绑用例的判别力） | 将 `cert.ts:872` 判定式注入 `false &&`，跑 `npm run test:cert:offline` | **T20.3 转红（58 passed / 2 failed）**，复原后回到 60/60 |
+| 行号取证 | `rg -n` 逐锚点核对 | 本 chap 全部行号均实测，非记忆（见 §18.9） |
+
+探针 B 的意义：§16.5 要求的"**把 diff 回退后该用例必须失败**"这次**真的成立**。这是本线程第一次有验收用例具备对原缺陷的判别力——§15 之前反复出现的恒真断言/零判别力问题，本轮**没有复发**。
+
+---
+
+### 18.2 ✅ 复核通过项（开发方声称 vs 审查方实测）
+
+| §17 声明 | 我的实测 | 判定 |
+| :--- | :--- | :---: |
+| ① `TestGetDeviceNodeID` 通过，覆盖"全空返回空串且不缓存" | `go test ./pkg/server` ok（36.9s）。用例对"回退派生"确有判别力：若删掉 `hardware.go:501` 的早退，`combined="::"` 会重新算出常量 `71546855d627`，断言即转红 | ✅ |
+| ② `rg 'SET public_key_sha256'` 命中 | 命中 `cert.ts:878`，且 SELECT 已扩为 `public_key_sha256, device_id`（`:866`） | ✅ |
+| ③ T20.1/20.2/20.3 全绿 | 实跑 60 passed / 0 failed，T20.3 两条断言均出现 | ✅ |
+| ④ T20.0 强门禁 | 实跑出现 `✓ T20.0 ... 400 device_id_required` | ✅ |
+| ⑤ `npm run test:offline` = 131 passed；`typecheck` 0 error | 实跑 `Results: 131 passed, 0 failed`；`tsc --noEmit` 无输出 | ✅ |
+| ⑥ 客户端 Go 测试零回归 | `go test ./pkg/server ./pkg/cert` 全 ok | ✅（回归在语义层，不在测试层——见 §18.3~§18.5） |
+| Step 1a/1b 实现正确 | `hardware.go:501-505` 在 **`cachedNodeID = ...` 之前** `return ""`，`GetDeviceNodeID()` 不再派生常量、不再写入 nodeID 缓存 | ✅ 完全符合 §16.1 |
+| 重试落点未下沉 | `GetDeviceNodeID()` / `GetDeviceFingerprintHashes()` 零重试；重试仅在 `app.go:2118-2123` 的异步静默协程 | ✅ 未污染 `server.go:2451` 传输路径 |
+| 版本号 | `pkg/version/version.go:12` = `v1.36.104`，`desktop/gui/wails.json` = `1.36.104`，两侧一致 | ✅ |
+| 未改 Go struct、无需重生成 Wails 绑定 | diff 中无 struct 变更 | ✅ |
+
+**结论：§17 的诚实度是合格的。问题不在"说了没做"，而在"做了但选错了"。**
+
+---
+
+### 18.3 🔴 R1｜换绑授权依据被降级为"知道 `device_id` 即可"，而这个值正是产品**主动要求用户交出去**的
+
+**实测事实链：**
+
+| 环节 | 实测 |
+| :--- | :--- |
+| 授权判定式 | `cert.ts:872` `if (boundDeviceId && boundDeviceId === deviceIdHeader)`——**只比对请求头里的字符串**，不验签、不验硬件、不查 `device_registry` |
+| 授权值来源 | 客户端把 `server.GetAuthorityDeviceID()` 直接放进 `X-EQT-Device-ID`（`app.go:2169` → `provisioner.go:799-801`） |
+| 该值是否机密 | **否**。`desktop/gui/agent.go:108` `DeviceID: server.GetDeviceStableID()` → `hardware.go:393` → `return GetAuthorityDeviceID()`，同一值被渲染进 About 面板 **全文**（`main.js:2833`，无截断、`user-select: text`），并配**一键复制按钮**（`main.js:2820` `data-copy-text="${escapeAttr(state.status.deviceID)}"`，按钮文案 `copy_device_id` = "Click to copy Device ID"） |
+| 另一泄露通道 | crash dump 载荷含同一值（`desktop/crash/reporter.go:71` `report.DeviceID = server.GetDeviceStableID()`） |
+
+**攻击面（需如实标注前提）**：攻击者需要知道受害机的 32 hex `device_id`。这不是"任意局域网对端可得"——**但产品自己的 UI 把它设计成"可复制、可交付"的信息**（按钮存在的唯一目的就是让用户把它发给别人）。因此：
+
+> 任何拿到过该字符串的人（客服工单、聊天截图、crash dump、屏幕可见），都可以用**自己新生成的私钥**发起 provision，`node_id` 填受害机的公开 nodeID（印在二维码与 URL 中），`device_id` 填受害机的公开 device_id ⇒ 云端判定"同一台物理机的合法轮换" ⇒ **改写绑定 + 为攻击者签发 `*.<受害 node>.direct.eqt.net.im` 的公信证书** ⇒ 攻击者可对受害机的局域网传输做中间人。
+
+**这正是 §21.⑧（红线 ㉚）的同一缺陷换了个标识符重演**：*公开的低熵标识符不得成为签发/换绑授权*。上一轮我们判定 `node_id` 不能当授权（48 bit、印在二维码里）；这一轮 `device_id` 也不能——它是 128 bit，但**它不是秘密，它是被设计出来供人转发的联络标识**。密钥长度不构成机密性，分发渠道才构成机密性。
+
+**First Principle 下的正确判据**：换绑的授权应当证明**"我持有当前被绑定的私钥"**（用旧密钥对新公钥签名，Worker 验证后换绑），而不是**"我知道一个字符串"**。前者对应"轮换"，后者对应"认领"。
+
+**若旧私钥确实已丢失（这才是真自愈场景），则必须承认：此时无法区分"原主轮换"与"他人认领"。** 在该不可判定点上，安全默认值应当偏向 **fail-closed**：宁可在丢失私钥时退回明文 HTTP 传输（可用性降级），也不接受身份被第三方认领（身份被接管）。§14.3 的方向"废除轨道 B、让用户自愈"没有错，但自愈的**凭证**不能是转发用的联络 ID。
+
+**规格遗漏（附带）**：§14.3.1 要求"Worker 校验该 `device_id` 在 `device_registry` 中有效且存在"，实现里**没有这一步**。我判定**这一步漏掉是正确的**——注册表里任何伪造指纹都能铸出新 `device_id`（`device-registry.ts:144` `generateRandomDeviceId()`，无任何上游认证），查它不构成认证。但这也说明：**当前实现与规格都不存在任何真正的认证依据**，两者都不是"差一步"，而是"缺一个维度"。
+
+**处置建议**：保留 Step 2 的 D1 `UPDATE` 语句与 T20.3 用例（换绑通道本身要留着），把**触发条件**从"`device_id` 字符串相等"改为"旧公钥签名验证通过"；`device_id` 相等可降级为辅助条件。
+
+---
+
+### 18.4 🔴 R2｜存量证书迁移会**制造**一张域名不匹配的证书，并永久抑制重新签发——比不做迁移更差
+
+`MigrateFallbackNodeCredentials`（`provisioner.go:175-226`）把回退目录 `71546855d627` 下的证书**原样复制**到真实 nodeID 目录。问题是**证书里的域名就是旧 node 的**：
+
+| 环节 | 实测 |
+| :--- | :--- |
+| 证书 SAN 生成 | `provisioner.go:334-335` `nodeDomain = "<nodeID>.<BaseDomain>"`、`wildcardDomain = "*.<nodeID>.<BaseDomain>"`，写入 `:345` `DNSNames` |
+| 迁移动作 | `provisioner.go:188-215`：`tls.LoadX509KeyPair(fallbackCert, fallbackKey)` 只验"能解析 + 未过期"，随后 `WriteFile` 把 **fullchain.pem 原文**搬到目标目录 |
+| 本地校验是否查域名 | **不查**。`GetDeviceCertificate`（`:562-596`）只做 `VerifyCertificateTrust` + `isCertExpired`，`nodeID` 参数只用于**定位目录**，从不与证书 SAN 比对 |
+| 对外宣告的主机名 | `server.go:2470` `directDomain := cert.FormatDirectDomainWithNode(targetIP, activeNode)`，而 `activeNode` 来自 `GetActiveCertificate` 的**第二个返回值**（`provisioner.go:629` `return devCert, cleanNode, nil`）= **真实 nodeID**；`FormatDirectDomainWithNode`（`:60`）拼出 `<ip-dashed>.<nodeID>.<BaseDomain>` |
+| 降级是否会救场 | **不会**。`agent.go:1031` `if cfg.Secure && !cert.HasValidCertificateForNode(...)` —— 迁来的废证书"能解析 + 未过期"⇒ `HasValidCertificateForNode` 返回 **true**（`cert.go:53-56` 就是 `GetActiveCertificate(...) == nil`）⇒ **不降级**，`cfg.Secure` 保持 true |
+| 是否会自我纠正 | **不会**。`app.go:2137-2154`：`force=false` 时先 `GetDeviceCertificate(nodeID)`，成功且剩余 >15 天即 `EventsEmit("eqt:tls-cert-ready", true)` **并 return**，永不重新申请 |
+
+**净效果**：设备对外宣告 `https://<ip>.<真实node>.direct.eqt.net.im`，却出示一张签给 `71546855d627` 的证书 ⇒ 浏览器 `ERR_CERT_COMMON_NAME_INVALID` ⇒ **HTTPS 硬失败，且没有回退**。
+
+**而"不迁移"的行为反而更好**：删掉迁移后，真实 node 目录无证书 ⇒ `GetDeviceCertificate` 失败 ⇒ `HasValidCertificateForNode` = false ⇒ `agent.go:1032` 触发 `cfg.Secure = false` ⇒ **优雅退化为明文 HTTP，局域网传输照常可用**。
+
+⇒ **这是一次 Rule 13 回归，且方向是"把能用的降级换成了不能用的加密"。** 它在 §16.1f 的处置选项里恰好对应我建议**不要**选的那条：把回退证书当资产继承。正确处置是 **(b) 不继承、让真实 node 目录为空，由降级路径接管**；或在迁移前**校验证书 SAN 是否覆盖目标 nodeID**，不覆盖即拒绝迁移（并可顺手删除该孤儿证书）。
+
+**必须注意：这一步不是"顺手加的保险"，它改变了产品行为。** 建议回滚 `MigrateFallbackNodeCredentials`（`provisioner.go:175-226` 及其在 `:246`、`:579` 的两个调用点），改为"不迁移 + 允许降级"。
+
+---
+
+### 18.5 🔴 R3｜首绑 400 门禁切断了"无 `device_id`"用户的**全部** LAN-TLS 能力，其中包含**关闭遥测的用户**
+
+**实测事实链：**
+
+| 环节 | 实测 |
+| :--- | :--- |
+| 新门禁 | `cert.ts:909` 首绑前 `if (!deviceIdHeader)` → `400` + `reason_key: 'device_id_required'` |
+| 客户端何时不带这个头 | `provisioner.go:799-801` `if opts.DeviceID != "" { 设置头 }` —— **空值即不发头** |
+| `DeviceID` 何时为空 | `app.go:2169` `DeviceID: server.GetAuthorityDeviceID()`；`GetAuthorityDeviceID()`（`hardware.go:360-388`）在**无本地 `.lic`、无内存缓存、无磁盘缓存**时返回 `""` |
+| 何时会落到"三无" | ①**遥测关闭**：`hardware.go:400-403` `if !config.IsTelemetryEnabled() { ...return }` —— `RegisterDeviceOnline()` 直接早退，永不铸造 `device_id`；② 首次运行且注册请求失败（Worker 不可达 / 出口被阻断）；③ 纯离线首装 |
+| 改动前这些用户拿到什么 | 首绑 `INSERT` 时 `device_id` 写 NULL 并**正常签发证书**——即局域网 TLS **可用** |
+| 改动后 | **400，永不签发**。且客户端只处理 `node_key_mismatch`（`provisioner.go:840`），新增的 `device_id_required` **无任何消费点** |
+
+**最刺眼的一条证据：开发方自己的测试 diff 就是回归的证明。** `cert-provision-offline.js` 里 **7 处既有请求被补上了 `X-EQT-Device-ID`** 才保持绿色（`test_device_valid_8`/`_15`/`_19`、`test_ip_rate_device` 等）。这些用例在改动前**不带该头也能首绑成功**——它们就是"无 `device_id` 也能用"这个被删掉的能力的活化石。
+
+**为什么这属于 Rule 13 而不是"合理的收紧"**：§2.2 与 §6 全篇论证的正是"纯离线场景下 LAN-TLS 必须可用"，而遥测开关是**用户隐私设置**，不是异常状态。以隐私设置换取功能可用性，且**无声**（客户端不认识该 reason_key、i18n 无词条、无 UI 提示），是典型的静默功能退化。
+
+**正确的收紧方式（三步，缺一不可）：**
+1. 门禁只应拦**"本该有身份却缺失"**的情形。`GetAuthorityDeviceID()` 为空**不等于**非法——它是合法状态（未注册/已关闭遥测）。
+2. 若目标确实是"不留 NULL 行"，正确做法是 **`INSERT` 时写入一个客户端生成的、不可跨机复用的本地标识**（例如对本地私钥公钥做哈希），而不是"没有就拒绝服务"。这样既满足非空约束，又不剥夺离线能力。
+3. 无论选哪条，`device_id_required` 必须**同时**具备：客户端 `reason_key` 分支（比照 `provisioner.go:840`）、`i18n.js` 词条、以及按 `CLAUDE.md` 用**应用内通知**告知用户"因未注册/已关闭遥测，局域网加密传输不可用，已回退明文"。当前三处**全缺**。
+
+---
+
+### 18.6 🟠 R4｜重试链路无法恢复它要修的场景；`InvalidateCachedNodeID` 是**死代码**
+
+`app.go:2118-2123` 的重试只做一件事：`if server.GetDeviceNodeID() != "" { break }` 然后 `time.Sleep(1500ms)`。它**不触碰指纹缓存**。而真正的卡点在另一个缓存里：
+
+| 事实 | 实测 |
+| :--- | :--- |
+| 预计算协程**无条件**标记缓存完成 | `hardware.go:205-209`：收齐三个 channel 后直接 `cachedUUID/cachedCPU/cachedDisk = ...; hasCached = true`——**值为空也照写** |
+| 空值一旦入缓存即永久 | `hardware.go:259` `if !hasCached {` —— 整个重新探测块被跳过 ⇒ 之后每次调用都返回三个空串 |
+| 唯一可恢复的路径 | `hardware.go:271-275` 的 300ms 超时分支返回空串时**不**设 `hasCached` ⇒ 下次调用会重试。但协程只要**最终返回**（哪怕返回空），就会把 `hasCached` 置真，从这个瞬间起重试永久失效 |
+| 开发方新增的钩子 | `hardware.go:515-519` `InvalidateCachedNodeID()` 只清 `cachedNodeID`，**不清 `hasCached`/`cachedUUID` 等** |
+| 该钩子的调用点 | `rg 'InvalidateCachedNodeID'` 全仓命中 **3 处，全部在 `hardware_test.go`** ⇒ 生产代码零调用，是**死代码** |
+
+**反向探针 A 实测**（临时内部包用例，跑完即删）：置 `hasCached=true` 且三项为空，连续 3 轮 `GetDeviceNodeID()`（每轮之间调用 `InvalidateCachedNodeID()`）——**3 轮全部返回空串，无恢复**，与代码推断一致。
+
+**这不是"重试没写好"，而是"重试打在了错误的缓存层上"**：`GetDeviceNodeID` 的 nodeID 缓存已经被 Step 1a/1b 正确地改为"不缓存空值"，所以那一层本来就不需要重试；真正会永久污染的是**指纹层**，而它既没有失效接口，也没被重试触碰。另附一条同源瑕疵：`hardware.go:215` 无条件打印 `Device hardware fingerprints cached successfully`——**成功日志不由结果驱动**，三项全空时同样报 "successfully"（红线 ㉖ 复发）。
+
+**建议**：为指纹缓存提供 `InvalidateFingerprintCache()`（清 `hasCached` 与三个值 + 允许重新触发预计算），在异步重试循环里**每次**调用；并把 `:215` 的日志改为按结果分支（全空 ⇒ `[WARN] cached empty fingerprints`）。要么如此，要么删掉重试循环、把 `InvalidateCachedNodeID` 一并删除——**保留一个不能触发重算的失效钩子 + 一个不失效的重试，是双重误导**。
+
+---
+
+### 18.7 🟠 R5｜迁移只覆盖两个历史回退键空间中的**一个**
+
+`provisioner.go:193` `fallbackCandidates := []string{"71546855d627"}` —— 只有常量那一个。而历史回退是**两支**：
+
+| 分支 | 触发条件 | 落盘目录 | 是否已覆盖 |
+| :--- | :--- | :--- | :---: |
+| 常量 | 三项指纹全空 **且** 无 `authID` | `71546855d627` | ✅ |
+| 跨域依赖值 | 三项指纹全空 **且有** `authID` | `GetAuthorityDeviceID()[:12]` | ❌ **未覆盖** |
+
+第二支不是理论：它要求"指纹全空"（Windows `cpu_hash` 常态为空 + WMI 超时）"且已完成注册"，完全可能发生，其证书同样成了孤儿。且该值**可计算**（`GetAuthorityDeviceID()[:12]`），并非不可枚举，没有理由漏掉。
+
+（附带：若采纳 §18.4 的建议改为"不迁移 + 允许降级"，本条自动消解——这也是我推荐该方案的理由之一。）
+
+---
+
+### 18.8 🟡 R6｜新增拒绝分支缺消费者（本线程第 4 次复发）
+
+`device_id_required` 目前只有 **Worker 生产者**（`cert.ts:909`）与**测试断言**（T20.0）。缺三件套：客户端 `reason_key` 分支（对照 `provisioner.go:840` 已有的 `node_key_mismatch` 处理）、`i18n.js` 词条（实测 0 命中）、用户可见的应用内通知。这与 §15.5 / §12 系列同型：**新增字段/分支只在一端落地**。
+
+---
+
+### 18.9 本轮全部行号取证记录（可复现）
+
+```
+hardware.go:209/215/284   hasCached = true / "cached successfully" / 同步分支的 hasCached
+hardware.go:271-275       300ms 超时返回空且不设 hasCached
+hardware.go:393           GetDeviceStableID → GetAuthorityDeviceID
+hardware.go:400-403       遥测关闭 ⇒ RegisterDeviceOnline 早退
+hardware.go:501-505       全空 ⇒ return ""（早于 cachedNodeID 赋值，Step 1a 正确）
+hardware.go:510/515       cachedNodeID= / InvalidateCachedNodeID（生产零调用）
+provisioner.go:188-215    迁移的 stat + LoadX509KeyPair + WriteFile
+provisioner.go:193        fallbackCandidates = {"71546855d627"}
+provisioner.go:334-335/345  SAN: "<node>.direct.eqt.net.im" + "*.<node>.direct.eqt.net.im"
+provisioner.go:562-596    GetDeviceCertificate：仅 trust + expiry
+provisioner.go:627-629    GetActiveCertificate：cleanNode!="" 才查专用证书；返回 (cert, cleanNode, nil)
+provisioner.go:799-801    空 DeviceID ⇒ 不发头
+app.go:2118-2123          重试循环（只 sleep，不失效缓存）
+app.go:2130-2154          nodeID 空守卫 + "已有证书且>15天即 return" 短路
+desktop/gui/agent.go:108  DeviceID: server.GetDeviceStableID()（进 About）
+desktop/gui/agent.go:1031-1034  Secure 且证书无效 ⇒ 降级明文
+server.go:2470-2472       对外主机名 = <ip-dashed>.<activeNode>.direct.eqt.net.im
+cert.go:53-56             HasValidCertificateForNode ≡ (GetActiveCertificate 无错)
+cert.ts:866/872/878/909   SELECT 扩列 / 授权判定式 / UPDATE / 400 device_id_required
+main.js:2820/2833         About 面板一键复制 + 全文渲染 device_id
+```
+
+**反向探针记录**（两项，均已复原，`git status --porcelain` 为空）：
+
+- **A（空指纹缓存可恢复性）**：临时用例 → `CONFIRMED: 3 retries after an empty-but-cached precompute all return empty; no recovery` → PASS → 文件已删除。
+- **B（T20.3 判别力）**：`cert.ts:872` 注入 `false &&` → `npm run test:cert:offline` = **58 passed, 2 failed**，红点恰为两条 T20.3 断言 → 复原后 **60 passed, 0 failed**。
+
+---
+
+### 18.10 收敛评估与下一步（第六轮）
+
+**本轮的进步是真实的**：审查对象从"章节"变成了"diff"；§17 的六项声明经复跑**全部属实**；§16.5 要求的"回退即转红"**首次真正成立**；Step 1a/1b 是 §14 以来第一段完全正确、且方向与根因一致的实现。**"拉跨"的形态也变了**：从前几轮的"把没做的说成闭环"，变成这一轮的"把做对的机制用在了错误的授权依据上"——是设计判断失误，不是交付不实。
+
+**收敛的剩余距离**：三项 🔴 都不是"再加一段代码"，而是**各需要一次方向选择**：
+
+| 编号 | 需要做的判断 | 我的建议 |
+| :--- | :--- | :--- |
+| R1 | 换绑授权依据是什么 | 改为"旧公钥签名验证"；`device_id` 降为辅助。宁可丢失私钥时退回明文，也不接受第三方认领 |
+| R2 | 回退证书是资产还是垃圾 | **不迁移**，让它成为孤儿并依赖既有的明文降级（当前迁移反而制造硬失败） |
+| R3 | 无 `device_id` 是"非法"还是"合法状态" | 合法 ⇒ 门禁必须为这些人留出路（本地派生标识入库，或放行并保留明文降级），并补齐三件套提示 |
+| R4/R5/R6 | 工程收尾 | 失效接口下沉到指纹层并在重试中调用（或整体删除）；`fallbackCandidates` 补全（若仍保留迁移）；`device_id_required` 补齐消费点 |
+
+**我建议的下一步不是再审查一轮文档，而是**：开发方就 R1/R2/R3 三项各选一条路并落地 → 我按同样的方式（只审 diff + 反向探针）复核一轮。若三项方向确认，本线程即可关闭。
+
+**在此之前，`cd9a1138` 不建议作为发布版本**：R2 与 R3 都会让**当前可用的用户变不可用**（前者是 HTTPS 硬失败无回退，后者是关闭遥测/离线用户彻底失去局域网 TLS）。
+
+---
 
 
 
