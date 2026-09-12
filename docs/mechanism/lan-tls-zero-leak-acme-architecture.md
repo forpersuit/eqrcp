@@ -2236,8 +2236,8 @@ assert(typeof base64UrlDecode('abc') === 'object', // :308 输入是【合法】
 | 版本双面 | `pkg/version/version.go` + `desktop/gui/wails.json` | `v1.36.96` / `1.36.96` 一致 ✅ |
 | 构建 | `go build ./...` | OK ✅ |
 | 包测试 | `go test ./pkg/config ./pkg/cert -count=1` | 均 `ok` ✅ |
-| 新增前端状态消费点 | `rg tlsCertIssuer\|tlsCertExpiry` | `main.js:2405` 真实消费 `state.appInfo.*`，非"只定义不消费"（对比 §11.31 的 K1 型隐患）✅ |
-| Go/TS 字段一致 | `app.go:174-176` ↔ `models.ts` | `TLSCertIssuer`/`TLSCertExpiry`/`TLSNodeID` 已同步 ✅ |
+| 新增前端状态消费点 | `rg tlsCertIssuer\|tlsCertExpiry` | `main.js:2405` 真实消费 `state.appInfo.*`，非"只定义不消费"（对比 §11.31 的 K1 型隐患）✅ ⚠️ **本结论已于 `347afd44` 失效**（该行改为图标 tooltip，`tlsCertExpiry` 在前端零命中；行号 2405 仍存在纯属巧合）——**详见 §11.38 Q4** |
+| Go/TS 字段一致 | `app.go:174-176` ↔ `models.ts` | `TLSCertIssuer`/`TLSCertExpiry`/`TLSNodeID` 已同步 ✅ ⚠️ **`TLSCertIssuer` 的唯一赋值点已在 `347afd44` 删除 ⇒ 双侧死字段**——**详见 §11.38 Q4** |
 | 通配符证书回退 | `cert.go:58-78` `getCachedCertPaths()` | **有** legacy 回退至 `~/.config/eqt/certs` ✅ |
 | crash dump 回退 | `desktop/crash/reporter.go` | `LoadRawDump` 读双路径、`ClearDump` 删双路径 ✅ |
 | 根收拢一致性 | `main.go`(webview2)、`app.go`(agent.port)、`file_logger.go` | 均改用统一根 ✅ |
@@ -2369,6 +2369,118 @@ PROBE: legacy device cert/key at .../001/.config/eqt/certs/abcdef123456 is INVIS
 - 单测套件：`go test -v ./pkg/cert ./pkg/config` 全部 PASS（新增迁移探针单测与递归单测）；
 - 跨平台覆盖：对 Windows `%APPDATA%\eqt` 与 POSIX `~/.config/eqt` 完成旧目录数据无损对称迁移验证；
 - 全局版本递增至 **`v1.36.99`**。
+
+---
+
+#### 11.38 第二十轮独立复核：v1.36.96 → v1.36.99 增量复核与文档同步（Q1~Q8 · 2026-09-12）
+
+**复核对象**：`6bd40f7e`（路径统一）→ `1745b051`（config 迁移）→ `63d222df`（skill 文档）→ `347afd44`（图标化 + 厂商名脱敏）→ `426677a8`（P1~P8 闭环 + 图标资源重生成）；旁证 `3a8c4ea7` / `f68f9963`（双环境 Worker 与 GTS EAB 真机签发）未触及客户端证书落盘与信任链。
+
+**方法**：逐条 `rg` 事实核验 + 反向探针。探针源码为临时文件（`pkg/cert/zz_probe_round20_test.go`、`pkg/config/zz_probe_round20_test.go`），运行取证后**已删除**，仓库无残留。
+
+##### 一、⚠️ 第十九轮"闭环声明"与实现事实的偏差（Q1~Q8）
+
+**Q1〔高危〕"迁移成功"日志由"进入分支"驱动而非"结果"驱动 ⇒ P1 的失败面未闭环，且失败被日志伪装成功**
+
+- 实现事实（`pkg/cert/provisioner.go:88-110`）：进入 legacy 分支后——
+  1. `os.MkdirAll(targetDir, 0700)` 失败 ⇒ **不建目录**，但仍 `return targetDir, nil`；
+  2. `os.ReadFile(src)` 失败 ⇒ 静默跳过（`if data, readErr := ...; readErr == nil` 无 else）；
+  3. `os.WriteFile(dst, data, perm)` 的错误被 **`_ =` 丢弃**；
+  4. 只要 `os.ReadDir(legacyDir)` 成功，**无条件**打印 `[LAN-TLS-KEY] [INFO] Successfully migrated legacy device credentials`。
+- 反向探针：legacy `privkey.pem`（真实 P-256 SEC1 PEM）置为 `chmod 0000`，`EQT_CONFIG_DIR` 指向全新目标根：
+
+```
+[LAN-TLS-KEY] [INFO] Successfully migrated legacy device credentials for node probenode20 from .../.config/eqt/certs/probenode20 to .../appdata/eqt/certs/probenode20
+PROBE-A [1] GetDeviceCertDir err=<nil>
+PROBE-A [2] target privkey.pem ABSENT: no such file or directory
+[LAN-TLS-KEY] [INFO] Private key at .../appdata/eqt/certs/probenode20/privkey.pem not found (initial setup), generating new key
+PROBE-A [3] RESULT: SILENT NEW KEY generated while legacy key existed => TOFU 403 risk CONFIRMED
+```
+
+- **裁决**：P1 的**路径漂移触发面已闭环**（旧根选值正确、方向正确），但**迁移失败触发面未闭环**，且新增的 INFO 级成功日志**把失败伪装成成功**，与红线 ㉔ 描述的后果链完全一致——新密钥一经签发即触发服务端 403 `node_key_mismatch`。§11.37 断言"**彻底杜绝**新密钥伪首次安装与云端 TOFU 403 冲突"**超出实现**，本轮修正为：**已覆盖路径漂移，未覆盖 I/O 失败**。
+- **修正要求**：迁移后须**校验目标 `privkey.pem` 存在且可解析**再返回；任一 I/O 失败须 `return ... err`，或至少降级为 `[WARNING]` 并输出源/目标路径；**禁止无条件成功日志**。
+
+**Q2〔中危〕同一数据的两条迁移实现语义冲突：目录权限 0700 → 0755 降级**
+
+- 实现事实：`pkg/config/config.go:188` 的 `copyDirRecursive` 用 `os.MkdirAll(dstDir, 0755)`；而 `pkg/cert/provisioner.go:90` 对同一目标用 `0700`。文件权限按后缀取 `0600`（`.pem`/`.key`）或 `0644`，**目录权限无任何保护**。
+- 反向探针（legacy `.../certs/node20` 源模式 `0700`）：
+
+```
+PROBE-B [src] legacy node dir mode=0700
+PROBE-B [dst] .../appdata/eqt/certs          mode=0755
+PROBE-B [dst] .../appdata/eqt/certs/node20   mode=0755
+PROBE-B [dst] .../appdata/eqt/certs/node20/privkey.pem mode=0600
+```
+
+- **裁决**：§11.37 的"无损权限复制 / 严格保留 `0600`"**只对文件成立、对目录不成立**。私钥内容未泄漏（文件仍 `0600`），但容器目录由"仅本人可进入"降级为"任何本地用户可遍历"，与红线 ㉓"回退须对称"同源。附带事实：certs 分支（`config.go:229-236`）**缺少"目标已存在"前置判据**（对比 config 分支的 `config.go:222`），故**每个进程启动**仍会对整棵 legacy 证书树做一次全量递归 `ReadDir`+`Stat`。
+- **修正要求**：目录一律 `0700`；certs 分支补目标存在判据；两条实现合流为单一函数（见红线 ㉘）。
+
+**Q3〔中危〕P5 的"修复"把弱断言变成恒真断言（判别力由"弱"降为"零"）**
+
+- 实现事实：`config.go:279-281` 定义 `DefaultConfigFile() = filepath.Join(DefaultConfigDir(), "config.yml")`；`config_test.go:164-170` 的期望值使用**完全相同的表达式**构造。两侧同源 ⇒ 无论 `DefaultConfigDir()` 返回什么，断言恒真。
+- 反向探针（不新增代码，直接改变被测量，两种互斥路径均通过）：
+
+```
+$ go test ./pkg/config -run TestDefaultConfigFileUsesLocalEQTDirectory -count=1        → ok
+$ EQT_CONFIG_DIR=/tmp/retired-probe go test ./pkg/config -run TestDefaultConfigFileUsesLocalEQTDirectory -count=1 → ok
+```
+
+- **裁决**：该测试**已无法在"路径漂移"时转红**，正是 P5 想要防的场景 ⇒ **修复不等于改进**；且与第八轮 `8d8bce11`「eliminate test tautology」治理过的缺陷同类，属**复发**。
+- **修正要求**：期望值须来自**独立来源**（字面量后缀 + 显式平台差异表，或独立构造 `filepath.Join(os.UserConfigDir(), "eqt", "config.yml")`）。
+
+**Q4〔中危〕文档"✅ 前端真实消费"结论在 `347afd44` 后失效；`TLSCertIssuer` 成为双侧死字段**
+
+- 实现事实：
+  - §11.36 表格断言 `main.js:2405` 真实消费 `state.appInfo.tlsCertIssuer/tlsCertExpiry`；`347afd44` 已将该行替换为 `t('tls_cert_ready')` 的图标 tooltip。当前 `rg tlsCertExpiry desktop/gui/frontend/src/` **零命中**（行号 2405 仍存在纯属巧合，易误判"结论仍成立"）。
+  - `desktop/gui/app.go:173` 的 `TLSCertIssuer` 在 `347afd44` 中**失去唯一赋值点**；全仓 `rg certIssuer --type go` 仅剩该字段声明，而 `models.ts:177,199` 仍在生成该字段 ⇒ **Go 侧死字段 + TS 侧死绑定**（记忆「改 Go struct 后 binding 需单独补提」的镜像形态：字段未删、赋值已删）。
+  - `TLSCertExpiry` 仍被赋值（`app.go:1278`，每次 `AppInfo()` 触发一次 `GetDeviceCertificate` + 时间格式化）但**无消费者** ⇒ "只写不读"。
+- **裁决**：K1 型隐患（只定义不消费）**在文档自称"已排除"的位置复发**；且同一文档内 §11.36 的 ✅ 与 §11.37 的 P4 闭环叙述**自相矛盾**（Rule 7）。本轮已就地标注 §11.36 两行并修正结论。
+- **修正要求**：删除 `TLSCertIssuer`（Go 与 `models.ts` 一并重生成）与 `TLSCertExpiry`，**或**恢复 UI 消费；二者取其一（见红线 ㉙）。
+
+**Q5〔低〕P4 的"彻底消除未本地化文本"结论成立，但成立理由不成立：兜底字面量不可达 + 键覆盖不对称**
+
+- 实现事实：`i18n.js:6-7` 与 `453-454` 仅 **zh/en** 定义 `tls_cert_preparing`/`tls_cert_ready`；`t()`（`i18n.js:3066-3077`）回退链为 `lang → en → zh → key`，故 ja/ko/es/de/fr 用户实际得到**英文** tooltip（**不是**硬编码中文）。`main.js:2405,2408` 的 `|| 'TLS 已就绪'` / `|| '置备中'` **不可达**（`t()` 最差返回 key 名本身，永不为假值）⇒ 死代码，易误导维护者以为存在中文兜底。
+- **裁决**：界面确无未本地化文本（对），但**依赖的是 en 回退而非"删除硬编码"**（理由错）；死字面量应删除；`tls_key_mismatch_msg` 已 6 语种齐备而 ready/preparing 仅 2 语种，属**键覆盖不对称**。
+
+**Q6〔低 · 建议〕可操作错误的可见性降级：文本指引 → hover-only emoji**
+
+- 实现事实：`347afd44` 把 key mismatch 的文本提示（原含动作指引"请重置密钥绑定"）替换为 `⚠️` + `title`（`main.js:2407`）。`title` 仅鼠标悬停可见，触屏/无指针环境不可见，emoji 亦无 `aria-label`；"离线时将以局域网标准模式保障传输"的降级说明同理消失。
+- **裁决**：符合用户"只显示图标状态"的明确指令，**不以 UX 意见否定用户决策**；但**"需要动作的告警"与"仅状态"不宜同级**。建议在 mismatch 分支补一次性**应用内通知**（项目既有规则：禁止 alert 弹窗、改用应用内通知），使关键动作指引不依赖 hover。本条为**建议，非缺陷**。
+
+**Q7〔低〕副作用 getter 反模式由 config 层扩散至 cert 层，第十九轮 P8 的"合理观察"裁决未阻止扩散**
+
+- 实现事实：`GetDeviceCertDir`（`provisioner.go:69`）名义为路径解析，现内含 `MkdirAll` + 读 + 写（迁移）；调用方包含**只读查询** `HasValidDeviceCertificate`（`provisioner.go:434`）、`GetDeviceCertificate`（`provisioner.go:405`，被 `AppInfo()` 每次调用）与写入路径 `SaveDeviceCertificate`。
+- **裁决**：§11.37 对 P8 的答复（"受 `sync.Once` 保护、幂等"）**只回应了幂等性，未回应副作用本身**，故该模式在本轮已复制到第二层。
+- **修正要求**：迁移上提为显式 `EnsureMigrated()`，在进程启动入口调用一次；路径 getter 保持纯函数。
+
+**Q8〔提示〕`EQT_CONFIG_DIR` 早退静默关闭迁移，该语义未在任何文档声明**
+
+- 实现事实：`config.go:252-254` 在环境变量非空时**直接 return**，绕过 `maybeMigrateLegacyConfig`（注释仅称"primarily for test isolation and custom directory overrides"）。
+- 影响面：因 `GetDeviceCertDir` 与 `getCachedCertPaths` 各有独立 legacy 回退，实际后果可控（迁移被跳过、改走回退读）；但"**设置部署覆盖变量 = 关闭数据迁移**"是隐式耦合，须在 skill 与部署文档显式声明。
+
+##### 二、正向确认（避免只列问题）
+
+| 项 | 核验方式 | 结果 |
+| --- | --- | --- |
+| P2 已闭环 | `config.go:220-227` | 源目录 `~/.local/eqt`（正确）、目标 `config.yml` 存在判据齐备，递归拷贝 ✅ |
+| P3 已闭环 | 探针 B | `copyDirRecursive` 已递归 `<node>/` 子目录（`/certs/node20` 成功落盘）✅（权限面见 Q2） |
+| P6 已闭环 | `scripts/sync-certs-from-vps.sh` | Windows 目标两处（`win_cert_dir` / `win_privkey_winpath`）均为 `AppData/Roaming/eqt/certs`，与运行时 `os.UserConfigDir()` 一致 ✅ |
+| P7 已闭环 | `rg '\.config/eqt' desktop/gui pkg/cert` | 用户可见日志改用 `config.DefaultCertsDir()`（`agent.go:1032`），注释同步（`cert.go:40`、`provisioner.go:476`），无残留旧根字面量 ✅ |
+| 旧根探针选值正确 | `provisioner.go:84-87` | `os.UserHomeDir()+".config/eqt/certs/"+node` ≡ Windows 旧值 `%USERPROFILE%\.config\eqt\certs\<node>` ✅ |
+| 不覆盖在用凭据 | `provisioner.go:77-81` | 目标已含 `privkey.pem` 时直接返回，迁移不覆盖 ✅ |
+| 新增测试为真测试 | `provisioner_test.go:783-828` | 校验迁移后内容一致 + `0600`，非空壳 ⚠️ 但**只覆盖成功路径**，失败面（Q1）无用例 |
+| 版本双面一致 | `pkg/version/version.go` + `desktop/gui/wails.json` | `v1.36.99` / `1.36.99` ✅ |
+| 构建与测试 | `go build ./...`；`go test ./pkg/config ./pkg/cert -count=1` | 全绿 ✅ |
+| 图标资产一致性 | `md5sum` 双侧比对 | `pkg/pages/assets/*` 与 `desktop/gui/frontend/src/assets/images/*` 三对（favicon/logo-mark/logo-horizontal）**md5 完全相同** ✅ |
+| 部署侧无客户端路径变更 | `3a8c4ea7` / `f68f9963` 差异范围 | 双环境 Worker 仅同步 EAB 凭据与端点；客户端落盘路径与信任链未变 ✅ |
+
+##### 三、复发计数与结论
+
+- **「文档/命名声称超出实现」连续第十轮复发**（F16 → G1/G2 → H1/H2/H3 → I1/I4 → J1 → K1 → L1 → M1 → N1/G1 → **Q1/Q2/Q4**）。
+- **本轮新特征**：偏差出现在**第十九轮自己写下的闭环结论**上——"闭环声明"本身成为下一轮的偏差源，说明闭环叙述缺乏"实现事实"锚点（可复核的探针或断言）。⇒ **闭环声明的粒度必须下沉到"可失败的最小事实"**，例如"迁移失败时返回错误"而非"彻底杜绝 TOFU 冲突"。
+- **本轮另有两处"修复反向回归"**：P5 的弱断言被修成恒真断言（Q3）；P1 的失败面在修复中被引入（Q1）。⇒ **修复提交须与原始意见逐条对照；修复后的断言必须能对原缺陷转红。**
+- **修订后逐项结论**：P1/P3 **部分闭环**（路径漂移已覆盖；I/O 失败与目录权限未覆盖）；P2/P4/P6/P7 **已闭环**；P5 **形式已改、判别力未恢复**；P8 **未处置且已扩散至 cert 层**。
+- 本轮**未新增版本号**：仅文档同步，无功能变更（符合「一旦有功能增加，则小版本号 +1」的反向约束）。
 
 
 
