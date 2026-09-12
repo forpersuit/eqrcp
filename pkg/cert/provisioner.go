@@ -172,6 +172,61 @@ func MigrateLegacyDeviceCredentials(nodeID string) error {
 	return nil
 }
 
+// MigrateFallbackNodeCredentials migrates certificate assets from known historical fallback nodeIDs
+// (e.g., constant "71546855d627" generated when hardware fingerprints were empty) to cleanNode if
+// the fallback directory contains a valid unexpired certificate and target directory has none.
+func MigrateFallbackNodeCredentials(cleanNode string) error {
+	cleanNode = strings.ToLower(strings.TrimSpace(cleanNode))
+	if cleanNode == "" {
+		return nil
+	}
+	targetDir, err := GetDeviceCertDir(cleanNode)
+	if err != nil {
+		return err
+	}
+	targetKey := filepath.Join(targetDir, "privkey.pem")
+	if fi, err := os.Stat(targetKey); err == nil && fi.Size() > 0 {
+		return nil
+	}
+
+	baseDir := config.DefaultCertsDir()
+	fallbackCandidates := []string{"71546855d627"}
+	for _, fallbackID := range fallbackCandidates {
+		if fallbackID == cleanNode {
+			continue
+		}
+		fallbackDir := filepath.Join(baseDir, fallbackID)
+		fallbackKey := filepath.Join(fallbackDir, "privkey.pem")
+		fallbackCert := filepath.Join(fallbackDir, "fullchain.pem")
+		if fiKey, err := os.Stat(fallbackKey); err == nil && fiKey.Size() > 0 {
+			if fiCert, err := os.Stat(fallbackCert); err == nil && fiCert.Size() > 0 {
+				if tlsCert, err := tls.LoadX509KeyPair(fallbackCert, fallbackKey); err == nil && !isCertExpired(tlsCert) {
+					if err := os.MkdirAll(targetDir, 0700); err != nil {
+						return err
+					}
+					certData, err := os.ReadFile(fallbackCert)
+					if err != nil {
+						continue
+					}
+					keyData, err := os.ReadFile(fallbackKey)
+					if err != nil {
+						continue
+					}
+					if err := os.WriteFile(filepath.Join(targetDir, "fullchain.pem"), certData, 0644); err != nil {
+						return err
+					}
+					if err := os.WriteFile(targetKey, keyData, 0600); err != nil {
+						return err
+					}
+					log.Printf("[LAN-TLS-KEY] [INFO] Successfully migrated fallback credentials from %s to %s", fallbackDir, targetDir)
+					return nil
+				}
+			}
+		}
+	}
+	return nil
+}
+
 // LoadOrGenerateDeviceKey loads the ECDSA P-256 private key for nodeID from disk,
 // or generates a new one securely in local memory and saves it with restricted 0600 permissions.
 // The private key is strictly isolated and never transmitted across the network.
@@ -187,6 +242,9 @@ func LoadOrGenerateDeviceKey(nodeID string) (*ecdsa.PrivateKey, error) {
 	if _, err := os.Stat(keyPath); os.IsNotExist(err) {
 		if migErr := MigrateLegacyDeviceCredentials(cleanNode); migErr != nil {
 			log.Printf("[LAN-TLS-KEY] [WARN] Legacy device credentials migration error for node %s: %v", cleanNode, migErr)
+		}
+		if migFallbackErr := MigrateFallbackNodeCredentials(cleanNode); migFallbackErr != nil {
+			log.Printf("[LAN-TLS-KEY] [WARN] Fallback credentials migration error for node %s: %v", cleanNode, migFallbackErr)
 		}
 	}
 
@@ -518,6 +576,7 @@ func GetDeviceCertificate(nodeID string) (tls.Certificate, error) {
 	// Trigger migration if files missing at target
 	if _, err := os.Stat(keyPath); os.IsNotExist(err) {
 		_ = MigrateLegacyDeviceCredentials(cleanNode)
+		_ = MigrateFallbackNodeCredentials(cleanNode)
 	}
 
 	certBytes, err := os.ReadFile(certPath)

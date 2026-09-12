@@ -498,18 +498,24 @@ func GetDeviceNodeID() string {
 	}
 
 	uuid, cpu, disk := GetDeviceFingerprintHashes()
-	// Fallback to AuthorityDeviceID if available and all fingerprints are empty
 	if uuid == "" && cpu == "" && disk == "" {
-		if authID := GetAuthorityDeviceID(); len(authID) >= 12 {
-			cachedNodeID = strings.ToLower(authID[:12])
-			return cachedNodeID
-		}
+		// Empty fingerprints must never be derived into constant 71546855d627 or cached:
+		// caching an empty-fingerprint result would permanently freeze this process
+		// into a machine-agnostic constant nodeID, preventing subsequent WMI retries from succeeding.
+		return ""
 	}
 
 	combined := fmt.Sprintf("%s:%s:%s", uuid, cpu, disk)
 	sum := sha256.Sum256([]byte(combined))
 	cachedNodeID = hex.EncodeToString(sum[:])[:12]
 	return cachedNodeID
+}
+
+// InvalidateCachedNodeID explicitly clears cachedNodeID so the next call will recompute.
+func InvalidateCachedNodeID() {
+	nodeIDMu.Lock()
+	defer nodeIDMu.Unlock()
+	cachedNodeID = ""
 }
 
 // ResetCachedNodeIDForTest clears cachedNodeID for testing purposes.

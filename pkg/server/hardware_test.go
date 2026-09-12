@@ -42,6 +42,34 @@ func TestGetDeviceNodeID(t *testing.T) {
 		t.Fatalf("mockNodeID must match ^[0-9a-f]{12}$, got %s", mockNodeID)
 	}
 
+	// 5. Test with all-empty fingerprints: must return empty string, NEVER derive constant 71546855d627
+	testFingerprintOverride = true
+	testBoardUUID = ""
+	testCPUSerial = ""
+	testDiskSerial = ""
+	ResetCachedNodeIDForTest()
+
+	emptyNodeID := GetDeviceNodeID()
+	if emptyNodeID != "" {
+		t.Fatalf("expected empty nodeID for all-empty fingerprints, got %q (must not derive 71546855d627 or authID)", emptyNodeID)
+	}
+
+	// 6. Test that empty nodeID was NOT cached: subsequent fingerprint acquisition succeeds immediately
+	testBoardUUID = "board-recovered"
+	testCPUSerial = "cpu-recovered"
+	testDiskSerial = "disk-recovered"
+	recoveredNodeID := GetDeviceNodeID()
+	if len(recoveredNodeID) != 12 {
+		t.Fatalf("expected recovered nodeID length 12 without explicit cache reset, got %q", recoveredNodeID)
+	}
+
+	// 7. Test InvalidateCachedNodeID
+	InvalidateCachedNodeID()
+	invalidatedNodeID := GetDeviceNodeID()
+	if invalidatedNodeID != recoveredNodeID {
+		t.Fatalf("expected recomputed nodeID %q to match %q", invalidatedNodeID, recoveredNodeID)
+	}
+
 	// Cleanup test override
 	testFingerprintOverride = false
 	testBoardUUID = ""

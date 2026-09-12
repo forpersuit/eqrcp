@@ -104,10 +104,22 @@ function makeMockDb(opts = {}) {
             return { meta: { changes: 1 } };
           }
           if (sql.includes('UPDATE node_public_keys')) {
-            const nodeId = this._binds[1];
-            const existing = nodeKeys.get(nodeId);
-            if (existing) {
-              existing.last_seen_at = this._binds[0];
+            if (sql.includes('SET public_key_sha256 =')) {
+              const pubKey = this._binds[0];
+              const lastSeen = this._binds[1];
+              const nodeId = this._binds[2];
+              const existing = nodeKeys.get(nodeId);
+              if (existing) {
+                existing.public_key_sha256 = pubKey;
+                existing.last_seen_at = lastSeen;
+              }
+            } else {
+              const lastSeen = this._binds[0];
+              const nodeId = this._binds[1];
+              const existing = nodeKeys.get(nodeId);
+              if (existing) {
+                existing.last_seen_at = lastSeen;
+              }
             }
             return { meta: { changes: 1 } };
           }
@@ -369,7 +381,8 @@ async function runTests() {
         headers: {
           'Content-Type': 'application/json',
           'X-EQT-Timestamp': String(nowTs),
-          'X-EQT-Device-Signature': sig
+          'X-EQT-Device-Signature': sig,
+          'X-EQT-Device-ID': 'test_device_valid_8'
         },
         body: JSON.stringify({ node_id: validNodeID, csr_pem: validCSRPEM })
       });
@@ -383,7 +396,8 @@ async function runTests() {
       headers: {
         'Content-Type': 'application/json',
         'X-EQT-Timestamp': String(nowTs),
-        'X-EQT-Device-Signature': sig
+        'X-EQT-Device-Signature': sig,
+        'X-EQT-Device-ID': 'test_device_valid_8'
       },
       body: JSON.stringify({ node_id: validNodeID, csr_pem: validCSRPEM })
     });
@@ -547,7 +561,8 @@ async function runTests() {
       headers: {
         'Content-Type': 'application/json',
         'X-EQT-Timestamp': String(nowTs),
-        'X-EQT-Device-Signature': sig
+        'X-EQT-Device-Signature': sig,
+        'X-EQT-Device-ID': 'test_device_valid_15'
       },
       body: JSON.stringify({ node_id: testNode, csr_pem: csr })
     });
@@ -564,7 +579,8 @@ async function runTests() {
       headers: {
         'Content-Type': 'application/json',
         'X-EQT-Timestamp': String(nowTs),
-        'X-EQT-Device-Signature': sig
+        'X-EQT-Device-Signature': sig,
+        'X-EQT-Device-ID': 'test_device_valid_15'
       },
       body: JSON.stringify({ node_id: testNode, csr_pem: csr })
     });
@@ -582,7 +598,8 @@ async function runTests() {
       headers: {
         'Content-Type': 'application/json',
         'X-EQT-Timestamp': String(nowTs),
-        'X-EQT-Device-Signature': sig
+        'X-EQT-Device-Signature': sig,
+        'X-EQT-Device-ID': 'test_device_valid_15'
       },
       body: JSON.stringify({ node_id: testNode, csr_pem: csr })
     });
@@ -782,7 +799,8 @@ async function runTests() {
         headers: {
           'Content-Type': 'application/json',
           'X-EQT-Timestamp': String(nowTs),
-          'X-EQT-Device-Signature': sig
+          'X-EQT-Device-Signature': sig,
+          'X-EQT-Device-ID': 'test_device_valid_19'
         },
         body: JSON.stringify({ node_id: acmeNode, csr_pem: acmeCsr })
       });
@@ -807,7 +825,7 @@ async function runTests() {
     assert(dnsSetCalls[0].body && dnsSetCalls[0].body.record === `_acme-challenge.${acmeNode}.direct.eqt.net.im.`, 'T19.4: DNS challenge recordName correctly constructed with device node');
   }
 
-  // Test 20: First-Use Public Key Binding (TOFU)
+  // Test 20: First-Use Public Key Binding (TOFU) & Authorized Key Rotation
   {
     const tofuNode = 'e1f2a3b4c5d6';
     const { csrPEM: csr1, privateKey: priv1 } = generateTestCSR(tofuNode);
@@ -815,36 +833,76 @@ async function runTests() {
     const db = makeMockDb();
     const ctx = makeMockCtx();
     const nowTs = Math.floor(Date.now() / 1000);
+    const testDeviceId = 'legit_device_uuid_tofu_1';
 
-    // 1st request with priv1 binds tofuNode to pubkey1
+    // 20.0: Initial registration without device_id must be rejected with 400 device_id_required
+    const noDevNode = 'e1f2a3b4c5d0';
+    const { csrPEM: csrNoDev, privateKey: privNoDev } = generateTestCSR(noDevNode);
+    const sigNoDev = signNodePayload(privNoDev, noDevNode, nowTs);
+    const req0 = new Request('http://api.test/api/v1/cert/provision', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-EQT-Timestamp': String(nowTs),
+        'X-EQT-Device-Signature': sigNoDev
+      },
+      body: JSON.stringify({ node_id: noDevNode, csr_pem: csrNoDev })
+    });
+    const resp0 = await handleCertRoutes(req0, { DB: db }, ctx, new URL(req0.url), {});
+    const data0 = await resp0.json();
+    assert(resp0.status === 400 && data0.reason_key === 'device_id_required', 'T20.0: Initial registration without device_id rejected with 400 device_id_required');
+
+    // 20.1: 1st request with priv1 and testDeviceId binds tofuNode to pubkey1
     const sig1 = signNodePayload(priv1, tofuNode, nowTs);
     const req1 = new Request('http://api.test/api/v1/cert/provision', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-EQT-Timestamp': String(nowTs),
-        'X-EQT-Device-Signature': sig1
+        'X-EQT-Device-Signature': sig1,
+        'X-EQT-Device-ID': testDeviceId
       },
       body: JSON.stringify({ node_id: tofuNode, csr_pem: csr1 })
     });
     const resp1 = await handleCertRoutes(req1, { DB: db }, ctx, new URL(req1.url), {});
     await ctx.drain();
     assert(resp1.status === 200, 'T20.1: Initial registration with key 1 succeeds and binds key');
+    const boundEntry = db._nodeKeys.get(tofuNode);
+    assert(boundEntry && boundEntry.device_id === testDeviceId, 'T20.1: D1 records correct initial device_id binding');
+    const initialKey = boundEntry.public_key_sha256;
 
-    // 2nd request with priv2 (different key!) must be rejected with 403 node_key_mismatch
+    // 20.2: 2nd request with priv2 and rogue device_id must be rejected with 403 node_key_mismatch
     const sig2 = signNodePayload(priv2, tofuNode, nowTs);
-    const req2 = new Request('http://api.test/api/v1/cert/provision', {
+    const req2Rogue = new Request('http://api.test/api/v1/cert/provision', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-EQT-Timestamp': String(nowTs),
-        'X-EQT-Device-Signature': sig2
+        'X-EQT-Device-Signature': sig2,
+        'X-EQT-Device-ID': 'rogue_attacker_device'
       },
       body: JSON.stringify({ node_id: tofuNode, csr_pem: csr2 })
     });
-    const resp2 = await handleCertRoutes(req2, { DB: db }, ctx, new URL(req2.url), {});
-    const data2 = await resp2.json();
-    assert(resp2.status === 403 && data2.reason_key === 'node_key_mismatch', 'T20.2: Mismatched public key for bound node returns 403 node_key_mismatch');
+    const resp2Rogue = await handleCertRoutes(req2Rogue, { DB: db }, ctx, new URL(req2Rogue.url), {});
+    const data2Rogue = await resp2Rogue.json();
+    assert(resp2Rogue.status === 403 && data2Rogue.reason_key === 'node_key_mismatch', 'T20.2: Mismatched public key from different device returns 403 node_key_mismatch');
+
+    // 20.3: 3rd request with priv2 but matching testDeviceId must SUCCEED with 200 and UPDATE pubkey in D1!
+    const req2Legit = new Request('http://api.test/api/v1/cert/provision', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-EQT-Timestamp': String(nowTs),
+        'X-EQT-Device-Signature': sig2,
+        'X-EQT-Device-ID': testDeviceId
+      },
+      body: JSON.stringify({ node_id: tofuNode, csr_pem: csr2 })
+    });
+    const resp2Legit = await handleCertRoutes(req2Legit, { DB: db }, ctx, new URL(req2Legit.url), {});
+    await ctx.drain();
+    assert(resp2Legit.status === 200, 'T20.3: Key rotation for matching device_id returns 200 OK');
+    const rebindEntry = db._nodeKeys.get(tofuNode);
+    assert(rebindEntry && rebindEntry.public_key_sha256 !== initialKey, 'T20.3: D1 public_key_sha256 successfully updated upon authorized rebind');
   }
 
   // Test 21: IP Rate Limiting
@@ -866,6 +924,7 @@ async function runTests() {
           'Content-Type': 'application/json',
           'X-EQT-Timestamp': String(nowTs),
           'X-EQT-Device-Signature': sig,
+          'X-EQT-Device-ID': 'test_ip_rate_device',
           'CF-Connecting-IP': testIp
         },
         body: JSON.stringify({ node_id: iterNode, csr_pem: csrPEM })
@@ -916,6 +975,7 @@ async function runTests() {
         'Content-Type': 'application/json',
         'X-EQT-Timestamp': String(nowTs),
         'X-EQT-Device-Signature': globalSig,
+        'X-EQT-Device-ID': 'test_ip_rate_device',
         'CF-Connecting-IP': '198.51.100.99'
       },
       body: JSON.stringify({ node_id: globalNode, csr_pem: globalCsr })

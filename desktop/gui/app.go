@@ -2111,6 +2111,17 @@ func (a *App) DevProvisionDeviceTLSCert() (bool, error) {
 func (a *App) silentProvisionDeviceTLSCert() {
 	// 1. Initial grace delay to let main startup finish smoothly without competing for network/CPU
 	time.Sleep(3 * time.Second)
+
+	// In the asynchronous background provision routine only:
+	// If the node ID is temporarily empty due to cold-start WMI latency,
+	// retry up to 3 times (1500ms each) before proceeding or failing-soft.
+	for i := 0; i < 3; i++ {
+		if server.GetDeviceNodeID() != "" {
+			break
+		}
+		time.Sleep(1500 * time.Millisecond)
+	}
+
 	_, _ = a.provisionDeviceTLSCert(false)
 }
 

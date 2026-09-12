@@ -863,28 +863,55 @@ export async function handleCertRoutes(
       .join('');
 
     const existingKey = await env.DB.prepare(
-      `SELECT public_key_sha256 FROM node_public_keys WHERE node_id = ?`
-    ).bind(cleanNode).first<{ public_key_sha256: string }>();
+      `SELECT public_key_sha256, device_id FROM node_public_keys WHERE node_id = ?`
+    ).bind(cleanNode).first<{ public_key_sha256: string; device_id: string | null }>();
 
     if (existingKey) {
       if (existingKey.public_key_sha256 !== pubKeyFingerprint) {
-        console.warn(`[LAN-TLS-PROVISION] [REJECT] Key mismatch for nodeID=${cleanNode}: bound=${existingKey.public_key_sha256} req=${pubKeyFingerprint}`);
+        const boundDeviceId = existingKey.device_id || '';
+        if (boundDeviceId && boundDeviceId === deviceIdHeader) {
+          // Authorized key rotation on the same physical device (OS reinstall, cleared cache, key deleted)
+          console.log(`[LAN-TLS-PROVISION] [REBIND] Key rotation authorized for nodeID=${cleanNode}, deviceID=${deviceIdHeader}`);
+          ctx.waitUntil((async () => {
+            try {
+              await env.DB.prepare(`
+                UPDATE node_public_keys SET public_key_sha256 = ?, last_seen_at = ? WHERE node_id = ?
+              `).bind(pubKeyFingerprint, new Date().toISOString(), cleanNode).run();
+            } catch (rebindErr) {
+              console.error(`[LAN-TLS-PROVISION] Failed to update rotated public key in D1:`, rebindErr);
+            }
+          })());
+          // Key rotation authorized: do not return 403, proceed to certificate issuance
+        } else {
+          console.warn(`[LAN-TLS-PROVISION] [REJECT] Key mismatch for nodeID=${cleanNode}: bound=${existingKey.public_key_sha256} req=${pubKeyFingerprint}`);
+          return new Response(JSON.stringify({
+            error: 'Device public key mismatch: this node ID is cryptographically bound to a different keypair',
+            reason_key: 'node_key_mismatch'
+          }), {
+            status: 403,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+      } else {
+        ctx.waitUntil((async () => {
+          try {
+            await env.DB.prepare(`
+              UPDATE node_public_keys SET last_seen_at = ? WHERE node_id = ?
+            `).bind(new Date().toISOString(), cleanNode).run();
+          } catch (_) {}
+        })());
+      }
+    } else {
+      if (!deviceIdHeader) {
+        console.warn(`[LAN-TLS-PROVISION] [REJECT] Initial binding requires non-empty device_id for nodeID=${cleanNode}`);
         return new Response(JSON.stringify({
-          error: 'Device public key mismatch: this node ID is cryptographically bound to a different keypair',
-          reason_key: 'node_key_mismatch'
+          error: 'Device registration required: initial certificate binding requires a valid device ID',
+          reason_key: 'device_id_required'
         }), {
-          status: 403,
+          status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       }
-      ctx.waitUntil((async () => {
-        try {
-          await env.DB.prepare(`
-            UPDATE node_public_keys SET last_seen_at = ? WHERE node_id = ?
-          `).bind(new Date().toISOString(), cleanNode).run();
-        } catch (_) {}
-      })());
-    } else {
       ctx.waitUntil((async () => {
         try {
           await env.DB.prepare(`
@@ -893,7 +920,7 @@ export async function handleCertRoutes(
           `).bind(
             cleanNode,
             pubKeyFingerprint,
-            deviceIdHeader || null,
+            deviceIdHeader,
             new Date().toISOString(),
             new Date().toISOString()
           ).run();
