@@ -27,6 +27,7 @@
 17. [开发方落地交付与自愈效果验收报告（2026-09-12 · 对应 §16 工单）](#17-开发方落地交付与自愈效果验收报告2026-09-12--对应-16-工单)
 18. [第六轮独立复核意见（针对 `cd9a1138` 落地 diff · 2026-09-12 · 基线 v1.36.104）——首次以代码 diff 为审查对象](#18-第六轮独立复核意见针对-cd9a1138-落地-diff--2026-09-12--基线-v136104首次以代码-diff-为审查对象)
 19. [开发方对第六轮复核的裁决与精准落地：拨乱反正，确立无退化自愈终局（基线 v1.36.105）](#19-开发方对第六轮复核的裁决与精准落地拨乱反正确立无退化自愈终局基线-v136105)
+20. [第七轮独立复核意见（针对 `663b6dfb` 落地 diff · 2026-09-12 · 基线 v1.36.105）——对"裁决依据"本身的可证伪性复核](#20-第七轮独立复核意见针对-663b6dfb-落地-diff--2026-09-12--基线-v136105对裁决依据本身的可证伪性复核)
 
 ---
 
@@ -1853,3 +1854,219 @@ main.js:2820/2833         About 面板一键复制 + 全文渲染 device_id
 | **版本号同步** | `pkg/version/version.go`, `desktop/gui/wails.json` | 均已对齐升级至 `v1.36.105` / `1.36.105` | ✅ PASS |
 
 至此，第六轮复核提出的合理项（R2、R3、R4、R5、R6）已全部彻底高质量落地；不合理项（R1）已通过第一性原理完成证伪与文档归档，系统达到最佳工程自愈状态。
+
+---
+
+## 20. 第七轮独立复核意见（针对 `663b6dfb` 落地 diff · 2026-09-12 · 基线 v1.36.105）——对"裁决依据"本身的可证伪性复核
+
+### 20.0 本轮复核对象与取值方式的转变
+
+`663b6dfb` 共 9 文件、`+120/-87`：`cert.ts`(12) / `cert-provision-offline.js`(8) / `app.go`(1) / `wails.json`(2) / 本文档(73) / `provisioner.go`(-59) / `hardware.go`(39) / `hardware_test.go`(11) / `version.go`(2)。
+
+前六轮复核的对象依次是"章节 → 章节 → 规格 → diff"。本轮出现第三种对象：**开发方对第六轮意见的"裁决"本身**。
+
+- §19.1.1 的五项"采纳"是**动作**，可直接跑命令验证（确实全部为真）；
+- §19.1.2 对 R1 的"不采纳"是一段**论证**，论证里含有可证伪的事实断言。
+
+**因此本轮的核心问题不是"改没改"，而是"否决所依据的事实是否成立"。** 一段否决论证只要其中一条缓解措施在代码中不存在，整个风险判断的结论就不能被采信——**这与前六轮"文档声称超出实现"是同一类错误的第三次换壳**（第二十二轮 ⑪：安全论证的事实前提未经确证；第二十三轮 ⑭：审查方标识符写错被固化为规格；本轮：**开发方把不存在的缓解措施写进安全论证以降低风险评级**）。
+
+---
+
+### 20.1 固定取证动作表（本轮 3 项实测 + 2 项探针）
+
+| # | 动作 | 命令 | 实测结果 |
+| :--- | :--- | :--- | :--- |
+| 1 | 变更面清点 | `git show --stat 663b6dfb` | 9 文件 / +120 / -87 |
+| 2 | 前端是否被本轮触碰 | `git show --name-only 663b6dfb \| rg 'main\.js\|i18n\.js'` | **零命中**（见 R7） |
+| 3 | 是否曾实现过脱敏 | `git log --oneline -S 'shortDeviceID' -- desktop/gui/frontend/src/main.js` | **空（从未）** |
+| 4 | 反向探针 D | 临时追加 T20-b 用例跑 `npm run test:cert:offline` | 见 §20.4（跑完即复原，`git status --porcelain` 为空） |
+| 5 | 反向探针 E | 禁用 `InvalidateFingerprintCache` 的 nodeID 清理后跑 `TestGetDeviceNodeID` | **转红**（`hardware_test.go:54`）⇒ 该层**有**判别力，我原假设被推翻并已撤回（见 §20.7） |
+
+**验收基线复跑（全绿）**：`go build ./...` 退出 0；`go test ./pkg/server ./pkg/cert` → `ok eqt/pkg/server 32.490s` / `ok eqt/pkg/cert`；`npm run typecheck` → `tsc --noEmit` 无输出；`npm run test:cert:offline` → **61 passed, 0 failed**；`npm run test:offline` → **131 passed, 0 failed**。
+
+---
+
+### 20.2 ✅ 已彻底落地的项（R2 / R3 / R4 / R5 / R6，逐条实测为真）
+
+| 项 | §19 声明 | 我的实测 | 判定 |
+| :--- | :--- | :--- | :---: |
+| R2 | 彻底删除 `MigrateFallbackNodeCredentials` 及全部调用点 | `rg 'MigrateFallbackNodeCredentials\|fallbackCandidates'`（`-g '*.go' -g '*.ts'`）**零命中**（仅注释留名） | ✅ |
+| R3 | 撤销首绑 400 门禁，无 `device_id` 时记 NULL 并正常签发 | `cert.ts` 中 `device_id_required` **零命中**；`INSERT` 已回退为 `deviceIdHeader \|\| null`（`:908-913`）；探针 D 实测首绑返回 **200 + `device_id: null`** | ✅ |
+| R4 | 全空指纹不标记 `hasCached`，实现 `InvalidateFingerprintCache` 并在重试中调用 | `hardware.go:209-215` 按结果分支；`:523-535` 新增导出函数；`app.go:2123` 在重试循环中调用 | ✅（形态正确，代价见 R9） |
+| R4b | 成功日志由结果驱动 | `:211` `cached successfully` 与 `:214` `[WARN] ... all empty` **已分叉** | ✅ |
+| R5 | 未覆盖的 authID 候选集 | 随 R2 删除而**物理消解**（`fallbackCandidates` 全仓零命中） | ✅ |
+| R6 | `device_id_required` 缺消费端 | 随 R3 撤销而**物理消解**（该 reason_key 全仓零命中） | ✅ |
+
+**这一步必须如实记功**：上表六项**全部为真**，第五轮以来第二次出现"声称零偏差"。尤其 R2 的处置**完全采纳了我建议的方向**（不迁移 ⇒ 允许 `cfg.Secure=false` 优雅退化为明文），而不是折衷。**方向性判断上，开发方与审查方在 R2/R3 上已经完全对齐。**
+
+---
+
+### 20.3 🔴 R7｜§19.1.2 用来**降低 R1 风险评级**的那条缓解措施，在代码中不存在
+
+§19.1.2 第 3 点"现实威胁模型的风险收益权衡"把 R1 判定为可接受的依据有三条：① 证书仅用于局域网回环；② 云端已实施单节点 3 次/24 小时频控；③ **"前端已将 About 界面的 Device ID 复制改为安全脱敏复制，极大降低了用户无意泄露凭证的概率"**。
+
+第 ③ 条**实测不成立**：
+
+| 环节 | 实测 |
+| :--- | :--- |
+| 本轮是否改过前端 | `663b6dfb` 的 9 个文件中**没有** `main.js` / `i18n.js`（`git show --name-only` 零命中） |
+| 历史上是否实现过脱敏 | `git log -S 'shortDeviceID' -- desktop/gui/frontend/src/main.js` → **空**（从未） |
+| 全仓唯一的 `shortDeviceID` | `pkg/server/server.go:1759` 定义、`:1768` 调用——**只用于服务端接收目录命名**，与 UI 无关；且按第二十三轮 ⑮ 已记录，它**未导出**，前端根本拿不到 |
+| About 面板当前行为 | `main.js:2833` **全文**渲染 `state.status.deviceID`（无截断，`user-select: text`、`word-break: break-all`）；`:2820` 复制按钮 `data-copy-text="${escapeAttr(state.status.deviceID)}"` 携带**完整值**；`:3516` 原样写入剪贴板 |
+| 按钮的设计意图 | `title`/`aria-label` = `t('copy_device_id')`，文案即 **"Click to copy Device ID"** |
+
+⇒ **"脱敏复制"不存在，而且该按钮存在的唯一目的就是把完整值交出去。** 这不是"降低泄露概率"，而是**产品主动、一键、鼓励泄露**。
+
+**为什么这条比"文档写错一行"严重得多**：它是**一段安全论证的承重墙**。去掉 ③ 之后，R1 的威胁模型回到第六轮的原状——**任何曾拿到过该字符串的人（客服工单、聊天截图、crash dump、屏幕可见、或直接点那个"复制 Device ID"按钮）都可以用自己新生成的私钥，对受害机的公开 nodeID 发起换绑，取得 `*.<受害 node>.direct.eqt.net.im` 的公信证书**。第 ① 条（仅局域网回环）确实成立，但它约束的是**证书的杀伤力**，不是**换绑的可行性**——换绑成功即意味着受害机自身的自愈通道被别人占据（受害机与自己发起的换绑将互相覆盖，形成反复争夺），这本身就是第一性原理下不可接受的属性。
+
+**处置建议（二选一，必须选一个）**：
+1. **撤回该论断**，并在 §19.1.2 的权衡里把 ③ 删除或改标为"待实现"；或
+2. **真正实现它**——前端展示与复制都改为截断值（例如前 8 位 + `…`），完整值只能通过显式二次确认或"复制完整值"的独立操作取得，并同步验证 `main.js:2833` 与 `:2820` 两处。
+
+**无论选哪条，都不影响 R1 的方向裁决权归属开发方；但"依据"必须先与代码一致。** 这是本线程第三次出现"审查/开发双方的书面断言未经代码核验"（前两次见 ⑪、⑭），固化为红线 ⑯ 的加强条款。
+
+---
+
+### 20.4 🔴 R8｜**NULL 绑定的节点永不可换绑**——而这恰好是本轮刚刚放开的人群（探针 D 实证）
+
+`cert.ts:869-889` 的换绑分支（`663b6dfb` **未修改**，与 `cd9a1138` 逐字相同）：
+
+```ts
+const existingKey = await env.DB.prepare(
+  `SELECT public_key_sha256, device_id FROM node_public_keys WHERE node_id = ?`
+).bind(cleanNode).first<{ public_key_sha256: string; device_id: string | null }>();
+
+if (existingKey) {
+  if (existingKey.public_key_sha256 !== pubKeyFingerprint) {
+    const boundDeviceId = existingKey.device_id || '';
+    if (boundDeviceId && boundDeviceId === deviceIdHeader) {   // ← :872
+      /* 授权轮换 */
+    } else {
+      /* 403 node_key_mismatch */                              // ← :886-889
+    }
+  }
+```
+
+`:871` 的 `|| ''` 把 NULL 归一为**空串**，而 `:872` 的门是 `boundDeviceId && ...`——**空串为 falsy ⇒ 直接落 403**。于是：
+
+> **T20.0 刚刚被"放开"的那个节点（首绑未带 `device_id`、D1 中 `device_id = NULL`），其私钥一旦丢失，将永久无法完成轮换——即使它后来拿到了 `device_id` 也一样。**
+
+**反向探针 D 实测**（在该测试文件末尾临时追加，跑完即复原，`git status --porcelain` 为空）：
+
+```
+PROBE_A first_bind_no_device_id    status=200 row={"node_id":"e1f2a3b4c5d9",
+                                              "public_key_sha256":"eecdc8ba…","device_id":null}
+PROBE_B rotation_on_null_bound_no_header  status=403 reason_key="node_key_mismatch"
+PROBE_C rotation_on_null_bound_with_header status=403 reason_key="node_key_mismatch"
+```
+
+三条合起来说明：**首绑可以不带 `device_id`，但此后任何换绑都要求行内已有非空 `device_id`——这是一条只进不出的单向门。**
+
+**为什么这是 🔴 而不是🟠**：它**直接击穿 §19.1.2 的中心承诺**。§19.1.2 的开篇立论是"用户为什么遇到 `node_key_mismatch`？**100% 的真实物理场景是因为旧私钥已经不复存在**（重装 OS、清空 `%APPDATA%\eqt`、磁盘损坏换硬件、杀毒误删）"，并据此宣称该方案"既解决了重装系统后私钥丢失的自动恢复问题"。而 §19.1.1 第 2 点**刚刚**为"关闭遥测 / 纯离线"用户恢复了首绑能力——这批用户在**重装 OS 后仍然关闭遥测或仍然离线**（这正是他们不带该头的原因），于是：**他们被第一项修改放进来，又被第二项修改永久锁死。自愈能力对该人群恰好为 0。**
+
+**这正是第二十四轮 ⑰(a) "NULL 永不可升级" 的同型缺陷在同一张表上复发**，且本轮 R3 的处置**只解决了"进不来"，没有解决"出不去"**（R3 原建议第 2 条已提示"应写入一个客户端生成的本地标识而非拒绝服务"，本轮采取的是"记 NULL"）。
+
+**处置建议（与 §20.3 独立，可分别选择）**：
+- 最小改动：`:872` 的门放宽为"行内 `device_id` 为空 **且** 本次也未提供 ⇒ 允许换绑"（即"从未绑定过身份的节点，其首次身份认定永远开放"）；或
+- 更稳：首绑时写入客户端生成的本地派生标识（如对本地公钥做哈希），使该列永不为 NULL——但这需要客户端改动，属于 §18.5 建议 2 的原方案。
+
+**并须补一条用例**：`T20.x`：首绑 NULL → 换新钥 + 无头 ⇒ 期望 200。当前 `cert-provision-offline.js` 只有 T20.0~T20.3，**该组合零覆盖**。
+
+---
+
+### 20.5 🟠 R9｜失效接口的**代价**：热路径从"缓存空值"回落到**持锁同步 WMI**，且日志陈述了虚假状态
+
+`InvalidateFingerprintCache`（`hardware.go:523-535`）在清空指纹后把 `precomputeStarted` 置回 **false**（`:529`）。该标志的语义是"异步预计算协程在飞行中"，但它**不可再被置真**：
+
+| 事实 | 实测 |
+| :--- | :--- |
+| 预计算入口只在进程启动时调用一次 | `main.go:19`、`desktop/gui/main.go:46`、`cmd/eqt/main.go:12`——**三处全在启动路径**，运行期无任何再触发点 |
+| 完成信号是**一次性的** | `hardware.go:217-219` `precomputeOnce.Do(func(){ close(precomputeDone) })`——`sync.Once` 用尽、channel 已关，**无法重新武装** |
+| 失效后的走向 | `:263 !hasCached` 为真、`:264 precomputeStarted` 为假 ⇒ 落 `:280-291` 的 **else 同步分支** |
+| 该分支持锁做三路 WMI | `:257 defer fingerprintMu.Unlock()` ＋ `:282-284` `GetBoardUUID()/GetCPUSerial()/GetSystemDiskSerial()` —— **三路阻塞 I/O 在持有全局互斥锁期间执行** |
+| 若同步分支仍返回全空 | `:288` 条件不成立 ⇒ `hasCached` 保持 false ⇒ **此后每一次调用都重复这三路持锁 WMI** |
+| 谁在热路径上调用 | `server.go:2451`（**局域网传输启动**）、`app.go:1256`（`AppInfo`，前端轮询） |
+| 日志陈述 | `:281` 打印 `Warning: Sync retrieve fingerprints (**precompute not started**)`——预计算**早已完成**，此陈述为假 |
+
+**净效果**：对"WMI 持续返回空"的这一小群机器，改动前（`hasCached=true` 缓存空值）每次调用是**零 I/O 的即时返回**；改动后**每次调用都是三路持锁 WMI**。这正是 R4 想救的人群，却恰好是承受该代价的人群。它同时触碰了本项目自订的后端规则——"WMI 类高时延 I/O 不得出现在交互主路径的同步路径上"。
+
+**潜在陷阱（当前不可达，须记录）**：`precomputeStarted=true` ＋ `precomputeDone` 已关 ＋ `hasCached=false` 三者叠加时，`:269-274` 的 `select` 会**立即**从已关闭 channel 返回，读到的是刚被清空的缓存 ⇒ **返回空且永不恢复**。当前没有任何运行期调用点会重新触发预计算，故**不可达**；但状态机已经处在一个"可被误用即静默失效"的形态上——只要日后有人为了"重试"而再调一次 `PrecomputeDeviceFingerprints()`，换来的就是**永久空指纹且无任何报错**。
+
+**根因**：`sync.Once` ＋ 一次性 channel 与"可失效"的需求在结构上冲突——**"失效 + 重算"无法在这个设计里表达**。
+
+**处置建议**：把一次性信号换成**可重入的代数计数器**（`precomputeGen int`，读取方比对期望代数），或在失效时**重建 channel**；并且不要让 `precomputeStarted` 承担"是否已完成"的语义（它现在同时表达两件事，因此必然有一处为假）。若短期不重构，则**至少**把 `:281` 的日志改为陈述事实（如 `recomputing synchronously after invalidation`），并为持锁 WMI 评估是否需要通过局部变量在锁外执行。
+
+---
+
+### 20.6 🟠 R10｜§19.3 验收表引文不保真（本线程第 N 次"表格数字与实测不符"）
+
+| §19.3 声明 | 我的实测 | 差异 |
+| :--- | :--- | :--- |
+| "`npm run test:offline` (T20.1~T20.4)" | `rg 'T20\.' cert-provision-offline.js` → **T20.0 / T20.1 / T20.2 / T20.3**，**不存在 T20.4** | 引用了一个不存在的用例编号（同时掩盖了 §20.4 的覆盖缺口） |
+| "**131 passed, 0 failed** (60 assertions passed)" | 套件总数 **131 passed, 0 failed ✅**；但 cert 套件实测为 **61 passed, 0 failed** | 断言数 60 ≠ 61 |
+| "Go 语言核心测试套件 … 10 个核心包**全部 PASS**" | `go test ./pkg/server ./pkg/cert` 复跑 ok ✅（`pkg/server` 32.490s） | 无差异 |
+
+数字不保真本身是小事，**但它掩盖了 §20.4 的零覆盖**——"T20.1~T20.4"读起来像换绑场景已被完整覆盖，实际覆盖范围恰好停在缺陷的边界上。做法与第十九轮 ⑫ 同型：**验收表须逐字与被验证物对齐**。
+
+---
+
+### 20.7 🟡 R11｜自愈路径的测试覆盖缺口（并附我本轮被推翻的一个假设）
+
+**我原本的假设**：`hardware_test.go` 第 7 步（`:66-78`）对"重算"零判别力。**反向探针 E 推翻了这个假设**：把 `InvalidateFingerprintCache` 的 nodeID 清理部分（`:532-534`）删掉后，`TestGetDeviceNodeID` **转红**（`hardware_test.go:54`）——说明该层确实被覆盖。**假设撤回，如实记在此处。**
+
+但探针 E 也暴露了覆盖的**真实边界**：`hardware_test.go:46` 之后 `testFingerprintOverride` 一直为 `true`，而 `GetDeviceFingerprintHashes` 在 `hardware.go:252-254` 对 `testFingerprintOverride || testBoardUUID != "" ...` **提前 return**，因此——
+
+- **`:280-291` 的同步重算分支，没有任何测试执行过**（它正是 R9 中承担自愈与代价的那段代码）；
+- `precomputeStarted` / `precomputeDone` / `precomputeOnce` 的状态机，同样零覆盖；
+- 第 7 步 `:75` 的 `invalidatedNodeID == recoveredNodeID` 两者**都走 override 路径**，验证的是"同一输入同一哈希"，不是"经真实硬件重算后恢复"。
+
+⇒ §19.3 该行"重试时调用确保**真实重算**"这一断言，**当前测试体系无法支持**。建议补一个不依赖 override 的用例（注入可替换的 `GetBoardUUID` 等采集函数，而非绕过缓存层），使"失效 → 重算 → `hasCached` 恢复"成为可断言路径。
+
+---
+
+### 20.8 本轮全部取证记录（可复现）
+
+```
+hardware.go:154-161       fingerprintMu / hasCached / precomputeStarted / precomputeDone / precomputeOnce
+hardware.go:209-215       按结果分支的 hasCached + 成功/WARN 日志（R4 已修）
+hardware.go:217-219       precomputeOnce.Do(close(precomputeDone))（一次性，不可重装）
+hardware.go:252-254       testFingerprintOverride 早退（测试无法进入真实缓存路径）
+hardware.go:257/263/264   持锁 + !hasCached + precomputeStarted 判定
+hardware.go:269-279       300ms 等待分支；:270 读已关闭 channel
+hardware.go:280-291       同步分支：持锁三路 WMI，全空则不置 hasCached
+hardware.go:281           "precompute not started" —— 虚假陈述
+hardware.go:523-529       InvalidateFingerprintCache：清 4 字段 + precomputeStarted=false
+hardware.go:532-534       清 cachedNodeID（探针 E 证明其被 step 5 覆盖）
+app.go:2123               重试循环内调用 InvalidateFingerprintCache（每次迭代）
+server.go:2451            传输启动路径调用指纹/nodeID
+app.go:1256               AppInfo 轮询路径
+cert.ts:865-889           SELECT(含 device_id) / 换绑授权式 :872 / 403 :886-889
+cert.ts:908-913           INSERT 回退为 deviceIdHeader || null（R3 已修）
+cert-provision-offline.js:T20.0~T20.3  无 T20.4；无 NULL 绑定换绑用例
+pkg/server/server.go:1759/1768          shortDeviceID 仅服务端目录命名，未导出
+desktop/gui/frontend/src/main.js:2820/2833/3516  device_id 全文渲染 + 一键复制完整值
+```
+
+**探针记录（均已复原，`git status --porcelain` 为空）**：
+- **探针 D（NULL 绑定换绑）**：临时追加 T20-b 用例 → `PROBE_B/C = 403 node_key_mismatch` → 文件已 `git checkout --` 复原，残留检查 `rg -c 'PROBE_'` = 0。
+- **探针 E（nodeID 清理的判别力）**：临时移除 `hardware.go:532-534` → `TestGetDeviceNodeID` **FAIL**（`hardware_test.go:54`）→ 复原后 `ok eqt/pkg/server 0.014s`。**结论与我的初始假设相反，已撤回该假设。**
+
+---
+
+### 20.9 收敛评估与下一步（第七轮）
+
+**本轮的实质进步**：R2/R3/R4/R5/R6 **全部真实落地，且 R2/R3 走的是我建议的方向而非折衷**——这是本线程第二次"零偏差"。审查对象也从 diff 推进到了**裁决论证**，形态进一步收敛。
+
+**剩余距离只有三项，且性质各异**：
+
+| 编号 | 性质 | 需要做的判断 | 我的建议 |
+| :--- | :--- | :--- | :--- |
+| R7 | **论证依据不实** | "脱敏复制"是否存在 | 二选一：撤回该论断，或真正实现脱敏。**这是必须处理的**——它目前是 R1 风险评级偏低的主要依据 |
+| R8 | **门只进不出** | NULL 绑定节点能否换绑 | 放宽 `:872` 的门（行内为空且本次也为空 ⇒ 放行），或首绑写入本地派生标识；并补 T20 用例。**这是本轮唯一的真缺陷** |
+| R9 | **失效的代价与虚假状态** | 可重入状态机 | 用代数计数器/channel 重建替换 `sync.Once`；至少修正 `:281` 日志。可延后，但须记录在案 |
+
+**关于 R1 本身**：我**接受方向裁决权归开发方**——"重装后自愈"确实是本线程要解决的原始 Bug，我第六轮提出的"旧私钥签名"在"旧钥确已丢失"这一主流场景下确实无解，这一点开发方说对了。**但接受方向 ≠ 接受依据**：R7 所引用的缓解措施不存在，R8 所暴露的人群无出路。**这两条在依据被修正前，R1 的风险评级不能维持现状。**
+
+**下一步**：开发方就 R7/R8 各选一条路（R9 可延后）→ 我按同一方式（只审 diff + 反向探针）复核一轮 → 三项确认后本线程关闭。
+
+**发布建议维持 §18.10 的结论**：`cd9a1138` 不建议发版（R2/R3 已修，但 R8 使关遥测/离线用户在丢失私钥后永久失去 LAN-TLS）。`663b6dfb` 相比 `cd9a1138` 是**净改善**（R2/R3 的硬回归已消除），但 **R8 意味着该人群的自愈承诺尚未兑现**——是否带 R8 发版，取决于开发方是否接受"该人群降级为明文"作为终态。
