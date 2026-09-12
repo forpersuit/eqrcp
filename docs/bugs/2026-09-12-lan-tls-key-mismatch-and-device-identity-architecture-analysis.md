@@ -22,6 +22,7 @@
 12. [开发方对第三轮独立复核意见的深度回应与终局闭环落地规格](#12-开发方对第三轮独立复核意见的深度回应与终局闭环落地规格)
 13. [第四轮独立复核意见（针对 §12 终局落地规格 · 2026-09-12 · 基线 v1.36.103）](#13-第四轮独立复核意见针对-12-终局落地规格--2026-09-12--基线-v136103)
 14. [开发方终局裁定：跳出枝节博弈，确立端云极简自愈终局规格](#14-开发方终局裁定跳出枝节博弈确立端云极简自愈终局规格)
+15. [第五轮独立复核意见（针对 §14 终局裁定 · 2026-09-12 · 基线 v1.36.103）——兼本轮复审的终止声明](#15-第五轮独立复核意见针对-14-终局裁定--2026-09-12--基线-v136103兼本轮复审的终止声明)
 
 ---
 
@@ -1182,6 +1183,153 @@ if (!uuid && !cpu && !disk) {
 - **用户不需要知道门牌号的生成算法**：在前端 GUI 界面中，普通用户完全不需要感知 `Node ID` 的存在，它只是在后台默默拼接在二维码和 TLS 证书 SAN 列表里的一串寻址技术参数；
 - **前端心智极简统一**：About 界面只向用户展示一个唯一的、脱敏的 `设备标识 (Device ID)`，用于商业授权展示与技术支持沟通；
 - **底层严密分工，上层极简统一**——这正是优秀软件工程架构的终极形态。
+
+---
+
+## 15. 第五轮独立复核意见（针对 §14 终局裁定 · 2026-09-12 · 基线 v1.36.103）——兼本轮复审的终止声明
+
+### 15.1 首先确认：§14 是本线程首次方向完全正确的收敛
+
+§14.1 的自我剖析（"责任倒置"）与 §14.3 的处置（**彻底废除轨道 B**）**是对的**，且与本轮审查在 §13 的 U1/U2 建议方向一致：轨道 B 是"为容忍客户端偶发脏数据而在服务端堆防御"的产物，**删除优于规格化**。§14.2 把治理点前移到客户端常量，是唯一能同时消解 U1/U2/T2 三类的做法。
+
+因此本轮复核的**性质与前四轮不同**：不再质疑方案方向，只核验该方案**落地所依赖的事实前提**。以下 6 项全部以 `rg`/`sed` 实测取证。
+
+### 15.2 ✅ U7 已真实闭环（四轮来首次"声称"与"实测"完全一致）
+
+| 项 | 实测 |
+| :--- | :--- |
+| §8.1.3 换绑流程图（原 `:406` mermaid 节点） | `:408` 现为 `Worker->>Worker: 校验 Header 中的 deviceIdHeader (头名 'X-EQT-Device-ID')` ✅ |
+| §10.3 实施规格正文（原 `:666`） | `:668` 现为「不仅校验请求头 **`X-EQT-Device-ID`** 非空」✅ |
+| §9.3 表格残留 | 均在 ❌ 标注下"原文保留以留痕，请勿据其实现" ✅（有标注，不算残留） |
+
+⇒ §14.5 对 U7 标"全局零残留"，**本轮实测成立**。这是本线程**第一次**开发方的"声称"与实测完全吻合。
+
+### 15.3 🔴 V1 —「维持 `device_id` 严格的 `NOT NULL` 约束」是伪前提，且列名错误
+
+§14.3.1 第 1 条称："废除轨道 B……数据库表 `node_public_keys` 中，`device_id` 字段**维持**严格的 `NOT NULL` 约束"。
+
+实测 `schema.sql:274-282`：
+
+```sql
+CREATE TABLE IF NOT EXISTS node_public_keys (
+    node_id           TEXT PRIMARY KEY,
+    public_key_sha256 TEXT NOT NULL,
+    device_id         TEXT DEFAULT NULL,      -- ← 不是 NOT NULL
+    first_bound_at    TEXT NOT NULL,
+    last_seen_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_node_public_keys_device ON node_public_keys(device_id);
+```
+
+- 「**维持** `NOT NULL`」暗示该约束已存在 ⇒ 实施方会**跳过**"新增约束"这一步，而实际上 `device_id` 自建表起就是 `DEFAULT NULL`，且 `:282` 还专门为它建了索引。⇒ 措辞须改为「**新增** `device_id` 非空约束（当前为 `DEFAULT NULL`），并处理存量 NULL 行（见判定 C）」。
+- §14.3.1 第 2 条的写入语句 `INSERT INTO node_public_keys (node_id, public_key, device_id, created_at, last_seen_at)` 中，**`public_key` 与 `created_at` 两个列名在表中不存在**（实为 `public_key_sha256`、`first_bound_at`；可对照 `cert.ts:891` 的真实列清单）。照此写即 SQL 报错。
+
+### 15.4 🔴 V2 — 判定 A 的核心能力（改写公钥）在代码中不存在，§14.5 却标 ✅「契约闭环」
+
+§14.3.1 判定 A 称"**直接允许自动更新公钥**，仅受 `cert.ts:703-705` 的 24h/3 次约束，零阻断、零弹窗、平滑自愈"。
+
+实测 `cert.ts` 全文对 `node_public_keys` 只有三种语句：
+
+| 行 | 语句 |
+| :--- | :--- |
+| `:866` | `SELECT public_key_sha256 FROM node_public_keys WHERE node_id = ?` |
+| `:883` | `UPDATE node_public_keys SET last_seen_at = ? WHERE node_id = ?` |
+| `:891` | `INSERT INTO node_public_keys (node_id, public_key_sha256, device_id, first_bound_at, last_seen_at)` |
+
+**零处改写 `public_key_sha256`。** 这正是 TOFU 死锁的**根因能力**——本线程从第 21 轮起指出"全仓无换绑 UPDATE"，历经四轮，代码未变。§14.5 却把它标为 `✅ 契约闭环`。
+
+⚠️ 这是记忆中所记"文档宣称超出实现"的**第十五轮复现**，且落在**整份文档唯一的能力开关**上。判定 A 若不配一条 `UPDATE public_key_sha256 = ?`，§14 的全部自愈论述仍是**规格**而非**闭环**，措辞须降级为"待实施"。
+
+### 15.5 🔴 V3 — 重试若下沉到指纹读取层，即构成传输路径的存量回归（违反 Rule 13）
+
+§14.2.1 要求"在调用 `provisioner.Provision()` 之前，若检测到指纹哈希为空，客户端自动执行带退避的 WMI 重试（最多 3 次，单次超时放宽至 1500ms）"。该措辞**未限定重试代码的落点**，而两层的调用面差异极大：
+
+| 层 | 非测试调用点 | 是否在交互/传输路径上 |
+| :--- | :--- | :--- |
+| `GetDeviceFingerprintHashes()`（`hardware.go:247`） | **5 处**（`hardware.go:404`/`:500`、`license.go:223`/`:372`/`:622`） | `license.go` 三处位于**许可证校验**链路 |
+| `GetDeviceNodeID()`（`hardware.go:485`） | **3 处**（`server.go:2451`、`desktop/gui/agent.go:1031`、`app.go:1255`/`:2120`） | **`server.go:2451` 位于每次 LAN-TLS 传输的证书装载与 URL 生成路径** |
+
+⇒ 实施方若把重试放进 getter（最"自然"的落点），则**每次局域网传输启动最坏增加 4.5 秒**（3 × 1500ms），并把 `DevProvisionDeviceTLSCert`（Wails 直绑方法，`app.go:2102`）从"秒级返回"变成"4.5 秒阻塞主交互线程"。这正是 §14 本身想避免的那类回归。
+⇒ 规格必须显式写死：**重试只允许位于异步 provision 链（`app.go:265 go a.silentProvisionDeviceTLSCert()` → `:2111` → `:2119`），严禁置于 `GetDeviceFingerprintHashes()` / `GetDeviceNodeID()` 之内**。
+
+### 15.6 🔴 V4 — `cachedNodeID` 缓存会让重试失效：§14.2 的治本方案在当前实现下不成立
+
+`GetDeviceNodeID()`（`hardware.go:485-513`）首调即固化 `cachedNodeID`，而**回退分支就写在缓存赋值里**：
+
+```go
+uuid, cpu, disk := GetDeviceFingerprintHashes()
+if uuid == "" && cpu == "" && disk == "" {
+    if authID := GetAuthorityDeviceID(); len(authID) >= 12 {
+        cachedNodeID = strings.ToLower(authID[:12])   // ← 回退值被写入缓存
+        return cachedNodeID
+    }
+}
+```
+
+若进程内任何**早于** provision 的调用先触发（`agent.go:1031` 的证书有效性检查、`license.go` 校验链路、`app.go:1255`），缓存即被 `authID[:12]`（或常量 `71546855d627`）污染，**并在整个进程生命周期内不再重算**。此时 §14.2.1 的 WMI 重试即使 3 次全部成功，`node_id` 也**不会改变**，常量照样上行——§14.2 的"常量物理消解"落空。
+
+⇒ 规格须追加：**重试成功后必须失效 `cachedNodeID`**。现有 `ResetCachedNodeIDForTest()`（`hardware.go:516`）为测试专用，需另建非测试重置入口（或把回退分支从缓存路径中摘除，即"空指纹不缓存"）。
+
+### 15.7 🟠 V5 —「99.999%」是无来源的量化承诺；重试代码不存在却标 ✅「物理消解」
+
+- §14.2.1 称"在物理 PC 上，重试成功率达 **99.999%**"——无任何实测或来源，与记忆中"每日数万张"属同型（对外/决策文档中的不可核验量化承诺）。
+- `rg -n 'retry|Retry' pkg/server/hardware.go` **零命中**；`pkg/cert` 与 `pkg/server` 无任何 WMI 重试逻辑。⇒ §14.2.1 是**纯新增方案**，§14.5 却标 `✅ 物理消解`。措辞须降级为"待实施"，量化承诺改为"以实测标定"。
+
+### 15.8 🟡 V6 — §14.6 表格的事实错误：Node ID 与网卡无关
+
+§14.6 第 1 节表格称 Node ID 的"物理本质/生命周期"为"**与物理网卡及局域网拓扑绑定**（更换网络适配器或重置时可能微调）"。
+
+实测 `hardware.go:500`：`GetDeviceNodeID()` 的唯一输入是 `GetDeviceFingerprintHashes()`，其成分为**主板 UUID（`GetBoardUUID`）/ CPU 序列号（`GetCPUSerial`）/ 系统盘序列号（`GetSystemDiskSerial`）**——**与网卡、与局域网拓扑无关**。更换网卡不会改变 `node_id`；反之重置主板/换盘会。
+
+该表的结论（Node ID 与 Device ID **必须分开**）**依然成立**，但其论据中含一条会被当成产品语义的错误事实（该表是给用户看的"终极定论"）。⇒ 修正该行为"与主板/CPU/系统盘序列号绑定"。
+
+### 15.9 ✅ 本轮确认属实项
+
+| 项 | 实测结论 |
+| :--- | :--- |
+| §14.3 废除轨道 B 的方向 | **正确**，与 §13 U1/U2 建议一致（删除优于规格化） |
+| §14.2 把治理点前移至客户端常量 | **方向正确**，是同时消解 U1/U2/T2 的前提 |
+| §14.4.1 `ProvisionOptions` 透传方案 | **可实施**：遵循既有 `opts.DeviceID`/`opts.Signature` 惯例，无 import 环 |
+| §14.4.2 无 alert 原则 | 与项目 `CLAUDE.md` 一致 |
+| §14.4.3 标注新建 `format.ts` | 已按 §13 U6 修正 |
+| U7 两处残留 | **实测已全部归位**（`:408`、`:668`），§9.3 残留均带 ❌ 标注 |
+| **唯一生产 provision 调用点** | `desktop/gui/app.go:2171`（`RequestDeviceCertificate`），静默路径**确在 goroutine 中**（`app.go:265`）——§14.2.1 关于"不受 300ms 束缚"的判断对静默路径**成立**（但对 `DevProvisionDeviceTLSCert` 不成立，见 §15.5） |
+
+### 15.10 📈 复发计数与性质说明
+
+「文档声明与实现不符」连续 **十五轮**。但本轮性质有实质改善：**§14 的方案方向首次与审查方建议完全一致**（治本 + 删机制），残留偏差集中于三类——① **数据库契约描述**（V1：把从未存在的约束写成"维持"，并写错两个列名）；② **能力落地状态标注**（V2/V5：规格已写即标 ✅ 闭环，而代码零改动）；③ **实施落点**（V3/V4：重试的位置与缓存失效未规定，导致治本方案在当前实现下不成立）。
+
+⇒ 「为修缺陷而新引入的机制自身带缺陷」这一形态（第二十四轮提出）在本轮**消退**；回归的是**状态标注虚高**（V2/V5）。
+
+### 15.11 ⏹ 复审终止声明与实施移交清单
+
+**本线程 5 次提交中 4 次为纯文档**（`git log`：`f29b8012`/`5b663ed4`/`da6fd630`/`1be31df5`/`d7a02842`/`3d2b6698`/`ea1868c0`，仅 `c7e191e0` 含代码）。文档的**可陈述面是无限的**，每新增一章都会产生新的可证伪陈述（本轮 U7 的"彻底清理"、§14.5 的"✅ 物理消解"皆此类）；而代码是有限的，测试会给出确定答案。⇒ **规格化的边际收益已低于实施。**
+
+**自本节起，本文档不再新增规格章节。** 下一轮的审查对象应是 **diff**，而非文档章节。规格已足以开工，移交清单如下（三步，删除多于新增）：
+
+| 步 | 动作 | 位置 | 规模 |
+| :--- | :--- | :--- | :--- |
+| **Step 1（根因）** | 删除 `GetDeviceNodeID()` 的全空回退分支（改为返回空），空指纹**不写入** `cachedNodeID`；在异步 provision 链内加 WMI 重试（3 次/1500ms）并在成功后失效缓存；常量硬阻断 | `pkg/server/hardware.go:499-513`、`desktop/gui/app.go:2111-2120` | ~20 行 |
+| **Step 2（能力）** | mismatch 分支加一次 `SELECT device_id`，比对通过后 `UPDATE node_public_keys SET public_key_sha256 = ?, last_seen_at = ?` ——**这是 TOFU 自愈的真正开关，四轮未写** | `cloudflare/eqt-drm-api/src/routes/cert.ts:865-900` | ~5 行 |
+| **Step 3（清理）** | 从规格中**删除**轨道 B / NULL 记录判定 C / 配额预留三节——根因修掉后它们是死代码 | 本文档 §12.2、§14.3.1 判定 C、§14.5 相关行 | 净删除 |
+| **Step 4（约束）** | `node_public_keys.device_id` 由 `DEFAULT NULL` 改 `NOT NULL`（**新建约束，非"维持"**），并处理存量 NULL 行 | `cloudflare/eqt-drm-api/schema.sql:277` | 1 行 + 迁移 |
+
+**验收判据**（可机读，替代文档评审）：① 指纹全空时 `GetDeviceNodeID()` 返回空串且不被缓存（Go 单测）；② `cert.ts` 存在对 `public_key_sha256` 的 UPDATE（`rg` 命中）；③ 私钥被删除后重新 provision，**同一 `device_id` 下换绑成功**（Worker 测试）；④ 局域网传输启动耗时**无增加**（回归探针：`server.go:2451` 路径的基准测试）。
+
+### 15.12 探针记录
+
+| 探针 | 命令 | 结果 |
+| :--- | :--- | :--- |
+| V1 列与约束 | `rg -n -A 10 'CREATE TABLE IF NOT EXISTS node_public_keys' schema.sql` | `:277 device_id TEXT DEFAULT NULL`、`:282` 建索引 ⇒ 非 NOT NULL |
+| V1 列名 | `rg -n 'INTO node_public_keys' cert.ts` | `:891` 真实列为 `public_key_sha256`/`first_bound_at` |
+| V2 换绑能力 | `rg -n 'public_key_sha256\s*=\|SET\s+public_key\|UPDATE node_public_keys' cert.ts` | 唯一命中 `:883 UPDATE ... SET last_seen_at` ⇒ **无改写公钥语句** |
+| V3 影响面 | `rg -n 'GetDeviceFingerprintHashes\(\|GetDeviceNodeID\(\)'` | 5 + 3 个非测试调用点，含 `server.go:2451`（传输路径） |
+| V3 异步性 | `rg -n 'silentProvisionDeviceTLSCert'` | `app.go:265 go a.silentProvisionDeviceTLSCert()` ⇒ 静默路径确为 goroutine |
+| V4 缓存 | `sed -n '485,516p' hardware.go` | 回退值写入 `cachedNodeID`；`ResetCachedNodeIDForTest` 为测试专用 |
+| V5 重试存在性 | `rg -n 'retry\|Retry' pkg/server/hardware.go` | **零命中** |
+| V6 node_id 成分 | `sed -n '499,513p' hardware.go` | `GetDeviceFingerprintHashes()` → sha256，**与网卡无关** |
+| U7 闭环 | `rg -n "头名\|deviceIdHeader" <doc>` | `:408` 与 `:668` 均为 `X-EQT-Device-ID` ⇒ 已归位 |
+| 唯一调用点 | `rg -n 'RequestDeviceCertificate' --glob '*.go'` | 生产仅 `app.go:2171` |
 
 
 
