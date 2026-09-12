@@ -868,15 +868,27 @@ export async function handleCertRoutes(
 
     if (existingKey) {
       if (existingKey.public_key_sha256 !== pubKeyFingerprint) {
-        const boundDeviceId = existingKey.device_id || '';
-        if (boundDeviceId && boundDeviceId === deviceIdHeader) {
+        const boundDeviceId = existingKey.device_id ? String(existingKey.device_id).trim().toLowerCase() : '';
+        // Authorized key rotation / self-healing logic:
+        // 1. If this node has a bound device_id: require strictly matching non-empty deviceIdHeader
+        // 2. If this node has NO bound device_id (NULL, e.g. telemetry disabled or offline node):
+        //    allow self-healing rebind without deviceIdHeader, or upgrade-bind if deviceIdHeader is now provided
+        const isAuthorizedRebind = boundDeviceId
+          ? (boundDeviceId === deviceIdHeader)
+          : true;
+
+        if (isAuthorizedRebind) {
           // Authorized key rotation on the same physical device (OS reinstall, cleared cache, key deleted)
-          console.log(`[LAN-TLS-PROVISION] [REBIND] Key rotation authorized for nodeID=${cleanNode}, deviceID=${deviceIdHeader}`);
+          console.log(`[LAN-TLS-PROVISION] [REBIND] Key rotation authorized for nodeID=${cleanNode}, boundDeviceID=${boundDeviceId || '(none)'}, reqDeviceID=${deviceIdHeader || '(none)'}`);
           ctx.waitUntil((async () => {
             try {
               await env.DB.prepare(`
-                UPDATE node_public_keys SET public_key_sha256 = ?, last_seen_at = ? WHERE node_id = ?
-              `).bind(pubKeyFingerprint, new Date().toISOString(), cleanNode).run();
+                UPDATE node_public_keys 
+                SET public_key_sha256 = ?, 
+                    device_id = COALESCE(device_id, ?), 
+                    last_seen_at = ? 
+                WHERE node_id = ?
+              `).bind(pubKeyFingerprint, deviceIdHeader || null, new Date().toISOString(), cleanNode).run();
             } catch (rebindErr) {
               console.error(`[LAN-TLS-PROVISION] Failed to update rotated public key in D1:`, rebindErr);
             }

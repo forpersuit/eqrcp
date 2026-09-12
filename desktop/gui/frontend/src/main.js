@@ -2830,7 +2830,7 @@ function renderAboutPanel() {
                             </button>
                         ` : ''}
                     </div>
-                    <span style="font-size: 13px; font-weight: 700; font-family: var(--font-mono); color: var(--text-primary); letter-spacing: 0.08em; user-select: text; word-break: break-all;">${escapeHTML(state.status?.deviceID || '------')}</span>
+                    <span style="font-size: 13px; font-weight: 700; font-family: var(--font-mono); color: var(--text-primary); letter-spacing: 0.08em; user-select: text; word-break: break-all;" title="${escapeAttr(state.status?.deviceID || '')}">${escapeHTML(maskDeviceID(state.status?.deviceID))}</span>
                 </div>
                 <div style="grid-column: span 2; background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; text-align: left;">
                     <span style="font-size: 10px; color: var(--text-secondary); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">${t('legal') || 'Legal'}</span>
@@ -6749,6 +6749,13 @@ function escapeHTML(value) {
 
 function escapeAttr(value) {
     return escapeHTML(value).replace(/`/g, '&#096;');
+}
+
+function maskDeviceID(value) {
+    const str = String(value ?? '').trim();
+    if (!str || str === '------') return '------';
+    if (str.length <= 14) return str;
+    return `${str.slice(0, 8)}…${str.slice(-4)}`;
 }
 
 

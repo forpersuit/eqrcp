@@ -151,14 +151,15 @@ var (
 	testDiskSerial          string
 	testFingerprintOverride bool
 
-	fingerprintMu     sync.Mutex
-	cachedUUID        string
-	cachedCPU         string
-	cachedDisk        string
-	hasCached         bool
-	precomputeStarted bool
-	precomputeDone    = make(chan struct{})
-	precomputeOnce    sync.Once
+	fingerprintMu            sync.Mutex
+	cachedUUID               string
+	cachedCPU                string
+	cachedDisk               string
+	hasCached                bool
+	precomputeStarted        bool
+	precomputeDone           = make(chan struct{})
+	precomputeOnce           sync.Once
+	lastFingerprintProbeTime time.Time
 )
 
 // PrecomputeDeviceFingerprints concurrently fetches and caches the motherboard, CPU, and disk fingerprints in background
@@ -278,16 +279,29 @@ func GetDeviceFingerprintHashes() (string, string, string) {
 				return "", "", ""
 			}
 		} else {
-			log.Println("[DRM] Warning: Sync retrieve fingerprints (precompute not started). Block waiting...")
-			uuid = GetBoardUUID()
-			cpu = GetCPUSerial()
-			disk = GetSystemDiskSerial()
-			cachedUUID = uuid
-			cachedCPU = cpu
-			cachedDisk = disk
-			if uuid != "" || cpu != "" || disk != "" {
+			if !lastFingerprintProbeTime.IsZero() && time.Since(lastFingerprintProbeTime) < 1*time.Second {
+				// Anti-penetration: if hardware retrieval yielded empty fingerprints within the last 1s,
+				// do not repeatedly hammer the WMI/registry subsystem on hot polling paths.
+				return uuid, cpu, disk
+			}
+			lastFingerprintProbeTime = time.Now()
+			fingerprintMu.Unlock()
+
+			log.Println("[DRM] Sync retrieve fingerprints (cache invalidated or not precomputed). Block waiting...")
+			rawUUID := GetBoardUUID()
+			rawCPU := GetCPUSerial()
+			rawDisk := GetSystemDiskSerial()
+
+			fingerprintMu.Lock()
+			cachedUUID = rawUUID
+			cachedCPU = rawCPU
+			cachedDisk = rawDisk
+			if rawUUID != "" || rawCPU != "" || rawDisk != "" {
 				hasCached = true
 			}
+			uuid = cachedUUID
+			cpu = cachedCPU
+			disk = cachedDisk
 		}
 	}
 
@@ -527,6 +541,7 @@ func InvalidateFingerprintCache() {
 	cachedCPU = ""
 	cachedDisk = ""
 	precomputeStarted = false
+	lastFingerprintProbeTime = time.Time{}
 	fingerprintMu.Unlock()
 
 	nodeIDMu.Lock()
