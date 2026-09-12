@@ -2187,13 +2187,12 @@ func (a *App) provisionDeviceTLSCertInternal(force bool, allowSelfHeal bool) (bo
 	res, err := cert.RequestDeviceCertificate(ctx, provisionClient, opts)
 	if err != nil {
 		if errors.Is(err, cert.ErrNodeKeyMismatch) {
-			// Self-healing: if device has no authoritative device credentials (e.g. telemetry disabled/free offline user),
-			// cloud enforces Fail-Closed and rejects rebind to prevent takeover of public node_ids.
-			// Client automatically rotates node salt to derive a fresh node_id and immediately retries via TOFU.
-			if allowSelfHeal && server.GetAuthorityDeviceID() == "" {
+			// Self-healing: when cloud rejects rebind with Fail-Closed (e.g. unauthenticated node, NULL row mismatch,
+			// or key drift), client automatically rotates node salt to derive a fresh node_id and immediately retries via TOFU.
+			if allowSelfHeal {
 				newNodeID, rErr := server.RotateDeviceNodeIdentity()
 				if rErr == nil && newNodeID != "" && newNodeID != nodeID {
-					healMsg := fmt.Sprintf("[LAN-TLS-PROVISION] [SELF-HEALING] Node key mismatch for unauthenticated nodeID=%s. Automatically rotated node identity to %s and retrying...", nodeID, newNodeID)
+					healMsg := fmt.Sprintf("[LAN-TLS-PROVISION] [SELF-HEALING] Node key mismatch for nodeID=%s. Automatically rotated node identity to %s and retrying via TOFU...", nodeID, newNodeID)
 					if a.logger != nil {
 						a.logger.Warning(healMsg)
 					}
@@ -2241,4 +2240,3 @@ func (a *App) provisionDeviceTLSCertInternal(force bool, allowSelfHeal bool) (bo
 	}
 	return true, nil
 }
-

@@ -92,18 +92,29 @@ func TestHardwareThrottleCooldown(t *testing.T) {
 	testCPUSerial = ""
 	testDiskSerial = ""
 
+	// Ensure clean state complying with production invariants (hasCached=false => empty cached hashes)
+	InvalidateFingerprintCache()
+
 	fingerprintMu.Lock()
 	hasCached = false
 	precomputeStarted = false
-	cachedUUID = "cooldown-uuid"
-	cachedCPU = "cooldown-cpu"
-	cachedDisk = "cooldown-disk"
+	cachedUUID = ""
+	cachedCPU = ""
+	cachedDisk = ""
 	lastFingerprintProbeTime = time.Now()
 	fingerprintMu.Unlock()
 
+	start := time.Now()
 	uuid, cpu, disk := GetDeviceFingerprintHashes()
-	if uuid != "cooldown-uuid" || cpu != "cooldown-cpu" || disk != "cooldown-disk" {
-		t.Fatalf("expected cooldown throttled return of cached values, got %s, %s, %s", uuid, cpu, disk)
+	elapsed := time.Since(start)
+
+	// In production, during cooldown window after an empty probe, it skips expensive re-probing
+	// and consistently returns empty triplet in microseconds (< 200ms), preventing subsystem hammer.
+	if uuid != "" || cpu != "" || disk != "" {
+		t.Fatalf("expected cooldown throttled return of empty hashes, got %q, %q, %q", uuid, cpu, disk)
+	}
+	if elapsed > 200*time.Millisecond {
+		t.Fatalf("expected cooldown return to be instantaneous (<200ms), took %v", elapsed)
 	}
 
 	// Cleanup
