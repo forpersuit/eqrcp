@@ -61,7 +61,6 @@ func FormatDirectDomainWithNode(ipStr string, nodeID string) string {
 	return fmt.Sprintf("%s.%s.%s", dashed, cleanNode, BaseDomain)
 }
 
-// GetDeviceCertDir returns the directory path where certificate and private key
 // GetDeviceCertDir returns the directory path where device certificates and private keys
 // for the given node ID are stored (xxx/eqt/certs/<node-id>).
 // This is a pure path resolution function with zero file I/O side effects (Q7).
