@@ -2120,6 +2120,7 @@ func (a *App) silentProvisionDeviceTLSCert() {
 			break
 		}
 		time.Sleep(1500 * time.Millisecond)
+		server.InvalidateFingerprintCache()
 	}
 
 	_, _ = a.provisionDeviceTLSCert(false)

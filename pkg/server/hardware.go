@@ -206,13 +206,17 @@ func PrecomputeDeviceFingerprints() {
 		cachedUUID = uuid
 		cachedCPU = cpu
 		cachedDisk = disk
-		hasCached = true
+		if uuid != "" || cpu != "" || disk != "" {
+			hasCached = true
+			log.Printf("[DRM] Device hardware fingerprints cached successfully in %v.", time.Since(startTime))
+		} else {
+			hasCached = false
+			log.Printf("[DRM] [WARN] Device hardware fingerprints all empty; skipping cache mark to allow retry in %v.", time.Since(startTime))
+		}
 		fingerprintMu.Unlock()
 		precomputeOnce.Do(func() {
 			close(precomputeDone)
 		})
-
-		log.Printf("[DRM] Device hardware fingerprints cached successfully in %v.", time.Since(startTime))
 
 		// 默默在后台触发本地证书校验，完全避免主线程阻塞
 		log.Println("[DRM] Background local license verification started...")
@@ -281,7 +285,9 @@ func GetDeviceFingerprintHashes() (string, string, string) {
 			cachedUUID = uuid
 			cachedCPU = cpu
 			cachedDisk = disk
-			hasCached = true
+			if uuid != "" || cpu != "" || disk != "" {
+				hasCached = true
+			}
 		}
 	}
 
@@ -511,16 +517,29 @@ func GetDeviceNodeID() string {
 	return cachedNodeID
 }
 
-// InvalidateCachedNodeID explicitly clears cachedNodeID so the next call will recompute.
-func InvalidateCachedNodeID() {
+// InvalidateFingerprintCache explicitly invalidates all cached hardware fingerprints
+// and the derived cachedNodeID. This allows subsequent calls to retry querying
+// the hardware subsystem (e.g. WMI) if an earlier attempt yielded empty fingerprints.
+func InvalidateFingerprintCache() {
+	fingerprintMu.Lock()
+	hasCached = false
+	cachedUUID = ""
+	cachedCPU = ""
+	cachedDisk = ""
+	precomputeStarted = false
+	fingerprintMu.Unlock()
+
 	nodeIDMu.Lock()
-	defer nodeIDMu.Unlock()
 	cachedNodeID = ""
+	nodeIDMu.Unlock()
+}
+
+// InvalidateCachedNodeID explicitly clears cachedNodeID and fingerprint cache so the next call will recompute.
+func InvalidateCachedNodeID() {
+	InvalidateFingerprintCache()
 }
 
 // ResetCachedNodeIDForTest clears cachedNodeID for testing purposes.
 func ResetCachedNodeIDForTest() {
-	nodeIDMu.Lock()
-	defer nodeIDMu.Unlock()
-	cachedNodeID = ""
+	InvalidateFingerprintCache()
 }

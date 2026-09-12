@@ -835,7 +835,7 @@ async function runTests() {
     const nowTs = Math.floor(Date.now() / 1000);
     const testDeviceId = 'legit_device_uuid_tofu_1';
 
-    // 20.0: Initial registration without device_id must be rejected with 400 device_id_required
+    // 20.0: Initial registration without device_id succeeds (TOFU for telemetry-disabled/offline nodes), recording null device_id
     const noDevNode = 'e1f2a3b4c5d0';
     const { csrPEM: csrNoDev, privateKey: privNoDev } = generateTestCSR(noDevNode);
     const sigNoDev = signNodePayload(privNoDev, noDevNode, nowTs);
@@ -849,8 +849,10 @@ async function runTests() {
       body: JSON.stringify({ node_id: noDevNode, csr_pem: csrNoDev })
     });
     const resp0 = await handleCertRoutes(req0, { DB: db }, ctx, new URL(req0.url), {});
-    const data0 = await resp0.json();
-    assert(resp0.status === 400 && data0.reason_key === 'device_id_required', 'T20.0: Initial registration without device_id rejected with 400 device_id_required');
+    await ctx.drain();
+    assert(resp0.status === 200, 'T20.0: Initial registration without device_id succeeds with 200 (preserves offline/telemetry-disabled compatibility)');
+    const noDevEntry = db._nodeKeys.get(noDevNode);
+    assert(noDevEntry && noDevEntry.device_id === null, 'T20.0: D1 records null device_id when not provided on initial binding');
 
     // 20.1: 1st request with priv1 and testDeviceId binds tofuNode to pubkey1
     const sig1 = signNodePayload(priv1, tofuNode, nowTs);

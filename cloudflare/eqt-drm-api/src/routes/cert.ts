@@ -902,16 +902,6 @@ export async function handleCertRoutes(
         })());
       }
     } else {
-      if (!deviceIdHeader) {
-        console.warn(`[LAN-TLS-PROVISION] [REJECT] Initial binding requires non-empty device_id for nodeID=${cleanNode}`);
-        return new Response(JSON.stringify({
-          error: 'Device registration required: initial certificate binding requires a valid device ID',
-          reason_key: 'device_id_required'
-        }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
-      }
       ctx.waitUntil((async () => {
         try {
           await env.DB.prepare(`
@@ -920,7 +910,7 @@ export async function handleCertRoutes(
           `).bind(
             cleanNode,
             pubKeyFingerprint,
-            deviceIdHeader,
+            deviceIdHeader || null,
             new Date().toISOString(),
             new Date().toISOString()
           ).run();

@@ -63,8 +63,15 @@ func TestGetDeviceNodeID(t *testing.T) {
 		t.Fatalf("expected recovered nodeID length 12 without explicit cache reset, got %q", recoveredNodeID)
 	}
 
-	// 7. Test InvalidateCachedNodeID
-	InvalidateCachedNodeID()
+	// 7. Test InvalidateCachedNodeID and InvalidateFingerprintCache
+	InvalidateFingerprintCache()
+	fingerprintMu.Lock()
+	if hasCached || cachedUUID != "" || cachedCPU != "" || cachedDisk != "" {
+		fingerprintMu.Unlock()
+		t.Fatalf("expected InvalidateFingerprintCache to clear all cached fingerprints and hasCached")
+	}
+	fingerprintMu.Unlock()
+
 	invalidatedNodeID := GetDeviceNodeID()
 	if invalidatedNodeID != recoveredNodeID {
 		t.Fatalf("expected recomputed nodeID %q to match %q", invalidatedNodeID, recoveredNodeID)
