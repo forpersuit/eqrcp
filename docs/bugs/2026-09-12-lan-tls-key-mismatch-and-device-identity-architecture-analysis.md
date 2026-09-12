@@ -31,6 +31,7 @@
 21. [开发方对第七轮复核的终局闭环落地：破除死锁、真脱敏与锁外重算（基线 v1.36.106）](#21-开发方对第七轮复核的终局闭环落地破除死锁真脱敏与锁外重算基线-v136106)
 22. [第八轮独立复核意见（针对 `4ee67b0e` 落地 diff · 2026-09-13 · 基线 v1.36.106）——对"终局闭环"的安全边界复核](#22-第八轮独立复核意见针对-4ee67b0e-落地-diff--2026-09-13--基线-v136106对终局闭环的安全边界复核)
 23. [开发方对第八轮复核的终局闭环落地：坚守 Fail-Closed，客户端自愈换绑，彻底闭合攻击面（基线 v1.36.107）](#23-开发方对第八轮复核的终局闭环落地坚守-fail-closed客户端自愈换绑彻底闭合攻击面基线-v136107)
+24. [第九轮独立复核意见（针对 `b161d543` 落地 diff · 2026-09-13 · 基线 v1.36.107）——对"自愈门控"与"验收数字"的复核](#24-第九轮独立复核意见针对-b161d543-落地-diff--2026-09-13--基线-v136107对自愈门控与验收数字的复核)
 
 ---
 
@@ -2341,4 +2342,173 @@ git status --porcelain = 空；rg -c 'PROBE28' = 0（两文件）
 | **版本号升级** | `pkg/version/version.go`, `desktop/gui/wails.json` | 均已按项目规则小版本号递增至 `v1.36.107` / `1.36.107` | ✅ PASS |
 
 至此，第八轮复核提出的所有意见已全数达成闭环。云端坚守 Fail-Closed 确保数据与授权不可被第三方篡夺，客户端通过自愈式节点轮换彻底打破死锁，实现了安全性与可用性的终极统一。
+
+---
+
+## 24. 第九轮独立复核意见（针对 `b161d543` 落地 diff · 2026-09-13 · 基线 v1.36.107）——对"自愈门控"与"验收数字"的复核
+
+### 24.0 本轮审查对象与取证方式
+
+**审查对象**：`b161d543`（8 文件，+247/−43；版本升至 `v1.36.107`）。方向为第 22 章 §22.9 **出口 1**（云端回到 fail-closed + 自愈改由客户端轮换 node 身份）。
+
+**取值方式**：与第 28 轮相同——只审 diff，全部结论由**探针**而非阅读给出；每条绿色结论都配一条**反向探针**（把 diff 回退后该用例必须转红）。
+
+| 编号 | 类型 | 构造 |
+| :--- | :--- | :--- |
+| **R29-1** | 反向探针（cert.ts） | `Boolean(boundDeviceId && boundDeviceId === deviceIdHeader)` → `true` |
+| **R29-2** | 反向探针（hardware.go） | 冷却早退分支 `if` 置 `false &&` |
+| **P29-A1/A2** | 同批对照（负） | 空头首绑 ⇒ 200 + 行 `device_id === null` |
+| **P29-A3** | 目标探针 | NULL 行 + **非空合法** `X-EQT-Device-ID` ⇒ ? |
+| **P29-B** | 同批对照（正） | 轮换后的新 node + 同一头 ⇒ ? |
+| **P29-C1/C2** | 同批对照 | 强绑 X 首绑 ⇒ 200；强绑 X + 头 Y ⇒ ? |
+| **P29-D** | 可达性探针 | 冷却分支的**生产可达状态**（`hasCached=false` ∧ `cached*` 全空）返回值 ⇒ ? |
+
+所有探针均在同批自建 `makeMockDb()` / 独立 node 上运行（避免第 28 轮 P28-C 那种"共享频控桶污染对照"），并在取证后**全部回退**（`git status --porcelain` 空）。
+
+### 24.1 ✅ 实测为真（第三次"声称零偏差"，且本次攻击面闭合**可判别**）
+
+| 验证项 | 命令 / 探针 | 实测 | 结论 |
+| :--- | :--- | :--- | :--- |
+| 云端 fail-closed 恢复 | `cert.ts` diff 逐字 | `const isAuthorizedRebind = Boolean(boundDeviceId && boundDeviceId === deviceIdHeader);` | ✅ 与 §22.9 出口 1 一致 |
+| **改写后的 T20.* 具备判别力** | **R29-1** | `true` ⇒ **T20.2 / T20.4b×2 / T20.5 转红**，`Results: 63 passed, 4 failed` | ✅ **P28-B / P28-C 攻击面确已闭合**，且用例非空转 |
+| 盖章通道被结构性移除 | diff | `UPDATE` 不再含 `device_id = COALESCE(device_id, ?)` | ✅ 即使放行也无法盖章 |
+| 自愈轮换功能成立 | `go test -v ./pkg/server -run TestRotateDeviceNodeIdentity` | `New node ID: 7bed8d1c6a85` / `4d4f15d753d9`，两次互异且持久 | ✅ |
+| **向前兼容（存量用户 node_id 不变）** | 代码穷举 | `readCachedNodeSalt()` ENOENT ⇒ `""` ⇒ `GetDeviceNodeID()` 走原三分量分支 | ✅ 未轮换者身份不漂移 |
+| **R15 冷却分支可判别** | **R29-2** | 禁用冷却早退 ⇒ `TestHardwareThrottleCooldown` **FAIL**（落到真实 WMI，返回真实指纹） | ✅ 新用例确能失败 |
+| R16 采纳 | `docs` §21.1 改写 | 删去"从根源杜绝泄露"，明确复制按钮为有意全值通道 | ✅ |
+| 版本号 | `pkg/version/version.go` / `wails.json` | `v1.36.107` / `1.36.107` | ✅ |
+| 构建与测试 | `go build ./...` | OK | ✅ |
+| | `go test -count=1 ./cmd/... ./pkg/...` | **16 包 ok / 0 FAIL** | ✅ |
+| | `npm run typecheck` | `tsc --noEmit` 0 error | ✅ |
+| | `npm run test:cert:offline` | `Results: 67 passed, 0 failed` | ✅ |
+| | `npm run test:offline` | exit 0，**全部套件 0 failed** | ✅（数字偏差见 R19） |
+
+**本轮最关键的正面证据**：开发方**把我在第 28 轮用作取证反例的 `T20.5` 翻转为反向断言**——原用例断言"NULL 行带 `device_id` 换绑成功且 D1 升级"，现断言"盖章 `device_id` ⇒ 403 且 D1 `device_id` 保持 null"。这是"删除/反转的能力在测试里留下活化石"的同型反向应用：**被修掉的能力同样在测试改动里留痕**，比任何文档声明都更能证明方向被真实采纳。
+
+### 24.2 🟠 R18：自愈门控与云端判定式**不同构**——该子人群回到第 27 轮的永久死锁
+
+- **判定式**：`desktop/gui/app.go:2193`
+  ```go
+  if allowSelfHeal && server.GetAuthorityDeviceID() == "" {
+  ```
+- **云端接受与否，是"服务端那一行"的属性；客户端此门控是"本地缓存"的属性。二者不等价，差额就是缺陷所在。**
+
+**探针（同批三组对照，同一次运行）**：
+
+| 探针 | 构造 | 实测 | 说明 |
+| :--- | :--- | :--- | :--- |
+| P29-A1/A2 | 空头首绑（关遥测/离线） | `200`，行 `device_id === null` | 对照成立 |
+| **P29-A3** | **同上节点、换钥（重装），客户端"现在有"权威 ID 并带上** | **`403 node_key_mismatch`** | **持有凭据也无法满足云端规则** |
+| P29-C2 | 强绑 X 的行 + 客户端出示 Y（ID 漂移） | `403 node_key_mismatch` | 同型第二入口 |
+| P29-B | 轮换出的新 node + 同一头 | `200` | 自愈机制本身有效——**问题只在门控** |
+
+⇒ **当本地 `GetAuthorityDeviceID() != ""` 而云端行是 NULL（或行内 ID 与本地不同）时：云端永不接受，客户端永不轮换** ⇒ 永久 403，且只弹出一条**无法执行的提示**：全仓检索"请重置密钥绑定"**仅命中该提示串自身**（`desktop/gui/app.go:2207`、`:2216`、`main.js:6813`、`i18n.js:10`），**不存在任何重置密钥绑定的入口**；前端 `main.js:6803` 亦只做 toast 展示（`state.tlsKeyMismatch` 仅驱动 ⚠️ 图标，不阻断传输）。
+
+**可达性是常路径，不是边角**：`silentProvisionDeviceTLSCert()` 等待 3 秒（`app.go:2113`）后置备，而 `RegisterDeviceOnline()` 是 **10 秒超时**的网络调用（`hardware.go:441`）。首启时若注册尚未落盘，`opts.DeviceID`（`app.go:2174`）即空 ⇒ **首绑写入 NULL 行**；随后注册成功、`device_id` 落缓存 ⇒ 本地有 ID。此后任何一次私钥变更（重装/清缓存）即落入本条。
+
+**该门控不可能是防护性的**：若行确实强绑定于客户端当前 `device_id`，请求本就会 200（无 `ErrNodeKeyMismatch`），门控不参与；门控只在**已经失败**的分支上生效，而该分支下轮换不会弃掉任何有价值物。故 `GetAuthorityDeviceID() == ""` 这一子句**只有副作用，没有收益**。
+
+**收口成本 = 一行**：`RotateDeviceNodeIdentity()` 的生产调用点**全仓唯一**（`rg -n 'RotateDeviceNodeIdentity'` 仅 `desktop/gui/app.go:2194` 一处非测试命中），删除该子句后由 `allowSelfHeal=false` 保证的单次重试仍然防环，无其他爆炸半径。
+
+**建议**：改为
+```go
+if allowSelfHeal {
+```
+（保留 `allowSelfHeal=false` 的单次重试；不改云端任何判定式）。
+
+### 24.3 🟡 R19：§23.2 把 **cert 子套件**的断言数当成 **test:offline 全套件**的数字
+
+- **声称**（§23.2）：`npm run test:offline` ⇒ "**22 suites passed, 67 assertions passed, 0 failed**"。
+- **实测**：`npm run test:offline` 退出码 0、全部 0 failed；打印聚合 `Results:` 行的套件为 **8 个**，分别为 `42 / 27 / 64 / 21 / 17 / 67 / 24 / 131`，合计 **393 条断言**。
+- **67 恰好是 `test:cert:offline` 自己的数字**（见 24.1），"22 suites"与任何实测口径（8 个聚合行 / 19 条 npm 子脚本）均不符。
+
+**结论**：实质结论（离线全套件通过）成立，但数字不可复现。这是第 27 轮方法论 ④（"验收表的数字须逐个对齐；数字不保真会掩盖覆盖缺口"）的同型复发。**修法**：该行改为实测数字，或直接引 `exit 0 / 0 failed` 而不并列子套件断言数。
+
+### 24.4 🟡 R20：R15 新用例断言了**生产中不可达**的状态（分支覆盖成立，结论措辞越界）
+
+**不变量**：`hardware.go` 中 `hasCached == false ⟹ cachedUUID == cachedCPU == cachedDisk == ""`。三处写点均成对赋值——预计算 `:206-216`、同步分支 `:295-305`、失效 `:538-544`（`InvalidateFingerprintCache` 同时清 `hasCached` 与三个 `cached*`）。
+
+**探针 P29-D**（构造生产可达状态：`hasCached=false` ∧ `cached*` 全空 ∧ `lastFingerprintProbeTime=now()`）：
+```
+PROBE29-D cooldown+invariant-state => uuid="" cpu="" disk=""
+PROBE29-D GetDeviceNodeID() during cooldown window => ""
+```
+而 `TestHardwareThrottleCooldown`（`hardware_test.go:89-107`）注入的是 `cached* = "cooldown-*"` **与** `hasCached=false` 的组合——该组合生产不可达——并断言这三个值原样返回。
+
+⇒ §23.2 的"断言冷却限频**直接返回有效缓存**"在生产语义下为假：冷却期返回的是**空三元组**（因为进入冷却的前提正是上一次探测已证明全空）。冷却的真实收益是"**不再重探**"，不是"返回有效缓存"。
+
+**✅ 同时必须澄清（避免误修）**：**R9 的冷却在返回值上是语义中性的**——它只在"上一次探测已证明三路全空"时触发，返回的三元组与直接重探完全相同；因此**不构成任何行为回归**。这不是缺陷，只是用例的观测点选错了。**修法**：把断言改为可观测"未重探"的判据（探测计数 / 耗时），或保留用例但把 §23.2 该行改为"冷却期跳过重探（返回与重探一致的空三元组）"。
+
+### 24.5 🟡 R21：机制文档 F12 的根因陈述被本次改动废止
+
+`docs/mechanism/lan-tls-zero-leak-acme-architecture.md:1181` 仍写：**"`node_id` 派生自不可变硬件特征（跨系统重装恒定）"**——这是整段 F12 根因推理的前提（"唯一易失资产是私钥"）。本次改动后：
+
+- `node_id = sha256(uuid : cpu : disk [ : salt ])[:12]`，`salt` 是**本地可变文件** `node_salt.dat`（`hardware.go:502/530/577-583`）；
+- 客户端在 403 时会**主动改变** `node_id`。
+
+故"跨系统重装恒定"不再无条件成立（配置目录随重装丢失则回落硬件派生值；带 salt 则改变）。同文件 `:1187-1189` 的"方案 B（时间窗口老化自愈）"亦已被"fail-closed + 客户端轮换"取代。**只需同步一行限定语，无需重写**（属第 24/25 轮已固化的"历史节次实例式修复"）。
+
+### 24.6 残余登记与自我更正
+
+**登记（非缺陷，建议显式写明）**：
+
+1. **轮换使已分发的直连链接/二维码失效**：`<旧 node>.direct.eqt.net.im` 在轮换后不再指向本机；且每次轮换在 `node_public_keys` 留下一行不可回收的孤儿。⇒ §23 的"对用户完全透明无感"对手持旧链接/旧二维码的用户**不成立**，建议改写为"对当前会话透明；已分发的旧直连地址失效"。
+2. **"知道 device_id 字符串"仍是唯一重绑授权**：§23.1.2 将其定为 `/api/v1/cert/provision` 的"承重墙"，而同一章的 §23.1.4（R16）刚刚确认该值在 About 面板 `title` 中全文可见、并由复制按钮**原样全值导出**。二者并列即自相矛盾。**这已是"承重墙论据跨节挪借"的第 5 次复发**（⑪ → ⑭ →【51】→【58】→ 本轮）。**建议**：保留措辞但补写不变量——"`device_id` **不构成秘密**；该墙的真实强度 = 客户端持有被绑定私钥 ∧ 服务端行强绑定"，把借用来的强度显式降级，而不是删除该句。
+3. **未实测项（如实声明）**：R18 的**客户端半边**未跑运行时探针。原因：`provisionDeviceTLSCertInternal` 的 `opts` 未暴露 `Endpoint`（`pkg/cert/provisioner.go:605` 有该字段但 `app.go:2172-2184` 未赋值），且 `testFingerprintOverride` 未导出、`GetDeviceNodeID()` 在 GUI 测试进程内会走真实 WMI/DMI，探针不可控。该半边依据为**调用点穷举**（全仓唯一生产调用点 + 其守卫表达式）+ **服务端半边实测**（P29-A3 / P29-C2）。按 Rule 12，此处标注为**论证**而非**实测**。
+
+**自我更正（连续第三轮）**：我原假设"`TestRotateDeviceNodeIdentity` / `ResetNodeSaltForTest` 会写/删**开发者真实配置目录**的 `node_salt.dat`（预提交钩子每次提交都会执行 `go test ./...`）"，**已被证伪**——`pkg/server/main_test.go:10-26` 的 `TestMain` 为本包整体设置 `EQT_CONFIG_DIR` 到临时目录。该假设当场撤回，**不作为发现上报**。
+
+### 24.7 取证记录（原文）
+
+```
+$ npm run test:cert:offline            # 基线
+Results: 67 passed, 0 failed
+
+$ R29-1: cert.ts  isAuthorizedRebind = Boolean(...)  ->  true
+  ✗ FAIL: T20.2: Mismatched public key from different device returns 403 node_key_mismatch
+  ✗ FAIL: T20.4b: Unauthenticated rebind on null-bound node strictly rejected with 403 fail-closed
+  ✗ FAIL: T20.4b: D1 public_key_sha256 unchanged, hijacking prevented
+  ✗ FAIL: T20.5: Hostile device_id stamp on null-bound node rejected with 403
+Results: 63 passed, 4 failed
+
+$ P29-A/B/C（同批同 DB，独立 node）
+PROBE29-A3 => status=403 reason_key=node_key_mismatch
+PROBE29-B  => rotated node with credentials status=200
+PROBE29-C  => bound-to-X + header Y status=403 reason_key=node_key_mismatch
+Results: 73 passed, 0 failed          # 67 + 6 条探针断言，全绿
+
+$ R29-2: hardware.go 冷却早退 -> if false &&
+--- FAIL: TestHardwareThrottleCooldown (0.01s)
+    hardware_test.go:106: expected cooldown throttled return of cached values, got 9c7db44c..., , ea6ef02e...
+FAIL	eqt/pkg/server	0.017s
+
+$ P29-D: 生产可达的冷却状态
+PROBE29-D cooldown+invariant-state => uuid="" cpu="" disk=""
+PROBE29-D GetDeviceNodeID() during cooldown window => ""
+
+$ npm run test:offline | rg '^Results:'
+42 / 27 / 64 / 21 / 17 / 67 / 24 / 131   （8 个聚合套件，合计 393 条，0 failed，exit 0）
+
+$ go test -count=1 ./cmd/... ./pkg/...   -> 16 包 ok / 0 FAIL
+$ go build ./...                         -> OK
+$ npm run typecheck                      -> tsc --noEmit 0 error
+$ git status --porcelain                 -> 空（探针全部回退）
+$ rg -c 'PROBE29' pkg/ cloudflare/       -> 0（仅本文档引用）
+```
+
+### 24.8 收敛评估与出口
+
+**净变化判定**：`b161d543` 相对 `4ee67b0e` 是**方向正确的实质修复**——第 28 轮 R12（公开 `node_id` 成为换绑授权）与 R13（原主被永久锁死）所依据的两个攻击在**反向探针下确已闭合**，且开发方把取证反例 `T20.5` 翻转成了反向断言。R14/R16 的措辞已更正，R15 的分支覆盖已补齐（R29-2 证明其可判别）。
+
+**残余集中在一处**：自愈的**门控条件**与云端的**判定条件**不同构，使"本地有权威 ID ∧ 云端行为 NULL/漂移"的子人群**回到第 27 轮记录的永久死锁**，并配以一条不存在的操作指引。
+
+| 出口 | 内容 | 评价 |
+| :--- | :--- | :--- |
+| **出口 1（推荐）** | 删除 `app.go:2193` 的 `&& server.GetAuthorityDeviceID() == ""`（保留 `allowSelfHeal=false` 单次重试）；R19/R20/R21 为措辞与覆盖同步；24.6 两条残余登记 | **一行改动 + 三处文案**，无需触碰云端判定式，无爆炸半径（唯一调用点已穷举） |
+| 出口 2 | 改为"始终先按当前凭据请求，仅在 403 时轮换"（即出口 1 的等价表述，但把"凭据是否为空"从判定式彻底移出） | 与出口 1 同效，表述更贴近云端语义 |
+| 出口 3 | 保留门控，改为给"请重置密钥绑定"提供一个真实入口（例如"重置节点身份"按钮） | 把可用性问题转成产品交互问题，成本高于出口 1，且未消除"云端永不接受"的根因 |
+
+**发布建议**：`b161d543` **可以随版发布**——它修掉的（第 28 轮两个 🔴）比它遗留的（一个 🟠 子人群可用性）严重得多。**但建议 R18 的一行改动并入下一次提交**；R19/R20/R21 与 24.6 的两条残余登记可直接落地。
+
+**收敛信号**：本轮**首次**出现"我上轮的取证反例被翻转成反向断言"＋"三条 🟠/🟡 全部是可一行或一句话修正的措辞/门控"，且第 28 轮的两个 🔴 被判据闭合。**判定：本线程进入收敛尾段**——若下一轮仍只有措辞级残留，可停止代码审查，转为只对 R18 的落地 diff 做一次反向探针验收。
 
