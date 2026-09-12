@@ -920,7 +920,7 @@ async function runTests() {
     const rebindEntry = db._nodeKeys.get(tofuNode);
     assert(rebindEntry && rebindEntry.public_key_sha256 !== initialKey, 'T20.3: D1 public_key_sha256 successfully updated upon authorized rebind');
 
-    // 20.4: Self-healing rebind for NULL-bound node WITHOUT device_id must SUCCEED (200 OK)
+    // 20.4: Initial registration without device_id succeeds (TOFU for telemetry-disabled)
     const nullNode = 'f0a1b2c3d4e5';
     const { csrPEM: nullCsr1, privateKey: nullPriv1 } = generateTestCSR(nullNode);
     const sigNull1 = signNodePayload(nullPriv1, nullNode, nowTs);
@@ -940,43 +940,40 @@ async function runTests() {
     assert(entryNull1 && entryNull1.device_id === null, 'T20.4: D1 records null device_id initially');
     const initialNullKey = entryNull1.public_key_sha256;
 
-    // 20.4b: Rebind with NEW private key for null-bound node, STILL without device_id (reinstalled OS, telemetry disabled)
-    const { csrPEM: nullCsr2, privateKey: nullPriv2 } = generateTestCSR(nullNode);
-    const sigNull2 = signNodePayload(nullPriv2, nullNode, nowTs);
-    const reqNull2 = new Request('http://api.test/api/v1/cert/provision', {
+    // 20.4b: Hijack attempt by third party with new key without device_id must be REJECTED (403 fail-closed)
+    const { csrPEM: rogueCsr, privateKey: roguePriv } = generateTestCSR(nullNode);
+    const sigRogue = signNodePayload(roguePriv, nullNode, nowTs);
+    const reqRogue = new Request('http://api.test/api/v1/cert/provision', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-EQT-Timestamp': String(nowTs),
-        'X-EQT-Device-Signature': sigNull2
+        'X-EQT-Device-Signature': sigRogue
       },
-      body: JSON.stringify({ node_id: nullNode, csr_pem: nullCsr2 })
+      body: JSON.stringify({ node_id: nullNode, csr_pem: rogueCsr })
     });
-    const respNull2 = await handleCertRoutes(reqNull2, { DB: db }, ctx, new URL(reqNull2.url), {});
-    await ctx.drain();
-    assert(respNull2.status === 200, 'T20.4b: Self-healing key rotation for null-bound node without device_id succeeds with 200 OK');
-    const entryNull2 = db._nodeKeys.get(nullNode);
-    assert(entryNull2 && entryNull2.public_key_sha256 !== initialNullKey, 'T20.4b: D1 public_key_sha256 updated upon null-bound rebind');
+    const respRogue = await handleCertRoutes(reqRogue, { DB: db }, ctx, new URL(reqRogue.url), {});
+    const dataRogue = await respRogue.json();
+    assert(respRogue.status === 403 && dataRogue.reason_key === 'node_key_mismatch', 'T20.4b: Unauthenticated rebind on null-bound node strictly rejected with 403 fail-closed');
+    const entryAfterRogue = db._nodeKeys.get(nullNode);
+    assert(entryAfterRogue && entryAfterRogue.public_key_sha256 === initialNullKey, 'T20.4b: D1 public_key_sha256 unchanged, hijacking prevented');
 
-    // 20.5: Rebind with NEW private key for null-bound node, UPGRADING with device_id
-    const { csrPEM: nullCsr3, privateKey: nullPriv3 } = generateTestCSR(nullNode);
-    const sigNull3 = signNodePayload(nullPriv3, nullNode, nowTs);
-    const upgradeDevId = 'upgraded_telemetry_device_id_999';
-    const reqNull3 = new Request('http://api.test/api/v1/cert/provision', {
+    // 20.5: Hostile takeover attempt with forged/arbitrary device_id must also be REJECTED (403 fail-closed)
+    const reqHostile = new Request('http://api.test/api/v1/cert/provision', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-EQT-Timestamp': String(nowTs),
-        'X-EQT-Device-Signature': sigNull3,
-        'X-EQT-Device-ID': upgradeDevId
+        'X-EQT-Device-Signature': sigRogue,
+        'X-EQT-Device-ID': 'attacker_chosen_device_id_x'
       },
-      body: JSON.stringify({ node_id: nullNode, csr_pem: nullCsr3 })
+      body: JSON.stringify({ node_id: nullNode, csr_pem: rogueCsr })
     });
-    const respNull3 = await handleCertRoutes(reqNull3, { DB: db }, ctx, new URL(reqNull3.url), {});
-    await ctx.drain();
-    assert(respNull3.status === 200, 'T20.5: Key rotation for null-bound node with newly supplied device_id succeeds with 200 OK');
-    const entryNull3 = db._nodeKeys.get(nullNode);
-    assert(entryNull3 && entryNull3.device_id === upgradeDevId, 'T20.5: D1 device_id successfully upgraded to newly supplied device_id');
+    const respHostile = await handleCertRoutes(reqHostile, { DB: db }, ctx, new URL(reqHostile.url), {});
+    const dataHostile = await respHostile.json();
+    assert(respHostile.status === 403 && dataHostile.reason_key === 'node_key_mismatch', 'T20.5: Hostile device_id stamp on null-bound node rejected with 403');
+    const entryAfterHostile = db._nodeKeys.get(nullNode);
+    assert(entryAfterHostile && entryAfterHostile.device_id === null, 'T20.5: D1 device_id remains null, owner not locked out');
   }
 
   // Test 21: IP Rate Limiting

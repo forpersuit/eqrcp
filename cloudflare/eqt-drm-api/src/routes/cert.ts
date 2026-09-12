@@ -869,26 +869,24 @@ export async function handleCertRoutes(
     if (existingKey) {
       if (existingKey.public_key_sha256 !== pubKeyFingerprint) {
         const boundDeviceId = existingKey.device_id ? String(existingKey.device_id).trim().toLowerCase() : '';
-        // Authorized key rotation / self-healing logic:
-        // 1. If this node has a bound device_id: require strictly matching non-empty deviceIdHeader
-        // 2. If this node has NO bound device_id (NULL, e.g. telemetry disabled or offline node):
-        //    allow self-healing rebind without deviceIdHeader, or upgrade-bind if deviceIdHeader is now provided
-        const isAuthorizedRebind = boundDeviceId
-          ? (boundDeviceId === deviceIdHeader)
-          : true;
+        // Strict Fail-Closed Authorization:
+        // Only allow public key rotation if this node is strongly bound to a device_id
+        // AND the request presents a matching non-empty X-EQT-Device-ID header.
+        // Weak/NULL-bound nodes and mismatched headers are strictly rejected with 403,
+        // completely preventing any third party from hijacking node certificates or locking out the owner.
+        const isAuthorizedRebind = Boolean(boundDeviceId && boundDeviceId === deviceIdHeader);
 
         if (isAuthorizedRebind) {
           // Authorized key rotation on the same physical device (OS reinstall, cleared cache, key deleted)
-          console.log(`[LAN-TLS-PROVISION] [REBIND] Key rotation authorized for nodeID=${cleanNode}, boundDeviceID=${boundDeviceId || '(none)'}, reqDeviceID=${deviceIdHeader || '(none)'}`);
+          console.log(`[LAN-TLS-PROVISION] [REBIND] Key rotation authorized for nodeID=${cleanNode}, deviceID=${deviceIdHeader}`);
           ctx.waitUntil((async () => {
             try {
               await env.DB.prepare(`
                 UPDATE node_public_keys 
                 SET public_key_sha256 = ?, 
-                    device_id = COALESCE(device_id, ?), 
                     last_seen_at = ? 
                 WHERE node_id = ?
-              `).bind(pubKeyFingerprint, deviceIdHeader || null, new Date().toISOString(), cleanNode).run();
+              `).bind(pubKeyFingerprint, new Date().toISOString(), cleanNode).run();
             } catch (rebindErr) {
               console.error(`[LAN-TLS-PROVISION] Failed to update rotated public key in D1:`, rebindErr);
             }

@@ -3,6 +3,7 @@ package server
 import (
 	"regexp"
 	"testing"
+	"time"
 )
 
 func TestGetDeviceNodeID(t *testing.T) {
@@ -82,5 +83,76 @@ func TestGetDeviceNodeID(t *testing.T) {
 	testBoardUUID = ""
 	testCPUSerial = ""
 	testDiskSerial = ""
+	ResetNodeSaltForTest()
+}
+
+func TestHardwareThrottleCooldown(t *testing.T) {
+	testFingerprintOverride = false
+	testBoardUUID = ""
+	testCPUSerial = ""
+	testDiskSerial = ""
+
+	fingerprintMu.Lock()
+	hasCached = false
+	precomputeStarted = false
+	cachedUUID = "cooldown-uuid"
+	cachedCPU = "cooldown-cpu"
+	cachedDisk = "cooldown-disk"
+	lastFingerprintProbeTime = time.Now()
+	fingerprintMu.Unlock()
+
+	uuid, cpu, disk := GetDeviceFingerprintHashes()
+	if uuid != "cooldown-uuid" || cpu != "cooldown-cpu" || disk != "cooldown-disk" {
+		t.Fatalf("expected cooldown throttled return of cached values, got %s, %s, %s", uuid, cpu, disk)
+	}
+
+	// Cleanup
+	InvalidateFingerprintCache()
+}
+
+func TestRotateDeviceNodeIdentity(t *testing.T) {
+	ResetNodeSaltForTest()
+	testFingerprintOverride = true
+	testBoardUUID = "fixed-board-uuid"
+	testCPUSerial = "fixed-cpu-serial"
+	testDiskSerial = "fixed-disk-serial"
 	ResetCachedNodeIDForTest()
+
+	origNodeID := GetDeviceNodeID()
+	if len(origNodeID) != 12 {
+		t.Fatalf("expected initial node ID length 12, got %q", origNodeID)
+	}
+
+	newNodeID, err := RotateDeviceNodeIdentity()
+	if err != nil {
+		t.Fatalf("RotateDeviceNodeIdentity failed: %v", err)
+	}
+	if len(newNodeID) != 12 {
+		t.Fatalf("expected new rotated node ID length 12, got %q", newNodeID)
+	}
+	if newNodeID == origNodeID {
+		t.Fatalf("rotated node ID %q must differ from original %q", newNodeID, origNodeID)
+	}
+
+	// Verify persistence & cache consistency
+	readAgain := GetDeviceNodeID()
+	if readAgain != newNodeID {
+		t.Fatalf("subsequent GetDeviceNodeID returned %q, expected %q", readAgain, newNodeID)
+	}
+
+	// Verify subsequent rotation produces yet another distinct node ID
+	thirdNodeID, err := RotateDeviceNodeIdentity()
+	if err != nil {
+		t.Fatalf("second RotateDeviceNodeIdentity failed: %v", err)
+	}
+	if thirdNodeID == newNodeID || thirdNodeID == origNodeID {
+		t.Fatalf("third node ID %q collided with prior IDs", thirdNodeID)
+	}
+
+	// Cleanup
+	testFingerprintOverride = false
+	testBoardUUID = ""
+	testCPUSerial = ""
+	testDiskSerial = ""
+	ResetNodeSaltForTest()
 }

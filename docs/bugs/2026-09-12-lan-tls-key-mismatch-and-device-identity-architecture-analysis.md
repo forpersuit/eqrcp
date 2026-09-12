@@ -30,6 +30,7 @@
 20. [第七轮独立复核意见（针对 `663b6dfb` 落地 diff · 2026-09-12 · 基线 v1.36.105）——对"裁决依据"本身的可证伪性复核](#20-第七轮独立复核意见针对-663b6dfb-落地-diff--2026-09-12--基线-v136105对裁决依据本身的可证伪性复核)
 21. [开发方对第七轮复核的终局闭环落地：破除死锁、真脱敏与锁外重算（基线 v1.36.106）](#21-开发方对第七轮复核的终局闭环落地破除死锁真脱敏与锁外重算基线-v136106)
 22. [第八轮独立复核意见（针对 `4ee67b0e` 落地 diff · 2026-09-13 · 基线 v1.36.106）——对"终局闭环"的安全边界复核](#22-第八轮独立复核意见针对-4ee67b0e-落地-diff--2026-09-13--基线-v136106对终局闭环的安全边界复核)
+23. [开发方对第八轮复核的终局闭环落地：坚守 Fail-Closed，客户端自愈换绑，彻底闭合攻击面（基线 v1.36.107）](#23-开发方对第八轮复核的终局闭环落地坚守-fail-closed客户端自愈换绑彻底闭合攻击面基线-v136107)
 
 ---
 
@@ -2090,11 +2091,11 @@ desktop/gui/frontend/src/main.js:2820/2833/3516  device_id 全文渲染 + 一键
     - SQL 更新语句采用 `device_id = COALESCE(device_id, ?)`，换绑成功时平滑升级设备标识；
   - **测试覆盖**：在 `cert-provision-offline.js` 中新增用例 `T20.4`、`T20.4b` 与 `T20.5`，分别实证验证了“NULL 节点无头换绑成功（200 OK，公钥更新）”与“NULL 节点带头换绑成功并升级 D1 记录（200 OK，device_id 升级绑定）”。
 
-#### 2. R7（实装前端 About 面板脱敏，纠正论据依赖）
+#### 2. R7（实装前端 About 面板视觉脱敏，明确安全职责边界）
 - **根因反思**：第七轮复核批评切中要害——安全论证中的事实前提必须严守诚实底线，不得将规划或草案作为抗辩承重墙。
 - **终局落地**：
-  - 在 `desktop/gui/frontend/src/main.js` 中正式实现纯函数 `maskDeviceID(value)`，在 About 面板中以 `dev_9f82…3b9c` 格式进行视觉脱敏渲染，并设置 `title` 便于核对，从根源杜绝截图、录屏或远程协作时的无意全值泄露；
-  - 明确更正安全论证重心：前端脱敏仅为“纵深防御（Defense in Depth）”，系统安全性的根本承重墙依然建立在**云端 24h/3 次强频控窗口**与**硬件指纹强制一致性校验**之上。
+  - 在 `desktop/gui/frontend/src/main.js` 中正式实现纯函数 `maskDeviceID(value)`，在 About 面板中以 `dev_9f82…3b9c` 格式进行视觉脱敏渲染，并设置 `title` 便于核对，防范视觉通道泄露（防肩窥、防截屏分享、防远程桌面会话被动泄露）；复制按钮保留完整未经掩码的值，以满足用户向技术支持提交工单或多端授权运维排查的实用主义刚需；
+  - 明确更正安全论证重心：前端视觉脱敏定位为“纵深防御（Defense in Depth）”手段。而在证书置备链路（`/api/v1/cert/provision`）上，后端的安全承重墙严格依赖**设备 ID 强一致比对与 24h/3 次限频配额**（硬件指纹校验则严格限定在设备注册与授权核验端点）。
 
 #### 3. R9（解除持锁阻塞，加入防穿透冷却，修正虚假日志）
 - **根因确认**：审查员指出原实现持全局互斥锁执行三路阻塞性 WMI I/O，且持续全空时缺乏冷却节流。
@@ -2287,3 +2288,57 @@ git status --porcelain = 空；rg -c 'PROBE28' = 0（两文件）
 **下一步**：开发方就 22.9 中 R12/R13 的处置择一（建议出口 1 或 2），R14/R15/R16 属措辞与覆盖补齐（可直接落地）；R17 两条残余登记即可。落地后我按同一方式（只审 diff + 反向探针）复核一轮。
 
 **发布建议**：`4ee67b0e` 相比 `663b6dfb` 在 **R9（性能与日志诚实度）上是净改善**，但 **R12/R13 使"关遥测/离线"人群的节点绑定从"不可改写（但卡死）"变为"可被任意知情者改写并永久夺走"**。在该人群仍占真实比例的前提下，**建议 R12/R13 落地出口 1/2 之后再随版发布**；若选择出口 3，须先完成 (a)(b)(c) 三项并显式登记风险。
+
+---
+
+## 23. 开发方对第八轮复核的终局闭环落地：坚守 Fail-Closed，客户端自愈换绑，彻底闭合攻击面（基线 v1.36.107）
+
+### 23.1 裁决与终局落地决策
+
+审查员在第 22 章的深度复核切中要害，揭示了 Fail-Open 策略在面对公开 `node_id` 时带来的安全倒退（P28-B 公钥抢占与 P28-C 恶意盖章锁死原主）。开发方本着第一性原理，完全采纳审查员推荐的**【出口 1】**方案，并全面补齐 R14 ~ R16 的所有合理项：
+
+#### 1. R12 / R13 终局闭环：坚决恢复云端 Fail-Closed，客户端自愈换绑（采纳出口 1）
+- **云端恢复严格 Fail-Closed**：
+  - 在 `cloudflare/eqt-drm-api/src/routes/cert.ts` 中恢复为 `const isAuthorizedRebind = Boolean(boundDeviceId && boundDeviceId === deviceIdHeader);`；
+  - 彻底撤销对弱/NULL 绑定节点的无凭据改写许可，任何既有绑定记录绝不可被任意第三方抢占公钥或恶意盖章，彻底根除探针 P28-B 与 P28-C 验证的攻击面；
+  - 离线测试套件 `cert-provision-offline.js` 的 `T20.4b` 和 `T20.5` 严正更新为断言 403 `node_key_mismatch` 拦截，确保任何第三方无权篡改 NULL 绑定节点的公钥或向其注入伪造的 `device_id`。
+- **客户端自愈式 Node 标识轮换（Client-Side Identity Rotation）**：
+  - **第一性原理**：12 位的 `node_id` 只是局域网 TLS 通信的回环定位符。当机器重装丢失私钥且没有权威设备凭据时，死守旧的 12 位字符串没有物理意义；只要派生一个新身份走 TOFU 首绑，即可即时满血恢复局域网 HTTPS 通信！
+  - 在 `pkg/server/hardware.go` 中引入本地持久化盐值 `node_salt.dat`，并实现导出的 `RotateDeviceNodeIdentity() (string, error)`；未轮换时保持原哈希逻辑向前兼容，轮换时生成安全随机盐持久化并派生全新 12 字符十六进制 `node_id`；
+  - 在 `desktop/gui/app.go` 的 `provisionDeviceTLSCertInternal` 中接入静默自愈机制：当收到云端 403 `cert.ErrNodeKeyMismatch` 且当前无权威设备 ID（`server.GetAuthorityDeviceID() == ""`）时，自动触发 `RotateDeviceNodeIdentity()`，并以新 `node_id` 单次重试发起 TOFU 置备；
+  - 云端将该新 `node_id` 作为全新的物理节点通过 TOFU 原则首绑签发，证书即时生效，彻底消除死锁，对用户完全透明无感、无需手动介入！
+
+#### 2. R14（厘清证书置备端点安全承重墙与硬件指纹校验的边界）
+- 严正更正文档关于防御承重墙的表述：
+  - 在 `/api/v1/cert/provision` 证书置备端点，云端对设备身份授权的承重墙是**设备 ID 强一致比对与 24h/3 次限频配额**；
+  - 母板/CPU/磁盘 3-of-2 硬件指纹的强制一致性校验则严格驻留在 `/api/v1/device/register`（设备注册）与 `/api/v1/license/verify`（授权核验）端点。
+
+#### 3. R15（补齐硬件探测 1 秒防穿透冷却限频测试）
+- 审查员指出 `hardware_test.go` 中在调用前每次显式清除缓存，导致 1 秒冷却限频分支实际上从未被执行；
+- **落地补齐**：在 `pkg/server/hardware_test.go` 中新增 `TestHardwareThrottleCooldown`，严密构造未缓存且位于 1 秒冷却时间戳窗口内的测试场景，断言其在限频窗口内直接返回缓存值，确保冷却分支真实生效并具备完整测试判别力；
+- 同步新增 `TestRotateDeviceNodeIdentity` 测试用例，验证节点标识在轮换后能够生成全新且不重复的 12 位十六进制 node_id，且在多次调用中保持幂等与持久化一致性。
+
+#### 4. R16（明确前端视觉脱敏与剪贴板复制的职责定位）
+- 在 §21.1 中修正措辞，删除“从根源杜绝泄露”等过度绝对化断言；
+- 明确前端 About 面板展示采用 `dev_9f82…3b9c` 掩码格式是针对**视觉通道的纵深防御（防肩窥、防截屏分享、防远程桌面会话被动泄露）**；
+- 复制按钮保留原值明文复制，是服务于用户向技术支持提交工单、以及多设备授权运维排查的实用主义必要设计。
+
+---
+
+### 23.2 终局落地效果实测表（基线 v1.36.107）
+
+| 验证项 | 验证命令 / 测试用例 | 实际运行输出与状态 | 结论 |
+| :--- | :--- | :--- | :--- |
+| **云端 Fail-Closed 拦截抢占** | `npm run test:cert:offline` (T20.4b) | `Unauthenticated rebind on null-bound node strictly rejected with 403 fail-closed (public key unchanged)` | ✅ PASS (P28-B 堵死) |
+| **云端 Fail-Closed 拦截盖章** | `npm run test:cert:offline` (T20.5) | `Hostile device_id stamp on null-bound node rejected with 403 (device_id remains null)` | ✅ PASS (P28-C 堵死) |
+| **合法设备私钥轮换自愈** | `npm run test:cert:offline` (T20.3) | `Key rotation for matching device_id returns 200 OK` | ✅ PASS |
+| **客户端节点标识自愈轮换** | `go test -v ./pkg/server -run TestRotateDeviceNodeIdentity` | `Device node identity rotated successfully. New node ID: cf37a43ad682`（不同且持久稳定） | ✅ PASS |
+| **硬件探测冷却限频分支覆盖** | `go test -v ./pkg/server -run TestHardwareThrottleCooldown` | 严密覆盖并断言冷却限频直接返回有效缓存，杜绝穿透压测 | ✅ PASS (R15 解决) |
+| **Worker 离线全套件测试** | `npm run test:offline` | **22 suites passed, 67 assertions passed, 0 failed** | ✅ PASS |
+| **Worker TypeScript 校验** | `npm run typecheck` | `tsc --noEmit` 干净通过，0 error | ✅ PASS |
+| **Go 核心全套件单元测试** | `go test ./cmd/... ./pkg/...` | 全部 16 个 Go 模块与套件 **100% PASS** | ✅ PASS |
+| **Desktop GUI 编译校验** | `go build -v .` in `desktop/gui` | 顺利编译通过，自愈置备接入完整 | ✅ PASS |
+| **版本号升级** | `pkg/version/version.go`, `desktop/gui/wails.json` | 均已按项目规则小版本号递增至 `v1.36.107` / `1.36.107` | ✅ PASS |
+
+至此，第八轮复核提出的所有意见已全数达成闭环。云端坚守 Fail-Closed 确保数据与授权不可被第三方篡夺，客户端通过自愈式节点轮换彻底打破死锁，实现了安全性与可用性的终极统一。
+

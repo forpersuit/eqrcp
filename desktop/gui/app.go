@@ -2129,6 +2129,10 @@ func (a *App) silentProvisionDeviceTLSCert() {
 // provisionDeviceTLSCert requests a dedicated device certificate from the provisioner gateway.
 // When force is false, it skips requesting if a valid certificate (>15 days remaining) already exists.
 func (a *App) provisionDeviceTLSCert(force bool) (bool, error) {
+	return a.provisionDeviceTLSCertInternal(force, true)
+}
+
+func (a *App) provisionDeviceTLSCertInternal(force bool, allowSelfHeal bool) (bool, error) {
 	nodeID := server.GetDeviceNodeID()
 	if nodeID == "" {
 		return false, fmt.Errorf("device node ID is empty")
@@ -2183,6 +2187,23 @@ func (a *App) provisionDeviceTLSCert(force bool) (bool, error) {
 	res, err := cert.RequestDeviceCertificate(ctx, provisionClient, opts)
 	if err != nil {
 		if errors.Is(err, cert.ErrNodeKeyMismatch) {
+			// Self-healing: if device has no authoritative device credentials (e.g. telemetry disabled/free offline user),
+			// cloud enforces Fail-Closed and rejects rebind to prevent takeover of public node_ids.
+			// Client automatically rotates node salt to derive a fresh node_id and immediately retries via TOFU.
+			if allowSelfHeal && server.GetAuthorityDeviceID() == "" {
+				newNodeID, rErr := server.RotateDeviceNodeIdentity()
+				if rErr == nil && newNodeID != "" && newNodeID != nodeID {
+					healMsg := fmt.Sprintf("[LAN-TLS-PROVISION] [SELF-HEALING] Node key mismatch for unauthenticated nodeID=%s. Automatically rotated node identity to %s and retrying...", nodeID, newNodeID)
+					if a.logger != nil {
+						a.logger.Warning(healMsg)
+					}
+					if a.ctx != nil {
+						wailsruntime.LogWarning(a.ctx, healMsg)
+					}
+					return a.provisionDeviceTLSCertInternal(true, false)
+				}
+			}
+
 			warnMsg := fmt.Sprintf("[LAN-TLS-PROVISION] [CRITICAL] Node key mismatch for nodeID=%s: 本地证书私钥与云端设备登记不一致，请重置密钥绑定。当前进程静默置备已终止（若未重绑重启后仍会尝试）。", nodeID)
 			if a.logger != nil {
 				a.logger.Warning(warnMsg)

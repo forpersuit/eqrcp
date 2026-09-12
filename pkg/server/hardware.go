@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -497,9 +498,57 @@ var (
 	cachedNodeID string
 )
 
+func cachedNodeSaltPath() string {
+	return filepath.Join(config.DefaultConfigDir(), "node_salt.dat")
+}
+
+func readCachedNodeSalt() string {
+	p := cachedNodeSaltPath()
+	data, err := os.ReadFile(p)
+	if err != nil {
+		return ""
+	}
+	salt := strings.TrimSpace(string(data))
+	if len(salt) < 16 || len(salt) > 64 {
+		return ""
+	}
+	return salt
+}
+
+func writeCachedNodeSalt(salt string) error {
+	p := cachedNodeSaltPath()
+	if err := os.MkdirAll(filepath.Dir(p), 0700); err != nil {
+		return err
+	}
+	return os.WriteFile(p, []byte(strings.TrimSpace(salt)), 0600)
+}
+
+// RotateDeviceNodeIdentity generates a fresh cryptographic salt for node identity derivation,
+// persists it locally, and recalculates a new deterministic 12-character node ID.
+// This is used for self-healing when a device's local key changes and the cloud server
+// rejects re-binding under Fail-Closed policy due to absent authority credentials.
+func RotateDeviceNodeIdentity() (string, error) {
+	saltBytes := make([]byte, 16)
+	if _, err := rand.Read(saltBytes); err != nil {
+		return "", fmt.Errorf("failed to generate random salt: %w", err)
+	}
+	newSalt := hex.EncodeToString(saltBytes)
+	if err := writeCachedNodeSalt(newSalt); err != nil {
+		return "", fmt.Errorf("failed to persist node salt: %w", err)
+	}
+
+	nodeIDMu.Lock()
+	cachedNodeID = ""
+	nodeIDMu.Unlock()
+
+	newNodeID := GetDeviceNodeID()
+	log.Printf("[DRM] Device node identity rotated successfully. New node ID: %s", newNodeID)
+	return newNodeID, nil
+}
+
 // GetDeviceNodeID returns a deterministic 12-character hex node identifier
 // for the local machine, derived from the cascade SHA-256 hash of the device
-// hardware fingerprints: sha256(uuidHash + ":" + cpuHash + ":" + diskHash)[:12].
+// hardware fingerprints and optional node salt: sha256(uuidHash + ":" + cpuHash + ":" + diskHash [ + ":" + salt])[:12].
 // It provides cross-reboot stability and idempotency for LAN-TLS node subdomains
 // (*.<node-id>.direct.eqt.net.im) while ensuring zero private key sharing.
 func GetDeviceNodeID() string {
@@ -525,7 +574,13 @@ func GetDeviceNodeID() string {
 		return ""
 	}
 
-	combined := fmt.Sprintf("%s:%s:%s", uuid, cpu, disk)
+	salt := readCachedNodeSalt()
+	var combined string
+	if salt != "" {
+		combined = fmt.Sprintf("%s:%s:%s:%s", uuid, cpu, disk, salt)
+	} else {
+		combined = fmt.Sprintf("%s:%s:%s", uuid, cpu, disk)
+	}
 	sum := sha256.Sum256([]byte(combined))
 	cachedNodeID = hex.EncodeToString(sum[:])[:12]
 	return cachedNodeID
@@ -557,4 +612,10 @@ func InvalidateCachedNodeID() {
 // ResetCachedNodeIDForTest clears cachedNodeID for testing purposes.
 func ResetCachedNodeIDForTest() {
 	InvalidateFingerprintCache()
+}
+
+// ResetNodeSaltForTest removes persisted node salt and clears cached node ID for testing.
+func ResetNodeSaltForTest() {
+	_ = os.Remove(cachedNodeSaltPath())
+	InvalidateCachedNodeID()
 }
