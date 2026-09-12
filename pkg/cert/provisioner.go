@@ -62,68 +62,134 @@ func FormatDirectDomainWithNode(ipStr string, nodeID string) string {
 }
 
 // GetDeviceCertDir returns the directory path where certificate and private key
+// GetDeviceCertDir returns the directory path where device certificates and private keys
 // for the given node ID are stored (xxx/eqt/certs/<node-id>).
-// If the target directory does not yet contain credentials but a legacy directory
-// (~/.config/eqt/certs/<node-id>) exists with privkey.pem, it automatically migrates
-// the credentials to the unified directory while preserving 0600 file modes.
+// This is a pure path resolution function with zero file I/O side effects (Q7).
 func GetDeviceCertDir(nodeID string) (string, error) {
 	baseDir := config.DefaultCertsDir()
 	cleanNode := strings.ToLower(strings.TrimSpace(nodeID))
 	if cleanNode == "" {
 		return baseDir, nil
 	}
-	targetDir := filepath.Join(baseDir, cleanNode)
+	return filepath.Join(baseDir, cleanNode), nil
+}
 
-	// Check if target directory already has credentials
+// legacyKeyExists checks if a valid private key exists in legacy ~/.config/eqt/certs/<cleanNode>
+// when the legacy directory is distinct from the target directory.
+func legacyKeyExists(cleanNode string) bool {
+	if cleanNode == "" {
+		return false
+	}
+	targetDir, err := GetDeviceCertDir(cleanNode)
+	if err != nil {
+		return false
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return false
+	}
+	legacyDir := filepath.Join(home, ".config", "eqt", "certs", cleanNode)
+	if filepath.Clean(legacyDir) == filepath.Clean(targetDir) {
+		return false
+	}
+	legacyKey := filepath.Join(legacyDir, "privkey.pem")
+	if fi, err := os.Stat(legacyKey); err == nil && fi.Size() > 0 {
+		return true
+	}
+	return false
+}
+
+// MigrateLegacyDeviceCredentials migrates credentials for nodeID from legacy location
+// (~/.config/eqt/certs/<nodeID>) to targetDir. It strictly enforces 0700 dir permissions,
+// 0600 key file permissions, fails loud on any I/O error, and verifies target privkey.pem
+// existence before logging success (Q1, Q2, Red Line 26).
+func MigrateLegacyDeviceCredentials(nodeID string) error {
+	cleanNode := strings.ToLower(strings.TrimSpace(nodeID))
+	if cleanNode == "" {
+		return nil
+	}
+	targetDir, err := GetDeviceCertDir(cleanNode)
+	if err != nil {
+		return err
+	}
 	targetKey := filepath.Join(targetDir, "privkey.pem")
-	if _, err := os.Stat(targetKey); err == nil {
-		return targetDir, nil
+	if fi, err := os.Stat(targetKey); err == nil && fi.Size() > 0 {
+		return nil
 	}
 
-	// Fallback check: look in legacy ~/.config/eqt/certs/<cleanNode>
-	if home, err := os.UserHomeDir(); err == nil && home != "" {
-		legacyDir := filepath.Join(home, ".config", "eqt", "certs", cleanNode)
-		if filepath.Clean(legacyDir) != filepath.Clean(targetDir) {
-			legacyKey := filepath.Join(legacyDir, "privkey.pem")
-			if _, err := os.Stat(legacyKey); err == nil {
-				// Migrate legacy device credentials to targetDir automatically
-				if err := os.MkdirAll(targetDir, 0700); err == nil {
-					if entries, readErr := os.ReadDir(legacyDir); readErr == nil {
-						for _, entry := range entries {
-							if entry.IsDir() {
-								continue
-							}
-							src := filepath.Join(legacyDir, entry.Name())
-							dst := filepath.Join(targetDir, entry.Name())
-							if data, readErr := os.ReadFile(src); readErr == nil {
-								perm := os.FileMode(0644)
-								if strings.HasSuffix(entry.Name(), ".pem") || strings.HasSuffix(entry.Name(), ".key") {
-									perm = 0600
-								}
-								_ = os.WriteFile(dst, data, perm)
-							}
-						}
-						log.Printf("[LAN-TLS-KEY] [INFO] Successfully migrated legacy device credentials for node %s from %s to %s",
-							cleanNode, legacyDir, targetDir)
-					}
-				}
-				return targetDir, nil
-			}
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return nil
+	}
+	legacyDir := filepath.Join(home, ".config", "eqt", "certs", cleanNode)
+	if filepath.Clean(legacyDir) == filepath.Clean(targetDir) {
+		return nil
+	}
+	legacyKey := filepath.Join(legacyDir, "privkey.pem")
+	if fi, err := os.Stat(legacyKey); err != nil || fi.Size() == 0 {
+		return nil
+	}
+
+	if err := os.MkdirAll(targetDir, 0700); err != nil {
+		log.Printf("[LAN-TLS-KEY] [WARN] Failed to create target cert dir %s: %v", targetDir, err)
+		return fmt.Errorf("failed to create target cert dir %s: %w", targetDir, err)
+	}
+
+	entries, readErr := os.ReadDir(legacyDir)
+	if readErr != nil {
+		log.Printf("[LAN-TLS-KEY] [WARN] Failed to read legacy cert dir %s: %v", legacyDir, readErr)
+		return fmt.Errorf("failed to read legacy cert dir %s: %w", legacyDir, readErr)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		src := filepath.Join(legacyDir, entry.Name())
+		dst := filepath.Join(targetDir, entry.Name())
+		data, err := os.ReadFile(src)
+		if err != nil {
+			log.Printf("[LAN-TLS-KEY] [WARN] Failed to read legacy file %s during migration: %v", src, err)
+			return fmt.Errorf("failed to read legacy file %s: %w", src, err)
+		}
+		perm := os.FileMode(0644)
+		if strings.HasSuffix(entry.Name(), ".pem") || strings.HasSuffix(entry.Name(), ".key") {
+			perm = 0600
+		}
+		if err := os.WriteFile(dst, data, perm); err != nil {
+			log.Printf("[LAN-TLS-KEY] [WARN] Failed to write migrated file %s: %v", dst, err)
+			return fmt.Errorf("failed to write migrated file %s: %w", dst, err)
 		}
 	}
 
-	return targetDir, nil
+	// Result-driven verification (Q1 & Red Line 26): target key must exist and be non-empty
+	if fi, err := os.Stat(targetKey); err != nil || fi.Size() == 0 {
+		log.Printf("[LAN-TLS-KEY] [WARN] Migration verification failed for node %s: target privkey.pem missing or empty", cleanNode)
+		return fmt.Errorf("migration verification failed for node %s: target privkey.pem missing or empty", cleanNode)
+	}
+
+	log.Printf("[LAN-TLS-KEY] [INFO] Successfully migrated legacy device credentials for node %s from %s to %s",
+		cleanNode, legacyDir, targetDir)
+	return nil
 }
 
 // LoadOrGenerateDeviceKey loads the ECDSA P-256 private key for nodeID from disk,
 // or generates a new one securely in local memory and saves it with restricted 0600 permissions.
 // The private key is strictly isolated and never transmitted across the network.
 func LoadOrGenerateDeviceKey(nodeID string) (*ecdsa.PrivateKey, error) {
-	dir, err := GetDeviceCertDir(nodeID)
+	cleanNode := strings.ToLower(strings.TrimSpace(nodeID))
+	dir, err := GetDeviceCertDir(cleanNode)
 	if err != nil {
 		return nil, err
 	}
 	keyPath := filepath.Join(dir, "privkey.pem")
+
+	// Trigger migration if target key is absent
+	if _, err := os.Stat(keyPath); os.IsNotExist(err) {
+		if migErr := MigrateLegacyDeviceCredentials(cleanNode); migErr != nil {
+			log.Printf("[LAN-TLS-KEY] [WARN] Legacy device credentials migration error for node %s: %v", cleanNode, migErr)
+		}
+	}
 
 	// 1. Try to load existing private key
 	if data, err := os.ReadFile(keyPath); err == nil {
@@ -140,9 +206,20 @@ func LoadOrGenerateDeviceKey(nodeID string) (*ecdsa.PrivateKey, error) {
 		}
 		log.Printf("[LAN-TLS-KEY] [WARNING] Existing private key at %s is corrupted or invalid, generating new key (may cause cloud node_key_mismatch if already registered)", keyPath)
 	} else if !os.IsNotExist(err) {
-		log.Printf("[LAN-TLS-KEY] [WARNING] Failed to read private key at %s: %v, generating new key", keyPath, err)
+		log.Printf("[LAN-TLS-KEY] [WARNING] Failed to read private key at %s: %v", keyPath, err)
+		if legacyKeyExists(cleanNode) {
+			return nil, fmt.Errorf("legacy private key exists for node %s but cannot be read at %s: %w; refusing to silently generate new key to prevent TOFU 403 conflict", cleanNode, keyPath, err)
+		}
 	} else {
-		// Key file does not exist. Check if certificates exist (indicating key was deleted/lost after prior setup)
+		// Key file does not exist at target.
+		// Critical check (Q1 & Red Line 24): if legacy key exists but migration did not produce target key,
+		// REFUSE to silently generate a new key which would lead to TOFU 403 node_key_mismatch on cloud!
+		if legacyKeyExists(cleanNode) {
+			log.Printf("[LAN-TLS-KEY] [WARN] Legacy private key exists for node %s but was not migrated to %s. Refusing to generate new key to avoid TOFU node_key_mismatch.", cleanNode, keyPath)
+			return nil, fmt.Errorf("legacy private key exists for node %s but migration to %s failed; refusing to generate new key to prevent TOFU 403 conflict", cleanNode, keyPath)
+		}
+
+		// Check if certificates exist (indicating key was deleted/lost after prior setup)
 		certPath := filepath.Join(dir, "fullchain.pem")
 		if _, certErr := os.Stat(certPath); certErr == nil {
 			log.Printf("[LAN-TLS-KEY] [WARNING] Private key at %s is missing while fullchain.pem exists, generating new key (may cause cloud node_key_mismatch until re-bound)", keyPath)
@@ -438,6 +515,11 @@ func GetDeviceCertificate(nodeID string) (tls.Certificate, error) {
 
 	certPath := filepath.Join(dir, "fullchain.pem")
 	keyPath := filepath.Join(dir, "privkey.pem")
+
+	// Trigger migration if files missing at target
+	if _, err := os.Stat(keyPath); os.IsNotExist(err) {
+		_ = MigrateLegacyDeviceCredentials(cleanNode)
+	}
 
 	certBytes, err := os.ReadFile(certPath)
 	if err != nil {

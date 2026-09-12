@@ -346,6 +346,10 @@ WantedBy=multi-user.target
 > - **✅ 本轮确认属实项**：P2/P3 闭环（源目录 `~/.local/eqt` 正确、`copyDirRecursive` 已覆盖 `<node>/` 子目录，探针实证 `node20` 落盘）；P6 闭环（`sync-certs-from-vps.sh` 两处 Windows 目标均为 `AppData/Roaming/eqt/certs`，与 `os.UserConfigDir()` 一致）；P7 闭环（`rg '\.config/eqt'` 在 `desktop/gui`、`pkg/cert` 零残留，日志改走 `config.DefaultCertsDir()`）；旧根探针选值正确（`os.UserHomeDir()+".config/eqt/certs/<node>"` ≡ Windows 旧值）；目标已含密钥时不覆盖；版本双面 `v1.36.99` 一致；`go build ./...` 与 `go test ./pkg/config ./pkg/cert -count=1` 全绿；图标资产双侧 `md5` 完全相同；部署侧（`3a8c4ea7`/`f68f9963`）未触及客户端落盘路径与信任链。
 > - **📈 复发计数**：「文档/命名声称超出实现」连续 **十轮**复发，且**新特征是偏差出现在上一轮自己写下的闭环结论上** ⇒ 闭环声明须下沉到"可失败的最小事实"（如"迁移失败时返回错误"），而非"彻底杜绝 XX 冲突"。
 > - **🧹 测试卫生**：本轮再次证明"修复可能引入新缺陷"——弱断言→恒真断言（Q3）、路径修复→失败面静默（Q1）。修复提交须与原始意见**逐条对照**，并验证修复后的断言能对原缺陷**转红**。
+> - **✅ Q1~Q8 闭环落实（v1.36.100 · 2026-09-12）**：Q1 抽取独立 `MigrateLegacyDeviceCredentials` 并在末尾执行强结果校验（目标私钥存在且大小非空），在 `LoadOrGenerateDeviceKey` 中增加 `legacyKeyExists` 判据，旧私钥存在但迁移失败时坚决拒绝生成新私钥并抛出错误（单元测试 `TestMigrateLegacyDeviceCredentials_FailureHandling` 实证覆盖权限为 `0000` 时的拒签行为）；Q2 将 `copyDirRecursive` 创建目录权限收拢为 `0700` 并为 certs 分支补充 `hasEntries` 目标非空前置跳过判据；Q3 重构 `TestDefaultConfigFileUsesLocalEQTDirectory`，期望值改由原生系统 API（`os.UserConfigDir()`/`os.UserHomeDir()`）独立拼装，并补充反向否定断言坚决拒收 legacy 路径，修复 `TestNew` 环境变量清理泄漏；Q4 从 `app.go`、`AppInfo()` 与 `models.ts` 中彻底清理死字段 `TLSCertIssuer` 与只写不读字段 `TLSCertExpiry`；Q5 移除 `main.js` 中不可达死字面量，并在 `i18n.js` 中为 ja/ko/es/de/fr 补齐缺失的 3 个证书状态词条；Q6 为状态徽标容器补充 `role="img"` 与 `aria-label` 增强无障碍支持，维持应用内无侵扰静默降级；Q7 将 `GetDeviceCertDir` 纯化为纯路径计算函数，将迁移副作用解耦为独立方法；Q8 正式声明：设置 `EQT_CONFIG_DIR` 环境变量将绕过全局 legacy 迁移逻辑以保证测试与自定义目录隔离；版本号双面递增至 `v1.36.100`。
+> - **✅ 置备超时放宽与 Dev 模式调试闭环（v1.36.101 · 2026-09-12）**：彻底修复 `desktop/gui/app.go` 中复用全局 5 秒短超时 HTTP 客户端扼死 10~15 秒 ACME DNS-01 过程的问题，为置备流程配置专用的 45 秒超时客户端（与 context 匹配）；在 Go 端导出 `DevProvisionDeviceTLSCert()` 并于前端 Developer Options 增加「LAN-TLS 证书调试」模块，支持一键手动申请/刷新公信证书并在无需重启的情况下实时更新状态图标为 🔒；新增 `TestDevProvisionDeviceTLSCert_ToleratesServerLatencyAboveFiveSeconds` 验证 5.5s 延迟容忍性，版本双面递增至 `v1.36.101`。
+
+
 
 
 

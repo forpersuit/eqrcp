@@ -170,8 +170,6 @@ type AppInfo struct {
 	UploadDirFreeSpace string `json:"uploadDirFreeSpace,omitempty"`
 	IsTest             bool   `json:"isTest"`
 	HasValidTLSCert    bool   `json:"hasValidTLSCert"`
-	TLSCertIssuer      string `json:"tlsCertIssuer,omitempty"`
-	TLSCertExpiry      string `json:"tlsCertExpiry,omitempty"`
 	TLSNodeID          string `json:"tlsNodeId,omitempty"`
 }
 
@@ -1256,14 +1254,6 @@ func (a *App) AppInfo() AppInfo {
 	}
 	nodeID := server.GetDeviceNodeID()
 	hasValidCert := cert.HasValidCertificateForNode("", "", nodeID)
-	var certExpiry string
-	if hasValidCert {
-		if devCert, err := cert.GetDeviceCertificate(nodeID); err == nil {
-			if expiry, err := cert.GetCertificateExpiry(devCert); err == nil {
-				certExpiry = expiry.Format("2006-01-02 15:04")
-			}
-		}
-	}
 	info := AppInfo{
 		Product:         "EQT",
 		Name:            "Easy QR Transfer",
@@ -1275,7 +1265,6 @@ func (a *App) AppInfo() AppInfo {
 		LogPath:         logPath,
 		IsTest:          server.IsTestBuild(),
 		HasValidTLSCert: hasValidCert,
-		TLSCertExpiry:   certExpiry,
 		TLSNodeID:       nodeID,
 	}
 	if cli, err := findEqtCLI(); err == nil {
@@ -2109,37 +2098,49 @@ func (a *App) SubmitFeedback(category, contact, message, imageData, imageFormat 
 	return result.ImageURL, nil
 }
 
+// DevProvisionDeviceTLSCert allows manual triggering of TLS certificate provisioning from developer options.
+func (a *App) DevProvisionDeviceTLSCert() (bool, error) {
+	return a.provisionDeviceTLSCert(true)
+}
+
 // silentProvisionDeviceTLSCert runs in a background goroutine after GUI startup.
 // It checks whether a dedicated certificate exists for the current nodeID.
 // If missing or near expiration, it requests one from the Cloudflare provisioner gateway.
 // On success, it notifies the GUI via the "eqt:tls-cert-ready" event.
 // Adheres strictly to fail-soft and non-blocking rules.
 func (a *App) silentProvisionDeviceTLSCert() {
-	nodeID := server.GetDeviceNodeID()
-	if nodeID == "" {
-		return
-	}
-
 	// 1. Initial grace delay to let main startup finish smoothly without competing for network/CPU
 	time.Sleep(3 * time.Second)
+	_, _ = a.provisionDeviceTLSCert(false)
+}
+
+// provisionDeviceTLSCert requests a dedicated device certificate from the provisioner gateway.
+// When force is false, it skips requesting if a valid certificate (>15 days remaining) already exists.
+func (a *App) provisionDeviceTLSCert(force bool) (bool, error) {
+	nodeID := server.GetDeviceNodeID()
+	if nodeID == "" {
+		return false, fmt.Errorf("device node ID is empty")
+	}
 
 	// 2. Check if a valid certificate already exists and has > 15 days of validity left
-	if devCert, err := cert.GetDeviceCertificate(nodeID); err == nil {
-		if expiry, err := cert.GetCertificateExpiry(devCert); err == nil && time.Until(expiry) > 15*24*time.Hour {
-			msg := fmt.Sprintf("[LAN-TLS] Local dedicated certificate is active for nodeID=%s (status=ready, expiresAt=%s, %d days remaining)",
-				nodeID, expiry.Format("2006-01-02 15:04"), int(time.Until(expiry).Hours()/24))
-			if a.logger != nil {
-				a.logger.Info(msg)
+	if !force {
+		if devCert, err := cert.GetDeviceCertificate(nodeID); err == nil {
+			if expiry, err := cert.GetCertificateExpiry(devCert); err == nil && time.Until(expiry) > 15*24*time.Hour {
+				msg := fmt.Sprintf("[LAN-TLS] Local dedicated certificate is active for nodeID=%s (status=ready, expiresAt=%s, %d days remaining)",
+					nodeID, expiry.Format("2006-01-02 15:04"), int(time.Until(expiry).Hours()/24))
+				if a.logger != nil {
+					a.logger.Info(msg)
+				}
+				if a.ctx != nil {
+					wailsruntime.LogInfo(a.ctx, msg)
+					wailsruntime.EventsEmit(a.ctx, "eqt:tls-cert-ready", true)
+				}
+				return true, nil
 			}
-			if a.ctx != nil {
-				wailsruntime.LogInfo(a.ctx, msg)
-				wailsruntime.EventsEmit(a.ctx, "eqt:tls-cert-ready", true)
-			}
-			return
 		}
 	}
 
-	startMsg := fmt.Sprintf("[LAN-TLS-PROVISION] [START] Initiating background silent provisioning for nodeID=%s", nodeID)
+	startMsg := fmt.Sprintf("[LAN-TLS-PROVISION] [START] Initiating certificate provisioning for nodeID=%s (force=%v)", nodeID, force)
 	if a.logger != nil {
 		a.logger.Info(startMsg)
 	}
@@ -2147,7 +2148,8 @@ func (a *App) silentProvisionDeviceTLSCert() {
 		wailsruntime.LogInfo(a.ctx, startMsg)
 	}
 
-	// 3. Request dedicated device certificate from remote Gateway
+	// 3. Request dedicated device certificate from remote Gateway.
+	// ACME DNS-01 verification typically requires 10-25 seconds; we grant 45 seconds to both context and dedicated client.
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 
@@ -2165,7 +2167,8 @@ func (a *App) silentProvisionDeviceTLSCert() {
 		},
 	}
 
-	res, err := cert.RequestDeviceCertificate(ctx, a.client, opts)
+	provisionClient := &http.Client{Timeout: 45 * time.Second}
+	res, err := cert.RequestDeviceCertificate(ctx, provisionClient, opts)
 	if err != nil {
 		if errors.Is(err, cert.ErrNodeKeyMismatch) {
 			warnMsg := fmt.Sprintf("[LAN-TLS-PROVISION] [CRITICAL] Node key mismatch for nodeID=%s: 本地证书私钥与云端设备登记不一致，请重置密钥绑定。当前进程静默置备已终止（若未重绑重启后仍会尝试）。", nodeID)
@@ -2180,18 +2183,18 @@ func (a *App) silentProvisionDeviceTLSCert() {
 					"message": "本地证书私钥与云端设备登记不一致，请重置密钥绑定",
 				})
 			}
-			return
+			return false, err
 		}
 
 		// Log detailed error and fail-soft without disturbing the user
-		msg := fmt.Sprintf("[LAN-TLS-PROVISION] [FAIL-SOFT] Background provisioning deferred: %v (plain HTTP fallback active)", err)
+		msg := fmt.Sprintf("[LAN-TLS-PROVISION] [FAIL-SOFT] Provisioning deferred: %v (plain HTTP fallback active)", err)
 		if a.logger != nil {
 			a.logger.Info(msg)
 		}
 		if a.ctx != nil {
 			wailsruntime.LogInfo(a.ctx, msg)
 		}
-		return
+		return false, err
 	}
 
 	successMsg := fmt.Sprintf("[LAN-TLS-PROVISION] [SUCCESS] Dedicated certificate ready for nodeID=%s (status=ready, expiresAt=%s)",
@@ -2203,5 +2206,6 @@ func (a *App) silentProvisionDeviceTLSCert() {
 		wailsruntime.LogInfo(a.ctx, successMsg)
 		wailsruntime.EventsEmit(a.ctx, "eqt:tls-cert-ready", true)
 	}
+	return true, nil
 }
 

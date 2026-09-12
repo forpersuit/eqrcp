@@ -25,6 +25,8 @@ export function ClearPendingUpdate():Promise<void>;
 
 export function DevForceOnlineLicenseSync():Promise<main.AgentStatus>;
 
+export function DevProvisionDeviceTLSCert():Promise<boolean>;
+
 export function DevTriggerCrash():Promise<main.CrashReportInfo>;
 
 export function DismissCrashReport():Promise<void>;

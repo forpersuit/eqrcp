@@ -59,6 +59,7 @@ import {
     DismissCrashReportPermanently,
     DevForceOnlineLicenseSync,
     DevTriggerCrash,
+    DevProvisionDeviceTLSCert,
 } from '../wailsjs/go/main/App';
 
 window.addEventListener('error', (e) => {
@@ -2402,10 +2403,10 @@ function renderSettingsPanel() {
                             <strong>
                                 ${t('enable_tls')}
                                 ${state.appInfo?.hasValidTLSCert ?
-                                    `<span class="tls-status-icon ready" title="${escapeAttr(t('tls_cert_ready') || 'TLS 已就绪')}" style="margin-left: 6px; font-size: 12px; vertical-align: baseline; display: inline-block;">🔒</span>` :
+                                    `<span class="tls-status-icon ready" role="img" aria-label="${escapeAttr(t('tls_cert_ready'))}" title="${escapeAttr(t('tls_cert_ready'))}" style="margin-left: 6px; font-size: 12px; vertical-align: baseline; display: inline-block;">🔒</span>` :
                                     state.tlsKeyMismatch ?
-                                    `<span class="tls-status-icon mismatch" title="${escapeAttr(state.tlsKeyMismatchMsg || '密钥不匹配')}" style="margin-left: 6px; font-size: 12px; vertical-align: baseline; display: inline-block; cursor: help;">⚠️</span>` :
-                                    `<span class="tls-status-icon preparing" title="${escapeAttr(t('tls_cert_preparing') || '置备中')}" style="margin-left: 6px; font-size: 12px; vertical-align: baseline; display: inline-block;">⏳</span>`}
+                                    `<span class="tls-status-icon mismatch" role="img" aria-label="${escapeAttr(state.tlsKeyMismatchMsg || t('tls_key_mismatch_msg'))}" title="${escapeAttr(state.tlsKeyMismatchMsg || t('tls_key_mismatch_msg'))}" style="margin-left: 6px; font-size: 12px; vertical-align: baseline; display: inline-block; cursor: help;">⚠️</span>` :
+                                    `<span class="tls-status-icon preparing" role="img" aria-label="${escapeAttr(t('tls_cert_preparing'))}" title="${escapeAttr(t('tls_cert_preparing'))}" style="margin-left: 6px; font-size: 12px; vertical-align: baseline; display: inline-block;">⏳</span>`}
                             </strong>
                             <span>${t('enable_tls_desc')}</span>
                         </div>
@@ -2525,7 +2526,21 @@ function renderSettingsPanel() {
                         ${state.devCrashMsg ? `<div style="font-size: 11px; margin-top: 8px; color: ${state.devCrashMsg.startsWith('✅') ? 'var(--accent)' : '#ef4444'};">${escapeHTML(state.devCrashMsg)}</div>` : ''}
                     </div>
 
-                    <!-- Module 4: Exit Dev Mode or Server Managed Note -->
+                    <!-- Module 4: LAN-TLS Certificate Debug -->
+                    <div style="margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed var(--line);">
+                        <div style="font-weight: 800; font-size: 12px; color: var(--accent); margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+                            <span>🔒</span> ${t('dev_lan_tls_title') || 'LAN-TLS Encryption Debug'}
+                        </div>
+                        <div style="font-size: 10.5px; color: var(--text-secondary); margin-bottom: 8px; line-height: 1.35;">
+                            ${escapeHTML((t('dev_lan_tls_status') || 'Status: ') + (state.appInfo?.hasValidTLSCert ? '✅ ' + (t('tls_cert_ready') || 'Ready') : (state.tlsKeyMismatch ? '⚠️ ' + (t('tls_key_mismatch_msg') || 'Key Mismatch') : '⏳ ' + (t('tls_cert_preparing') || 'Preparing...'))))} | Node: <code style="font-family: var(--font-mono);">${escapeHTML(state.appInfo?.nodeID || 'unknown')}</code>
+                        </div>
+                        <button type="button" class="ghost" id="dev-provision-tls" ${state.devProvisioningTLS ? 'disabled' : ''} style="padding: 7px 6px; font-size: 11px; color: var(--accent); border-color: var(--accent); border-radius: 6px; font-weight: 700; width: 100%;">
+                            ${state.devProvisioningTLS ? '⏳ ' + (t('dev_tls_provisioning') || 'Requesting Certificate from Gateway (10-15s)...') : '🔄 ' + (t('dev_request_tls_cert') || 'Request / Refresh TLS Certificate')}
+                        </button>
+                        ${state.devProvisionTLSResult ? `<div style="font-size: 11px; margin-top: 6px; color: ${state.devProvisionTLSError ? '#ef4444' : 'var(--accent)'}; line-height: 1.35;">${escapeHTML(state.devProvisionTLSResult)}</div>` : ''}
+                    </div>
+
+                    <!-- Module 5: Exit Dev Mode or Server Managed Note -->
                     ${state.status?.isServerDev ? `
                         <div style="font-size: 11px; color: var(--text-secondary); padding: 8px 10px; background: var(--bg-hover); border-radius: 6px; border: 1.2px dashed var(--line); text-align: center; line-height: 1.4;">
                             🛡️ ${t('dev_server_managed_note') || 'Authorized by Server Device Allowlist. Revoke in Admin Console to disable.'}
@@ -4015,6 +4030,35 @@ function bindEvents() {
                     openPanel('settings');
                 }).catch(err => {
                     state.devCrashMsg = '❌ ' + (t('dev_crash_trigger_failed') || 'Failed to trigger crash: ') + err;
+                    render();
+                    openPanel('settings');
+                });
+                return;
+            }
+            if (e.target.closest('#dev-provision-tls')) {
+                if (state.devProvisioningTLS) return;
+                state.devProvisioningTLS = true;
+                state.devProvisionTLSResult = '';
+                state.devProvisionTLSError = false;
+                render();
+                openPanel('settings');
+                DevProvisionDeviceTLSCert().then(async (success) => {
+                    try {
+                        state.appInfo = await GetAppInfo();
+                    } catch (_) {}
+                    state.devProvisioningTLS = false;
+                    state.devProvisionTLSError = !success;
+                    state.devProvisionTLSResult = success
+                        ? (t('dev_tls_success') || '✅ 证书申请成功，已通过系统全局根信任校验并已落盘！')
+                        : (t('dev_tls_failed') || '⚠️ 证书置备未完成（局域网普通 HTTP 降级保障中），请查看日志。');
+                    showToast(state.devProvisionTLSResult);
+                    render();
+                    openPanel('settings');
+                }).catch((err) => {
+                    state.devProvisioningTLS = false;
+                    state.devProvisionTLSError = true;
+                    state.devProvisionTLSResult = '❌ ' + (err?.message || err || '申请证书异常');
+                    showToast(state.devProvisionTLSResult);
                     render();
                     openPanel('settings');
                 });

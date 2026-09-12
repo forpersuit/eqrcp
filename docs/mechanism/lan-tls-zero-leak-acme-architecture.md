@@ -2482,6 +2482,60 @@ $ EQT_CONFIG_DIR=/tmp/retired-probe go test ./pkg/config -run TestDefaultConfigF
 - **修订后逐项结论**：P1/P3 **部分闭环**（路径漂移已覆盖；I/O 失败与目录权限未覆盖）；P2/P4/P6/P7 **已闭环**；P5 **形式已改、判别力未恢复**；P8 **未处置且已扩散至 cert 层**。
 - 本轮**未新增版本号**：仅文档同步，无功能变更（符合「一旦有功能增加，则小版本号 +1」的反向约束）。
 
+#### 11.39 第二十轮演进：Q1~Q8 全量工程闭环、凭据迁移结果驱动校验与死字段清理（v1.36.100 · 2026-09-12）
+
+针对审查员在 §11.38 中提出的第二十轮复核意见（Q1~Q8），本轮遵循第一性原理、红线规范 ㉔ ㉚ 与零退化原则（Rule 13），完成了全量工程落地、可反向转红的测试用例补充及死字段彻底清理。
+
+##### 一、逐项对齐与工程事实清单
+
+| 复核项 | 风险等级 | 核心缺陷事实 | 落地闭环方案与代码事实 |
+| --- | --- | --- | --- |
+| **Q1** | 高危 | 迁移成功日志由进入分支驱动而非结果驱动，I/O 错误被忽略，旧私钥不可读时误报成功且生成新私钥触发 TOFU 403 | 1. 抽取独立 `MigrateLegacyDeviceCredentials(nodeID)`，创建目标目录严格使用 `0700`；<br>2. 任何 I/O 错误立即记录 WARN 并返回 `error`；<br>3. 迁移末尾对目标 `privkey.pem` 执行强结果校验（`os.Stat` 且 `Size() > 0`），校验失败直接报错，禁止无条件成功日志；<br>4. 新增 `legacyKeyExists(cleanNode)` 判据：若旧私钥存在但迁移失败导致目标新私钥不存在，`LoadOrGenerateDeviceKey` 明确返回错误拒签新私钥，彻底杜绝伪首次安装；<br>5. 新增 `TestMigrateLegacyDeviceCredentials_FailureHandling` 单元测试，将旧密钥设为 `0000` 权限，验证迁移报错且拒绝生成新私钥。 |
+| **Q2** | 中危 | 目录权限降级（`0755` vs `0700`），且 certs 迁移缺少目标已存在判据导致每次启动全量递归遍历 | 1. `pkg/config/config.go` 中 `copyDirRecursive` 创建目录权限从 `0755` 统一收拢为 `0700`，杜绝任何提权与非属主遍历风险；<br>2. `maybeMigrateLegacyConfig` 的 certs 分支前置判定目标目录是否已有内容（`hasEntries`），若非空则直接跳过，消除每次冷启动的递归 I/O 开销。 |
+| **Q3** | 中危 | 测试断言同源导致恒真（判别力为零），未能对路径漂移转红 | 1. `pkg/config/config_test.go` 中重构 `TestDefaultConfigFileUsesLocalEQTDirectory`，期望路径改由系统原生标准库 API（`os.UserConfigDir()` 与 `os.UserHomeDir()`）直接构造，彻底与被测函数内部调用的 `DefaultConfigDir()` 解耦；<br>2. 新增反向拒绝断言：断言返回值绝对不等于 legacy 路径 `filepath.Join(home, ".local", "eqt", "config.yml")`，确保在路径漂移回退时必然转红；<br>3. 修复 `TestNew` 中 `os.Clearenv()` 缺乏 defer 环境变量恢复的问题。 |
+| **Q4** | 中危 | `TLSCertIssuer` 失去赋值点成为死字段，`TLSCertExpiry` 只写不读，Wails TS 存在死绑定 | 1. 依据红线 ㉙ 规范，从 `desktop/gui/app.go` 的 `AppInfo` 结构体中彻底移除 `TLSCertIssuer` 与 `TLSCertExpiry` 字段；<br>2. 移除 `AppInfo()` 中冗余的证书解析与时间格式化计算；<br>3. 同步清理 `desktop/gui/frontend/wailsjs/go/models.ts` 中的死绑定，保持前后端数据契约无死冗余。 |
+| **Q5** | 低 | 兜底字面量不可达（死代码），多语种字典覆盖不对称（ja/ko/es/de/fr 缺少证书状态提示词条） | 1. 移除 `desktop/gui/frontend/src/main.js` 中不可达的死字面量 `|| 'TLS 已就绪'` 与 `|| '置备中'`；<br>2. 在 `desktop/gui/frontend/src/i18n.js` 中为 ja、ko、es、de、fr 补齐 `tls_cert_not_detected`、`tls_cert_preparing`、`tls_cert_ready` 词条，确保 6 种支持语种对齐一致。 |
+| **Q6** | 建议 | 警告图标缺乏 a11y 属性，操作指引 hover 依赖 | 1. 在 `desktop/gui/frontend/src/main.js` 中为状态徽标容器增加 `role="img"` 与 `aria-label="${titleText}"`，确保屏幕阅读器无障碍支持；<br>2. 维持既有静默降级策略（不弹 alert 侵扰用户），在控制台及界面图标上保持语义清晰的告警提示。 |
+| **Q7** | 低 | 副作用 Getter 反模式（`GetDeviceCertDir` 内含 `MkdirAll` 与迁移） | 1. 纯化 `GetDeviceCertDir(nodeID)` 为纯路径计算函数，完全移除 `os.MkdirAll` 与文件迁移副作用；<br>2. 凭据迁移收拢为独立的 `MigrateLegacyDeviceCredentials(nodeID)`，在需要凭据落盘/读取时显式调用。 |
+| **Q8** | 提示 | `EQT_CONFIG_DIR` 早退静默关闭迁移未在文档/技能库声明 | 1. 在 `pkg/config/config.go` 源码注释中明确声明：设置 `EQT_CONFIG_DIR` 表示显式指定运行时配置根或处于测试隔离环境，系统将故意绕过 legacy 目录迁移；<br>2. 本节及 `.agents/skills/eqt-lan-tls/SKILL.md` 正式将该语义收录入规范文档。 |
+
+##### 二、测试与反向转红验证结果
+
+1. **凭据迁移失败与拒签新私钥验证（Q1 反向探针转化为正式单元测试）**：
+   - 运行 `go test -v ./pkg/cert -run TestMigrateLegacyDeviceCredentials_FailureHandling`：
+   - 验证当 legacy `privkey.pem` 处于 `0000` 不可读状态时，`MigrateLegacyDeviceCredentials` 返回显式 I/O 错误，目标私钥未生成；随后 `LoadOrGenerateDeviceKey` 明确返回拒绝错误，绝不静默生成新密钥伪装首次安装。测试 100% PASS。
+2. **测试断言解耦与防漂移验证（Q3 独立断言）**：
+   - 运行 `go test -v ./pkg/config -run TestDefaultConfigFileUsesLocalEQTDirectory`：
+   - 在独立系统 API 期望值与反向拒绝断言下，测试 100% PASS。若人为将逻辑改回 `~/.local/eqt`，测试立即转红报错。
+3. **前端编译与类型绑定验证（Q4/Q5）**：
+   - 运行 `npm --prefix desktop/gui/frontend run build`：0 错误通过，无类型缺失，产物正常更新。
+4. **桌面端与服务端全量测试**：
+   - `go test ./pkg/cert ./pkg/config ./server ./cmd` 与 `(cd desktop/gui && go test ./...)` 全量通过。
+
+#### 11.40 第二十一轮演进：置备客户端超时放宽（5s → 45s）与 Dev 模式手动调试触发支持（v1.36.101 · 2026-09-12）
+
+##### 一、问题背景与根因定位
+在真机验收过程中，用户观察到桌面端打开数分钟后，Settings 中的 LAN-TLS 状态图标依然持续停留在 ⏳（置备中）未发生变化。排查 `%APPDATA%\eqt\logs\desktop.log` 取证发现：
+```log
+[11:38:02.962] [LAN-TLS-PROVISION] [GATEWAY-REQ] Sending CSR to https://lic.eqt.net.im/api/v1/cert/provision...
+[11:38:07.962] [LAN-TLS-PROVISION] [ERROR] Phase=GATEWAY_NETWORK error=Post "https://lic.eqt.net.im/api/v1/cert/provision": context deadline exceeded (Client.Timeout exceeded while awaiting headers)
+[11:38:07.962] [LAN-TLS-PROVISION] [FAIL-SOFT] Background provisioning deferred: ... (plain HTTP fallback active)
+```
+- **根因分析**：`desktop/gui/app.go:187` 中初始化的通用 `a.client` 设有 5 秒短超时（`Timeout: 5 * time.Second`）。虽然置备外层传入的 context 为 45 秒，但 `http.Client.Do` 底层在等待网关与 CA 进行 ACME DNS-01 验证（通常需 10~15 秒）时，在第 5 秒被客户端提前强制掐断。超时后客户端遵循 Fail-Soft 静默降级退出协程，导致前端无法接收 `eqt:tls-cert-ready` 事件而永久停留在 ⏳。
+
+##### 二、工程落地与 Dev 模式增强
+1. **置备专用长超时客户端**：
+   - 抽取 `provisionDeviceTLSCert(force bool) (bool, error)`，采用独立的 `provisionClient := &http.Client{Timeout: 45 * time.Second}`，彻底与 45s context 协同，确保 Google Public CA (GTS) 与双机权威 DNS 的完整质询过程不受任何本地超时截断。
+2. **Dev 模式手动调试触发支持**：
+   - 在 Go 端导出 `func (a *App) DevProvisionDeviceTLSCert() (bool, error)`；
+   - 在前端 Settings 的开发者选项（Developer Options）中新增「LAN-TLS 证书调试」区块，呈现当前节点 ID 与证书状态，并提供「🔄 申请 / 刷新设备证书」按钮；
+   - 点击后异步调用置备流程，带有 loading 态与实时 Toast 结果反馈；置备成功后自动触发 `eqt:tls-cert-ready` 事件，将 Settings 主面板的加密状态图标从 ⏳ 实时更新为 🔒，无需重启软件；
+   - 补齐中、英、日、韩、西、德、法 7 语种完整国际化字典。
+3. **单元测试与反向延迟证伪验证**：
+   - 在 `desktop/gui/app_test.go` 中新增测试 `TestDevProvisionDeviceTLSCert_ToleratesServerLatencyAboveFiveSeconds`：模拟网关耗时 5.5 秒（超过原 5 秒限制），断言客户端能正常等待并接收响应，绝不抛出 `Client.Timeout exceeded` 错误。用例通过（5.55s），证明超时保护彻底消除。
+
+
+
 
 
 

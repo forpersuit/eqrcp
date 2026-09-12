@@ -798,7 +798,7 @@ func TestGetDeviceCertDir_LegacyFallbackAndMigration(t *testing.T) {
 	targetConfigDir := filepath.Join(tempHome, "appdata", "eqt")
 	t.Setenv("EQT_CONFIG_DIR", targetConfigDir)
 
-	// Call GetDeviceCertDir
+	// Call pure GetDeviceCertDir
 	dir, err := GetDeviceCertDir(nodeID)
 	if err != nil {
 		t.Fatalf("GetDeviceCertDir failed: %v", err)
@@ -807,6 +807,11 @@ func TestGetDeviceCertDir_LegacyFallbackAndMigration(t *testing.T) {
 	expectedTargetDir := filepath.Join(targetConfigDir, "certs", nodeID)
 	if dir != expectedTargetDir {
 		t.Fatalf("GetDeviceCertDir = %q, want %q", dir, expectedTargetDir)
+	}
+
+	// Call MigrateLegacyDeviceCredentials
+	if err := MigrateLegacyDeviceCredentials(nodeID); err != nil {
+		t.Fatalf("MigrateLegacyDeviceCredentials failed: %v", err)
 	}
 
 	// Verify the private key was migrated to expectedTargetDir with 0600 permissions
@@ -824,5 +829,49 @@ func TestGetDeviceCertDir_LegacyFallbackAndMigration(t *testing.T) {
 	}
 	if fi.Mode().Perm() != 0600 {
 		t.Fatalf("expected 0600 permissions on migrated key, got: %o", fi.Mode().Perm())
+	}
+}
+
+func TestMigrateLegacyDeviceCredentials_FailureHandling(t *testing.T) {
+	// Q1 (Red Line 26): Verify that I/O failure during migration returns an error,
+	// does not log false success, and LoadOrGenerateDeviceKey refuses to silently
+	// generate a new key to avoid TOFU 403.
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+
+	nodeID := "unreadablelegacy"
+	legacyDir := filepath.Join(tempHome, ".config", "eqt", "certs", nodeID)
+	if err := os.MkdirAll(legacyDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	legacyKey := filepath.Join(legacyDir, "privkey.pem")
+	if err := os.WriteFile(legacyKey, []byte("unreadable-key"), 0000); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chmod(legacyKey, 0600)
+
+	targetConfigDir := filepath.Join(tempHome, "appdata", "eqt")
+	t.Setenv("EQT_CONFIG_DIR", targetConfigDir)
+
+	// 1. Migration must fail loud due to unreadable file
+	err := MigrateLegacyDeviceCredentials(nodeID)
+	if err == nil {
+		t.Fatal("expected MigrateLegacyDeviceCredentials to fail when legacy key is unreadable, got nil")
+	}
+
+	// 2. Target key must NOT exist
+	targetKey := filepath.Join(targetConfigDir, "certs", nodeID, "privkey.pem")
+	if _, statErr := os.Stat(targetKey); statErr == nil {
+		t.Fatal("target key should not exist when migration failed")
+	}
+
+	// 3. LoadOrGenerateDeviceKey must refuse to silently generate a new key
+	_, keyErr := LoadOrGenerateDeviceKey(nodeID)
+	if keyErr == nil {
+		t.Fatal("expected LoadOrGenerateDeviceKey to refuse key generation when legacy key exists but unmigrated, got nil")
+	}
+	if !strings.Contains(keyErr.Error(), "refusing to silently generate new key") &&
+		!strings.Contains(keyErr.Error(), "refusing to generate new key") {
+		t.Fatalf("unexpected error message from LoadOrGenerateDeviceKey: %v", keyErr)
 	}
 }

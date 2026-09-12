@@ -2,10 +2,14 @@ package main
 
 import (
 	"archive/zip"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestParseDesktopIntegrationStatus(t *testing.T) {
@@ -219,3 +223,81 @@ func TestGetLogTailAndBuildDiagnosticsZip(t *testing.T) {
 		t.Fatalf("expected 0 lines from non-existent log, got %d", len(emptyTails))
 	}
 }
+
+func TestDevProvisionDeviceTLSCert(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("EQT_CONFIG_DIR", filepath.Join(tempHome, "eqt_conf"))
+
+	// Mock Gateway returning 429 rate limit
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error":      "Certificate issuance rate limit exceeded (maximum 3 requests per 24 hours)",
+			"reason_key": "rate_limited",
+			"retry_after": 86400,
+		})
+	}))
+	defer server.Close()
+
+	t.Setenv("EQT_PROVISION_ENDPOINT", server.URL)
+
+	app := NewApp()
+	app.logger = NewFileLogger(filepath.Join(tempHome, "desktop.log"), true)
+	defer app.logger.Close()
+
+	// 1. DevProvisionDeviceTLSCert triggers provisioning with dedicated 45s client
+	success, err := app.DevProvisionDeviceTLSCert()
+	if success {
+		t.Fatalf("expected success=false when mock server returns 429 rate limited, got true")
+	}
+	if err == nil {
+		t.Fatalf("expected non-nil error when gateway returns rate limit, got nil")
+	}
+	if !strings.Contains(err.Error(), "rate limit") && !strings.Contains(err.Error(), "rate_limited") {
+		t.Errorf("expected error to mention rate limit, got: %v", err)
+	}
+}
+
+func TestDevProvisionDeviceTLSCert_ToleratesServerLatencyAboveFiveSeconds(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("EQT_CONFIG_DIR", filepath.Join(tempHome, "eqt_conf"))
+
+	// Server sleeps 5.5s (longer than the old 5s timeout, but well within 45s)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(5500 * time.Millisecond)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error":      "Certificate issuance rate limit exceeded",
+			"reason_key": "rate_limited",
+			"retry_after": 86400,
+		})
+	}))
+	defer server.Close()
+
+	t.Setenv("EQT_PROVISION_ENDPOINT", server.URL)
+
+	app := NewApp()
+	app.logger = NewFileLogger(filepath.Join(tempHome, "desktop.log"), true)
+	defer app.logger.Close()
+
+	success, err := app.DevProvisionDeviceTLSCert()
+	if success {
+		t.Fatalf("expected success=false, got true")
+	}
+	if err == nil {
+		t.Fatalf("expected rate limit error, got nil")
+	}
+	// Must NOT be context deadline exceeded / Client.Timeout exceeded
+	if strings.Contains(err.Error(), "Client.Timeout exceeded") {
+		t.Fatalf("provisioning client timed out at 5 seconds! Error: %v", err)
+	}
+	if !strings.Contains(err.Error(), "rate limit") {
+		t.Errorf("expected rate limit error after 5.5s server latency, got: %v", err)
+	}
+}
+
+

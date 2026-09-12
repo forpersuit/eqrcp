@@ -46,6 +46,10 @@ export function DevForceOnlineLicenseSync() {
   return window['go']['main']['App']['DevForceOnlineLicenseSync']();
 }
 
+export function DevProvisionDeviceTLSCert() {
+  return window['go']['main']['App']['DevProvisionDeviceTLSCert']();
+}
+
 export function DevTriggerCrash() {
   return window['go']['main']['App']['DevTriggerCrash']();
 }

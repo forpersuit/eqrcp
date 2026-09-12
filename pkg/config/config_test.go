@@ -13,6 +13,16 @@ import (
 )
 
 func TestNew(t *testing.T) {
+	origEnv := os.Environ()
+	defer func() {
+		os.Clearenv()
+		for _, e := range origEnv {
+			pair := strings.SplitN(e, "=", 2)
+			if len(pair) == 2 {
+				_ = os.Setenv(pair[0], pair[1])
+			}
+		}
+	}()
 	os.Clearenv()
 	_, f, _, _ := runtime.Caller(0)
 	foundIface, err := chooseInterface(application.Flags{})
@@ -162,10 +172,33 @@ func TestNew(t *testing.T) {
 }
 
 func TestDefaultConfigFileUsesLocalEQTDirectory(t *testing.T) {
+	// Q3 (Red Line 27): Compute expected path from independent system API, NOT from DefaultConfigDir()
+	if env := os.Getenv("EQT_CONFIG_DIR"); env != "" {
+		t.Setenv("EQT_CONFIG_DIR", "")
+	}
+
 	got := filepath.ToSlash(DefaultConfigFile())
-	expected := filepath.ToSlash(filepath.Join(DefaultConfigDir(), "config.yml"))
+
+	var expectedDir string
+	if userConfigDir, err := os.UserConfigDir(); err == nil && userConfigDir != "" {
+		expectedDir = filepath.Join(userConfigDir, "eqt")
+	} else if home, err := os.UserHomeDir(); err == nil && home != "" {
+		expectedDir = filepath.Join(home, ".config", "eqt")
+	} else {
+		t.Skip("Neither UserConfigDir nor UserHomeDir available")
+	}
+	expected := filepath.ToSlash(filepath.Join(expectedDir, "config.yml"))
+
 	if got != expected {
-		t.Fatalf("DefaultConfigFile() = %q, want %q", got, expected)
+		t.Fatalf("DefaultConfigFile() = %q, want independent expected path %q", got, expected)
+	}
+
+	// Negative assertion: must NOT point to legacy ~/.local/eqt/config.yml
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		legacyPath := filepath.ToSlash(filepath.Join(home, ".local", "eqt", "config.yml"))
+		if got == legacyPath {
+			t.Fatalf("DefaultConfigFile() unexpectedly matched legacy path %q", legacyPath)
+		}
 	}
 }
 

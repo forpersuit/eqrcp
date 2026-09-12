@@ -185,7 +185,8 @@ func copyDirRecursive(srcDir, dstDir string) error {
 	if err != nil {
 		return err
 	}
-	_ = os.MkdirAll(dstDir, 0755)
+	// Q2: Enforce 0700 permissions on all newly created directories to protect private keys and config
+	_ = os.MkdirAll(dstDir, 0700)
 	for _, entry := range entries {
 		src := filepath.Join(srcDir, entry.Name())
 		dst := filepath.Join(dstDir, entry.Name())
@@ -209,6 +210,7 @@ func copyDirRecursive(srcDir, dstDir string) error {
 // maybeMigrateLegacyConfig copies configuration files and certificates from legacy locations
 // (~/.local/eqt for config, ~/.config/eqt/certs for TLS certificates) to targetDir
 // if the target directory does not yet contain them.
+// Note: When EQT_CONFIG_DIR is set, this migration is bypassed by design to maintain test isolation (Q8).
 func maybeMigrateLegacyConfig(targetDir string) {
 	migrateLegacyOnce.Do(func() {
 		home, err := os.UserHomeDir()
@@ -230,8 +232,15 @@ func maybeMigrateLegacyConfig(targetDir string) {
 		legacyCertsDir := filepath.Join(home, ".config", "eqt", "certs")
 		targetCertsDir := filepath.Join(targetDir, "certs")
 		if filepath.Clean(legacyCertsDir) != filepath.Clean(targetCertsDir) {
-			if fi, err := os.Stat(legacyCertsDir); err == nil && fi.IsDir() {
-				_ = copyDirRecursive(legacyCertsDir, targetCertsDir)
+			// Pre-check (Q2): Skip full tree traversal if target certs directory already exists and is non-empty
+			targetExists := false
+			if entries, err := os.ReadDir(targetCertsDir); err == nil && len(entries) > 0 {
+				targetExists = true
+			}
+			if !targetExists {
+				if fi, err := os.Stat(legacyCertsDir); err == nil && fi.IsDir() {
+					_ = copyDirRecursive(legacyCertsDir, targetCertsDir)
+				}
 			}
 		}
 	})
@@ -239,7 +248,7 @@ func maybeMigrateLegacyConfig(targetDir string) {
 
 // DefaultConfigDir returns the unified base application data and configuration directory.
 // Priority order:
-// 1. EQT_CONFIG_DIR env var (primarily for test isolation and custom directory overrides)
+// 1. EQT_CONFIG_DIR env var (primarily for test isolation and custom directory overrides; bypasses legacy migration)
 // 2. Standard user config directory via os.UserConfigDir():
 //   - Windows: %APPDATA%\eqt (e.g. C:\Users\<user>\AppData\Roaming\eqt)
 //   - Linux/POSIX: ~/.config/eqt (or $XDG_CONFIG_HOME/eqt)

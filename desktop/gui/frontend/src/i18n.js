@@ -446,7 +446,13 @@ const translations = {
         "dev_trigger_crash": "触发崩溃测试",
         "dev_trigger_crash_desc": "仅开发环境：写入一次崩溃 dump，重启后即可走完整崩溃上报流程。",
         "dev_crash_triggered": "崩溃 dump 已写入，重启 eqt-desktop 即可看到崩溃上报弹窗。",
-        "crash_prefill_notice": "检测到上次崩溃信息，已自动填入下方表单。提交反馈时将同时上传崩溃报告。"
+        "crash_prefill_notice": "检测到上次崩溃信息，已自动填入下方表单。提交反馈时将同时上传崩溃报告。",
+        "dev_lan_tls_title": "局域网 TLS 证书调试",
+        "dev_lan_tls_status": "证书状态：",
+        "dev_tls_provisioning": "正在向云端置备证书 (预计 10~15 秒)...",
+        "dev_request_tls_cert": "申请 / 刷新设备证书",
+        "dev_tls_success": "✅ 证书申请成功，已通过系统全局根信任校验并已落盘！",
+        "dev_tls_failed": "⚠️ 证书置备未完成（局域网普通 HTTP 降级保障中），请查看日志。"
     },
     "en": {
         "tls_cert_not_detected": "No valid local certificate cache detected. Transfers will gracefully fallback to standard HTTP.",
@@ -893,9 +899,18 @@ const translations = {
         "dev_trigger_crash": "Trigger Crash Test",
         "dev_trigger_crash_desc": "Dev only: writes one crash dump; restart eqt-desktop to walk the full crash-report flow.",
         "dev_crash_triggered": "Crash dump written. Restart eqt-desktop to see the crash-report dialog.",
-        "crash_prefill_notice": "A previous crash was detected. Crash info has been pre-filled below. Submitting feedback will also upload the crash report."
+        "crash_prefill_notice": "A previous crash was detected. Crash info has been pre-filled below. Submitting feedback will also upload the crash report.",
+        "dev_lan_tls_title": "LAN-TLS Encryption Debug",
+        "dev_lan_tls_status": "Certificate Status: ",
+        "dev_tls_provisioning": "Requesting Certificate from Gateway (10-15s)...",
+        "dev_request_tls_cert": "Request / Refresh TLS Certificate",
+        "dev_tls_success": "✅ Certificate provisioned successfully and verified against system root trust store!",
+        "dev_tls_failed": "⚠️ Provisioning deferred (plain HTTP fallback active). Please check desktop.log for details."
     },
     "ja": {
+        "tls_cert_not_detected": "有効なローカル証明書キャッシュが検出されませんでした。自動的に標準HTTPにフォールバックします。",
+        "tls_cert_preparing": "LAN-TLS証明書をバックグラウンドで準備中（オフラインまたは初期化中は標準HTTPで保護されます）",
+        "tls_cert_ready": "公式 WebPKI TLS 準備完了 (デバイス専用セキュア緑の鍵)",
         "tls_key_mismatch_msg": "ローカル証明書の秘密鍵がクラウドアカウントと一致しません。キーバインドをリセットしてください",
         "enable_tls": "LAN-TLS 暗号化",
         "enable_tls_desc": "公式ワイルドカード証明書と TLS でローカル転送を暗号化します（盗聴防止、安全な緑の鍵）。",
@@ -1324,9 +1339,18 @@ const translations = {
         "window_settings_desc": "EQTウィンドウを閉じたときの動作を設定します。",
         "working": "処理中...",
         "year": "年",
-        "year_unit": "年"
+        "year_unit": "年",
+        "dev_lan_tls_title": "LAN-TLS 暗号化デバッグ",
+        "dev_lan_tls_status": "証明書ステータス：",
+        "dev_tls_provisioning": "ゲートウェイに証明書をプロビジョニング中 (10-15秒)...",
+        "dev_request_tls_cert": "証明書の申請 / 更新",
+        "dev_tls_success": "✅ 証明書のプロビジョニングに成功し、システムルート証明書ストアで検証されました！",
+        "dev_tls_failed": "⚠️ プロビジョニングは延期されました（標準HTTPでフォールバック中）。詳細はログをご確認ください。"
     },
     "ko": {
+        "tls_cert_not_detected": "유효한 로컬 인증서 캐시가 감지되지 않았습니다. 자동으로 표준 HTTP로 안전하게 대체됩니다.",
+        "tls_cert_preparing": "LAN-TLS 인증서를 백그라운드에서 준비 중입니다(오프라인 또는 초기화 중에는 표준 HTTP 사용).",
+        "tls_cert_ready": "공식 WebPKI TLS 준비 완료 (기기 전용 보안 녹색 자물쇠)",
         "tls_key_mismatch_msg": "로컬 인증서 개인 키가 클라우드 등록과 일치하지 않습니다. 키 바인딩을 재설정하십시오.",
         "enable_tls": "LAN-TLS 전송 암호화",
         "enable_tls_desc": "공식 와일드카드 인증서와 TLS로 로컬 전송을 암호화합니다(스니핑 방지, 보안 녹색 자물쇠).",
@@ -1755,9 +1779,18 @@ const translations = {
         "window_settings_desc": "EQT 창을 닫을 때의 소프트웨어 동작 설정.",
         "working": "처리 중...",
         "year": "year",
-        "year_unit": "년"
+        "year_unit": "년",
+        "dev_lan_tls_title": "LAN-TLS 암호화 디버그",
+        "dev_lan_tls_status": "인증서 상태: ",
+        "dev_tls_provisioning": "게이트웨이에서 인증서 프로비저닝 중 (10-15초)...",
+        "dev_request_tls_cert": "인증서 요청 / 갱신",
+        "dev_tls_success": "✅ 인증서 프로비저닝 완료 및 시스템 루트 신뢰 저장소 검증 성공!",
+        "dev_tls_failed": "⚠️ 프로비저닝이 연기되었습니다 (일반 HTTP 폴백 유지). 로그를 확인하세요."
     },
     "es": {
+        "tls_cert_not_detected": "No se detectó una caché de certificados válida. La transferencia volverá a HTTP estándar de forma segura.",
+        "tls_cert_preparing": "Certificado LAN-TLS preparándose en segundo plano (se usa HTTP estándar sin conexión o al iniciar).",
+        "tls_cert_ready": "TLS WebPKI oficial listo (candado verde seguro exclusivo del dispositivo)",
         "tls_key_mismatch_msg": "La clave privada del certificado local no coincide con el registro en la nube. Restablezca la vinculación de clave.",
         "enable_tls": "Cifrado LAN-TLS",
         "enable_tls_desc": "Cifra las transferencias locales con certificados oficiales y TLS (seguridad, candado verde).",
@@ -2186,9 +2219,18 @@ const translations = {
         "window_settings_desc": "Qué sucede cuando se cierra la ventana de EQT.",
         "working": "Procesando...",
         "year": "year",
-        "year_unit": "año"
+        "year_unit": "año",
+        "dev_lan_tls_title": "Depuración de Cifrado LAN-TLS",
+        "dev_lan_tls_status": "Estado del certificado: ",
+        "dev_tls_provisioning": "Solicitando certificado a la pasarela (10-15s)...",
+        "dev_request_tls_cert": "Solicitar / Renovar certificado TLS",
+        "dev_tls_success": "✅ ¡Certificado aprovisionado con éxito y verificado con el almacén raíz del sistema!",
+        "dev_tls_failed": "⚠️ Aprovisionamiento pospuesto (HTTP estándar activo). Consulte los registros."
     },
     "de": {
+        "tls_cert_not_detected": "Kein gültiger lokaler Zertifikats-Cache erkannt. Übertragungen fallen sicher auf Standard-HTTP zurück.",
+        "tls_cert_preparing": "LAN-TLS-Zertifikat wird im Hintergrund vorbereitet (offline oder beim Initialisieren wird Standard-HTTP verwendet).",
+        "tls_cert_ready": "Offizielles WebPKI-TLS bereit (gerätespezifisches sicheres grünes Schloss)",
         "tls_key_mismatch_msg": "Der private Schlüssel des lokalen Zertifikats stimmt nicht mit der Cloud-Registrierung überein. Bitte Schlüsselbindung zurücksetzen.",
         "enable_tls": "LAN-TLS-Verschlüsselung",
         "enable_tls_desc": "Verschlüsselt lokale Übertragungen mit offiziellen Zertifikaten und TLS (Abhörschutz, grünes Schloss).",
@@ -2617,9 +2659,18 @@ const translations = {
         "window_settings_desc": "Was passiert, wenn das EQT-Fenster geschlossen wird.",
         "working": "Verarbeitung...",
         "year": "year",
-        "year_unit": "Jahr"
+        "year_unit": "Jahr",
+        "dev_lan_tls_title": "LAN-TLS-Verschlüsselungs-Debug",
+        "dev_lan_tls_status": "Zertifikatsstatus: ",
+        "dev_tls_provisioning": "Zertifikat wird vom Gateway angefordert (10-15s)...",
+        "dev_request_tls_cert": "TLS-Zertifikat anfordern / aktualisieren",
+        "dev_tls_success": "✅ Zertifikat erfolgreich bereitgestellt und gegen den System-Root-Truststore verifiziert!",
+        "dev_tls_failed": "⚠️ Bereitstellung aufgeschoben (Standard-HTTP aktiv). Bitte Protokolle prüfen."
     },
     "fr": {
+        "tls_cert_not_detected": "Aucun cache de certificat local valide détecté. Les transferts basculent sur HTTP standard en toute sécurité.",
+        "tls_cert_preparing": "Le certificat LAN-TLS est en cours de préparation en arrière-plan (HTTP standard utilisé hors ligne ou à l'initialisation).",
+        "tls_cert_ready": "TLS WebPKI officiel prêt (cadenas vert sécurisé exclusif à l'appareil)",
         "tls_key_mismatch_msg": "La clé privée du certificat local ne correspond pas à l'enregistrement cloud. Veuillez réinitialiser la liaison de clé.",
         "enable_tls": "Chiffrement LAN-TLS",
         "enable_tls_desc": "Chiffre les transferts locaux avec des certificats officiels et TLS (anti-reniflage, cadenas vert).",
@@ -3048,7 +3099,13 @@ const translations = {
         "window_settings_desc": "Ce qui se passe lorsque la fenêtre EQT est fermée.",
         "working": "Traitement...",
         "year": "year",
-        "year_unit": "an"
+        "year_unit": "an",
+        "dev_lan_tls_title": "Débogage du chiffrement LAN-TLS",
+        "dev_lan_tls_status": "Statut du certificat : ",
+        "dev_tls_provisioning": "Demande de certificat auprès de la passerelle (10-15s)...",
+        "dev_request_tls_cert": "Demander / Renouveler le certificat TLS",
+        "dev_tls_success": "✅ Certificat provisionné avec succès et vérifié auprès du magasin racine du système !",
+        "dev_tls_failed": "⚠️ Provisionnement différé (HTTP standard actif). Veuillez vérifier les journaux."
     }
 };
 
