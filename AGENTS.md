@@ -28,11 +28,12 @@ go run . send ./example.txt
 go run . receive ./downloads
 ```
 
-For Windows binaries:
+For Windows binaries (consolidated 3-in-1 executable combining CLI, launcher, and GUI):
 
 ```sh
-GOOS=windows GOARCH=amd64 go build -o eqt.exe .
-GOOS=windows GOARCH=amd64 go build -ldflags -H=windowsgui -o eqt-launcher.exe ./cmd/eqt-launcher
+scripts/deploy-windows-results.sh
+# or for CLI-only testing:
+GOOS=windows GOARCH=amd64 go build -o eqt.exe ./cmd/eqt
 ```
 
 Git hooks installation:
@@ -49,7 +50,7 @@ Manual Windows acceptance deployment:
 scripts/deploy-windows-results.sh
 ```
 
-The deployment script closes `eqt.exe`, `eqt-launcher.exe`, and `eqt-desktop.exe`, then writes fresh Windows artifacts to `E:\developer\results` on Windows or `/mnt/e/developer/results` under WSL/Linux. Use `EQT_RESULTS_DIR` only when the acceptance directory is intentionally different.
+The deployment script compiles and writes the unified customer-facing Windows executable `eqt.exe` (and distribution archive `eqt-desktop-windows-amd64.zip`) to `E:\developer\results` on Windows or `/mnt/e/developer/results` under WSL/Linux. Use `EQT_RESULTS_DIR` only when the acceptance directory is intentionally different.
 
 ## Coding Style & Naming Conventions
 

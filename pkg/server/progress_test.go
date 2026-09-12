@@ -192,11 +192,8 @@ func TestResumableProgressFlow(t *testing.T) {
 }
 
 func TestServerResumableMultiDeviceIntegration(t *testing.T) {
-	// 1. 创建测试目录，自动探测 /mnt/e/developer/results
-	testDir := "/mnt/e/developer/results"
-	if _, err := os.Stat(testDir); err != nil {
-		testDir = t.TempDir()
-	}
+	// 1. 使用标准临时目录，彻底隔离测试文件，避免污染交付目录
+	testDir := t.TempDir()
 
 	// 准备测试文件 (单文件与多文件)
 	singleFile := filepath.Join(testDir, "test_resumable_single.bin")

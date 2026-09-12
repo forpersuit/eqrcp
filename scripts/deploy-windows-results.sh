@@ -148,18 +148,21 @@ if [[ "$run_checks" -eq 1 ]]; then
   (cd "$root_dir/desktop/gui" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" go test -timeout 180s ./...)
 fi
 
-echo "Building Windows CLI artifacts..."
-(cd "$root_dir" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o "$results_dir/eqt.exe" ./cmd/eqt)
-
 if [[ "$build_gui" -eq 1 ]]; then
   if wails_cmd="$(find_wails)"; then
-    echo "Building Windows Wails GUI (consolidated)..."
+    echo "Building Windows consolidated 3-in-1 executable (eqt.exe)..."
     rm -f /tmp/wailsbindings "$root_dir/desktop/gui/eqt-desktop-res.syso" || true
     (cd "$root_dir/desktop/gui" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" "$wails_cmd" build -clean -ldflags "-H=windowsgui" -o eqt-desktop.exe -platform windows/amd64)
     rm -f /tmp/wailsbindings "$root_dir/desktop/gui/eqt-desktop-res.syso" || true
-    # The Wails GUI binary is the consolidated 3-in-1 tool. Overwrite eqt.exe.
+    # The Wails GUI binary is the consolidated 3-in-1 tool (CLI + Launcher + GUI). Copy directly as customer executable.
     cp "$root_dir/desktop/gui/build/bin/eqt-desktop.exe" "$results_dir/eqt.exe"
+  else
+    echo "error: wails CLI not found in PATH or GOPATH/bin" >&2
+    exit 1
   fi
+else
+  echo "Building Windows CLI-only executable (eqt.exe)..."
+  (cd "$root_dir" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o "$results_dir/eqt.exe" ./cmd/eqt)
 fi
 
 # Package Windows installer/executable into zip archive for official website distribution
@@ -178,5 +181,8 @@ if os.path.exists(exe_path):
 # Close any lingering test agent processes that may have spawned during tests
 echo "Ensuring all lingering processes are closed..."
 close_eqt_processes
+
+# Clean up obsolete test binaries or test leftovers if present in acceptance dir
+rm -f "$results_dir"/eqt-*-test.exe "$results_dir"/eqt-test*.exe "$results_dir"/eqt-desktop-*.exe "$results_dir"/test_file*.txt "$results_dir"/test_resumable_single.bin 2>/dev/null || true
 
 echo "Acceptance artifacts written to: $results_dir"
