@@ -2534,6 +2534,34 @@ $ EQT_CONFIG_DIR=/tmp/retired-probe go test ./pkg/config -run TestDefaultConfigF
 3. **单元测试与反向延迟证伪验证**：
    - 在 `desktop/gui/app_test.go` 中新增测试 `TestDevProvisionDeviceTLSCert_ToleratesServerLatencyAboveFiveSeconds`：模拟网关耗时 5.5 秒（超过原 5 秒限制），断言客户端能正常等待并接收响应，绝不抛出 `Client.Timeout exceeded` 错误。用例通过（5.55s），证明超时保护彻底消除。
 
+#### 11.41 第二十二轮演进：TLS 开关交互闭环、动态状态图标自洽与自动触发置备（v1.36.102 · 2026-09-12）
+
+##### 一、问题背景与心智模型对齐
+1. **开关关闭状态下的图标认知混淆**：
+   - 之前版本无论「LAN-TLS Encryption」开关处于开启还是关闭，状态图标均直接根据本地磁盘是否存在有效证书文件渲染 🔒 或 ⏳。
+   - 当开关处于默认关闭（Off）状态时，用户若看到 ⏳，会误以为后台正在未经允许静默申请证书，产生认知割裂。依据第一性原理：开关关闭代表传输未加密，图标必须自洽地展示为「🔓（未加密状态）」，并配有 tooltip 提示「TLS 未开启，局域网以明文 HTTP 传输」。
+2. **开关状态切换与 DOM 响应脱节**：
+   - 原前端实现中，用户点击开关由 `handleAutoSaveSettings` 触发静默保存配置，但并未重新触发当前面板的 `render()` 重绘，导致用户点击开关后界面图标毫无变化。
+3. **HTTP 429 频控锁定排查与清除**：
+   - 在 45s 超时放宽至 v1.36.101 后，真机日志显示客户端在 781ms 内收到网关返回的 `429 (rate_limited)`。经查系此前因排查调试耗尽了生产 D1 针对该 node_id 设定的 24 小时 3 次限额。我们通过远端 D1 数据库执行命令重置了该设备的频控计数。
+
+##### 二、工程落地与状态自洽规范
+1. **状态图标呈现第一性准则**：
+   - **开关处于 Off（关闭）**：展示 `🔓`（`tls-status-icon disabled`，半透明灰色），tooltip 显示「TLS 未开启，局域网以明文 HTTP 传输」（7 国语言适配）。
+   - **开关处于 On（开启）**：
+     - 若本地具备有效证书且私钥匹配：展示 `🔒`（绿锁），tooltip 显示「TLS 局域网加密已就绪」；
+     - 若本地私钥失配：展示 `⚠️`，tooltip 显示警告指引；
+     - 若本地尚未获得证书：展示 `⏳`（等待），tooltip 显示「正在申请/置备 TLS 证书...」。
+2. **开关事件绑定与自动置备（Zero-Touch Auto-Provision）**：
+   - 监听 `#settings-enable-tls` 的 `change` 事件：
+     - 切换时立即更新 `state.settings.enableTLS` 并触发 `render()` 重绘 Settings 视图，确保图标与开关状态实时自洽；
+     - 当拨为 **开启** 且当前本地无有效证书（`!hasValidTLSCert`）时，立即自动调用 `DevProvisionDeviceTLSCert()` 在后台静默申请，并弹出即时状态提示；
+     - 证书签发成功后通过事件与 Promise 回调无缝更新 `hasValidTLSCert = true` 并重绘，图标无缝跃变为 `🔒`，无需重启客户端；
+     - 当拨为 **关闭** 时，立即重绘为 `🔓` 并给出应用内提示。
+3. **多语言全量覆盖**：
+   - 在 `desktop/gui/frontend/src/i18n.js` 中补齐 7 种语言（zh/en/ja/ko/es/de/fr）的 `tls_disabled_tooltip` 与 `tls_enabling_auto_provision` 词条。
+
+
 
 
 

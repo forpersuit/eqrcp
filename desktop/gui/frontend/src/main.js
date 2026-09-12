@@ -2402,7 +2402,9 @@ function renderSettingsPanel() {
                         <div class="setting-copy">
                             <strong>
                                 ${t('enable_tls')}
-                                ${state.appInfo?.hasValidTLSCert ?
+                                ${!Boolean(state.settings?.enableTLS) ?
+                                    `<span class="tls-status-icon disabled" role="img" aria-label="${escapeAttr(t('tls_disabled_tooltip'))}" title="${escapeAttr(t('tls_disabled_tooltip'))}" style="margin-left: 6px; font-size: 12px; vertical-align: baseline; display: inline-block; opacity: 0.65;">🔓</span>` :
+                                    state.appInfo?.hasValidTLSCert ?
                                     `<span class="tls-status-icon ready" role="img" aria-label="${escapeAttr(t('tls_cert_ready'))}" title="${escapeAttr(t('tls_cert_ready'))}" style="margin-left: 6px; font-size: 12px; vertical-align: baseline; display: inline-block;">🔒</span>` :
                                     state.tlsKeyMismatch ?
                                     `<span class="tls-status-icon mismatch" role="img" aria-label="${escapeAttr(state.tlsKeyMismatchMsg || t('tls_key_mismatch_msg'))}" title="${escapeAttr(state.tlsKeyMismatchMsg || t('tls_key_mismatch_msg'))}" style="margin-left: 6px; font-size: 12px; vertical-align: baseline; display: inline-block; cursor: help;">⚠️</span>` :
@@ -4287,6 +4289,38 @@ function bindEvents() {
             if (e.target.matches('#settings-interface, #settings-port, #settings-browser, #settings-enable-tls, #settings-block-proxy, #settings-chat-autosave, #settings-chat-download-dir, #settings-chat-v2, #settings-close-behavior, #settings-auto-update-mode, #settings-update-interval, #settings-lang, #settings-show-history, #settings-telemetry, #settings-notification')) {
                 if (e.target.id === 'settings-auto-update-mode') {
                     handleAutoUpdateModeChange(e.target.value);
+                    return;
+                }
+                if (e.target.id === 'settings-enable-tls') {
+                    const isEnabled = Boolean(e.target.checked);
+                    if (!state.settings) state.settings = {};
+                    state.settings.enableTLS = isEnabled;
+                    syncSettingsFromDOM();
+                    handleAutoSaveSettings();
+                    render();
+                    openPanel('settings');
+
+                    if (isEnabled) {
+                        if (!state.appInfo?.hasValidTLSCert) {
+                            showToast(t('tls_enabling_auto_provision') || 'ℹ️ 已开启 TLS 加密，正在后台申请设备证书（预计 10~15 秒）...');
+                            DevProvisionDeviceTLSCert().then(async (success) => {
+                                try {
+                                    state.appInfo = await GetAppInfo();
+                                } catch (_) {}
+                                render();
+                                openPanel('settings');
+                                if (success) {
+                                    showToast(t('tls_cert_ready') || '✅ 官方公信 TLS 证书就绪！');
+                                }
+                            }).catch((err) => {
+                                console.warn('[LAN-TLS] Auto provision on switch toggle failed:', err);
+                            });
+                        } else {
+                            showToast(t('tls_cert_ready') || '✅ 官方公信 TLS 证书已就绪！');
+                        }
+                    } else {
+                        showToast(t('tls_disabled_tooltip') || 'ℹ️ 局域网 TLS 加密已关闭');
+                    }
                     return;
                 }
                 syncSettingsFromDOM();
