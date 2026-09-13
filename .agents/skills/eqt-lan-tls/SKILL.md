@@ -818,6 +818,19 @@ WantedBy=multi-user.target
 > 3. **闸门覆盖域必须写明**，强度词（根治 / 彻底闭环 / 全面清零）每用一次须能指到一条**会因该机制失效而变红**的探针，见【118】。
 > 4. **本轮正向确认（值得沿用）**：开发方把 ESLint 闸门挂在 **`npm run build` 而非仅 `lint` 脚本**，且该 build 位于**提交路径**（`.git/hooks/pre-commit` → `scripts/deploy-windows-results.sh:134`，`run_checks=1` 默认开启，两侧均 `set -euo pipefail`）。本轮实测 `npm run build` 注入探针后 `BUILD_PROBE_EXIT=1` 且**日志中 vite 从未执行**，即「lint 红 ⇒ 产物不生成 ⇒ 提交被拒」构成**端到端可复现**的阻断链。后续所有静态闸门建议沿用：**闸门挂在构建入口，构建入口挂在提交路径上**。
 
+---
+
+## 18. 权威 CA 速率限制识别、统计自愈与保护冷却规范 (CA Rate-Limiting & Cooling)
+
+- **核心原则**：公信 ACME CA（如 Google Trust Services、Let's Encrypt）对同一域名和客户端存在严格的速率频次限制（如 429 Too Many Requests / Rate limit exceeded）。当客户端触发限制时，严禁盲目短间隔重试，避免导致全节点或全账户被 CA 风控长周期封禁。
+- **客户端自愈架构落地**：
+  1. **申请追踪器 (`TLSIssuanceStats`)**：
+     - 记录总请求数、成功数、限额触发数、最后成功时间与最后失败时间；
+     - 当捕获 `ErrRateLimited` 或 HTTP 429 时，记录 `RateLimitUntil = time.Now().Add(1 * time.Hour)` 冷却时间戳；
+  2. **主动短路拦截 (Active Cooldown Interception)**：
+     - 在冷却期未结束前，用户若再次在 GUI 打开 TLS 开关，系统在发起任何真实外部网络请求前直接短路返回，提示用户剩余冷却秒数，并自动保持局域网高速明文传输；
+     - 消除无效重试，保护局域网即时可用性与 CA 信用。
+
 
 
 

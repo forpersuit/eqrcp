@@ -58,6 +58,22 @@ type App struct {
 	tlsMu         sync.RWMutex
 	lastTLSError  string
 	provisionMu   sync.Mutex
+	tlsStats      TLSIssuanceStats
+	testHookBeforeFailBroadcast func()
+}
+
+type TLSIssuanceStats struct {
+	TotalRequests       int       `json:"total_requests"`
+	SuccessCount        int       `json:"success_count"`
+	RateLimitCount      int       `json:"rate_limit_count"`
+	FailureCount        int       `json:"failure_count"`
+	LastAttemptTime     time.Time `json:"last_attempt_time"`
+	LastSuccessTime     time.Time `json:"last_success_time"`
+	LastRateLimitTime   time.Time `json:"last_rate_limit_time"`
+	RateLimitUntil      time.Time `json:"rate_limit_until"`
+	LastErrorMessage    string    `json:"last_error_message"`
+	IsRateLimitedActive bool      `json:"is_rate_limited_active"`
+	RemainingCoolingSec int       `json:"remaining_cooling_sec"`
 }
 
 type AgentTask struct {
@@ -2206,6 +2222,34 @@ func (a *App) provisionDeviceTLSCertInternal(force bool, allowSelfHeal bool) (bo
 		wailsruntime.LogInfo(a.ctx, startMsg)
 	}
 
+	// Rate limit cooldown guard: avoid repeated futile requests if authority limit is active
+	a.tlsMu.Lock()
+	if !a.tlsStats.RateLimitUntil.IsZero() && time.Now().Before(a.tlsStats.RateLimitUntil) {
+		remainingSec := int(time.Until(a.tlsStats.RateLimitUntil).Seconds())
+		coolErr := fmt.Errorf("certificate authority rate limit cooldown active (remaining %d seconds)", remainingSec)
+		a.lastTLSError = coolErr.Error()
+		a.tlsMu.Unlock()
+
+		a.persistDisableTLS()
+		if a.testHookBeforeFailBroadcast != nil {
+			a.testHookBeforeFailBroadcast()
+		}
+		if a.ctx != nil {
+			wailsruntime.EventsEmit(a.ctx, "eqt:tls-cert-failed", map[string]any{
+				"node_id":         nodeID,
+				"error":           coolErr.Error(),
+				"fallback":        "plain_http",
+				"is_rate_limited": true,
+				"retry_after_sec": remainingSec,
+				"message":         "触发证书颁发机构频次限制，已自动切换为局域网高速传输（保护冷却中）",
+			})
+		}
+		return false, coolErr
+	}
+	a.tlsStats.TotalRequests++
+	a.tlsStats.LastAttemptTime = time.Now()
+	a.tlsMu.Unlock()
+
 	// 3. Request dedicated device certificate from remote Gateway.
 	// ACME DNS-01 verification typically requires 10-25 seconds; we grant 45 seconds to both context and dedicated client.
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
@@ -2265,6 +2309,9 @@ func (a *App) provisionDeviceTLSCertInternal(force bool, allowSelfHeal bool) (bo
 			// 第一性原理：错配路径亦必须在发出事件前先行落盘 EnableTLS=false，
 			// 消除 ToCToU 竞态，杜绝前端 ReadSettings() 读回磁盘残留 true 的 fail-open 风险。
 			a.persistDisableTLS()
+			if a.testHookBeforeFailBroadcast != nil {
+				a.testHookBeforeFailBroadcast()
+			}
 			if a.ctx != nil {
 				wailsruntime.LogWarning(a.ctx, warnMsg)
 				wailsruntime.EventsEmit(a.ctx, "eqt:tls-node-key-mismatch", map[string]any{
@@ -2276,14 +2323,33 @@ func (a *App) provisionDeviceTLSCertInternal(force bool, allowSelfHeal bool) (bo
 			return false, err
 		}
 
-		// Log detailed error and fail-soft without disturbing the user
+		isRateLimit := errors.Is(err, cert.ErrRateLimited) ||
+			strings.Contains(strings.ToLower(err.Error()), "rate limit") ||
+			strings.Contains(strings.ToLower(err.Error()), "429") ||
+			strings.Contains(strings.ToLower(err.Error()), "too many requests") ||
+			strings.Contains(strings.ToLower(err.Error()), "resource exhausted") ||
+			strings.Contains(strings.ToLower(err.Error()), "quota")
+
+		retryAfterSec := 3600
 		a.tlsMu.Lock()
 		a.lastTLSError = err.Error()
+		if isRateLimit {
+			a.tlsStats.RateLimitCount++
+			a.tlsStats.LastRateLimitTime = time.Now()
+			a.tlsStats.RateLimitUntil = time.Now().Add(time.Duration(retryAfterSec) * time.Second)
+		} else {
+			a.tlsStats.FailureCount++
+		}
+		a.tlsStats.LastErrorMessage = err.Error()
 		a.tlsMu.Unlock()
 
 		// 第一性原理：证书置备失败后，后端先同步落盘 settings.EnableTLS = false，再对外广播事件，
 		// 确保前后端与磁盘配置强一致性。
 		a.persistDisableTLS()
+
+		if a.testHookBeforeFailBroadcast != nil {
+			a.testHookBeforeFailBroadcast()
+		}
 
 		msg := fmt.Sprintf("[LAN-TLS-PROVISION] [AUTO-DISABLED] Provisioning deferred: %v (EnableTLS automatically reset to false; plain HTTP fallback active)", err)
 		if a.logger != nil {
@@ -2292,9 +2358,17 @@ func (a *App) provisionDeviceTLSCertInternal(force bool, allowSelfHeal bool) (bo
 		if a.ctx != nil {
 			wailsruntime.LogInfo(a.ctx, msg)
 			wailsruntime.EventsEmit(a.ctx, "eqt:tls-cert-failed", map[string]any{
-				"node_id":  nodeID,
-				"error":    err.Error(),
-				"fallback": "plain_http",
+				"node_id":         nodeID,
+				"error":           err.Error(),
+				"fallback":        "plain_http",
+				"is_rate_limited": isRateLimit,
+				"retry_after_sec": retryAfterSec,
+				"message": func() string {
+					if isRateLimit {
+						return "触发证书颁发机构频次限制，已自动切换为局域网高速传输（保护冷却中）"
+					}
+					return "证书置备遇到异常，已自动关闭局域网 TLS 并保持标准明文传输"
+				}(),
 			})
 		}
 		return false, err
@@ -2302,6 +2376,10 @@ func (a *App) provisionDeviceTLSCertInternal(force bool, allowSelfHeal bool) (bo
 
 	a.tlsMu.Lock()
 	a.lastTLSError = ""
+	a.tlsStats.SuccessCount++
+	a.tlsStats.LastSuccessTime = time.Now()
+	a.tlsStats.RateLimitUntil = time.Time{}
+	a.tlsStats.LastErrorMessage = ""
 	a.tlsMu.Unlock()
 
 	successMsg := fmt.Sprintf("[LAN-TLS-PROVISION] [SUCCESS] Dedicated certificate ready for nodeID=%s (status=ready, expiresAt=%s)",
@@ -2314,6 +2392,21 @@ func (a *App) provisionDeviceTLSCertInternal(force bool, allowSelfHeal bool) (bo
 		wailsruntime.EventsEmit(a.ctx, "eqt:tls-cert-ready", true)
 	}
 	return true, nil
+}
+
+// GetTLSIssuanceStats returns the TLS provisioning and rate limit statistics.
+func (a *App) GetTLSIssuanceStats() TLSIssuanceStats {
+	a.tlsMu.Lock()
+	defer a.tlsMu.Unlock()
+	stats := a.tlsStats
+	if !stats.RateLimitUntil.IsZero() && time.Now().Before(stats.RateLimitUntil) {
+		stats.IsRateLimitedActive = true
+		stats.RemainingCoolingSec = int(time.Until(stats.RateLimitUntil).Seconds())
+	} else {
+		stats.IsRateLimitedActive = false
+		stats.RemainingCoolingSec = 0
+	}
+	return stats
 }
 
 // GetLastTLSError returns the error message from the most recent TLS provisioning failure, if any.

@@ -377,3 +377,20 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
 - **环境依赖**：`.git/hooks/pre-commit` 为**本地不受版本控制**的文件，仅由 `scripts/install-hooks.sh` 生成。凡改动该脚本，**必须重跑 `scripts/install-hooks.sh`**，否则新逻辑在其他环境静默失效。（`954dfa6e` 起 `wails.json` 自暂存逻辑已从构建脚本 `deploy-windows-results.sh` 迁入钩子模板——该变量 `EQT_PRE_COMMIT_CONTEXT` 目前仅写无读，属可清理死变量。）
 - **文档单一事实源**：钩子/部署说明同时存在于 `AGENTS.md`、`GEMINI.md`、`CLAUDE.md`。`954dfa6e` 仅更新前两者，`CLAUDE.md` 的 “Manual Windows acceptance deployment” 仍误指 `install-hooks.sh`（应为 `deploy-windows-results.sh`）。**改动此类说明时须三处同改**，否则即漂移。
 - **通用判据**（与 `eqt-lan-tls` 审查红线 ⑧ 同源）：任何“门禁 / 校验”声明，须锚定到**会真实运行的流水线调用点（文件:行）**，而非脚本定义处。
+
+---
+
+## 20. 状态指示矢量化与前端具名导入静态防线 (Vector Status & Import Audit)
+
+- **状态指示矢量化与色彩规范 (Vector Status vs Emoji)**：
+  - **规则**：严禁在系统状态指示（如 TLS 加密状态、连接状态、设置面板开关指示）中使用系统彩色 Emoji（如 🔒、🔓、⚠️）。不同操作系统（Windows/macOS/Linux/Android）对 Emoji 的渲染差异极大，极易造成视觉偏色与失真。
+  - **标准实现**：统一使用内联矢量 SVG 图标：
+    - **Ready / 就绪态**：使用品牌主题色（`var(--accent, #156f5a)`）闭锁 SVG；
+    - **Disabled / 未启用态**：使用精致灰色（`var(--text-muted, #94a3b8)`）开锁或闭锁 SVG；
+    - **Preparing / 置备中**：使用轻量旋转 SVG 动画（配合 `@keyframes spin`）；
+    - **Failed / 警告态**：使用标准三角告警 SVG 图标。
+  - **文案规范**：提示文字严禁带“绿锁”等颜色描述词，应优化为“官方公信 TLS 已就绪 (单机专属安全认证)”等严谨专业表达。
+- **具名导入静态审计防线 (Named Import Static Audit)**：
+  - **规则**：ES 模块化重构时，ESLint `no-undef` 只能防范全局域未定义，无法拦截具名导入指向目标模块不存在导出符号（`import { missing } from './target.js'`）。
+  - **标准落地**：通过 `scripts/audit-frontend-imports.mjs` 解析全部前端源码的具名导入与目标文件的真实导出集合进行强匹配校验；
+  - **构建接线**：审计脚本必须挂载在 `scripts/deploy-windows-results.sh` 与提交检查主链上，阻断任何未导出符号逃逸至生产包。

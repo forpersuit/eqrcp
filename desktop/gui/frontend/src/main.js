@@ -848,12 +848,14 @@ function updateQRDOMAndButtonUI(task, wrapperId) {
     const qrWrapper = document.getElementById(wrapperId);
     if (qrWrapper) {
         const qrImage = getTaskQRImage(task);
+        const isReceive = task.action === 'receive' || task.type === 'receive' || wrapperId === 'receive-qr-wrapper';
+        const badgeHtml = isReceive ? '' : renderTaskSecurityBadge(task.pageUrl, state, t, escapeAttr);
         const newQrHtml = isQRExpanded && qrImage ? `
             <div class="qr-hero">
                 <img src="${escapeAttr(qrImage)}" alt="Transfer QR code" />
                 <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 6px;">
                     <button class="ghost open-qr" data-open-url="${escapeAttr(task.pageUrl)}">${t('open_in_browser')}</button>
-                    ${renderTaskSecurityBadge(task.pageUrl, state, t, escapeAttr)}
+                    ${badgeHtml}
                 </div>
             </div>
         ` : (isQRExpanded ? `<div class="empty-state transfer-empty" style="margin-top: 12px;">${t('waiting_qr')}</div>` : '');
@@ -1287,7 +1289,6 @@ function renderReceiveTransfer(task) {
                         <img src="${escapeAttr(qrImage)}" alt="Transfer QR code" />
                         <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 6px;">
                             <button class="ghost open-qr" data-open-url="${escapeAttr(task.pageUrl)}">${t('open_in_browser')}</button>
-                            ${renderTaskSecurityBadge(task.pageUrl, state, t, escapeAttr)}
                         </div>
                     </div>
                 ` : (isQRExpanded ? `<div class="empty-state transfer-empty" style="margin-top: 12px;">${t('waiting_qr')}</div>` : '')}
@@ -5218,9 +5219,11 @@ async function autoDisableTLSOnFailure(errorMsg, openSettings = false) {
     } catch (e) {
         console.warn('[LAN-TLS] Failed to read latest settings after auto-disable:', e);
     }
-    state.settings.enableTLS = false;
-
-    showToast(t('tls_failed_auto_disabled') || '⚠️ 证书置备遇到异常，已自动关闭局域网 TLS 并保持标准明文传输。可稍后在开发者选项重试。');
+    const isRateLimit = state.tlsRateLimited || (errorMsg && (errorMsg.includes('rate limit') || errorMsg.includes('429') || errorMsg.includes('Too Many Requests')));
+    const toastMsg = isRateLimit
+        ? (t('tls_cert_rate_limited') || '触发证书颁发机构频次限制（已自动切换为局域网高速传输，保护期中）')
+        : (t('tls_failed_auto_disabled') || '⚠️ 证书置备遇到异常，已自动关闭局域网 TLS 并保持标准明文传输。可稍后在开发者选项重试。');
+    showToast(toastMsg);
     render();
     if (openSettings || state.activePanel === 'settings') {
         openPanel('settings');
@@ -6716,10 +6719,13 @@ function getTaskQRImage(task) {
     if (!task) {
         return '';
     }
+    const pageUrl = task.pageUrl || '';
     if (task.qrCode) {
+        if (pageUrl && !qrDataUrlCache.has(pageUrl)) {
+            qrDataUrlCache.set(pageUrl, task.qrCode);
+        }
         return task.qrCode;
     }
-    const pageUrl = task.pageUrl || '';
     if (!pageUrl) {
         return '';
     }
@@ -6903,11 +6909,14 @@ EventsOn('eqt:tls-cert-failed', async (payload) => {
     state.tlsProvisioning = false;
     state.tlsProvisionFailed = true;
     state.tlsProvisionError = (payload && payload.error) || 'Certificate provisioning deferred';
+    state.tlsRateLimited = Boolean(payload && payload.is_rate_limited);
+    state.tlsRateLimitRetryAfter = (payload && payload.retry_after_sec) || 0;
     try {
         state.appInfo = await AppInfo();
     } catch (_) {}
     if (Boolean(state.settings?.enableTLS) && !state.appInfo?.hasValidTLSCert) {
-        await autoDisableTLSOnFailure(state.tlsProvisionError, false);
+        const errorMsg = (payload && payload.message) || state.tlsProvisionError;
+        await autoDisableTLSOnFailure(errorMsg, false);
     } else {
         render();
     }

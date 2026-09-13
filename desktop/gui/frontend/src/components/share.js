@@ -98,14 +98,6 @@ export async function getMergedQRCodeDataURL(text, logoSrc) {
         }
     }
     if (typeof qrDataUrl !== 'string' || !qrDataUrl) {
-        qrDataUrl = '';
-    }
-    // 2. 本地生成不可用时, 仅在线降级到第三方在线 QR API
-    if (!qrDataUrl && isOnline()) {
-        qrDataUrl = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&ecc=H&data=${encodeURIComponent(text || 'https://www.eqt.net.im')}`;
-    }
-
-    if (!qrDataUrl) {
         return null;
     }
     const qrImg = await loadImageElement(qrDataUrl);

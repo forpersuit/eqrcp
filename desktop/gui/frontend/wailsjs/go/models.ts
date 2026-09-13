@@ -440,6 +440,60 @@ export namespace main {
 	        this.exists = source["exists"];
 	    }
 	}
+	export class TLSIssuanceStats {
+	    total_requests: number;
+	    success_count: number;
+	    rate_limit_count: number;
+	    failure_count: number;
+	    // Go type: time
+	    last_attempt_time: any;
+	    // Go type: time
+	    last_success_time: any;
+	    // Go type: time
+	    last_rate_limit_time: any;
+	    // Go type: time
+	    rate_limit_until: any;
+	    last_error_message: string;
+	    is_rate_limited_active: boolean;
+	    remaining_cooling_sec: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TLSIssuanceStats(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.total_requests = source["total_requests"];
+	        this.success_count = source["success_count"];
+	        this.rate_limit_count = source["rate_limit_count"];
+	        this.failure_count = source["failure_count"];
+	        this.last_attempt_time = this.convertValues(source["last_attempt_time"], null);
+	        this.last_success_time = this.convertValues(source["last_success_time"], null);
+	        this.last_rate_limit_time = this.convertValues(source["last_rate_limit_time"], null);
+	        this.rate_limit_until = this.convertValues(source["rate_limit_until"], null);
+	        this.last_error_message = source["last_error_message"];
+	        this.is_rate_limited_active = source["is_rate_limited_active"];
+	        this.remaining_cooling_sec = source["remaining_cooling_sec"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 
 }
 

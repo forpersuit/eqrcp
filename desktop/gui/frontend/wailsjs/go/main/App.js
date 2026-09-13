@@ -102,6 +102,10 @@ export function GetPendingOfflineUpdate() {
   return window['go']['main']['App']['GetPendingOfflineUpdate']();
 }
 
+export function GetTLSIssuanceStats() {
+  return window['go']['main']['App']['GetTLSIssuanceStats']();
+}
+
 export function InstallUpdate(arg1) {
   return window['go']['main']['App']['InstallUpdate'](arg1);
 }

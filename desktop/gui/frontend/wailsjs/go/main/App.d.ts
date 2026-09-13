@@ -53,6 +53,8 @@ export function GetLogTail(arg1:number):Promise<Array<string>>;
 
 export function GetPendingOfflineUpdate():Promise<server.PendingOfflineUpdateInfo>;
 
+export function GetTLSIssuanceStats():Promise<main.TLSIssuanceStats>;
+
 export function InstallUpdate(arg1:string):Promise<void>;
 
 export function OpenExternal(arg1:string):Promise<void>;

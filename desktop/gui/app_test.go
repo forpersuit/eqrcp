@@ -448,5 +448,90 @@ func TestDevProvisionDeviceTLSCert_NodeKeyMismatchAutoDisablesTLS(t *testing.T) 
 	}
 }
 
+func TestDevProvisionDeviceTLSCert_PersistsBeforeBroadcastAndTracksRateLimit(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("EQT_CONFIG_DIR", filepath.Join(tempHome, "eqt_conf"))
 
+	reqCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reqCount++
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error":       "certificate issuance rate limit exceeded",
+			"reason_key":  "rate_limited",
+			"retry_after": 3600,
+		})
+	}))
+	defer server.Close()
 
+	t.Setenv("EQT_PROVISION_ENDPOINT", server.URL)
+
+	app := NewApp()
+	app.logger = NewFileLogger(filepath.Join(tempHome, "desktop.log"), true)
+	defer app.logger.Close()
+
+	app.agent = newDesktopAgent(nil)
+	settings, err := app.agent.readSettings()
+	if err != nil {
+		t.Fatalf("readSettings failed: %v", err)
+	}
+	settings.EnableTLS = true
+	if _, err := app.agent.writeSettings(settings); err != nil {
+		t.Fatalf("writeSettings failed: %v", err)
+	}
+
+	hookCalled := false
+	app.testHookBeforeFailBroadcast = func() {
+		hookCalled = true
+		diskSettings, err := app.agent.readSettings()
+		if err != nil {
+			t.Fatalf("hook failed to read disk settings: %v", err)
+		}
+		if diskSettings.EnableTLS {
+			t.Fatalf("INVARIANT VIOLATION: EnableTLS must be written to disk as false BEFORE broadcasting failure event! got true")
+		}
+	}
+
+	// 第一次调用：向 mock server 请求并触发 429
+	success, err := app.DevProvisionDeviceTLSCert()
+	if success {
+		t.Fatalf("expected success=false for rate limit, got true")
+	}
+	if err == nil {
+		t.Fatalf("expected non-nil error, got nil")
+	}
+	if !hookCalled {
+		t.Fatalf("testHookBeforeFailBroadcast was not called!")
+	}
+
+	// 验证统计信息与冷却保护状态
+	stats := app.GetTLSIssuanceStats()
+	if stats.RateLimitCount != 1 {
+		t.Fatalf("expected RateLimitCount=1, got %d", stats.RateLimitCount)
+	}
+	if !stats.IsRateLimitedActive {
+		t.Fatalf("expected IsRateLimitedActive=true, got false")
+	}
+	if stats.RemainingCoolingSec <= 0 {
+		t.Fatalf("expected RemainingCoolingSec > 0, got %d", stats.RemainingCoolingSec)
+	}
+
+	// 第二次调用：应当触发主动冷却拦截，直接短路（不再向 server 发送请求）
+	hookCalled = false
+	currentReqCount := reqCount
+	success2, err2 := app.DevProvisionDeviceTLSCert()
+	if success2 {
+		t.Fatalf("expected success2=false during active cooldown, got true")
+	}
+	if err2 == nil || !strings.Contains(err2.Error(), "cooldown") {
+		t.Fatalf("expected cooldown error, got: %v", err2)
+	}
+	if reqCount != currentReqCount {
+		t.Fatalf("expected no new HTTP request during cooldown, but reqCount changed from %d to %d", currentReqCount, reqCount)
+	}
+	if !hookCalled {
+		t.Fatalf("testHookBeforeFailBroadcast was not called on cooldown short-circuit!")
+	}
+}

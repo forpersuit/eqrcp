@@ -107,6 +107,8 @@ if [[ "$run_checks" -eq 1 ]]; then
 
   echo "Running Go tests..."
   (cd "$root_dir" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" go test -timeout 180s ./...)
+  echo "Running Desktop GUI Go tests..."
+  (cd "$root_dir/desktop/gui" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" go test -timeout 180s .)
   # Sync wails.json version with pkg/version/version.go
   raw_ver="$(grep -o 'version = "[^"]*"' "$root_dir/pkg/version/version.go" | cut -d'"' -f2 | sed 's/^v//')"
   if [[ -n "$raw_ver" && -f "$root_dir/desktop/gui/wails.json" ]]; then
@@ -124,6 +126,8 @@ if [[ "$run_checks" -eq 1 ]]; then
     " || true
   fi
 
+  echo "Auditing GUI frontend named imports..."
+  (cd "$root_dir" && node scripts/audit-frontend-imports.mjs)
   if wails_cmd="$(find_wails)"; then
     echo "Generating Wails bindings..."
     rm -f /tmp/wailsbindings || true

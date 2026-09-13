@@ -50,6 +50,7 @@ type desktopAgent struct {
 	notifyEnabled bool
 	notifier      func(title string, message string) error
 	chatReadyCh   chan error
+	currentReadyCh chan error
 }
 
 func newDesktopAgent(ctx context.Context) *desktopAgent {
@@ -587,17 +588,47 @@ func (agent *desktopAgent) pushTask(task AgentTask) (AgentStatus, error) {
 		if agent.busy {
 			agent.replaceActiveLocked("replaced")
 		}
-		agent.startNextLocked()
+		readyCh := agent.startNextLocked()
+		agent.touchLocked()
+		agent.mu.Unlock()
+
+		if readyCh != nil {
+			select {
+			case err := <-readyCh:
+				agent.mu.Lock()
+				agent.currentReadyCh = nil
+				if err != nil {
+					agent.lastError = err.Error()
+					agent.touchLocked()
+					status := agent.snapshotLocked()
+					agent.mu.Unlock()
+					return status, err
+				}
+				agent.touchLocked()
+				status := agent.snapshotLocked()
+				agent.mu.Unlock()
+				return status, nil
+			case <-time.After(5 * time.Second):
+				agent.mu.Lock()
+				agent.currentReadyCh = nil
+				agent.touchLocked()
+				status := agent.snapshotLocked()
+				agent.mu.Unlock()
+				return status, nil
+			}
+		}
+
+		agent.mu.Lock()
+		agent.touchLocked()
+		status := agent.snapshotLocked()
+		agent.mu.Unlock()
+		return status, nil
 	}
-	agent.touchLocked()
-	status := agent.snapshotLocked()
-	agent.mu.Unlock()
-	return status, nil
 }
 
-func (agent *desktopAgent) startNextLocked() {
+func (agent *desktopAgent) startNextLocked() chan error {
 	if agent.busy || len(agent.queue) == 0 {
-		return
+		return nil
 	}
 	task := agent.queue[0]
 	agent.queue = agent.queue[1:]
@@ -611,8 +642,11 @@ func (agent *desktopAgent) startNextLocked() {
 	}
 	agent.busy = true
 	agent.current = &record
+	readyCh := make(chan error, 1)
+	agent.currentReadyCh = readyCh
 	agent.notifyRecordLocked(record)
 	go agent.execute(task, record.ID)
+	return readyCh
 }
 
 func (agent *desktopAgent) startChatLocked(task AgentTask) chan error {
@@ -636,6 +670,12 @@ func (agent *desktopAgent) execute(task AgentTask, id int) {
 	err := agent.runTask(task)
 	agent.mu.Lock()
 	defer agent.mu.Unlock()
+	if agent.currentReadyCh != nil && err != nil {
+		select {
+		case agent.currentReadyCh <- err:
+		default:
+		}
+	}
 	if agent.current != nil && agent.current.ID == id {
 		finishedAt := time.Now()
 		agent.current.FinishedAt = &finishedAt
@@ -775,6 +815,12 @@ func (agent *desktopAgent) repeatTask(id int) (AgentStatus, error) {
 }
 
 func (agent *desktopAgent) replaceActiveLocked(state string) {
+	if agent.currentReadyCh != nil {
+		select {
+		case agent.currentReadyCh <- fmt.Errorf("task %s", state):
+		default:
+		}
+	}
 	if agent.current != nil {
 		agent.current.State = state
 		finishedAt := time.Now()
@@ -1179,6 +1225,12 @@ func (agent *desktopAgent) setTaskPageURL(action string, pageURL string, qrConte
 			agent.current.PageURL = pageURL
 			if qrCode != "" {
 				agent.current.QRCode = qrCode
+			}
+		}
+		if agent.currentReadyCh != nil {
+			select {
+			case agent.currentReadyCh <- nil:
+			default:
 			}
 		}
 	}

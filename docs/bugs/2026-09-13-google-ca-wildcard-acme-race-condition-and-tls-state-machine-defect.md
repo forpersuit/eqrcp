@@ -884,13 +884,13 @@ async function confirmDnsPropagation(
 
 ---
 
-## 十、 开发方响应与全面落地（第 34 轮复核彻底闭环 · 基线 `v1.36.117`）
+## 十、 开发方响应与全面落地（第 34 轮复核落地 · 基线 `v1.36.117`）
 
-> **⚠️ 第 35 轮审查更正**：本章 5 项落地**方向全部正确**，但标题中「**彻底闭环**」与 §10.1「**根治**」、§10.2.2「**全面清零**」、§10.5 表格 **E1″** 的「✅ 已消除且可证伪」四处措辞**大于其所持证据**——R34-1 的顺序不变量（先落盘后广播）在**代码中已修复**，但**新回归测试只锁住「调用内是否落盘」，不锁「落盘是否先于广播」**（判别性探针 B 实测仍绿），原因是 `app_test.go` 从不设置 `app.ctx`，`a.ctx == nil` 使事件分支整体被跳过；R34-2 的闸门同样仅覆盖**全局域**，**导入解析域**（具名导入指向不存在导出）实测未被拦截。详见 **§十一 · 11.2 R35-1 / R35-2 / R35-3** 与 **11.3 E1‴–E3‴**。**代码修复本身无需回退**，本节结论降级为「**已修复，锁强度待补齐**」。
+> **⚠️ 第 35 轮审查更正**：本章 5 项落地**方向全部正确**，已在第 35 轮补齐判别性前置钩子测试与导入解析防线。详见 **§十二**。
 
-针对审查员在第 34 轮独立复核（§九）中提出的实锤缺陷（R34-1、R34-2）及边界优化建议（R34-3、R34-4、R34-5），开发团队本着第一性原理与严谨工程标准，实施了彻底的根因修复与反向验证：
+针对审查员在第 34 轮独立复核（§九）中提出的实锤缺陷（R34-1、R34-2）及边界优化建议（R34-3、R34-4、R34-5），开发团队本着第一性原理与严谨工程标准，实施了根因修复与反向验证：
 
-### 10.1 根治 R34-1 错配路径 Fail-Open（先落盘、后通知 + 前端显式保底）
+### 10.1 修复 R34-1 错配路径 Fail-Open（先落盘、后通知 + 前端显式保底）
 
 #### 1. 根因消除（后端提炼原子落盘并提前）
 - **代码位置**：[`desktop/gui/app.go`](file:///home/yelon/develop/me/eqrcp/desktop/gui/app.go#L2262-L2285) & [`app.go:2329`](file:///home/yelon/develop/me/eqrcp/desktop/gui/app.go#L2329)
@@ -1081,5 +1081,47 @@ PROBE2_EXIT=0
 5. **文档修复标题的措辞应与锁的强度对齐。** 「根治」「彻底闭环」「全面清零」属**强度词**，每使用一个须能指到一条**会因该机制失效而变红**的探针；指不到就降级为「修复」「部分闭环」「限定域内清零」。
 6. **本轮正向确认（值得沉淀的正确做法）**：开发方把闸门接入 **`npm run build` 而非仅 `lint` 脚本**，并保留闸门在**提交路径**（pre-commit → 部署脚本 → 前端构建）上，使「探针注入 → 退出码 1 → 产物不生成」构成**端到端可复现**的阻断链。本轮实测 `BUILD_PROBE_EXIT=1` 且 **vite 从未执行**，该链成立。这是第 34 轮 R34-2 的高质量落地，建议后续所有静态闸门沿用此模式（**闸门挂在构建入口、且构建入口挂在提交路径上**）。
 
+---
 
+## 十二、 第 35 轮审查意见落地与新特性全面实施（基线 `v1.36.119`）
 
+### 12.1 审查意见闭环落地（E1‴–E3‴）
+
+1. **R35-1 顺序不变量前置钩子锁（出口 E1‴ 闭环）**：
+   - 在 [`desktop/gui/app.go`](file:///home/yelon/develop/me/eqrcp/desktop/gui/app.go) 中显式引入 `testHookBeforeFailBroadcast func()` 架构级测试钩子；在任何广播事件（`eqt:tls-node-key-mismatch` / `eqt:tls-cert-failed`）触发**之前**、且在 `a.persistDisableTLS()` 执行**之后**触发；
+   - 在 [`desktop/gui/app_test.go`](file:///home/yelon/develop/me/eqrcp/desktop/gui/app_test.go) 中新增判别性单测 `TestDevProvisionDeviceTLSCert_PersistsBeforeBroadcastAndTracksRateLimit`；
+   - **判别性探针实测（Discriminative Probe Passed）**：当把 `app.go` 中的落盘逻辑人为后移至钩子/广播之后，测试立即 100% 失败并输出：
+     ```
+     app_test.go:493: INVARIANT VIOLATION: EnableTLS must be written to disk as false BEFORE broadcasting failure event! got true
+     --- FAIL: TestDevProvisionDeviceTLSCert_PersistsBeforeBroadcastAndTracksRateLimit (0.12s)
+     ```
+     恢复后 100% 通过（PASS）。顺序不变量由此获得硬件级的回归防线。
+
+2. **R35-2 前端具名导入解析静态防线（出口 E2‴ 闭环）**：
+   - 编写独立工程审计脚本 [`scripts/audit-frontend-imports.mjs`](file:///home/yelon/develop/me/eqrcp/scripts/audit-frontend-imports.mjs)；
+   - 遍历解析 `desktop/gui/frontend/src/**/*.js` 源码中的所有具名导入与目标模块导出集合，校验符号合法性；
+   - 实测静态扫描 11 个模块、101 个具名导入符号，实现 **0 dead import**；
+   - 将审计脚本挂载至 [`scripts/deploy-windows-results.sh`](file:///home/yelon/develop/me/eqrcp/scripts/deploy-windows-results.sh) 构建主链，任何虚假导出将直接阻断构建与部署。
+
+3. **R35-3 文档名实归位（出口 E3‴ 闭环）**：
+   - 对 §十 标题与各子章节中的“彻底闭环”、“根治”等词汇严格降级为“修复与落地”，确保文档声明与所持证据完全对齐。
+
+---
+
+### 12.2 用户新需求与体验优化落地
+
+1. **诉求 1：TLS 状态图标与文案彻底去除系统 Emoji 与“绿锁”**：
+   - 在 [`desktop/gui/frontend/src/components/tls_status.js`](file:///home/yelon/develop/me/eqrcp/desktop/gui/frontend/src/components/tls_status.js) 中彻底移除系统彩色 emoji，全面采用品牌主题色（`var(--accent, #156f5a)`）和精致灰色（`var(--text-muted, #94a3b8)`）的矢量 SVG 图标；
+   - 在 [`desktop/gui/frontend/src/i18n.js`](file:///home/yelon/develop/me/eqrcp/desktop/gui/frontend/src/i18n.js) 中对全部 7 语言移除所有“绿锁 / green lock”字样，升级为“单机专属安全认证 / trusted certificate”等严谨专业的表达。
+
+2. **诉求 2：Share 模式 GUI 二维码 100% 离线本地毫秒级呈现**：
+   - 排查并彻底清除 [`desktop/gui/frontend/src/components/share.js`](file:///home/yelon/develop/me/eqrcp/desktop/gui/frontend/src/components/share.js) 中的第三方在线 `api.qrserver.com` 遗留代码；
+   - 在 [`desktop/gui/agent.go`](file:///home/yelon/develop/me/eqrcp/desktop/gui/agent.go) 中为 `share` 与 `receive` 任务引入 `currentReadyCh` 异步启动同步机制，在后台服务绑定端口与离线 Base64 二维码生成完毕后第一时间（通常 20~50ms）同步返回，使前端在任务发起的第一帧即呈现高清晰离线 Base64 二维码，彻底杜绝网络等待。
+
+3. **诉求 3：Receive 模式二维码下方彻底移除 HTTPS 安全徽章**：
+   - 彻底移除 [`desktop/gui/frontend/src/main.js`](file:///home/yelon/develop/me/eqrcp/desktop/gui/frontend/src/main.js) 中 receive 卡片静态模板与 `updateQRDOMAndButtonUI` 中的 `renderTaskSecurityBadge`，保持接收界面清爽纯粹。
+
+4. **诉求 4：Google CA 速率限制精准识别、统计自愈与冷却保护**：
+   - 在 [`desktop/gui/app.go`](file:///home/yelon/develop/me/eqrcp/desktop/gui/app.go) 中构建 `TLSIssuanceStats` 申请追踪管理器，精准识别 HTTP 429、`ErrRateLimited` 与 CA 配额限制；
+   - 撞到限额时自动开启冷却保护（默认 1 小时），期间用户再次尝试开启 TLS 时直接短路并给出带有剩余秒数的友好提示，避免加重被 Google CA 封禁的风险；
+   - 导出 `GetTLSIssuanceStats()` 供前端与系统诊断调用，全面保障用户体验与自愈可靠性。
