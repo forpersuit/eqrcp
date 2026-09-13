@@ -1375,3 +1375,219 @@ PROBE-CONFIRMED: 非限额错误被误判为 CA 限额（冷却 3599 秒）
 ### 14.5 架构双文档主干与历史关系对齐 (R37-14)
 - 在 `lan-tls-security-protocol-technical-report.md` 文首增补主干权威取代声明（Supersession Notice），确立其为生产最新实测基线（私钥存储路径为 `certs/<node-id>/privkey.pem`、续签阈值 15 天、A 记录 TTL 300s、Google Public CA EAB 单轨架构）；并在 `lan-tls-zero-leak-acme-architecture.md` 文首标注历史蓝图归档导读，双文档协同。
 
+
+---
+
+## 十五、 审查意见（第 39 轮独立复核 · 对 `fc508b5d` + `a195bd30` 的落地审查 · 基线 `v1.36.125`）
+
+> **复核日期**：2026-09-13
+> **受审提交**：`fc508b5d`（阶段一：自适应断路器与令牌桶，`v1.36.124`）、`a195bd30`（阶段二：2PC 记账与 SingleFlight，`v1.36.125`）
+> **受审文档**：`docs/plan/lan-tls-google-ca-limit-closure-and-failover-plan.md`（阶段一/二自述「已完成 · 100% 交付」）、`docs/mechanism/lan-tls-zero-leak-acme-architecture.md` §七
+> **方法**：不以自述为准。逐条回代码核验，并对每一个「并发/原子性」类断言写**可证伪实验**（先跑正对照证明探针有判别力，再采信结论）。
+> **探针工件**：`/tmp/r38b_race.js`、`/tmp/r38b_race2.js`、`/tmp/r38b_halfopen.js`（真实 SQLite via `node:sqlite`，异步封装以模拟 D1 的网络往返交错）
+
+### 15.1 结论摘要
+
+阶段一/二的**架构方向正确**（把「静态数字上限」换成「按上游真实信号自适应」），代码**确实落地**了断路器三态机、令牌桶、2PC 记账与 SingleFlight，离线套件全绿（见 §15.4）。但「100% 交付」的自述**不成立**，存在 4 条 🔴：
+
+| 编号 | 级别 | 一句话 |
+|---|---|---|
+| **R39-1** | 🔴 | `reserveD1RateLimit` 自称「Atomically」，实为 SELECT→UPDATE 两步 → **并发下 L1/L2 限流完全失效**（实测 10 并发全部放行） |
+| **R39-2** | 🔴 | 令牌桶同一读-改-写竞态 → **突发时反而放量**（桶满 5、10 并发实测全部放行），恰好废掉它唯一要生效的场景 |
+| **R39-3** | 🔴 | `releaseD1RateLimit` 无窗口/身份守卫 → 失败请求的迟到回滚可**侵蚀他人甚至新窗口**的合法计数（实测凭空多出 1 个名额） |
+| **R39-4** | 🔴 | 计划文档声称 Hold 带「**120 秒超时租约**」，代码**零租约字段、零回收器** → Worker 被驱逐时预占位**永久泄漏** |
+| **R39-13** | 🟠 | 计划文档 §三 的**规格数字**（桶容量 20 / 20 次滑窗 + 50% / 冷却 60→300→1800）与实现（容量 5 / `failure_count >= 3` / 30→60→…→1920）**不符**，而该节正是「100% 交付」的规格依据 |
+
+另有 **🟠 6 条**（R39-5/6/7/9/10/13）与 **🟡 3 条**（R39-8/11/12），合计 13 条，详见 §15.2。
+
+### 15.2 缺陷清单
+
+#### R39-1 🔴 `reserveD1RateLimit` 的「原子性」不成立：并发下节点/IP 限流形同虚设
+
+- **文档断言**：`cloudflare/eqt-drm-api/src/utils/rate-limit.ts:215-220` 注释块（其中第 **217** 行原文）——「Two-phase rate limiting reservation… **Atomically** checks and reserves an attempt slot」。
+- **实测实现**：`rate-limit.ts:231-233` 先 `SELECT count, window_start FROM rate_limits WHERE key = ?`，再在 `:263-265` 发第二条 `UPDATE rate_limits SET count = count + 1 WHERE key = ?`。两条独立语句之间**没有事务**，D1 也不提供跨语句读-改-写原子性 → 两个并发请求可同时读到 `count = 2`（上限 3）并各自 +1。
+- **可证伪实验**（`/tmp/r38b_race2.js`）：
+  - **正对照**：串行 5 次、上限 3 → `allowed = 3` ✅（证明探针有判别力，非环境噪声）；
+  - **场景 A**：预置 `count = 2 / 上限 3`，**10 并发**同时到达 → `allowed = 10`（正确应为 **1**），终值 `count = 12`（正确应为 3）。
+- **可达性核验（避免夸大，重要）**：节点键 `cert_provision:{nodeID}`（`cert.ts:886-887`）在**同一 isolate 内**会被 SingleFlight 折叠（`cert.ts:777` 的 `do()` 包裹了 `cert.ts:887` 的预约，跟随者根本不进入预约代码），故「同节点并发」多半被合并、不易触发本条。但以下两条路径**必然并发**，故本条**不是理论风险**：
+  1. **IP 键** `cert_provision:ip:{clientIp}`（`cert.ts:909-910`）—— 同一 NAT/办公网出口下 **≥2 台不同设备**并发置备即命中；
+  2. 跨 POP/跨 isolate 的同节点并发 —— SingleFlight 覆盖不到（见 R39-6）。
+- **影响**：节点 3/24h 与 IP 10/24h 在突发时被击穿；限额越是被需要，越是失效。
+- **处方**：把「判定 + 自增」合并为**单条语句**。D1 支持 `RETURNING`，可改为 UPSERT 一条语句原子完成（窗口过期判定与自增在 `CASE` 内完成），例如：
+
+  ```sql
+  INSERT INTO rate_limits (key, count, window_start) VALUES (?, 1, ?)
+  ON CONFLICT(key) DO UPDATE SET
+    count = CASE WHEN (julianday(?) - julianday(rate_limits.window_start)) * 86400000.0 > ?
+                 THEN 1 ELSE rate_limits.count + 1 END,
+    window_start = CASE WHEN (julianday(?) - julianday(rate_limits.window_start)) * 86400000.0 > ?
+                        THEN ? ELSE rate_limits.window_start END
+  RETURNING count;
+  ```
+  取回 `count` 与 `maxAttempts` 比较即得 `allowed`。**并补一条并发用例**：预置剩余额度 1、并发 N 次预约，断言放行数恰为 1（当前套件没有这条，见 §15.4 末尾）。
+
+#### R39-2 🔴 令牌桶同源竞态：突发时反向放量
+
+- **实现**：`token-bucket.ts:56-63` `SELECT tokens…` → `:83-87` / `:93-97` `UPDATE token_buckets SET tokens = …`，同样是两条独立语句。
+- **可证伪实验**（`/tmp/r38b_race2.js` 场景 B）：桶满 `capacity = 5`、**10 并发** → `allowed = 10`（正确应为 **5**），终值 `tokens = 4`（正确应为 0）。
+- **讽刺之处在于**：令牌桶存在的唯一理由就是削峰，而**并发正是它唯一需要生效的场景**；实测它在并发下退化为「无条件放行」。
+- **文档断言**：计划文档阶段一「引入 10次/分钟 令牌桶平滑限流，**保护 Google CA 避免突发毛刺**」—— 实测与声明相反。
+- **另注**：文档只写了「10 次/分钟」（即 `refillRatePerSec = 10/60`，`cert.ts:933`），**未写突发容量 5**。补文档时宜写明「10 req/min 持续速率，突发上限 5」。
+- **处方**：同 R39-1，改为单语句 `UPDATE … RETURNING tokens`（或用 `env.DB.batch()` 包住读写，但 `RETURNING` 更直接）。
+
+#### R39-3 🔴 `releaseD1RateLimit` 会侵蚀他人的合法计数（回滚可「凭空发名额」）
+
+- **实现**：`rate-limit.ts:204-213`：
+  ```ts
+  await env.DB.prepare(
+    "UPDATE rate_limits SET count = MAX(0, count - 1) WHERE key = ?"
+  ).bind(key).run();
+  ```
+  只有 `key` 一个条件 —— **没有 `WHERE window_start = ?`**，也**没有本次预约的身份标识**（无 `hold_id`）。
+- **可证伪实验**（`/tmp/r38b_race.js` 第二组）：旧窗口有一次预约 `a`；窗口滚过后新窗口产生一次合法占用 `b`（`count = 1`）；此时 `a` 因失败迟到回滚 → `count` 被减为 **0**。即「一次失败的旧请求，给新窗口**白送**了一个名额」。
+- **更普遍的一类**：同一窗口内 A 失败回滚会把 B 的合法占用一并抹掉 → 计数**低于**真实消耗（**fail-open**）。这与本轮 2PC「只对有效交付计费」的初衷方向相反 —— 变成了「连别人的账也一并报销」。
+- **处方**（按代价从低到高）：
+  1. **最低**：`release` 加窗口守卫 `WHERE key = ? AND window_start = ?`（预约时把 `window_start` 记在闭包里），阻断跨窗口漂移；
+  2. **推荐**：引入 `hold_id`（可直接复用 `traceId`）+ `expires_at` 的 hold 行，`release` 只删自己的 hold 行，`Confirmed` 时才把 hold 折进计数。这同时把 R39-4 的租约缺口一起补上。
+
+#### R39-4 🔴 「120 秒超时租约」在代码中不存在 → 预占位可永久泄漏
+
+- **文档断言**：`docs/plan/lan-tls-google-ca-limit-closure-and-failover-plan.md:141` ——「**Phase 1（预占位 Hold）**：客户端请求到来，先在 D1 登记临时预占位（Hold，设置 **120 秒超时租约**）」。同节 `:143` 还称「将 Hold 状态转为 **Confirmed** 正式落盘」。
+- **实测**：
+  - `a195bd30` **未修改 `schema.sql`**（`git show --stat a195bd30` 的 10 个文件中无 `schema.sql`）；`rate_limits` 表只有 `key / count / window_start` 三列（`rate-limit.ts:180-184`，`schema.sql:65-69` 同），**没有 hold 状态列、没有 `expires_at`**；
+  - 租约 / 回收语义检索：`lease` / `reap` / `reclaim` / `sweep` / `hold_id` 于全 `src/` **0 命中**（此 5 词已含正对照：`window_start` 同期命中 9 处，证明检索式有效）。**注意 `expires_at` 不可混入此断言**：它在全仓有 **87 处**，但**无一在限流路径**（`rate-limit.ts` / `token-bucket.ts` 各 0 处），全部属授权 / DRM / Paddle / Portal 及 `device_cert_provisions.expires_at` 的**证书有效期**语境；
+  - 实现里没有 `Confirmed` 状态，`provisionCommitted`（`cert.ts:879 / 1387 / 1418`）只是一个**内存布尔量**，进程一结束就没了。
+- **后果（这是本条比 R39-1/2/3 更该先修的理由）**：Worker 若在预约之后、`finally` 之前被**驱逐 / CPU 超时 / 客户端断开导致 ctx 取消**，`finally` 不会执行 → 预占位**永不释放**，该节点/IP 的额度被凭空吃掉，直到 24 小时窗口自然滚过。**「失败即刻释放」这套机制的安全性，完全依赖租约兜底；而租约根本没写。** 即 Hold 模型少了它自己的安全网。
+- **处方**：与 R39-3 的推荐方案合并实现 —— 预约时写入 `expires_at = now + 120s`，预约路径上顺带惰性回收 `DELETE FROM rate_limit_holds WHERE expires_at < ?`；或至少把「无租约」这一事实写进文档，不要声称已有。
+
+#### R39-5 🟠 断路器 HALF_OPEN 没有「单探针」闸门（注释与实现直接矛盾）
+
+- **注释**：`circuit-breaker.ts:57` ——「HALF_OPEN: Cooldown expired, allows a **single probe** request to test upstream health.」
+- **实现**：`circuit-breaker.ts:89-92` —— `if (row.state === 'HALF_OPEN') return { allowed: true, … }`，**无条件放行**，没有任何「只准一个」的占位/计数。
+- **可证伪实验**（`/tmp/r38b_halfopen.js`）：
+  - **正对照**：OPEN 且冷却未过 → `allowed = false, retryAfter = 3600s` ✅（探针有判别力）；
+  - **探针**：把 `cooldown_until` 置为刚过期，**20 并发** → `allowed = 20`（注释声称应为 **1**），终态 `HALF_OPEN`。
+- **影响**：冷却结束的瞬间，所有在途请求一起打到上游 —— 断路器在最该收手的时刻变成**惊群放大器**；若这 20 个里有一个失败，立刻 re-OPEN，状态在 OPEN↔HALF_OPEN 之间抖动。
+- **处方**：用一次条件写做 CAS 闸门，只有把状态从 `OPEN` 改成 `HALF_OPEN` 的那个调用者才拿到探针资格：
+  ```sql
+  UPDATE circuit_breakers SET state='HALF_OPEN', updated_at=?
+   WHERE name=? AND state='OPEN' AND cooldown_until <= ?
+  ```
+  以返回的 `changes === 1` 判定；已处于 `HALF_OPEN` 的其它请求应返回 `allowed = false`。
+
+#### R39-6 🟠 SingleFlight 是 isolate 内存态，跨 POP 不合并；文档/技能却写成无条件的「自动合并」
+
+- **实现**：`singleflight.ts:15` `private flights = new Map<…>()`，实例为模块级单例（`cert.ts:16` `export const certProvisionSingleFlight = new SingleFlightGroup<…>`）。**内存态 = 单 isolate 作用域**。Cloudflare Workers 会在多 POP、多 isolate 上并行处理请求，且 isolate 可被随时回收。
+- **文档断言**：计划文档阶段二「Worker 内存层挂接 SingleFlight 机制，**相同 NodeID 并发请求自动合并**，拦截竞争冲突」；`.agents/skills/eqt-lan-tls/SKILL.md`【143】「同一 NodeID 的并发置备请求**严格**合并至同一个在途 Promise，外部 CA `newOrder` 网络调用与 DNS 写入**严格仅执行 1 次**」—— 二者均**未标注作用域**。
+- **正确定调**：SingleFlight 的真实效力是「**同一 isolate 内**合并」，它在最常见的场景（同一客户端短时间重试、同一 POP 命中）是有效的；但跨 POP 的同节点并发**不会**被合并。
+- **连带结论**：正因为单飞跨 POP 覆盖不到，**R39-1 的原子性修复不是优化而是必要条件** —— 跨 POP 的最后一道防线只能是 D1 端的原子性。
+- **处方**：文案补边界（架构/计划/技能三处），改为「同 isolate 内合并；跨 POP 不保证，最终由 D1 侧原子预约兜底」，并把 SingleFlight 的定位从「拦截竞争冲突」下修为「降低同 POP 重复上游调用」。
+
+#### R39-7 🟠 L1/L2 返回硬编码 `retry_after: 86400`，与「动态冷却」自述矛盾，且最多过度锁死 24 倍
+
+- **实现**：`cert.ts:901` / `:903`（节点限流）与 `cert.ts:924` / `:926`（IP 限流）**硬编码 `86400`**，与窗口已过去多久无关。
+- **对照**：同为本次交付的令牌桶与断路器返回的是**动态值**（`cert.ts:941` `retry_after: tbResult.retryAfter`、`cert.ts:958` `retry_after: cbCheck.retryAfter`）→ 同一系统内出现了两套退避语义。
+- **文档自述**：`lan-tls-zero-leak-acme-architecture.md` §7.5 第四维 ——「端侧捕获 429，提取 `Retry-After`，Fail-Closed 切断开关，**动态冷却锁定**」。
+- **影响**：用户在窗口第 23 小时触限（真实只需再等 1 小时），仍被锁 24 小时。这是 **Fail-Closed 方向上的过度锁死**，与 2PC「避免误伤合法用户」的初衷相悖。
+- **处方**：改为返回剩余窗口 `Math.max(60, windowMs - (now - window_start))`（预约时已读到 `window_start`，顺带返回即可），同时同步 `Retry-After` 头。
+
+#### R39-8 🟡 SingleFlight 内部 promise 被 reject 却无 handler → unhandled rejection
+
+- **实现**：`singleflight.ts:69` 调用 `rejectPromise(err)`，而该 promise 只被**后续加入者** `await`（`:49`）。若 `fn()` 失败时**没有任何跟随者**，此 promise 无人消费 → 触发 unhandled rejection。创建者自身只 `throw err`（`:70`），并未 await 它。
+- **影响**：Workers 日志噪音/告警；在严格模式下可能影响 isolate 行为。
+- **处方**：创建后立刻挂一个空处理器保留 rejection 给跟随者消费，例如 `promise.catch(() => {})`；或改为「只在有跟随者时才保留 rejection」的等价写法。
+
+#### R39-9 🟠 架构文档仍在宣称「必须严守 40 次安全缓冲区」，该保险丝已被本次提交删除，锚点 `cert.ts:802` 已失效
+
+- **架构文档断言**（`docs/mechanism/lan-tls-zero-leak-acme-architecture.md`；为免行号随编辑漂移，一律以「章节 + 原文引述」定位）：
+  - §7.1 第 3 点（`「全局 40 次 / 7 天」的真实定位`）：「网关中的 `cert_provision:global_acme`（40 次 / 7 天，`cert.ts:802`）… 而是 EQT 团队…主动设立的保守防御熔断线（Guardrail）」…「**必须严守该 40 次安全缓冲区**」；
+  - §五.2 三层立体防刷体系 Layer 3：「全网在滑动 7 天内累计达到 40 次置备请求后，熔断器自动跳闸…」；
+  - **同源陈旧陈述另有 6 处**（本轮逐处核对，均须一并改判）：§三.1 时序图 `校验三层频控 (Node 3次/24h, IP 10次/24h, 全局 40次/7d)`；§五.2 三态图 `[Layer 3: 生产全局熔断兜底]`；§六 映射表 `三层立体防刷体系 (Node 3 / IP 10 / 全局 40)`（标 ✅ 真实生效）；§7.2 `"retry_after": 604800` 与 `在 604800 秒（7 天）冷却期内再次点击开关将被直接拦截`；§7.5 三态表**第二维「网关分层拦截」**（`L1/L2/L3 全局熔断三级拦截` 标【已建成】，`cert.ts:758/780/803` 锚点亦失效）；§九 路线图 `主动开启用户受全局 40次/周 熔断保护`。**注意 §7.3 的三层矩阵并无字面 "Layer 3" 行**，其陈旧项实为第二层的 `[待闭环] Admin 仪表盘专属配额进度看板（直观显示 当前已用/40）`（分母 40 已不存在）。
+- **实测**：`fc508b5d` 已把 `global_acme` / `global_rate_limited` / `604800` 从 `cert.ts` **彻底删除**（全文检索零命中，仅余 `cert.ts:931` 的注释「Global CA Traffic Smoothing」）；**`cert.ts:802` 现在的真实内容是一个孤立的收尾大括号 `        }`**（SingleFlight `onConflict` 分支的结尾），该锚点已完全失效（本缺陷与第 38 轮 R38-8 同属「行号漂移后锚点指错位置」一类）。
+- **两份文档互斥且均无取代声明**：计划文档阶段一写「从 cert.ts **彻底移除** `global_acme` 40/7d 静态硬编码」，架构文档写「**必须严守**该 40 次安全缓冲区」—— 同一天、同一主题、相反结论。
+- **需要正视的实质变化（不只是文案）**：删掉全局保险丝后，CA 账户的**唯一主动上限消失了**，取而代之的是令牌桶（10/min 平滑，瞬时限流）+ 断路器（**被动/反应式**：必须先吃到上游 429 才跳闸）。计划文档自己把全局 40/7d 定性为「保护主域名绝对不被 CA 封禁」的保险丝，那么替换它的方案必须回答：**首次触墙之前 Google 侧的滥用信号是否已经形成？** 断路器答不了这个问题 —— 它是事后反应。这属于**可接受的设计取舍**（用「首次触墙」换「不再因静态数字集体误伤」），但**必须显式声明并交代残余风险**，而不是让两份文档各说各话。
+- **处方**：① 架构文档加**文档头部「全文改判横幅」**统一声明取代关系（并在 §7.1 第 3 点、§7.2、§7.3 各加节级注记）—— 该保险丝已于 `v1.36.124` 移除，替代物为令牌桶 + 断路器，`cert.ts:802` 锚点作废；**须覆盖上文列出的全部 9 处陈旧陈述（分布于 §三.1、§五.2、§六、§7.1、§7.2、§7.3、§7.5、§九 共 8 个章节）**，仅改一两处不足以消除互斥；② 计划文档补一段**残余风险声明**（首次触墙前的不可观测窗口 + 已知的 PSL 未合入现状）。
+
+#### R39-10 🟠 计划文档把不存在的 `acme-provider.ts` 当作既有代码文件展示
+
+- **文档断言**：`docs/plan/lan-tls-google-ca-limit-closure-and-failover-plan.md` §四「**网关设计了**统一的抽象策略层」，随后跟一个标注为 `// cloudflare/eqt-drm-api/src/utils/acme-provider.ts` 的 `typescript` 代码块。
+- **实测**：该文件**不存在**（`ls cloudflare/eqt-drm-api/src/utils/acme-provider.ts` → No such file）。同文档其它 TS 路径引用（`src/routes/cert.ts`、`src/utils/acme.ts`）均**存在**，唯此一条不存在 —— 属**设计草图被写成了落地文件**（与本项目第 37 轮 `parseIPFromDomain`、`cloudflare/eqt-worker/src/cert.ts` 同类）。
+- **处方**：代码块上方标注「**规划中（尚未落地）**」并改标题路径为「拟定路径」，或在 §阶段四中登记为待创建文件。
+
+#### R39-11 🟡 第 38 轮复核意见的**实质已被吸收**，但审查痕迹被无声明清除
+
+- **事实**：`3693ab1e`（「Refactor LAN-TLS zero-leak architecture documentation」）从 `lan-tls-zero-leak-acme-architecture.md` 删除**含 `R38` 的 52 行、新增 0 行**（`git show 3693ab1e -- <doc> | rg '^-.*R38' | wc -l` = 52 / `^+.*R38` = 0），文件由 2985 行压缩至 645 行；提交信息与文档内**均无取代声明**。
+- **客观评价（避免误伤，逐条已核）**：R38 各条的**实质已改对**，不是被掩盖 ——
+  - R38-1「在 Cloudflare DNS 添加 `_acme-challenge` TXT」：已消失（现仅保留「Cloudflare DNS 面板中 `ns1`/`ns2` 须保持灰云」的**委派**红线，属正确表述）；
+  - R38-2 虚构的 `identity.json`：已消失；
+  - R38-3（LE 配额误记为 GTS）：已在 §7.1 显式改判为「早期设计草稿中曾引用"3 小时最多 300 笔订单"… **实为 Let's Encrypt 官方公开规则的误植**」（`rg -n "误植"` 可定位）；
+  - R38-4（计量单位）：已改为「该计数对象是**"向云端发起的置备请求次数"**而非独立用户数」并明说 40/7d 系 EQT 自设 Guardrail（同节紧随其后一行）；
+  - R38-6（四维感知）：已改为 §7.5 的**三态表**（`| **第一维：前置水位感知** |` 一行），第一维标【未建成】、第四维标【已建成】；
+  - R38-12（`301098.xyz`）：已消失；R38-13（邮箱）：已改为 `ACME_EMAIL = "forpersuit@gmail.com"`（`rg -n 'ACME_EMAIL'` 可定位）。
+  - ⚠️ 以上四处**均以「章节 + 原文引述」定位，不写行号** —— 因本文档本轮在头部插入了改判横幅，早先以行号（`:490/:493/:573/:362`）书写的引用**已整体漂移 +12 行**；行号锚点在本文档已两次失效，不宜再用。
+- **仍应留痕的理由**：复核意见本身是交付物。整体删除后，无法追溯「哪条意见、何时闭环、由谁判定闭环」。**建议**：在架构文档加一行「第 38 轮复核意见已逐条吸收，原文见 `676299a6`」，或在本文件建立跨轮追溯表。
+
+#### R39-12 🟡 SKILL.md 【142】【143】的绝对化措辞与实测冲突（技能文件是长期资产，会被后续会话当作事实引用）
+
+- **【142】原文**：「…只有成功发证且落盘审计后才将 `provisionCommitted` 设为 `true`（确认扣减），**彻底杜绝**"网络偶发抖动重试将合法用户 24h 配额耗光"的缺陷。」
+  - 与实测冲突：跨窗口回滚（R39-3）与无租约泄漏（R39-4）都还能让配额账目失真，只是方向相反（**多给**名额）。
+- **【143】原文**：「同一 NodeID 的并发置备请求**严格**合并…外部 CA `newOrder` 网络调用与 DNS 写入**严格仅执行 1 次**。」
+  - 与实测冲突：见 R39-6，跨 POP/跨 isolate 不保证。
+- **处方**：把「彻底杜绝 / 严格」下修为可验证的作用域表述（「在 `finally` 可达的前提下」、「同一 isolate 内」），并把 R39-1~R39-4 作为**已知边界**记入技能。
+
+#### R39-13 🟠 计划文档 §三 的**规格数字**与阶段一/二实际交付**不符**（而该节正是「100% 交付」的规格依据）
+
+- **§3.2 令牌桶容量**：文档写「**桶容量 (Capacity)：20 个令牌**」；实现是 `consumeToken(env, 'cert_provision:acme_smoothing', 5, 10 / 60)`（`cert.ts:933`）⇒ 实为 **5**。填充速率（文档「每 6 秒 1 个 / 稳态 10 次每分钟」）与实现 `10 / 60` **一致** ✅。
+- **§3.1 断路器跳闸条件**：文档写「在 D1 中**滑动维护最近 20 次请求的健康度**」+「最近 20 次置备中，**连续失败率超过 50%**」；实现是**绝对计数** `if (isRateLimit || currentState === 'HALF_OPEN' || currentFails >= 3)`（`circuit-breaker.ts:168`）—— **既无 20 次滑动窗口，也无百分比**。且 `recordCircuitSuccess` 在任何成功时把 `failure_count` 归零（`:129` 绑定 `('CLOSED', 0, …)`），故其真实语义是「**连续**失败计数」而非「滑动窗口失败率」。
+- **§3.1 冷却序列**：文档写「初始 60s ➔ 300s ➔ 1800s」；实现走无 `Retry-After` 分支时 `Math.min(30 * Math.pow(2, Math.min(currentFails - 1, 6)), 3600)`（`:162`）⇒ 实际序列 **30 → 60 → 120 → 240 → 480 → 960 → 1920**（`Math.min(fails-1, 6)` 让指数在第 7 次起封顶在 1920s，`3600` 上限在该路径**永不触发**）。**文档的「300s / 1800s」在代码中无任何对应**。
+- **为何这条不是纯文案问题**：本节是阶段一「【已完成 · 100% 交付】」的**规格依据**。规格数字与交付物不一致时，「100% 交付」这一判定本身无法成立 —— 要么实现偏离了规格，要么规格未随实现更新，**二者必居其一，须由开发方明确表态**，否则后续按本节规格实现阶段三（Admin 大盘要展示「令牌桶余量」「失败率」）时会再次落空。
+- **处方**：① 若以实现为准 ⇒ 回改 §3.1/§3.2 数字（容量 20→5、窗口 20 次 + 50% → `failure_count >= 3`、冷却序列改为实际阶梯）；② 若以规格为准 ⇒ 实现须补 20 次滑动窗口与失败率判定 —— **注意必须与 R39-1 的单语句原子化一并做**，否则滑窗本身又是新的读-改-写竞态。**推荐 ①**：5 / 3 的阈值更保守，且已有离线用例覆盖。
+
+### 15.3 修正处方（可直接执行 · 按优先级）
+
+1. **[E1] 预约原子化**（治 R39-1、R39-2）：把 `reserveD1RateLimit` 与 `consumeToken` 的「读-改-写」各自合并为**单条 `UPDATE … RETURNING` / UPSERT … RETURNING`** 语句。
+2. **[E2] 回滚可归因**（治 R39-3）：`release` 带窗口守卫；进一步引入 `hold_id` + `expires_at`。
+3. **[E3] 租约兜底**（治 R39-4）：`rate_limits`（或新建 hold 表）增加 `expires_at`，预约路径惰性回收过期 hold；同步修正计划文档 §3.4 的「120 秒租约 / Confirmed 状态」表述使其与实现一致。
+4. **[E4] 半开单探针**（治 R39-5）：以条件写 `UPDATE … WHERE state='OPEN' AND cooldown_until <= ?` 的 `changes` 作 CAS 闸门。
+5. **[E5] 退避动态化**（治 R39-7）：L1/L2 返回剩余窗口而非硬编码 `86400`。
+6. **[E6] 文案校准**（治 R39-6、R39-9、R39-10、R39-12）：计划文档（阶段一/二/§3.4/§四）+ 架构文档（头部横幅 + §7.1/§7.2/§7.3/§7.5 注记，覆盖全部 9 处 40/7d 陈述）+ 技能（【142】【143】）+ SKILL 边界声明。
+7. **[E7] 测试补强**：新增三条**并发**用例 —— ① 令牌桶满容量 + N 并发 → 放行数必须 ≤ 容量；② 剩余额度 1 + N 并发预约 → 放行数恰为 1；③ 断路器冷却刚结束 + N 并发 → 放行数恰为 1。（当前套件为串行 + `Map` 型 D1 假体，**结构上无法证伪**这三条；详见 §15.4 末。）
+8. **[E8] 小版本号**：本轮为修复而非功能，按项目规则无需 +1；若新增 hold 表列则**需要**（schema 变更）。
+9. **[E9] 规格对齐**（治 R39-13）：计划文档 §3.1/§3.2 的桶容量 / 失败判定 / 冷却阶梯与实现逐项对齐，并明确「以实现为准」或「以规格为准」。
+
+### 15.4 正向确认（实测为真，应予保留）
+
+1. **「从 cert.ts 彻底移除 `global_acme` 40/7d 静态硬编码」为真**：`rg 'global_acme|global_rate_limited|604800' src/routes/cert.ts` 零命中（仅余 `:931` 的注释文字）。
+2. **2PC 挂接位置正确，成功路径不会自我撤销**：`cert.ts:1417-1424` 为 `finally { if (!provisionCommitted) await Promise.all([nodeRateReservation?.release(), ipRateReservation?.release()]); }`，而 `provisionCommitted` 仅在 `cert.ts:1387`（发证成功之后）置位 → 失败才回滚，语义正确。
+3. **`release()` 幂等**：`rate-limit.ts:241-251` 与 `:268-278` 均以 `released` 标志去重；`utils` 套件「count does not double-decrement on duplicate release call」已覆盖。
+4. **客户端不构成回归**：`pkg/cert/provisioner.go:794-806` 对 429 是**通用**处理 —— 先取响应体 `retry_after`，再回退 `Retry-After` 头，**不依赖具体 `reason_key`**。故新增的 `ca_traffic_smoothing`、`ca_circuit_open` 两个键与既有 `rate_limited`、`ip_rate_limited` 走同一路径，不会被误判成 `ErrGatewayFailed`。
+5. **断路器三态机自愈路径有真实覆盖**：`test:circuit:offline` 10/0，含 T4（OPEN + 冷却过 → HALF_OPEN 放行）、T5（探针成功 → CLOSED 且 `failure_count` 归零）、T6（探针失败 → 回 OPEN 且退避）、T7（管理员复位）。
+6. **退避有上界**：`circuit-breaker.ts:160` 与 `:162` 均以 `Math.min(…, 3600)` 封顶，不会无限增长。
+7. **令牌桶参数与文档一致**：`cert.ts:933` 传 `capacity = 5, refillRatePerSec = 10/60`，对应文档「10 次/分钟」（**仅需补写突发容量 5**）。
+8. **新表已进 `schema.sql`**：`circuit_breakers`、`token_buckets` 在 `fc508b5d` 落入 `cloudflare/eqt-drm-api/schema.sql`，不依赖运行时惰性建表（惰性 `CREATE TABLE IF NOT EXISTS` 仅作兜底）。
+9. **套件与类型检查全绿**（本轮实测，非自述）：`npm run typecheck` 0 错；`test:circuit:offline` 10/0；`test:singleflight:offline` 21/0；`test:cert:offline` 103/0；`test:utils:offline` 66/0。
+10. **版本号推进合规**：`v1.36.123 → 124`（阶段一）→ `125`（阶段二），符合「一旦有功能增加，则小版本号 +1」。
+11. **阶段三没有超报**：计划文档把阶段三标为「进行中 · 下一步重点」，而 `resetCircuitBreaker`（`circuit-breaker.ts:197`）与 `getCircuitBreakerStatus`（`:217`）**确无任何调用点** —— 自述与代码一致。
+12. **`T22.5` 确实证明单飞能省额度**：`cert-provision-offline.js` 断言 5 个并发同节点请求在 D1 上「**只记 1 次**」（`assert(d1Rate.count === 1, 'T22.5: …')`），且 5 个响应中 4 个带 `X-SingleFlight-Shared: true` —— 单飞在同 isolate 内确实有效（**边界见 R39-6**）。
+
+> **⚠️ 关于「为什么套件全绿却仍有 4 条 🔴」**：三条新套件用的是 **`Map` 型 D1 假体**（同步、无交错）与**串行调用序列**，`singleflight-offline.js` 的并发用例只覆盖「同一 key → 被合并成 1 次」这一**有利**方向，`T22.5` 甚至因为单飞先折叠了 5 个调用者、反而让限流计数器只见到 1 次请求。**也就是说，套件的绿色恰恰是因为单飞把并发挡在了限流器之外** —— 它从未让限流器真正并发过。这正是本项目红线「**形状锁 ≠ 效力锁**」的又一例：限流器**存在**（形状），但在并发下**不生效**（效力）。E7 的三条并发用例必须使用**真实 SQLite**（`node:sqlite`，仓库既有 `test:subscription:offline` 等先例）或带真实交错的假体，否则仍不可证伪。
+
+### 15.5 出口条件（Exit Criteria · 第 39 轮 · E1–E9）
+
+- **E1**：`reserveD1RateLimit` 的判定与自增由**单条语句**完成；附「剩余额度 1 + 10 并发 → 放行恰为 1」用例，且在**真实 SQLite** 上通过。
+- **E2**：`consumeToken` 同理；附「桶满容量 + 10 并发 → 放行 ≤ 容量」用例并通过。
+- **E3**：`release` 可归因 —— 至少带 `window_start` 守卫；附「跨窗口迟到回滚不侵蚀新窗口计数」用例并通过。
+- **E4**：hold 具备 `expires_at` 与惰性回收；附「预约后不释放、超时后再预约应恢复额度」用例并通过。
+- **E5**：HALF_OPEN 只放行一个探针；附「冷却刚结束 + 20 并发 → 放行恰为 1」用例并通过。
+- **E6**：L1/L2 的 `retry_after` 与 `Retry-After` 头返回**剩余窗口**（≤ 窗口长度），不再是常量 86400。
+- **E7**：文档与技能校准落地：计划文档阶段一/二 的「100% 交付」补注 R39 边界；§3.4 的「120 秒租约 / Confirmed」与实现一致；§四 的 `acme-provider.ts` 标为规划中；架构文档头部横幅 + §7.1/§7.2/§7.3/§7.5 注记覆盖全部 9 处 40/7d 陈述；SKILL【142】【143】收窄措辞。
+- **E8**：架构文档与计划文档对「全局上限是否保留」给出**单一权威结论**并声明取代关系（当前互斥）。
+- **E9**：计划文档 §3.1/§3.2 的规格数字（桶容量、失败判定、冷却阶梯）与实现**逐项对齐**，由开发方明确表态「以实现为准」或「以规格为准」并回改另一侧。
+
+### 15.6 本轮边界声明（未做什么）
+
+1. **未修改任何生产代码**（审查方角色：只写实施指令单）。本轮唯一写入是文档与技能文件。
+2. **未执行任何写库 / 部署 / 现网操作**；所有实验均在 `/tmp` 下的**内存 SQLite** 上完成，未触碰 `eqt-drm-db` / `eqt-drm-db-test`。
+3. **R39-6 的「跨 POP 不合并」为架构推断，非实测**：本地无法起多 isolate 复现，结论基于 Cloudflare Workers 的 isolate 语义（内存态不跨 isolate 共享）。标注为**架构级推论**，现网若需确证，应在两个不同地理 POP 并发同一 NodeID 并观察 `X-SingleFlight-Shared` 是否出现。
+4. **未评估阶段三/四**（Admin 大盘、Multi-CA 灾备池）—— 二者尚未落地，`resetCircuitBreaker` / `getCircuitBreakerStatus` 目前是**无调用点的预留导出**，本轮不将其计为缺陷。
+5. **未复核 `acme.ts` 的 51 行改动细节**（本轮聚焦限流/记账/单飞三条主线）；如需，可作为第 40 轮对象。

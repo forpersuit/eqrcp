@@ -978,3 +978,37 @@ WantedBy=multi-user.target
 >   - 同一 NodeID 的并发置备请求严格合并至同一个在途 Promise，外部 CA `newOrder` 网络调用与 DNS 写入严格仅执行 1 次，所有等待者毫秒级共享独立 Response；
 >   - 具备冲突防御机制：并发请求若携带不同 CSR（恶意并发竞争同一 NodeID），立即以 409 `concurrent_csr_conflict` 安全阻断，杜绝 DNS TXT 记录污染与 CA 脏订单。
 
+
+---
+
+## 第二十六轮落地复核（第 39 轮审查 · 对 `fc508b5d` + `a195bd30` 的落地审查 · 基线 `v1.36.125`）
+
+> **对象**：`cloudflare/eqt-drm-api` 的自适应断路器 / 令牌桶 / 2PC 记账 / SingleFlight 四条新机制，以及 `docs/plan/lan-tls-google-ca-limit-closure-and-failover-plan.md` 的「阶段一/二 100% 交付」自述。
+> **方法**：对每个「并发 / 原子性」类断言写**可证伪实验**（真实 SQLite via `node:sqlite`，异步封装模拟 D1 网络往返的交错），且**先跑正对照证明探针有判别力**再采信结论。
+> **成果**：共 13 条 —— 4 条 🔴（R39-1/2/3/4）+ 6 条 🟠（R39-5/6/7/9/10/13）+ 3 条 🟡（R39-8/11/12），详见 `docs/bugs/2026-09-13-google-ca-wildcard-acme-race-condition-and-tls-state-machine-defect.md` §十五。**其中 R39-13 为复核过程中追加**：计划文档 §三 的规格数字（桶容量 20 / 20 次滑窗 + 50% / 冷却 60→300→1800）与实现（5 / `failure_count >= 3` / 30→60→…→1920）**三项全不符**。
+
+> - **【144】⚠️ 任何「原子」断言都必须落到「单条语句」上，SELECT→UPDATE 两步一律视为非原子**：
+>   - 触发场景：`reserveD1RateLimit`（`src/utils/rate-limit.ts:215-220` 注释块、第 **217** 行自称 `Atomically`）实为 `:231-233` SELECT + `:263-265` UPDATE；`consumeToken`（`src/utils/token-bucket.ts:56-63` SELECT + `:83-87` UPDATE）同构。
+>   - 判据：D1 / Workers 不提供跨语句读-改-写原子性，两个并发请求可同时读到同一 `count`；**实测剩余额度 1 时 10 并发全部放行，令牌桶满 5 时 10 并发全部放行**。
+>   - 正确做法：把「窗口过期判定 + 自增」合并进单条 `INSERT … ON CONFLICT DO UPDATE … RETURNING count`，取回值再与上限比较。
+> - **【145】⚠️ 「释放 / 回滚」必须带窗口守卫或身份标识，否则会侵蚀他人的合法额度**：
+>   - 触发场景：`releaseD1RateLimit`（`src/utils/rate-limit.ts:208`）`UPDATE rate_limits SET count = MAX(0, count - 1) WHERE key = ?` —— 无 `window_start` 守卫、无 hold 身份。
+>   - 后果：**失败请求的迟到回滚可把新窗口的合法计数清零**（实测），凭空发名额；同窗口内则会把别人的占用一并抹掉，使计数**低于**真实消耗（fail-open）。
+>   - 正确做法：`release` 带上预约时读到的 `window_start`；更进一步用 `hold_id`（可复用 `traceId`）+ `expires_at` 的 hold 行，只删自己的行。
+> - **【146】⚠️ 内存态并发原语的效力范围是「单 isolate」，声称「自动合并 / 仅执行一次」必须标注作用域**：
+>   - 触发场景：`SingleFlightGroup` 的 `flights` 是模块级 `Map`（`src/utils/singleflight.ts:15`，单例在 `src/routes/cert.ts:16`）。Cloudflare Workers 多 POP、多 isolate，且 isolate 可随时回收。
+>   - 结论：单飞在**同 isolate 内**有效（`T22.5` 实证 5 并发只记 1 次额度），**跨 POP 不合并**；因此 D1 侧的原子性（【144】）不是优化而是**必要条件**。
+> - **【147】⚠️ 「租约 / 超时回收」必须在 schema 与回收器里同时找到落点；只写在文档里的租约等于没有**：
+>   - 触发场景：计划文档 §3.4 声称 Hold 带「120 秒超时租约」与「Confirmed 状态」，实测 `a195bd30` **未改 `schema.sql`**、`rate_limits` 仅 `key/count/window_start` 三列、全 `src/` 无租约字段与回收器。
+>   - 后果：Worker 被驱逐 / CPU 超时 / ctx 取消时不走 `finally` → 预占位**永不释放**，额度被凭空吃掉直到窗口滚过 —— **Hold 模型缺了它自己的安全网**，这比不设限流更隐蔽。
+
+> - **【148】⚠️ 规格文档里的每一个数字（阈值 / 容量 / 时间阶梯）都必须与交付实现逐项对齐，否则「已完成 x%」不可判定**：
+>   - 触发场景：计划文档 §3.2 写「桶容量 **20**」实为 **5**（`cert.ts:933`）；§3.1 写「最近 **20** 次滑动窗口 + 失败率 **50%**」实为 `failure_count >= 3` 绝对计数（`circuit-breaker.ts:168`，无滑窗无百分比）；写「冷却 60s ➔ 300s ➔ 1800s」实为 **30→60→120→240→480→960→1920**（`:162`）。**三个数字无一相符，而该节正是「阶段一 100% 交付」的规格依据。**
+>   - 判据：读到「已完成 / 已交付 / 100%」，先问**依据哪份规格**，再把规格里的每个数回代码核一遍；数字对不上时，交付定级不成立 —— 必须由开发方表态「以实现为准（回改文档）」还是「以规格为准（补实现）」，不能默认前者。
+> **方法论沉淀（第 39 轮）**：① 见到「Atomically / 原子 / 并发安全」这类词，第一件事是数**语句条数**，不是读注释，见【144】；② 计数器类机制的对称操作（扣减↔回滚）要成对审查，回滚往往缺守卫，见【145】；③ 任何内存态并发原语先问「我的进程边界在哪」，见【146】；④ 文档里的超时/租约/状态机要回 schema 找字段，找不到就是没有，见【147】；⑤ **套件全绿 ≠ 断言成立** —— 本轮 `T22.5` 的绿色恰恰来自 SingleFlight 先把 5 个调用者折叠成 1 个，限流器**从未真正并发过**，是「**形状锁 ≠ 效力锁**」的又一例；并发类断言必须用**真实 SQLite** 或带真实交错的假体，且先跑正对照。
+
+> **⚠️ 对既有条目【142】【143】的收窄（必须一并读）**：
+> - 【142】「…**彻底杜绝**"网络抖动重试将合法用户 24h 配额耗光"的缺陷」→ 收窄为「**在 `finally` 可达的前提下**不再因失败重试扣减额度」。已实测的反例：跨窗口迟到回滚会**多发**名额（【145】），无租约时预占位会**永久占用**（【147】）—— 账目两个方向都还能失真。
+> - 【143】「同一 NodeID 的并发置备请求**严格**合并…网络调用与 DNS 写入**严格仅执行 1 次**」→ 收窄为「**同一 isolate 内**合并」（【146】）。
+
+> **正向确认（实测为真）**：① 从 `cert.ts` **彻底移除** `global_acme` 40/7d 静态硬编码 —— 为真，`rg 'global_acme|global_rate_limited|604800' src/routes/cert.ts` 零命中；② 2PC 挂接位置正确 —— `cert.ts:1417-1424` 为 `finally { if (!provisionCommitted) …release() }`，`provisionCommitted` 仅在 `cert.ts:1387` 发证成功后置位，成功不会自我撤销；③ `release()` 幂等（`rate-limit.ts:241-251` / `:268-278` 的 `released` 标志）；④ 客户端对 429 **不依赖 `reason_key`**（`pkg/cert/provisioner.go:794-806` 先取 body `retry_after`、回退 `Retry-After` 头），新增 `ca_traffic_smoothing` / `ca_circuit_open` 不构成回归；⑤ 断路器自愈四态路径有真实覆盖（`test:circuit:offline` 10/0）；⑥ 退避有上界 `Math.min(…, 3600)`（`circuit-breaker.ts:160/162`）；⑦ 新表已进 `schema.sql`；⑧ 阶段三**没有超报** —— 自述「进行中」，而 `resetCircuitBreaker`（`circuit-breaker.ts:197`）与 `getCircuitBreakerStatus`（`:217`）确无调用点。
