@@ -642,6 +642,31 @@ WantedBy=multi-user.target
 > **方法论沉淀（本轮新增，可复用于任何"竞态修复"审查）**：审竞态修复先问三问——(1) 修法依赖的前置条件是被**验证**了，还是被**时间**假定了？(2) 结论中的百分比有几次运行、有无**反向对照**？(3) 该修复与同期引入的其它机制（本例为自动关断）**组合**后，失败结局是变好还是变坏？第 (3) 问在本轮首次产出结论，且是唯一会实际降低用户结局的项。
 > **另**：§3.3 的 Mermaid 缺 `Ready → Disabled`（手动关闭）与 `Failed → Preparing`（手动重试）两条边；`cert.ts:1053` 的 `recordName` 硬编码为 `_acme-challenge.${cleanNode}...`，而用 `_acme-challenge.${authz.identifier.value}.` 可让 RFC 8555 §7.1.3 的等价性**自证**，不再依赖并行硬编码。
 
+---
+
+## 第十六轮落地闭环（方案 A 落地、两阶段调用序不变量锁定与并发双写消除 · 基线 `v1.36.115`）
+
+> - **✅【95】双权威 DNS 节点正向读回确认（方案 A 落地）**：
+>   - 在 `cloudflare/eqt-drm-api/src/routes/cert.ts` 中实现 `confirmDnsPropagation`；
+>   - 彻底废弃 3000ms 盲等魔法常数，复用 `cmd/eqt-dns/main.go:399-403` 的 `GET /acme/challenge` 原生接口；
+>   - 轮询权威节点 `ns1` 和 `ns2`，只有当**全部权威节点**均返回包含当前域名下所有期望质询值（主域名值与通配符值）时，才进入 Phase 4 触发 CA 挑战；
+>   - 状态验证彻底取代时间假设，将残余竞态从“低概率静默失败”提升为“确定性前置验证”。
+>
+> - **✅【96】两阶段调用序不变量测试锁定（E1 & E3 落地）**：
+>   - 在 `tests/cert-provision-offline.js` 中注入 `callTracer` 与模拟权威存储 `authoritativeStorage`；
+>   - 在 CI 离线测试中严格锁定：`max(setDns01Challenge) < min(confirmDnsPropagation) <= max(confirmDnsPropagation) < min(triggerChallenge)`；
+>   - 新增 `Test 19b` 系列单测（T19b.1 ~ T19b.4），覆盖立即成功、多轮重试后成功、超时抛错及详细诊断上下文；离线测试用例数扩充至 **73 项** 全部通过。
+>
+> - **✅【97】消除并发双写与竞争（E4 落地）**：
+>   - 遵照审查意见，Go 后端在 `provisionDeviceTLSCertInternal` 失败分支中单点落盘 `curSettings.EnableTLS = false`；
+>   - 前端 `main.js`（`autoDisableTLSOnFailure`）彻底移除 `SaveSettings` 全量覆写，改为 `state.settings = await GetSettings()` 重新拉取后端落盘后的最新权威镜像；
+>   - 彻底消除前端持有的陈旧内存快照全量回写竞争，杜绝丢失更新。
+>
+> - **✅【98】日志与事件文案校准（E5 落地）**：
+>   - 将 `app.go:2290` 的日志标签从 `[FAIL-SOFT]` 更新为 `[AUTO-DISABLED]`，内容明确标注 `EnableTLS automatically reset to false`；
+>   - 消除与实际持久化行为矛盾的 `deferred` 歧义。
+
+
 
 
 

@@ -5210,16 +5210,12 @@ async function autoDisableTLSOnFailure(errorMsg, openSettings = false) {
         enableTLSSwitch.checked = false;
     }
 
+    // 后端在 provisionDeviceTLSCertInternal 失败时已原子落盘 settings.EnableTLS = false。
+    // 前端仅刷新本地 settings 镜像，严禁重复全量 SaveSettings，消除并发全量覆写竞争。
     try {
-        const settings = {
-            ...(state.settings || {}),
-            devMode: Boolean(state.settings?.devMode ?? false),
-            debugLog: Boolean(state.settings?.debugLog ?? false),
-            viewportDebug: Boolean(state.settings?.viewportDebug ?? false),
-        };
-        state.settings = await SaveSettings(settings);
-    } catch (e) {
-        console.warn('[LAN-TLS] Failed to persist settings after TLS auto-disable:', e);
+        state.settings = await GetSettings();
+    } catch (_) {
+        state.settings.enableTLS = false;
     }
 
     showToast(t('tls_failed_auto_disabled') || '⚠️ 证书置备遇到异常，已自动关闭局域网 TLS 并保持标准明文传输。可稍后在开发者选项重试。');

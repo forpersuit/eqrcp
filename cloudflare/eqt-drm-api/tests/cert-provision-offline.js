@@ -25,7 +25,7 @@ if (!fs.existsSync(compiledPath)) {
   process.exit(1);
 }
 
-const { handleCertRoutes, parseCSR, parseCertificateExpiry, setDns01Challenge, generateCompliantSerialNumber, issueCertificateFromCSR } = require(compiledPath);
+const { handleCertRoutes, parseCSR, parseCertificateExpiry, setDns01Challenge, generateCompliantSerialNumber, issueCertificateFromCSR, confirmDnsPropagation } = require(compiledPath);
 
 let passed = 0;
 let failed = 0;
@@ -721,6 +721,12 @@ async function runTests() {
     const originalFetch = globalThis.fetch;
     const dnsSetCalls = [];
     const dnsDeleteCalls = [];
+    const callTracer = [];
+    const authoritativeStorage = {
+      'https://ns1.test': {},
+      'https://ns2.test': {}
+    };
+    let globalCallSeq = 0;
     const acctKey = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
     const acctJwk = acctKey.privateKey.export({ format: 'jwk' });
 
@@ -772,16 +778,39 @@ async function runTests() {
         }), { status: 200, headers: { 'Replay-Nonce': `nonce-${nonceCounter++}`, 'Content-Type': 'application/json' } });
       }
       if (url.includes('/acme/challenge')) {
+        const u = new URL(url);
+        const origin = u.origin;
         if (method === 'POST') {
-          dnsSetCalls.push({ url, body: init ? JSON.parse(init.body) : null });
+          globalCallSeq++;
+          callTracer.push({ type: 'setDns01Challenge', seq: globalCallSeq, url });
+          const b = init ? JSON.parse(init.body) : null;
+          dnsSetCalls.push({ url, body: b });
+          if (b && b.record && b.value) {
+            const canon = b.record.toLowerCase().replace(/\.+$/, '') + '.';
+            if (!authoritativeStorage[origin]) authoritativeStorage[origin] = {};
+            if (!authoritativeStorage[origin][canon]) authoritativeStorage[origin][canon] = [];
+            if (!authoritativeStorage[origin][canon].includes(b.value)) {
+              authoritativeStorage[origin][canon].push(b.value);
+            }
+          }
           return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
+        if (method === 'GET') {
+          globalCallSeq++;
+          callTracer.push({ type: 'confirmDnsPropagation', seq: globalCallSeq, url });
+          const records = authoritativeStorage[origin] || {};
+          return new Response(JSON.stringify({ records }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
         if (method === 'DELETE') {
+          globalCallSeq++;
+          callTracer.push({ type: 'clearDns01Challenge', seq: globalCallSeq, url });
           dnsDeleteCalls.push(url);
           return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
       }
       if (url === 'https://acme.test/chal/1') {
+        globalCallSeq++;
+        callTracer.push({ type: 'triggerChallenge', seq: globalCallSeq, url });
         return new Response(JSON.stringify({ status: 'valid' }), { status: 200, headers: { 'Replay-Nonce': `nonce-${nonceCounter++}` } });
       }
       if (url === 'https://acme.test/order/1') {
@@ -837,6 +866,84 @@ async function runTests() {
     assert(acmeData && acmeData.cert_pem && acmeData.expires_at, 'T19.2: ACME response contains valid cert_pem and expires_at');
     assert(dnsSetCalls.length === 2, 'T19.3: DNS challenge set on all authoritative endpoints');
     assert(dnsSetCalls[0].body && dnsSetCalls[0].body.record === `_acme-challenge.${acmeNode}.direct.eqt.net.im.`, 'T19.4: DNS challenge recordName correctly constructed with device node');
+
+    const setSeqs = callTracer.filter(c => c.type === 'setDns01Challenge').map(c => c.seq);
+    const confirmSeqs = callTracer.filter(c => c.type === 'confirmDnsPropagation').map(c => c.seq);
+    const triggerSeqs = callTracer.filter(c => c.type === 'triggerChallenge').map(c => c.seq);
+
+    const maxSet = Math.max(...setSeqs);
+    const minConfirm = Math.min(...confirmSeqs);
+    const maxConfirm = Math.max(...confirmSeqs);
+    const minTrigger = Math.min(...triggerSeqs);
+
+    assert(maxSet < minConfirm, `T19.5: Invariant locked: max(setDns01Challenge)=${maxSet} < min(confirmDnsPropagation)=${minConfirm}`);
+    assert(maxConfirm < minTrigger, `T19.6: Invariant locked: max(confirmDnsPropagation)=${maxConfirm} < min(triggerChallenge)=${minTrigger}`);
+  }
+
+  // Test 19b: Unit Tests for confirmDnsPropagation (Positive confirmation & retry & failure modes)
+  {
+    const originalFetch = globalThis.fetch;
+    const testEndpoints = ['https://ns1.test', 'https://ns2.test'];
+    const testRecord = '_acme-challenge.testnode.direct.eqt.net.im.';
+    const testValues = ['token_value_a', 'token_value_b'];
+
+    // 19b.1: Immediate success
+    {
+      globalThis.fetch = async (url, init) => {
+        return new Response(JSON.stringify({
+          records: {
+            [testRecord]: testValues
+          }
+        }), { status: 200 });
+      };
+      let ok = true;
+      try {
+        await confirmDnsPropagation(testEndpoints, 'token', testRecord, testValues, 2000, 50);
+      } catch (e) {
+        ok = false;
+      }
+      assert(ok, 'T19b.1: confirmDnsPropagation succeeds when all endpoints return expected challenge values');
+    }
+
+    // 19b.2: Retry until ready
+    {
+      let attempts = 0;
+      globalThis.fetch = async (url, init) => {
+        attempts++;
+        if (attempts < 3) {
+          return new Response(JSON.stringify({ records: {} }), { status: 200 });
+        }
+        return new Response(JSON.stringify({
+          records: {
+            [testRecord]: testValues
+          }
+        }), { status: 200 });
+      };
+      let ok = true;
+      try {
+        await confirmDnsPropagation(testEndpoints, 'token', testRecord, testValues, 3000, 50);
+      } catch (e) {
+        ok = false;
+      }
+      assert(ok && attempts >= 3, 'T19b.2: confirmDnsPropagation retries and succeeds once authoritative records appear');
+    }
+
+    // 19b.3: Timeout throws loud error with detailed diagnostics
+    {
+      globalThis.fetch = async (url, init) => {
+        return new Response(JSON.stringify({ records: { [testRecord]: ['some_other_value'] } }), { status: 200 });
+      };
+      let caughtError = null;
+      try {
+        await confirmDnsPropagation(testEndpoints, 'token', testRecord, testValues, 300, 50);
+      } catch (e) {
+        caughtError = e;
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+      assert(caughtError !== null, 'T19b.3: confirmDnsPropagation throws when propagation deadline exceeded');
+      assert(caughtError && caughtError.message.includes('DNS-01 propagation positive confirmation failed'), 'T19b.4: Timeout error contains diagnostic context and observed values');
+    }
   }
 
   // Test 20: First-Use Public Key Binding (TOFU) & Authorized Key Rotation

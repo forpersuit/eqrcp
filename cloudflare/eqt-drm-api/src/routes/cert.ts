@@ -564,6 +564,66 @@ export async function clearDns01Challenge(
 }
 
 /**
+ * Positive confirmation of DNS-01 TXT record publication across all authoritative endpoints.
+ * Queries GET /acme/challenge on all nodes until every expected challenge value is positively confirmed.
+ */
+export async function confirmDnsPropagation(
+  endpoints: string[],
+  token: string,
+  recordName: string,
+  expectedValues: string[],
+  timeoutMs = 20000,
+  intervalMs = 500
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  const canonicalRecord = recordName.toLowerCase().replace(/\.+$/, '') + '.';
+  const observed: Record<string, string[]> = {};
+
+  while (Date.now() < deadline) {
+    let allConfirmed = true;
+    for (const ep of endpoints) {
+      try {
+        const url = `${ep.replace(/\/+$/, '')}/acme/challenge`;
+        const res = await fetch(url, {
+          method: 'GET',
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        });
+        if (!res.ok) {
+          allConfirmed = false;
+          observed[ep] = [`HTTP_${res.status}`];
+          continue;
+        }
+        const body = await res.json() as any;
+        const recs = body?.records || {};
+        const values: string[] = recs[canonicalRecord] || [];
+        observed[ep] = values;
+
+        for (const val of expectedValues) {
+          if (!values.includes(val)) {
+            allConfirmed = false;
+            break;
+          }
+        }
+      } catch (err: any) {
+        allConfirmed = false;
+        observed[ep] = [`ERR_${err?.message || 'failed'}`];
+      }
+    }
+
+    if (allConfirmed) {
+      return;
+    }
+
+    await new Promise(resolve => setTimeout(resolve, intervalMs));
+  }
+
+  throw new Error(
+    `DNS-01 propagation positive confirmation failed on authoritative endpoints for ${canonicalRecord} after ${timeoutMs}ms; ` +
+    `expected=[${expectedValues.join(', ')}] observed=${JSON.stringify(observed)}`
+  );
+}
+
+/**
  * Primary HTTP router for Certificate operations (/api/v1/cert/*)
  */
 export async function handleCertRoutes(
@@ -1071,10 +1131,23 @@ export async function handleCertRoutes(
           console.log(`[ACME] Injected DNS-01 challenge TXT for ${pending.domain}: ${pending.recordName}`);
         }
 
-        // Phase 3: Wait for DNS propagation across authoritative nodes and global resolvers (3000ms)
+        // Phase 3: Positive confirmation of DNS propagation across all authoritative DNS endpoints (Scheme A)
         if (pendingChallenges.length > 0) {
-          console.log(`[ACME] Waiting 3000ms for DNS challenge propagation before triggering CA validation...`);
-          await new Promise(resolve => setTimeout(resolve, 3000));
+          const valuesByRecord: Record<string, string[]> = {};
+          for (const pending of pendingChallenges) {
+            if (!valuesByRecord[pending.recordName]) {
+              valuesByRecord[pending.recordName] = [];
+            }
+            if (!valuesByRecord[pending.recordName].includes(pending.challengeVal)) {
+              valuesByRecord[pending.recordName].push(pending.challengeVal);
+            }
+          }
+
+          for (const [recName, expectedVals] of Object.entries(valuesByRecord)) {
+            console.log(`[ACME] Confirming DNS propagation across ${endpoints.length} authoritative nodes for ${recName} (expected: ${expectedVals.join(', ')})...`);
+            await confirmDnsPropagation(endpoints, dnsToken, recName, expectedVals, 20000, 500);
+          }
+          console.log(`[ACME] Confirmed all expected DNS-01 TXT values published across all authoritative endpoints.`);
 
           // Phase 4: Trigger all challenges
           for (const pending of pendingChallenges) {

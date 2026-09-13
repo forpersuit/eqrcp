@@ -2287,7 +2287,7 @@ func (a *App) provisionDeviceTLSCertInternal(force bool, allowSelfHeal bool) (bo
 			}
 		}
 
-		msg := fmt.Sprintf("[LAN-TLS-PROVISION] [FAIL-SOFT] Provisioning deferred: %v (plain HTTP fallback active)", err)
+		msg := fmt.Sprintf("[LAN-TLS-PROVISION] [AUTO-DISABLED] Provisioning deferred: %v (EnableTLS automatically reset to false; plain HTTP fallback active)", err)
 		if a.logger != nil {
 			a.logger.Info(msg)
 		}
