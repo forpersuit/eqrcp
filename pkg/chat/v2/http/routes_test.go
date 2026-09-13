@@ -1452,6 +1452,80 @@ func TestHandleZipDownload(t *testing.T) {
 	}
 }
 
+func TestHandleZipDownloadClientCancellation(t *testing.T) {
+	logger := &diag.MemoryLogger{}
+	handler := NewHandler(Config{BasePath: "/chat-v2", Logger: logger})
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	token := "cancel-zip-token"
+	sess := handler.sessions.GetOrCreate(token)
+
+	// Create 2 test messages for zip batch
+	sess.MessageStore.Add(protocol.EventEnvelope{
+		Type: protocol.EventMessageAdded,
+		Message: &protocol.Message{
+			ID:       "msg-c1",
+			Type:     "file",
+			FileName: "big1.bin",
+			Size:     5 * 1024 * 1024,
+		},
+	})
+	sess.MessageStore.Add(protocol.EventEnvelope{
+		Type: protocol.EventMessageAdded,
+		Message: &protocol.Message{
+			ID:       "msg-c2",
+			Type:     "file",
+			FileName: "big2.bin",
+			Size:     5 * 1024 * 1024,
+		},
+	})
+
+	// Pre-create jobs as the frontend does
+	_ = handler.transfer.CreateJob(token, "dl-msg-c1-peer-test", "msg-c1", "peer-test", "big1.bin", 5*1024*1024)
+	_ = handler.transfer.CreateJob(token, "dl-msg-c2-peer-test", "msg-c2", "peer-test", "big2.bin", 5*1024*1024)
+
+	zipURL := server.URL + "/chat-v2/cancel-zip-token/files/zip?ids=msg-c1,msg-c2&mock_size=5242880&clientId=peer-test"
+
+	ctx, cancel := context.WithCancel(context.Background())
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, zipURL, nil)
+	if err != nil {
+		cancel()
+		t.Fatal(err)
+	}
+
+	resp, err := server.Client().Do(req)
+	if err != nil {
+		cancel()
+		t.Fatal(err)
+	}
+
+	// Read a small piece then cancel client context to simulate user closing download modal
+	buf := make([]byte, 1024)
+	_, _ = resp.Body.Read(buf)
+	cancel()
+	_ = resp.Body.Close()
+
+	// Wait briefly for server-side streaming to encounter cancel
+	time.Sleep(100 * time.Millisecond)
+
+	job1, err := handler.transfer.GetJob("dl-msg-c1-peer-test")
+	if err != nil {
+		t.Fatalf("failed to get job1: %v", err)
+	}
+	job2, err := handler.transfer.GetJob("dl-msg-c2-peer-test")
+	if err != nil {
+		t.Fatalf("failed to get job2: %v", err)
+	}
+
+	if job1.State != protocol.TransferCancelled {
+		t.Fatalf("expected job1 to be TransferCancelled, got: %s", job1.State)
+	}
+	if job2.State != protocol.TransferCancelled {
+		t.Fatalf("expected job2 to be TransferCancelled, got: %s", job2.State)
+	}
+}
+
 func TestIsChatStaticToken(t *testing.T) {
 	tests := []struct {
 		token string

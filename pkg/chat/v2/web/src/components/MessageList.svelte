@@ -1176,7 +1176,7 @@
                             {formatBytes(msg.size || 0)}
                             {#if tx && tx.state === 'failed'}
                               · <span class="tx-error-text" title={tx.error || getTranslation('unknownError', currentLang)} style="color: #ef4444; cursor: help; text-decoration: underline dotted;">{getTranslation('transferFailed', currentLang)} ⚠️</span>
-                            {:else if tx && tx.state === 'cancelled'}
+                            {:else if tx && tx.state === 'cancelled' && mine}
                               · <span style="color: var(--muted, #64748b);">{getTranslation('cancelled', currentLang)}</span>
                             {:else if mine && (msg.uploading || (ulTx && ulTx.state === 'running'))}
                               · {ulTx ? ((ulTx.processing || (ulTx.percent ?? 0) >= 99) ? 99 : (ulTx.percent ?? 0)) : 0}%

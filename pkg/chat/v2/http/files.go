@@ -2,7 +2,9 @@ package chathttp
 
 import (
 	"archive/zip"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -109,7 +111,7 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request, token s
 		}
 	} else {
 		// Strict iOS Safari WebKit attachment requirements (.agents/skills/eqt-lan-tls/SKILL.md §6.1)
-		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+		w.Header().Set("Content-Disposition", contentDispositionFor("attachment", filename))
 		w.Header().Set("Cache-Control", "private, no-transform")
 		w.Header().Del("Pragma")
 		w.Header().Del("Expires")
@@ -283,9 +285,20 @@ func (h *Handler) handleDownload(w http.ResponseWriter, r *http.Request, token s
 
 	if streamErr != nil {
 		if jobID != "" {
-			_ = h.transfer.FailJob(jobID, streamErr)
+			if isClientCanceled(r, streamErr) {
+				_ = h.transfer.CancelJob(jobID)
+				diag.Emit(r.Context(), h.logger, diag.LevelInfo, "download stream canceled by client", nil, append(fields, diag.F("jobID", jobID))...)
+			} else {
+				_ = h.transfer.FailJob(jobID, streamErr)
+				diag.Emit(r.Context(), h.logger, diag.LevelWarn, "download stream failed", streamErr, fields...)
+			}
+		} else {
+			if isClientCanceled(r, streamErr) {
+				diag.Emit(r.Context(), h.logger, diag.LevelInfo, "download stream canceled by client", nil, fields...)
+			} else {
+				diag.Emit(r.Context(), h.logger, diag.LevelWarn, "download stream failed", streamErr, fields...)
+			}
 		}
-		diag.Emit(r.Context(), h.logger, diag.LevelWarn, "download stream failed", streamErr, fields...)
 		return
 	}
 
@@ -403,7 +416,40 @@ func (h *Handler) handleZipDownload(w http.ResponseWriter, r *http.Request, toke
 	sess := h.sessions.GetOrCreate(token)
 	zipFilename := query.Get("filename")
 	if zipFilename == "" {
-		zipFilename = fmt.Sprintf("chat-attachments-%s.zip", time.Now().Format("20060102-150405"))
+		var firstValidName string
+		validCount := 0
+		for _, fileID := range rawIDs {
+			if msg, ok := sess.MessageStore.Find(fileID); ok && msg != nil && msg.FileName != "" {
+				if firstValidName == "" {
+					firstValidName = msg.FileName
+				}
+				validCount++
+			} else if filePath := sess.GetAttachment(fileID); filePath != "" {
+				if firstValidName == "" {
+					firstValidName = filepath.Base(filePath)
+				}
+				validCount++
+			}
+		}
+		if validCount <= 1 {
+			if firstValidName != "" {
+				base := strings.TrimSuffix(firstValidName, filepath.Ext(firstValidName))
+				zipFilename = fmt.Sprintf("%s.zip", base)
+			} else {
+				zipFilename = fmt.Sprintf("chat-attachments-%s.zip", time.Now().Format("20060102-150405"))
+			}
+		} else {
+			if firstValidName != "" {
+				base := strings.TrimSuffix(firstValidName, filepath.Ext(firstValidName))
+				runes := []rune(base)
+				if len(runes) > 15 {
+					base = string(runes[:15]) + "..."
+				}
+				zipFilename = fmt.Sprintf("%s_等%d个文件.zip", base, validCount)
+			} else {
+				zipFilename = fmt.Sprintf("chat-attachments-%s.zip", time.Now().Format("20060102-150405"))
+			}
+		}
 	} else if !strings.HasSuffix(strings.ToLower(zipFilename), ".zip") {
 		zipFilename += ".zip"
 	}
@@ -443,7 +489,7 @@ func (h *Handler) handleZipDownload(w http.ResponseWriter, r *http.Request, toke
 	}
 
 	w.Header().Set("Content-Type", "application/zip")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", zipFilename))
+	w.Header().Set("Content-Disposition", contentDispositionFor("attachment", zipFilename))
 	w.WriteHeader(http.StatusOK)
 
 	zipWriter := zip.NewWriter(w)
@@ -560,7 +606,24 @@ func (h *Handler) handleZipDownload(w http.ResponseWriter, r *http.Request, toke
 					})
 				}
 			} else {
+				if isClientCanceled(r, copyErr) {
+					_ = h.transfer.CancelJob(jobID)
+					// Cancel all remaining batch items so they don't remain stuck at 0%
+					for _, remID := range rawIDs {
+						remJobID := "dl-" + remID
+						if clientID != "" {
+							remJobID = "dl-" + remID + "-" + clientID
+						}
+						if remJobID != jobID {
+							_ = h.transfer.CancelJob(remJobID)
+						}
+					}
+					diag.Emit(r.Context(), h.logger, diag.LevelInfo, "zip download stream canceled by client", nil, append(fields, diag.F("jobID", jobID))...)
+					return
+				}
 				_ = h.transfer.FailJob(jobID, copyErr)
+				diag.Emit(r.Context(), h.logger, diag.LevelWarn, "zip download stream failed", copyErr, append(fields, diag.F("jobID", jobID))...)
+				return
 			}
 		} else if mockSizeStr != "" {
 			// Mock data writer for test suite
@@ -601,7 +664,23 @@ func (h *Handler) handleZipDownload(w http.ResponseWriter, r *http.Request, toke
 					})
 				}
 			} else {
+				if isClientCanceled(r, writeErr) {
+					_ = h.transfer.CancelJob(jobID)
+					for _, remID := range rawIDs {
+						remJobID := "dl-" + remID
+						if clientID != "" {
+							remJobID = "dl-" + remID + "-" + clientID
+						}
+						if remJobID != jobID {
+							_ = h.transfer.CancelJob(remJobID)
+						}
+					}
+					diag.Emit(r.Context(), h.logger, diag.LevelInfo, "zip download stream canceled by client", nil, append(fields, diag.F("jobID", jobID))...)
+					return
+				}
 				_ = h.transfer.FailJob(jobID, writeErr)
+				diag.Emit(r.Context(), h.logger, diag.LevelWarn, "zip download stream failed", writeErr, append(fields, diag.F("jobID", jobID))...)
+				return
 			}
 		}
 	}
@@ -629,4 +708,90 @@ func isSafeInlineResource(contentType, filename string) bool {
 		return false
 	}
 	return true
+}
+
+// isClientCanceled determines whether an error or request state indicates that the remote
+// client (browser, mobile webview, or native app) intentionally closed or aborted the connection
+// (e.g. user dismissed download prompt, closed tab, or canceled transfer).
+func isClientCanceled(r *http.Request, err error) bool {
+	if r != nil && errors.Is(r.Context().Err(), context.Canceled) {
+		return true
+	}
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) {
+		return true
+	}
+	errStr := strings.ToLower(err.Error())
+	return strings.Contains(errStr, "transfer cancelled by user") ||
+		strings.Contains(errStr, "connection was forcibly closed") ||
+		strings.Contains(errStr, "forcibly closed by the remote host") ||
+		strings.Contains(errStr, "broken pipe") ||
+		strings.Contains(errStr, "connection reset by peer") ||
+		strings.Contains(errStr, "wsasend") ||
+		strings.Contains(errStr, "wsarecv") ||
+		strings.Contains(errStr, "client disconnected") ||
+		strings.Contains(errStr, "canceled") ||
+		strings.Contains(errStr, "context canceled")
+}
+
+func sanitizeASCIIFilename(filename string) string {
+	ext := filepath.Ext(filename)
+	cleanExt := ".bin"
+	extIsASCII := true
+	for i := 0; i < len(ext); i++ {
+		if ext[i] > 127 || ext[i] < 32 {
+			extIsASCII = false
+			break
+		}
+	}
+	if extIsASCII && ext != "" {
+		cleanExt = ext
+	}
+
+	base := strings.TrimSuffix(filename, ext)
+	var cleanBase strings.Builder
+	for i := 0; i < len(base); i++ {
+		b := base[i]
+		if (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') || b == '-' || b == '_' || b == '.' {
+			cleanBase.WriteByte(b)
+		} else if b <= 127 && b >= 32 {
+			cleanBase.WriteByte('_')
+		}
+	}
+	res := strings.Trim(cleanBase.String(), "_")
+	if res == "" {
+		res = "file"
+	}
+	return res + cleanExt
+}
+
+func rfc5987PercentEncode(s string) string {
+	var buf strings.Builder
+	for i := 0; i < len(s); i++ {
+		b := s[i]
+		if (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') ||
+			b == '!' || b == '#' || b == '$' || b == '&' || b == '+' || b == '-' ||
+			b == '.' || b == '^' || b == '_' || b == '`' || b == '|' || b == '~' {
+			buf.WriteByte(b)
+		} else {
+			fmt.Fprintf(&buf, "%%%02X", b)
+		}
+	}
+	return buf.String()
+}
+
+func contentDispositionFor(disposition string, filename string) string {
+	if disposition == "" {
+		disposition = "attachment"
+	}
+	asciiName := sanitizeASCIIFilename(filename)
+	quoted := strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(asciiName)
+	return fmt.Sprintf(
+		`%s; filename="%s"; filename*=UTF-8''%s`,
+		disposition,
+		quoted,
+		rfc5987PercentEncode(filename),
+	)
 }
