@@ -2277,6 +2277,16 @@ func (a *App) provisionDeviceTLSCertInternal(force bool, allowSelfHeal bool) (bo
 		a.tlsMu.Lock()
 		a.lastTLSError = err.Error()
 		a.tlsMu.Unlock()
+
+		// 第一性原理：证书置备失败后，后端自动重置并持久化 settings.EnableTLS = false，
+		// 防止配置状态漂移（避免用户处于“以为开启了加密实则明文传输”的虚假安全感，确保前后端与磁盘配置强一致性）
+		if a.agent != nil {
+			if curSettings, sErr := a.agent.readSettings(); sErr == nil && curSettings.EnableTLS {
+				curSettings.EnableTLS = false
+				_, _ = a.agent.writeSettings(curSettings)
+			}
+		}
+
 		msg := fmt.Sprintf("[LAN-TLS-PROVISION] [FAIL-SOFT] Provisioning deferred: %v (plain HTTP fallback active)", err)
 		if a.logger != nil {
 			a.logger.Info(msg)
@@ -2314,4 +2324,3 @@ func (a *App) GetLastTLSError() string {
 	defer a.tlsMu.RUnlock()
 	return a.lastTLSError
 }
-

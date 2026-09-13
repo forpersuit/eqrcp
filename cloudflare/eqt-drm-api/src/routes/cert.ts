@@ -1028,9 +1028,21 @@ export async function handleCertRoutes(
 
       const cleanupTasks: Array<() => Promise<void>> = [];
       try {
+        // Phase 1: Collect all authorizations and identify pending challenges
+        const pendingChallenges: Array<{
+          authzUrl: string;
+          domain: string;
+          challengeUrl: string;
+          challengeVal: string;
+          recordName: string;
+        }> = [];
+
         for (const authzUrl of order.authorizations) {
           const authz = await acmeClient.getAuthorization(authzUrl);
-          if (authz.status === 'valid') continue;
+          if (authz.status === 'valid') {
+            console.log(`[ACME] Authorization for ${authz.identifier.value} is already valid, skipping challenge.`);
+            continue;
+          }
 
           const dnsChall = authz.challenges.find(c => c.type === 'dns-01');
           if (!dnsChall) {
@@ -1039,14 +1051,39 @@ export async function handleCertRoutes(
 
           const challengeVal = await computeDns01ChallengeValue(dnsChall.token, thumbprint);
           const recordName = `_acme-challenge.${cleanNode}.direct.eqt.net.im.`;
+
           // Pre-register cleanup task before setting challenge to guarantee cleanup on timeout/abort (FINDING 8)
           cleanupTasks.push(() => clearDns01Challenge(endpoints, dnsToken, recordName, challengeVal));
-          await setDns01Challenge(endpoints, dnsToken, recordName, challengeVal);
 
-          await acmeClient.triggerChallenge(dnsChall.url);
+          pendingChallenges.push({
+            authzUrl,
+            domain: authz.identifier.value,
+            challengeUrl: dnsChall.url,
+            challengeVal,
+            recordName
+          });
         }
 
-        // Wait for all DNS authorizations to be verified and the order to transition to 'ready'
+        // Phase 2: Batch write all DNS-01 challenge records to all authoritative DNS endpoints
+        // Crucial: BOTH main domain and wildcard challenge values must exist in DNS before ANY challenge is triggered.
+        for (const pending of pendingChallenges) {
+          await setDns01Challenge(endpoints, dnsToken, pending.recordName, pending.challengeVal);
+          console.log(`[ACME] Injected DNS-01 challenge TXT for ${pending.domain}: ${pending.recordName}`);
+        }
+
+        // Phase 3: Wait for DNS propagation across authoritative nodes and global resolvers (3000ms)
+        if (pendingChallenges.length > 0) {
+          console.log(`[ACME] Waiting 3000ms for DNS challenge propagation before triggering CA validation...`);
+          await new Promise(resolve => setTimeout(resolve, 3000));
+
+          // Phase 4: Trigger all challenges
+          for (const pending of pendingChallenges) {
+            console.log(`[ACME] Triggering CA validation for ${pending.domain}...`);
+            await acmeClient.triggerChallenge(pending.challengeUrl);
+          }
+        }
+
+        // Phase 5: Wait for all DNS authorizations to be verified and the order to transition to 'ready'
         await acmeClient.pollOrder(orderUrl, 'ready', 60000, 2000);
 
         await acmeClient.finalizeOrder(order.finalize, parsedCSR.rawDER);

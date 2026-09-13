@@ -15,7 +15,7 @@ import { initDragDrop, sendDebugMessageToChat } from './dragdrop.js';
 import { renderShareOverlay, closeShareOverlay, prepareMergedQRCode, downloadSharePosterImage } from './components/share.js';
 import { renderLogViewerOverlay, openLogViewer, closeLogViewer, refreshLogTail, setLogFilter, setLogSearch, toggleAutoRefresh, copyAllLogs, exportDiagnostics, logViewerState } from './components/log_viewer.js';
 import { renderChatTransfersTray } from './components/chat_tray.js';
-import { renderTLSSettingIcon, getDevTLSStatusText, renderTaskSecurityBadge } from './components/tls_status.js';
+import { renderTLSSettingIcon, getDevTLSStatusText, renderTaskSecurityBadge, renderTopbarTLSIndicator } from './components/tls_status.js';
 
 import {ClipboardGetText, ClipboardSetText, EventsOn, LogInfo, LogError} from '../wailsjs/runtime/runtime';
 import {
@@ -570,6 +570,7 @@ function render() {
                     <button class="${state.mode === 'chat' ? 'active' : (runningMode && runningMode !== 'chat' ? 'disabled-mode' : '')}" data-mode="chat" title="${escapeHTML(getModeTitle('chat'))}">${t('chat')}</button>
                 </nav>
                 <div class="top-actions" role="menubar" aria-label="Application menu">
+                    ${renderTopbarTLSIndicator(state, t, escapeAttr)}
                     ${isOnline() && (!state.status || state.status.licenseReady ? !hasPaidLicense() : false) ? `
                         <button class="menu-button" id="open-redeem" title="${t('redeem_title')}" aria-label="${t('redeem_title')}">
                             <span class="menu-icon">${giftIcon()}</span>
@@ -3541,6 +3542,10 @@ function bindEvents() {
             }
             if (e.target.closest('#open-redeem, #open-redeem-inline')) {
                 openPanel('redeem');
+                return;
+            }
+            if (e.target.closest('#topbar-tls-status')) {
+                openPanel('settings');
                 return;
             }
             if (e.target.closest('#close-panel') || (e.target.classList && e.target.classList.contains('overlay'))) {

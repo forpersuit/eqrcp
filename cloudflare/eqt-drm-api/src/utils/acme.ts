@@ -423,7 +423,28 @@ export class AcmeClient {
         return order;
       }
       if (order.status === 'invalid') {
-        throw new Error('ACME order transitioned to invalid');
+        const failureDetails: string[] = [];
+        if ((order as any).error) {
+          const err = (order as any).error;
+          failureDetails.push(`order error: ${err.type || ''} ${err.detail || JSON.stringify(err)}`);
+        }
+        try {
+          for (const aUrl of (order.authorizations || [])) {
+            const aRes = await this.postSigned(aUrl, '');
+            if (aRes.ok) {
+              const aObj = await aRes.json() as any;
+              const invalidChalls = (aObj.challenges || []).filter((c: any) => c.status === 'invalid' && c.error);
+              for (const c of invalidChalls) {
+                const subDetails = (c.error.subproblems || []).map((s: any) => s.detail).filter(Boolean).join(', ');
+                failureDetails.push(`[${aObj.identifier?.value || 'unknown'}] ${c.error.type}: ${c.error.detail}${subDetails ? ` (${subDetails})` : ''}`);
+              }
+            }
+          }
+        } catch (fetchErr: any) {
+          failureDetails.push(`(failed to retrieve authz details: ${fetchErr?.message})`);
+        }
+        const summary = failureDetails.length > 0 ? failureDetails.join('; ') : 'no details';
+        throw new Error(`ACME order transitioned to invalid: ${summary}`);
       }
       await new Promise(resolve => setTimeout(resolve, intervalMs));
     }

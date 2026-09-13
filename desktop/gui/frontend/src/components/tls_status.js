@@ -99,3 +99,35 @@ export function renderTaskSecurityBadge(pageUrl, state, t, escapeAttr) {
     }
     return `<span class="tls-security-badge plain" title="${escapeAttr(t('tls_standard_http') || '标准 HTTP 明文传输')}">🔓 HTTP</span>`;
 }
+
+/**
+ * 渲染顶栏 (Top Bar) 处的 TLS 安全状态交互徽章/图标
+ * @param {object} state 全局状态对象
+ * @param {Function} t 国际化翻译函数
+ * @param {Function} escapeAttr 属性转义函数
+ * @returns {string} 图标 HTML 片段
+ */
+export function renderTopbarTLSIndicator(state, t, escapeAttr) {
+    const status = getTLSState(state);
+    switch (status) {
+        case 'ready':
+            return `<button class="menu-button topbar-tls-btn" id="topbar-tls-status" role="button" aria-label="${escapeAttr(t('tls_cert_ready') || 'TLS Ready')}" title="${escapeAttr(t('tls_cert_ready') || 'TLS Ready')}" style="padding: 0 4px; font-size: 13px; line-height: 1;">🔒</button>`;
+        case 'preparing':
+            return `<button class="menu-button topbar-tls-btn" id="topbar-tls-status" role="button" aria-label="${escapeAttr(t('tls_cert_preparing') || 'TLS Preparing')}" title="${escapeAttr(t('tls_cert_preparing') || 'TLS Preparing')}" style="padding: 0 4px; font-size: 13px; line-height: 1;">⏳</button>`;
+        case 'mismatch':
+        case 'failed': {
+            const err = state?.tlsProvisionError || state?.appInfo?.tlsError || '';
+            const tooltip = (t('tls_cert_failed_tooltip') || '证书置备遇到异常') + (err ? ` [${err}]` : '');
+            return `<button class="menu-button topbar-tls-btn" id="topbar-tls-status" role="button" aria-label="${escapeAttr(tooltip)}" title="${escapeAttr(tooltip)}" style="padding: 0 4px; font-size: 13px; line-height: 1; cursor: pointer;">⚠️</button>`;
+        }
+        case 'disabled':
+        default: {
+            const lastErr = state?.tlsProvisionError || state?.appInfo?.tlsError;
+            if (lastErr && state?.tlsProvisionFailed) {
+                const tooltip = (t('tls_failed_auto_disabled') || '证书置备遇到异常，已自动关闭局域网 TLS 并保持标准明文传输') + ` [${lastErr}]`;
+                return `<button class="menu-button topbar-tls-btn" id="topbar-tls-status" role="button" aria-label="${escapeAttr(tooltip)}" title="${escapeAttr(tooltip)}" style="padding: 0 4px; font-size: 13px; line-height: 1; opacity: 0.85; cursor: pointer;">⚠️</button>`;
+            }
+            return '';
+        }
+    }
+}

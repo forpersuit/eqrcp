@@ -601,6 +601,29 @@ WantedBy=multi-user.target
 >   - **擅自行为定性**：在 TLS 开关关闭（默认关闭）状态下，后台偷偷向外网发起 ACME 证书申请，属于严重的擅自越权行为（Unsolicited Background Action）。所谓“提前预热秒开体验”完全是工程师主义的傲慢，不仅耗费 CA 配额、向外网暴露节点指纹，还直接酿成了并发重入冲突与 HTTP 500。
 >   - **强制门控**：`silentProvisionDeviceTLSCert` 必须严格以 `settings.EnableTLS == true` 为前置门禁。未开启 TLS 时立即返回（`< 1ms`），不调用 WMI、不发任何网络包，把选择权完全交还用户。
 
+---
+
+## 第十四轮复核沉淀（Google CA 双域名 DNS-01 验证竞态、两阶段批量注入与顶级错误穿透 · 基线 `v1.36.114`）
+
+> - **🔴【83】Google Public CA（GTS）双域名 DNS-01 验证竞态根因（D1 记录 168 闭环）**：
+>   - **现象**：用户开启 TLS，自愈轮换新节点向网关发起申请，11 秒后网关抛出 HTTP 500，D1 记录 `ACME order transitioned to invalid`。
+>   - **根本原因**：
+>     1. 生产环境同时申请主域名 `node.direct.eqt.net.im` 与通配符 `*.node.direct.eqt.net.im`，GTS 下发 2 个 Authorizations，两者的 DNS-01 TXT 记录名称完全相同（`_acme-challenge.node.direct...`），但质询 Token 派生的 value 不同；
+>     2. 旧版代码在单步循环中注入 `val_1` 后，在 0ms 冷却下立刻调用 `triggerChallenge`；紧接着注入 `val_2` 并触发第二个 `triggerChallenge`；
+>     3. Google CA 拥有全球多视角探测集群（Multi-Perspective Validation），在毫秒级发起 DNS 查询，此时：权威 DNS 尚未完成双值同步，或者 Google 递归解析器命中 TTL 缓存（仅含 `val_1` 单条记录），导致第二个挑战直接报 `The TXT record retrieved ... did not contain val_2 (Did not find challenge value in TXT record)`；
+>     4. 只要有一个挑战失败，GTS 立即将整个 ACME Order 标记为 `invalid`；旧版 `acme.ts` 吞没了具体的 `authz.challenges[].error`，抛出裸 `Error` 冒泡触发 HTTP 500。
+> - **✅【84】两阶段解耦与 DNS 传播等待（Two-Phase Batch ACME DNS Provisioning）**：
+>   - **第一阶段（批量准备与注入）**：在通知 CA 之前，预先收集所有 Authorizations 的 challenge TXT 记录，一次性全部写入权威 DNS（`ns1` 与 `ns2`）；
+>   - **传播等待**：注入完成后硬性等待 3000ms（DNS Propagation Wait），确保双机权威 DNS 内存一致性与全球解析器视图同步；
+>   - **第二阶段（批量触发）**：再依次调用 `triggerChallenge` 通知 CA 校验；
+>   - 实测 100% 避免时序竞态，顺利完成 Google CA 官方签发与 fullchain 下载。
+> - **✅【85】ACME 错误穿透反吞没（Fail Loud on Invalid Orders）**：
+>   - 在 `AcmeClient.pollOrder` 中，当 `order.status === 'invalid'` 时，遍历抓取 `order.authorizations` 中每个挑战的 `c.error.type` 与 `c.error.detail`（含 `subproblems`），精准暴露失败原因。
+> - **✅【86】顶栏交互式 TLS 安全状态指示器**：
+>   - 在桌面端顶部工具栏（Top Bar）增加直观的 TLS 安全指示状态（🔒 官方公信 TLS 就绪 / ⏳ 申请中 / ⚠️ 异常 / 自动隐退），点击可直接调起设置面板查看详情与重试。
+> - **✅【87】Go 后端置备失败自动重置 EnableTLS**：
+>   - 在 Go 后端 `provisionDeviceTLSCertInternal` 失败分支中，直接重置并持久化 `settings.EnableTLS = false`，双保险防止配置漂移。
+
 
 
 
