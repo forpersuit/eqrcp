@@ -1009,17 +1009,29 @@
                   <span class="batch-zip-name" title={msg.batchInfo.zipFilename}>{msg.batchInfo.zipFilename}</span>
                 </div>
                 {#if msg.batchInfo.status === 'packaging'}
-                  <span class="batch-status-badge status-packaging">
+                  <span class="batch-status-badge status-packaging" title={getTranslation('batchDownloading', currentLang)} aria-label={getTranslation('batchDownloading', currentLang)}>
                     <span class="pulse-dot"></span>
-                    {getTranslation('batchDownloading', currentLang)}
                   </span>
                 {:else if msg.batchInfo.status === 'completed'}
-                  <span class="batch-status-badge status-completed">
-                    ✓ {getTranslation('batchDownloadCompleted', currentLang)}
+                  <span class="batch-status-badge status-completed" title={getTranslation('batchDownloadCompleted', currentLang)} aria-label={getTranslation('batchDownloadCompleted', currentLang)}>
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
                   </span>
                 {:else if msg.batchInfo.status === 'cancelled'}
-                  <span class="batch-status-badge status-cancelled">
-                    ✕ {getTranslation('batchDownloadCancelled', currentLang)}
+                  <span class="batch-status-badge status-cancelled" title={getTranslation('batchDownloadCancelled', currentLang)} aria-label={getTranslation('batchDownloadCancelled', currentLang)}>
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  </span>
+                {:else if msg.batchInfo.status === 'failed'}
+                  <span class="batch-status-badge status-failed" title={getTranslation('transferFailed', currentLang)} aria-label={getTranslation('transferFailed', currentLang)}>
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="12" y1="8" x2="12" y2="12"></line>
+                      <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
                   </span>
                 {/if}
               </div>

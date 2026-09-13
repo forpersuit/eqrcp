@@ -81,7 +81,7 @@ export interface BatchDownloadInfo {
   zipFilename: string;
   items: BatchDownloadItem[];
   totalBytes: number;
-  status: 'packaging' | 'completed' | 'cancelled';
+  status: 'packaging' | 'completed' | 'cancelled' | 'failed';
 }
 
 export interface Message {

@@ -139,7 +139,7 @@ export function createBatchDownloadInfo(
  */
 export function updateBatchInfoStatus(
   info: BatchDownloadInfo,
-  status: 'packaging' | 'completed' | 'cancelled'
+  status: 'packaging' | 'completed' | 'cancelled' | 'failed'
 ): BatchDownloadInfo {
   return {
     ...info,

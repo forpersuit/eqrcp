@@ -238,6 +238,9 @@ assert(cancelledInfo.items.length === 2, 'items preserved upon cancellation');
 const completedInfo = updateBatchInfoStatus(createdInfo, 'completed');
 assert(completedInfo.status === 'completed', 'batch status updated to completed');
 
+const failedInfo = updateBatchInfoStatus(createdInfo, 'failed');
+assert(failedInfo.status === 'failed', 'batch status updated to failed');
+
 // Assembly verification for batch card templates
 const msgListSveltePath = path.resolve(path.dirname(currentFilePath), '../components/MessageList.svelte');
 if (fs.existsSync(msgListSveltePath)) {
@@ -245,6 +248,7 @@ if (fs.existsSync(msgListSveltePath)) {
   assert(listCode.includes('system-batch-card'), 'MessageList.svelte renders system-batch-card');
   assert(listCode.includes('batch-card-file-list'), 'MessageList.svelte renders file list inside batch card');
   assert(listCode.includes('msg.batchInfo.zipFilename'), 'MessageList.svelte renders zip filename');
+  assert(listCode.includes('status-completed') && listCode.includes('status-failed') && listCode.includes('status-cancelled'), 'MessageList.svelte supports all badge statuses');
 }
 
 console.log('attachmentPolicy.test.ts: all assertions passed (including bridge contracts and assembly verification)');

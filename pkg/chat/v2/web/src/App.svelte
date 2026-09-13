@@ -58,6 +58,7 @@
     totalFiles: number;
     cancelled: boolean;
     completed: boolean;
+    failed: boolean;
   }
 
   let activeBatches: ActiveBatchRecord[] = [];
@@ -69,19 +70,17 @@
       completedIds: new Set(),
       totalFiles: messageIds.length,
       cancelled: false,
-      completed: false
+      completed: false,
+      failed: false
     });
   }
 
-  function markBatchCancelled(messageIds: string[], notifyUser = false) {
+  function markBatchCancelled(messageIds: string[]) {
     const peer = client ? client['clientPeer'] : 'desktop';
     for (const batch of activeBatches) {
-      if (!batch.cancelled && !batch.completed && messageIds.some(id => batch.messageIds.has(id))) {
+      if (!batch.cancelled && !batch.completed && !batch.failed && messageIds.some(id => batch.messageIds.has(id))) {
         batch.cancelled = true;
         chatActions.updateBatchStatus(batch.systemMsgId, 'cancelled');
-        if (notifyUser) {
-          chatActions.addSystemMessage(getTranslation('batchDownloadCancelled', currentLang));
-        }
         Array.from(batch.messageIds).forEach(id => {
           const tid = resolveDownloadTransferId(id, peer);
           chatActions.updateTransfer({
@@ -99,17 +98,37 @@
     }
   }
 
-  function markBatchItemCompleted(messageId: string, notifyUser = false) {
+  function markBatchItemCompleted(messageId: string) {
     for (const batch of activeBatches) {
-      if (!batch.cancelled && !batch.completed && batch.messageIds.has(messageId)) {
+      if (!batch.cancelled && !batch.completed && !batch.failed && batch.messageIds.has(messageId)) {
         batch.completedIds.add(messageId);
         if (batch.completedIds.size >= batch.totalFiles) {
           batch.completed = true;
           chatActions.updateBatchStatus(batch.systemMsgId, 'completed');
-          if (notifyUser) {
-            chatActions.addSystemMessage(getTranslation('batchDownloadCompleted', currentLang));
-          }
         }
+      }
+    }
+  }
+
+  function markBatchFailed(messageIds: string[], error = '') {
+    const peer = client ? client['clientPeer'] : 'desktop';
+    for (const batch of activeBatches) {
+      if (!batch.cancelled && !batch.completed && !batch.failed && messageIds.some(id => batch.messageIds.has(id))) {
+        batch.failed = true;
+        chatActions.updateBatchStatus(batch.systemMsgId, 'failed');
+        Array.from(batch.messageIds).forEach(id => {
+          const tid = resolveDownloadTransferId(id, peer);
+          chatActions.updateTransfer({
+            id: tid,
+            state: 'failed',
+            progress: -1,
+            speed: 0,
+            error: error || 'batch download failed'
+          });
+          if (client) {
+            client.cancelTransfer(tid);
+          }
+        });
       }
     }
   }
@@ -127,9 +146,9 @@
     if (!messageId) return;
 
     if (type === 'transfer_cancelled') {
-      markBatchCancelled([messageId], true);
+      markBatchCancelled([messageId]);
     } else if (type === 'transfer_completed') {
-      markBatchItemCompleted(messageId, true);
+      markBatchItemCompleted(messageId);
     }
   }
 
@@ -414,7 +433,7 @@
         speed: 0,
         error: ''
       });
-      markBatchItemCompleted(messageId, true);
+      markBatchItemCompleted(messageId);
     } else if (event.data.type === 'download-failed') {
       const { messageId, error } = event.data;
       const peer = client ? client['clientPeer'] : 'desktop';
@@ -450,32 +469,15 @@
       // Desktop user cancelled the batch save-folder dialog: clear seeded running transfers.
       const ids: string[] = event.data.messageIds || [];
       const peer = client ? client['clientPeer'] : 'desktop';
-      markBatchCancelled(ids, false);
+      markBatchCancelled(ids);
       applyBatchDownloadCancelled(ids, peer, {
         updateTransfer: (u) => chatActions.updateTransfer(u),
-        cancelTransfer: (tid) => { if (client) client.cancelTransfer(tid); },
-        addSystemNotice: (notice) => chatActions.addSystemMessage(notice)
+        cancelTransfer: (tid) => { if (client) client.cancelTransfer(tid); }
       }, currentLang);
     } else if (event.data.type === 'download-batch-failed') {
       const ids: string[] = event.data.messageIds || [];
-      const peer = client ? client['clientPeer'] : 'desktop';
-      markBatchCancelled(ids, false);
-      ids.forEach(messageId => {
-        const transferId = resolveDownloadTransferId(messageId, peer);
-        chatActions.updateTransfer({
-          id: transferId,
-          state: 'failed',
-          progress: -1,
-          speed: 0,
-          error: event.data.error || 'batch download failed'
-        });
-        if (client) {
-          client.cancelTransfer(transferId);
-        }
-      });
-      chatActions.addSystemMessage(
-        currentLang === 'en' ? `Batch download failed: ${event.data.error || ''}` : `批量下载失败：${event.data.error || ''}`
-      );
+      const err = event.data.error || 'batch download failed';
+      markBatchFailed(ids, err);
     } else if (event.data.type === 'chat-download-progress') {
       const { messageId, progress } = event.data;
       const peer = client ? client['clientPeer'] : 'desktop';

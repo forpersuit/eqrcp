@@ -823,6 +823,10 @@ h1 {
     background: rgba(46, 160, 67, 0.12);
     color: #2ea043;
 }
+.batch-status-badge.status-failed {
+    background: rgba(239, 68, 68, 0.12);
+    color: #ef4444;
+}
 .pulse-dot {
     width: 6px;
     height: 6px;

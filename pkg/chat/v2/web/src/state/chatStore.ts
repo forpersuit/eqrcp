@@ -196,9 +196,9 @@ export const chatActions = {
   },
 
   /**
-   * Update the status of a batch download notice card in-place ('packaging' -> 'completed' | 'cancelled').
+   * Update the status of a batch download notice card in-place ('packaging' -> 'completed' | 'cancelled' | 'failed').
    */
-  updateBatchStatus(messageId: string, status: 'packaging' | 'completed' | 'cancelled') {
+  updateBatchStatus(messageId: string, status: 'packaging' | 'completed' | 'cancelled' | 'failed') {
     messages.update(list => list.map(m => {
       if (m.id === messageId && m.batchInfo) {
         return {
