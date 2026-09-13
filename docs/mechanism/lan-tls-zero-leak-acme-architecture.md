@@ -1185,7 +1185,7 @@ Worker 与双机权威 DNS 节点的交互使用现有的 `/acme/challenge` 端�
      - 桌面端在检测到该错误时，向设置界面输出可操作引导文案（“⚠️ 本地证书私钥与云端设备登记不一致，请重置密钥绑定”）；
      - 客户端 `LoadOrGenerateDeviceKey` 在本地已有私钥损坏/缺失时输出显式 Warning，杜绝“悄无声息重新生钥”；
   2. **阶段二（受控重绑与客户端身份轮换自愈，终局闭环于 v1.36.108）**：
-     - **方案 A（强设备凭据换绑，v1.36.106+ 落地）**：在 `/api/v1/cert/provision` 请求中带上 `X-EQT-Device-ID`，若云端该节点已强绑定且凭据一致，原子更新公钥：`UPDATE node_public_keys SET public_key_sha256 = ?, updated_at = ... WHERE node_id = ?`；
+     - **方案 A（强设备凭据换绑，v1.36.106+ 落地）**：在 `/api/v1/cert/provision` 请求中带上 `X-EQT-Device-ID`，若云端该节点已强绑定且凭据一致，原子更新公钥：`UPDATE node_public_keys SET public_key_sha256 = ?, last_seen_at = ? WHERE node_id = ?`；
      - **方案 B（终局：客户端盐值轮换透明自愈，v1.36.107/108 落地）**：云端坚决维持 Fail-Closed；当客户端收到 403 `node_key_mismatch` 且无法通过强凭据换绑时，客户端引入随机盐 `node_salt.dat` 自动执行 `RotateDeviceNodeIdentity()` 派生全新 `node_id`，以新身份通过 TOFU 首绑即刻满血恢复局域网 HTTPS，实现全场景免人工干预自愈（取代了原方案 B 的 90 天老化等待）。
 
 ##### 二、F13 & F14 事务原子性与失败回滚方案（首次绑定竞态与孤儿绑定消除，待落地蓝图）

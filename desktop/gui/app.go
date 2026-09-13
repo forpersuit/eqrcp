@@ -2199,7 +2199,17 @@ func (a *App) provisionDeviceTLSCertInternal(force bool, allowSelfHeal bool) (bo
 					if a.ctx != nil {
 						wailsruntime.LogWarning(a.ctx, healMsg)
 					}
-					return a.provisionDeviceTLSCertInternal(true, false)
+					success, retryErr := a.provisionDeviceTLSCertInternal(true, false)
+					if !success && retryErr != nil {
+						retryFailMsg := fmt.Sprintf("[LAN-TLS-PROVISION] [SELF-HEALING] Node identity successfully rotated to %s, but retry deferred: %v. New identity will persist for next attempt.", newNodeID, retryErr)
+						if a.logger != nil {
+							a.logger.Warning(retryFailMsg)
+						}
+						if a.ctx != nil {
+							wailsruntime.LogWarning(a.ctx, retryFailMsg)
+						}
+					}
+					return success, retryErr
 				}
 			}
 

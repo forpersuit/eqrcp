@@ -117,8 +117,14 @@ func TestHardwareThrottleCooldown(t *testing.T) {
 		t.Fatalf("expected cooldown return to be instantaneous (<200ms), took %v", elapsed)
 	}
 
-	// Cleanup
+	// Verify InvalidateFingerprintCache resets the cooldown timestamp so subsequent probing is unblocked
 	InvalidateFingerprintCache()
+	fingerprintMu.Lock()
+	probeTimeZero := lastFingerprintProbeTime.IsZero()
+	fingerprintMu.Unlock()
+	if !probeTimeZero {
+		t.Fatalf("expected InvalidateFingerprintCache to reset lastFingerprintProbeTime to zero")
+	}
 }
 
 func TestRotateDeviceNodeIdentity(t *testing.T) {

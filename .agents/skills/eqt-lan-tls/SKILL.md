@@ -530,6 +530,18 @@ WantedBy=multi-user.target
 >
 > - **🧹 复核方法（本轮新增，最重要的一条）**：**(a) 审查方自己写下的"无法实测"结论，下一轮必须复核——它可能只是当时没找到入口。** 第九轮如实声明"R18 客户端半边未跑运行时探针（`opts` 未暴露 `Endpoint`）"；第十轮 `rg` 发现 **`EQT_PROVISION_ENDPOINT` 环境变量覆盖存在**（`pkg/cert/provisioner.go:648-658`），于是以 **`httptest` 桩网关 + `t.Setenv("EQT_CONFIG_DIR", t.TempDir())` + 预置 `device_id.dat`** 让本地权威 ID 非空，用真实 HTTP 往返把客户端自愈链跑了出来：`request[0]=4bd2649bfcd4` → `request[1]=91e32745ad1c`，`total_requests=2`。**(b) 反向探针必须恢复"被修掉的那一行原文"，而非任意变体**——把门控精确恢复为 `allowSelfHeal && server.GetAuthorityDeviceID() == ""` 后，`total_requests=1`、身份不变、**FAIL**，死锁被精确复现 ⇒ 该验收用例对该修复具备判别力。**(c) 用 `httptest` + `EQT_*` 环境覆盖为"客户端不可测"的结论解套，是本线程第一次成功为客户端链建立可复现验收。**
 
+---
+
+## 第十轮意见开发方闭环与终局落地（基线 `v1.36.109`）
+
+> - **✅ 列名与架构规范求真（R23）**：全面将机制与分析文档中的 SQL 列名修正为真实存在的 `last_seen_at`，杜绝不存在的 `updated_at` 误导后续实现。
+> - **✅ 承重墙去神化与频控客观定界（R22）**：明确频控是流量节流而非授权基石，且 per-node 桶随节点轮换重置；换绑安全严格建立在服务端 D1 行绑定匹配与客户端私钥持有之上。
+> - **✅ 冷却测试时间戳重置断言闭环（R24）**：在 `TestHardwareThrottleCooldown` 末尾追加断言 `lastFingerprintProbeTime.IsZero()`，确保失效调用真正解除时间戳阻断。
+> - **✅ 自愈重试失败显式可观测性（R25 合理项）**：在 `app.go` 中对自愈重试非 mismatch 失败输出 Warning 汇总，清晰标明新身份已持久化并待后续生效。
+> - **🚫 坚决否决回滚旧盐（R25 不合理项证伪）**：旧节点因 403 已在云端死亡，回滚旧盐将使下次置备再次撞墙 403 并陷入恶性振荡；前进式持久化新身份（Forward Progress）是单向自愈系统的唯一客观解。
+> - **版本递增**：版本升级至 `v1.36.109` / `1.36.109`。
+
+
 
 
 
