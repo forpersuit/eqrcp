@@ -93,11 +93,12 @@ func fetchNetworkTime() (time.Time, error) {
 		},
 	}
 	endpoints := []string{
-		getLicenseServer(),
-		"https://www.cloudflare.com",
-		"https://www.aliyun.com",
-		"https://www.qq.com",
-		"http://connect.rom.miui.com/generate_204",
+		getLicenseServer(),           // EQT 官方鉴权服务端
+		"https://www.cloudflare.com", // Cloudflare 全球 Anycast 边缘
+		"https://www.apple.com",      // Apple 全球基础设施服务
+		"https://www.microsoft.com",  // Microsoft 官方时间基础设施
+		"https://www.google.com",     // Google 全球核心网络基础设施
+		"https://aws.amazon.com",     // Amazon AWS 全球云计算基础设施
 	}
 
 	for _, endpoint := range endpoints {

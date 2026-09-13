@@ -93,6 +93,13 @@ EQT 作为一款跨平台局域网自组织传输与即时通讯系统，深度�
   - 现代移动浏览器对剪贴板访问（Clipboard API）、摄像头拍照、PWA 离线存储均强制要求 **Secure Context (HTTPS)**；
   - EQT 深度集成了 LAN-TLS 环回体系：具备局域网 DNS-01 挑战应答基础设施与证书加载管线，配合外部 ACME 自动化客户端完成通配符证书签发与加载，并在无法连接外网时平滑降级到内存动态自签名证书，确保局域网内所有终端享有原生 HTTPS 体验。
 
+### 8. 外部公共时钟嗅探与反作弊防篡改机制（External Network Time Probing）
+- **核心机制**：
+  - **防范时钟回拨**：针对本地 DRM 与每日免费限额，为防止用户篡改系统时钟作弊，系统在后台采用极其轻量（0 字节响应体 HEAD 请求）的异步机制，从全球顶级权威基础设施（Cloudflare、Apple、Microsoft、Google、AWS）提取 RFC 7231 `Date` 头校准时间；
+  - **频控与离线隔离**：成功缓存 1 小时，失败冷却 1 分钟，全内存隔离不落盘；纯内网无网环境自动 Fail-Open 采信本地单调时钟，绝不阻断传输；
+  - **详见专题技术文档**：[`docs/mechanism/external-network-time-probing-and-clock-drift-guard.md`](file:///home/yelon/develop/me/eqrcp/docs/mechanism/external-network-time-probing-and-clock-drift-guard.md)。
+
+
 ---
 
 ## 第三部分：工程质量与测试理论指导（测试第一性原理）
