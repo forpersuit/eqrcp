@@ -15,6 +15,10 @@
 >
 > **③ 关键战略解耦：PSL 属于海量规模化保障，测试环境无需 PSL，真 LE 代理先行闭环**：PSL 的第一性原理是解除主域名每周 50 张证书的限额（服务未来成千上万设备）。在测试环境中，每周证书消耗远低于 50 张，且有配额高达 30,000 张/周的 Let's Encrypt Staging 环境托底。**测试环境绝不需要申请或等待 PSL 合并，直接在测试环境（Worker `lic-test.eqt.net.im`）部署真实的 RFC 8555 Let's Encrypt DNS-01 代理引擎**，联动自建权威 DNS 完成 TXT 质询，签发真实公信证书并完成真机绿锁端到端验证，彻底消灭 FINDING 1~3。
 >
+> ⚠️ **R38-14（🟡 未溯源数字 · 第 38 轮复核）**：「Let's Encrypt Staging 配额高达 **30,000 张/周**」在本仓库与 LE 官方文档中**均无来源**（LE 不对 Staging 公布该数字配额）。建议改为定性表述（「Staging 限额远高于生产，适合闭环验证」）或补上权威来源链接。
+>
+> ⚠️ **R38-15（🟡 附加观察 · 复核发现）**：本段所述「测试环境用 LE 部署真实代理」与**现网配置已不一致**——`cloudflare/eqt-drm-api/wrangler.toml:84-86`（`[env.test]`）实际配置为 `ACME_DIRECTORY_URL = "https://dv.acme-v02.api.pki.goog/directory"`（**GTS 生产目录**）与 `ACME_DNS_API_ENDPOINTS = "https://ns1-dns.eqt.net.im,https://ns2-dns.eqt.net.im"`（**生产权威 DNS**）。即测试 Worker 会向**生产 GTS 账户**下单、向**生产权威 DNS** 写入 TXT（仅 D1 库为 `eqt-drm-db-test` 隔离）。这既是文档/部署分歧，也使测试流量与生产共用同一 CA 账户配额面。若为有意设计，建议在 §10.2 显式写明；若为遗留，需评估测试活动对生产 40/7d 统计面的影响。
+>
 > **④ 第三轮实现复核（2026-09-10，详见 §11）**：ACME 协议栈、代理签发主路径、多值 TXT、POPO 验签、±60s 时间戳均已落地且测试全绿；但新发现 **FINDING 4~7**。其中 **FINDING 4（客户端/前端无信任锚校验 → 生产自签证书被误报为“公信绿锁就绪”）是新增的公网放行阻断项**，必须先修复再讨论放量。
 >
 > **⑤ 第四轮落地复核（2026-09-10，详见 §11.6）**：开发已按第三轮意见提交 `c71c7460` 落地修复。复核确认 **FINDING 4~7 已在代码中真实闭环**（非文档自述），`go test ./pkg/cert ./pkg/server ./cmd/eqt-dns` 与离线套件全绿。但再审查发现：**修复 FINDING 6 时引入 FINDING 8（部分失败下 TXT 记录残留）**，且 §11.5 对 FINDING 4 的覆盖范围表述**夸大**（“全链路”实际仅覆盖设备证书路径），另有 1 条**无仓库证据**的声明需收敛。详见 §11.6。
@@ -28,6 +32,10 @@
 > **⑨ 第八轮落地演进：TOFU 公钥绑定与三层立体防刷体系（2026-09-11，详见 §11.13）**：开发提交 `d212137a`（v1.36.83）彻底解决 Action 2 / FINDING 2 遗留的防刷风险。D1 引入 `node_public_keys` 动态表实现 TOFU（首次使用信任）强绑定，首次置备登记 SPKI SHA-256 指纹，异钥提交直接 403 `node_key_mismatch` 阻断；建立 Node 级（3次/24h，429 `rate_limited`）+ 单 IP 级（10次/24h，429 `ip_rate_limited`）+ 生产全局 ACME 熔断兜底（40次/7天，429 `global_rate_limited`）三层防护体系；CLI `--cert/--key` 显式输出安全通知日志，`sync-certs-from-vps.sh` 增加弃用提示；新增 T20/T21 测试，离线套件扩充至 55 项全绿。
 >
 > **⑩ 第九轮战略升级：PSL 准入门槛事实校准与 Google Cloud Public CA (GTS) EAB 双轨路线（2026-09-11，详见 §11.14）**：澄清 Mozilla PSL PRIVATE 准入规范要求 2,000~3,000 独立用户实例证明的客观门槛，非早期冷启动前置；为彻底破除 Let's Encrypt 每周 50 张限额与 PSL 审核周期阻断，完成 Google Public CA (Google Trust Services) RFC 8555 §7.3.4 External Account Binding (EAB) 双轨集成（HMAC-SHA256 签名绑定）；配额由 GCP 项目独立分配且免受 eTLD+1 约束（以实际 Quota 为准），并输出完整交付手册（`docs/deploy/google-cloud-publicca-eab-runbook.md`）；全库对齐联系邮箱为 `leeyelon@gmail.com`；新增离线测试 T4.1~T4.5，ACME 离线套件扩充至 18 项全绿。
+>
+> ⚠️ **R38-13（🟠 声明与部署不符 · 第 38 轮复核 2026-09-13）**：上一段「全库对齐联系邮箱为 `leeyelon@gmail.com`」与现网部署**不符**。实测 `cloudflare/eqt-drm-api/wrangler.toml:36` / `:87` 为 `ACME_EMAIL = "forpersuit@gmail.com"`，且该值即 `cloudflare/eqt-drm-api/src/routes/cert.ts:1085-1086` **实际提交给 GTS 的 ACME 账户邮箱**（该值由 `f68f9963`、`3a8c4ea7` 两次提交引入）。`leeyelon@gmail.com` 现仅存在于离线测试夹具（`cloudflare/eqt-drm-api/tests/acme-offline.js:126/241/360`）、交付手册与本文档中。三者并存需择一为准：或在本文档补注「ACME 账户邮箱已改为 `forpersuit@gmail.com`」，或将配置回改，不宜继续陈述「全库对齐」。
+>
+> ⚠️ **R38-3a（🟠）**：本行「配额由 GCP 项目独立分配且**免受 eTLD+1 约束**」与本文档 **§十三.1 第 2620 行**「以顶级/二级母域名（eTLD+1，即 `eqt.net.im`）为统计边界，施加滑动 7 天总签发量硬约束」**直接自相矛盾**。两处必须择一为准并显式声明取代关系。
 
 ---
 
@@ -537,6 +545,8 @@ sequenceDiagram
 > - **实现端口事实**：`cmd/eqt-dns` 的 HTTP 管理默认绑定 `127.0.0.1:5380`（`main.go:26-27`），鉴权为 Bearer `--token`（`main.go:29, 344-345`），与下文示例原写的 `:8053` **不符**，已按实现修正为 `:5380`；
 > - **安全红线冲突**：`.agents/skills/eqt-lan-tls/SKILL.md §2.1` 明令“HTTP 管理端口强行锁定在 `127.0.0.1:5380`，仅限本地或 SSH 安全通道调用，**严禁公网开放**”。但 Worker 运行在云端，无法访问 `ns1`/`ns2` 的 `127.0.0.1`——直接对 `<ns1-ip>:5380` 发起公网 HTTP 即违反该红线。**实现前必须为云端 Worker 建立到 ns 管理端点的受限通道**（任选其一并在编码前确定）：(a) SSH 隧道 / Cloudflare Tunnel 转发；(b) ns 端以 `-http-listen` 额外绑定受限接口（或公网端口）+ 防火墙仅放行 Worker 出口 IP + Bearer 鉴权；(c) 若需绕开 ns HTTP 通道，可评估让 Worker 经 Cloudflare DNS API 直接写 TXT（放弃本方案的自建权威 DNS 联动）。本节原写的“双机节点均已上线 `isValidACMERecord`”仅证明 TXT 写入规则就绪，**不代表管理端点可公网直达**。
 > - **受限通道已决（2026-09-10 第三轮）**：选定“**ns 本机 Caddy 反代 + Bearer `--token` 鉴权 + 独立受限域名**（`https://ns1-dns.301098.xyz` / `https://ns2-dns.301098.xyz`）”，权威端口 `127.0.0.1:5380` 仍物理隔离（见 §10.2）。据此澄清 `.agents/skills/eqt-lan-tls/SKILL.md §2.1` 红线口径：**“严禁公网开放”指禁止裸 `:5380` 直出；经 Caddy 终结 TLS 并经 Bearer 校验的受限入口属允许通道**。此豁免须以本段为准，否则方案与既有红线字面冲突、后续审计会判违规。
+>
+> ⚠️ **R38-12（🟠 文档与部署不一致 · 第 38 轮复核 2026-09-13）**：上段「已决」的受限入口域名 `ns1-dns.301098.xyz` / `ns2-dns.301098.xyz` 与现网**不一致**。实测 `cloudflare/eqt-drm-api/wrangler.toml:35` / `:86` 为 `ACME_DNS_API_ENDPOINTS = "https://ns1-dns.eqt.net.im,https://ns2-dns.eqt.net.im"`，由 `134233b9`（*migrate authoritative DNS API endpoints to official eqt.net.im*）迁移而来；`301098.xyz` 在非文档代码中**仅**作为邮件服务器（`wrangler.toml:25/76`）与测试邮箱出现，**从不作为 DNS 端点**。审计方按本文档检索 `301098.xyz` 会误判「受限通道配置缺失」。建议在本段补注「**已改判为 `ns1-dns.eqt.net.im` / `ns2-dns.eqt.net.im`（`134233b9`）**」，并保留 Caddy + Bearer 的架构结论不变。
 > - **TTL 口径修正**：下文示例与 §4.3.1 时序图原写 `ttl: 60`，实现默认 **300 秒**（`cert.ts:403` 的 `ttl = 300`，Worker 调用未覆写）。300s 为 Let's Encrypt 多轮多点递归查询留出充足窗口，更稳健，**以实现为准**。
 
 Worker 与双机权威 DNS 节点的交互使用现有的 `/acme/challenge` 端点：
@@ -2565,6 +2575,8 @@ $ EQT_CONFIG_DIR=/tmp/retired-probe go test ./pkg/config -run TestDefaultConfigF
 3. **多语言全量覆盖**：
    - 在 `desktop/gui/frontend/src/i18n.js` 中补齐全语言（zh/en/ja/ko/es/de/fr）的 `tls_disabled_tooltip`、`tls_enabling_auto_provision`、`tls_cert_failed_tooltip`、`tls_cert_failed_status`、`tls_active_https`、`tls_fallback_http`、`tls_fallback_label` 与 `tls_standard_http` 词条。
 
+> ⚠️ **R38-11（🟡 清单不完整 · 第 38 轮复核 2026-09-13）**：上列 8 个词条**均真实存在**（各 7 语言，`rg -c "\"<key\":"` 全部 = 7），但并非全集：`i18n.js` 中 `tls_` 前缀键实为 **14** 个（各 7 语言），遗漏 `tls_failed_auto_disabled`（**正是本次 v1.36.110 交付新增的键**，`i18n.js:17` / `:480` / `:943` / `:1393` / `:1843` / `:2293` / `:2743`）、`tls_cert_ready`、`tls_cert_preparing`、`tls_cert_rate_limited`（限流气泡文案，`i18n.js:10`）、`tls_cert_not_detected`、`tls_key_mismatch_msg`。以「补齐全语言 8 个词条」描述本次交付会低估交付面。**建议**：改为「本版新增/校准 8 个；`tls_*` 全集 14 个（各 7 语言）= 98 条」。
+
 ---
 
 ### 十二、LAN-TLS 异常态运行流转、Fail-Soft 降级与图标精准联动（基线 v1.36.110）
@@ -2575,6 +2587,8 @@ $ EQT_CONFIG_DIR=/tmp/retired-probe go test ./pkg/config -run TestDefaultConfigF
    - 检测到本地不存在 `identity.json` 与私钥文件，本地自动派生 12 位十六进制 `nodeID`（如 `9be192a9efff`）；
    - 在本地安全生成全新 ECDSA P-256 私钥（落盘于 `certs/<nodeID>/privkey.pem`），私钥永不出机；
    - 构造自签名 CSR，包含专属单机域名与通配泛域名。
+
+> ⚠️ **R38-2（🔴 虚构文件名 + 因果链错误 · 第 38 轮复核 2026-09-13）**：`identity.json` 在本仓库**不存在**（`rg -n 'identity\.json'` 排除 `*.md` 后**零命中**），该文件名系虚构。且 nodeID 派生与「本地是否存在某文件」**无因果关系**：`pkg/server/hardware.go:550-572` `GetDeviceNodeID()` 的真实实现为 `sha256(uuidHash + ":" + cpuHash + ":" + diskHash [ + ":" + salt])[:12]`，源码注释（`hardware.go:549-553`）明确其来源为**硬件指纹级联哈希 + 可选 node salt**；三项指纹全空时函数**返回空串而非派生**（`hardware.go:570-575`，注释说明「空指纹绝不可派生并缓存」）。**正确表述**：删除 `identity.json`，改为「由主板/CPU/磁盘硬件指纹级联 SHA-256（+ 可选 salt）确定性派生 12 位小写 hex nodeID，与本地文件存在性无关」。
 2. **DRM 异步注册与授权恢复**：
    - 后台比对硬件指纹（主板 UUID、CPU 序列号、磁盘序列号），在线完成匿名设备登记，并自动恢复已绑定的云端 PLUS 许可证。
 3. **证书静默置备与用户主动触发的并发时序**：
@@ -2586,6 +2600,10 @@ $ EQT_CONFIG_DIR=/tmp/retired-probe go test ./pkg/config -run TestDefaultConfigF
    - 当外部 ACME 验证暂时延迟、DNS API 遇到限流、或者子请求超出 Worker 配额时，Worker 进入第 1106 行统一错误处理：
      `catch (err: any) { ... return new Response(JSON.stringify({ error: 'An unexpected error occurred while issuing the certificate', reason_key: 'internal_error' }), { status: 500 }); }`
    - 网关向客户端返回 HTTP 500 `internal_error`。
+
+> ⚠️ **R38-1（🔴「Cloudflare DNS」与实现不符，且被本文档自身否决 · 第 38 轮复核 2026-09-13）**：上项称 Worker「在 **Cloudflare DNS** 添加 `_acme-challenge` TXT 记录」——**不成立**。实测：`cloudflare/eqt-drm-api/wrangler.toml:35` / `:86` 配置 `ACME_DNS_API_ENDPOINTS = "https://ns1-dns.eqt.net.im,https://ns2-dns.eqt.net.im"`（**自建权威名称服务器**）；`cert.ts:1037` 拆分端点后由 `cert.ts:514`（POST）与 `cert.ts:553`（DELETE）直接请求 `{ep}/acme/challenge`；`cert.ts` 全文**无** `api.cloudflare.com`、**无** `/dns_records` 调用（`rg` 零命中）。更关键的是，本文档 **§四 第 538 行**已把「让 Worker 经 Cloudflare DNS API 直接写 TXT」明确列为**被否决**选项 (c)（因与自建权威 DNS 方案冲突）。**正确表述**：向自建权威名称服务器 `ns1`/`ns2` 的受限端点写入 TXT，与 `cmd/eqt-dns` 的回环解析联动。
+>
+> ⚠️ **R38-8（🟡 行号漂移 · 第 38 轮复核）**：上项「**第 1106 行**统一错误处理」的引文**逐字正确**，但行号已漂移——该 500 响应块现位于 `cert.ts:1231-1233`（`catch (err: any)` 起于 `cert.ts:1220`）。漂移约 125 行，属结构性重排（ACME 主路径插入）而非虚构。**建议**：将行号锚改为**符号锚**（如「`reason_key: 'internal_error'` 响应块」），此类漂移在全文档尚有多处，符号锚可一次性免疫。
 5. **客户端 Fail-Soft（软失败优雅降级）机制**：
    - 客户端收到 HTTP 500 后，遵循第一性原理：**绝对不阻断本地文件传输，自动降级为明文 HTTP 协议运行（`plain HTTP fallback active`）**；
    - 本地服务启动时检测到无有效证书，自动将 `cfg.Secure` 改为 `false`，生成明文 `http://` 链接与二维码，确保跨设备传输立即可用。
@@ -2622,6 +2640,14 @@ Google Trust Services (GTS) 作为公共 WebPKI CA，遵循 RFC 8555 规范并�
 3. **验证失败惩罚性冻结 (Failed Validations per Hostname per Hour)**：同一主机名 1 小时内验证失败达 5 次触发临时封禁；
 4. **多用户并发击穿风险**：所有客户端均以 `<nodeID>.direct.eqt.net.im` 为 SAN 向同一母域名申请通配符证书。在多用户密集上线或批量重装时，极易迅速击穿母域名的 GTS 周签发配额；同时若客户端遇阻后未加节制地反复重试，将迅速引发惊群效应（Thundering Herd）。
 
+> ⚠️ **R38-3（🟠 CA 归属错误 + 文档内自相矛盾 · 第 38 轮复核 2026-09-13）**：本节把 **Let's Encrypt 公开文档中的配额数字**归给了 GTS。逐条核对：
+> - 第 2620 行「以 eTLD+1（`eqt.net.im`）为统计边界，滑动 7 天总签发量硬约束」→ 这是 **LE** 的 *Certificates per Registered Domain* 规则，**Google 未公布**对应数字；
+> - 第 2621 行「3 小时内最多 300 笔订单」→ **LE** 的 *New Orders per Account*；
+> - 第 2622 行「同一主机名 1 小时内验证失败达 5 次触发临时封禁」→ **LE** 的 *Failed Validations per Hostname per Hour*（且该条 LE 已废止）。
+>   实测签发 CA 为 Google Trust Services：`wrangler.toml:33` / `:84` `ACME_DIRECTORY_URL = "https://dv.acme-v02.api.pki.goog/directory"`；Google 官方 ACME 文档**未公布任何此类数字配额**，仅要求客户端遵守 `429` 与 `Retry-After`（其 ACME Best Practices 明确此为唯一合规响应方式）。
+> - **并且与本文档第 30 行冲突**：第 30 行称 GTS 配额「由 GCP 项目独立分配且**免受 eTLD+1 约束**」，本节称「**以 eTLD+1 为统计边界**」。二者不可同时为真。
+> **建议**：① 把三条数字明确标注为「**Let's Encrypt 的公开规则**（本文档用于对比说明），GTS 侧无公开数字配额」；或直接删除数字，改为「GTS 以 429 + Retry-After 为准（无可查询的公开配额表）」。② 在 §十三.1 与第 30 行之间补一条取代声明，择一为准。
+
 #### 2. Google CA 标准错误响应
 当触发限制时，GTS 在 ACME 接口直接返回 RFC 7807 Problem Document：
 - **状态码**：HTTP 429 Too Many Requests
@@ -2641,6 +2667,10 @@ Google Trust Services (GTS) 作为公共 WebPKI CA，遵循 RFC 8555 规范并�
   - L1 节点级防护（3 次 / 24h）与 L2 IP 级防护（10 次 / 24h）：返回 HTTP 429 `{ error: '...', reason_key: 'rate_limited', retry_after: 86400 }`；
   - L3 全局硬熔断（40 次 / 7 天，`cert.ts:803`）：返回 HTTP 429 `{ error: '...', reason_key: 'global_rate_limited', retry_after: 604800 }`；
   - 限流触发后通过 `logRateLimitHit()` 将 `category=RATE_LIMIT_CERT_PROVISION_*`、`node_id`、`client_ip`、`trace_id` 写入 D1 `system_error_logs` 表。
+
+> ✅ **R38 正向确认（第 38 轮复核）**：以上三级闸门的**阈值与 `reason_key` 主体属实** —— `cert.ts:758` `isD1RateLimited(env, rateLimitKey, 3, 24*3600*1000)`、`:780` `..., 10, 24*3600*1000`、`:803` `..., 40, 7*24*3600*1000`（**`cert.ts:803` 行号锚在本轮核对中完全正确**）；`reason_key: 'global_rate_limited'` 与 `retry_after: 604800` 逐字正确（`cert.ts:814-815`）。`logRateLimitHit()` 写入 D1 `system_error_logs` 亦真实（`rate-limit.ts:238-250`）。
+>
+> ⚠️ **R38-9（🟡 L2 的 `reason_key` 写错 · 第 38 轮复核）**：上项把 L1 与 L2 并写为 `reason_key: 'rate_limited'`，但 L2 实际返回 **`ip_rate_limited`**（`cert.ts:791`），仅 L1 返回 `rate_limited`（`cert.ts:769`）。三层的 `reason_key` 是客户端分类处置的依据（`pkg/cert/provisioner.go:795-805` 据此构造 `RateLimitError`），必须逐个写准，否则审计会按图索骥找不到 `ip_rate_limited` 的产生点。
 - **穿透至 Google CA 被拒**：
   - 若穿透网关但在 Google ACME 接口收到 429 或其他异常，Worker 捕获后通过 `logSystemError(env, 'CERT_PROVISION_ERROR', 'ERROR', err, ...)` 将包含 Google CA 原始错误全文的堆栈写入 D1 `system_error_logs`；
   - 对外返回 500 `internal_error`。
@@ -2659,6 +2689,15 @@ Google Trust Services (GTS) 作为公共 WebPKI CA，遵循 RFC 8555 规范并�
   - 设置面板：开关旁显示黄色告警三角图标（`renderAlertSvg`），Tooltip 显示错误详情；
   - 动态冷却锁定：读取服务端 `retry_after`（86400s 或 604800s），冷却期内再次点击开关直接拦截，提示剩余秒数；
   - 开发者面板：显示 `[Failed] Provision Failed / HTTP Fallback (error)`。
+
+> ✅ **R38 正向确认（第 38 轮复核）**：本项描述的**行为全部属实**，且引文逐字正确 ——
+> - 「落盘并锁定 `enableTLS: false`」：`desktop/gui/app.go:2412-2418` `persistDisableTLS()` 在事件广播**之前**同步执行 `curSettings.EnableTLS = false` 落盘（注释明示其目的是防止前端 `ReadSettings()` 读回旧值造成 fail-open 漂移）；
+> - 「读取服务端 `retry_after`」：`pkg/cert/provisioner.go:795-805` 解析 `respPayload.RetryAfter` 并回退读 `Retry-After` 响应头，`pkg/cert/provisioner.go:856` `ExtractRateLimitRetryAfter()` 用 `errors.As`/`errors.Is` 做类型化提取（**第 36 轮 R36-2 / R36-3 两处缺陷均已闭环**，`desktop/gui/app.go:2326` 为调用点）；
+> - 「气泡提示」引文与 `desktop/gui/frontend/src/i18n.js:10` `"tls_cert_rate_limited"` **逐字相等**；`renderAlertSvg` 真实存在于 `desktop/gui/frontend/src/components/tls_status.js`。
+>
+> ⚠️ **R38-10（🟠 术语冲突 · 第 38 轮复核）**：本项用 **Fail-Closed** 命名「置备失败后关掉 TLS 特性」，而本文档 **§十二.5 第 2590 行**用 **Fail-Soft** 命名**同一条路径**的「降级明文 HTTP」；文档头部第 9 行又称二者为「**正交职责**」却未给定义；技术报告 `lan-tls-security-protocol-technical-report.md §9.4` 又把 CLI 称 Fail-Closed、Desktop 称 Fail-Soft。同一对术语在**三处含义各不相同**，审计方无法据词定位行为。**建议**：在文档头部第 9 行给出唯一定义并全文档强制引用，推荐按**故障域**划分 —— 「TLS 特性域 = Fail-Closed（关闭特性，不冒充安全）」「传输服务域 = Fail-Soft（业务不中断，降级明文）」。
+>
+> ⚠️ **R38-16（🟡 同一提示两套文案 · 第 38 轮复核）**：同一用户可见提示存在两个版本的字符串 —— 后端事件消息 `desktop/gui/app.go:2244` / `:2361` 为「…（**保护冷却中**）」，前端 `i18n.js:10` 为「…（**保护期中**）」；`desktop/gui/frontend/src/main.js:5227` 优先取 i18n 词条，故后端 payload 中的文案成为**永不显示的死文案**。建议二者统一，并删除死文案以免日后误改。
 
 #### 4. 出现限制墙后的全生命周期解决方案
 
@@ -2694,6 +2733,12 @@ Google Trust Services (GTS) 作为公共 WebPKI CA，遵循 RFC 8555 规范并�
   - 云端网关在 `cert.ts:803` 设立了 `cert_provision:global_acme` 40 次 / 7 天的硬熔断；
   - **这意味着在现行无修改状态下，全球每周仅有前 40 位主动开启 TLS 的新用户能成功签发公信通配符证书**；
   - **第 41 位及之后的用户**拨开开关时，云端将返回 429 `global_rate_limited`。
+
+> ⚠️ **R38-4（🟠 计数对象错误：「请求」≠「用户」 · 第 38 轮复核 2026-09-13）**：上项「全球每周仅有**前 40 位**…**新用户**能成功签发」**不成立**，计数对象是**请求**而非用户，实测三处证据：
+> 1. `cloudflare/eqt-drm-api/src/utils/rate-limit.ts:202-230` `isD1RateLimited()` 每次调用即执行 `UPDATE ... SET count = count + 1`（`rate-limit.ts:226-228`），**不区分调用者**；
+> 2. 判定发生在**签发之前**（`cert.ts:758` → `:780` → `:803`，先过闸门再走 ACME），因此**失败、被拒、纯重试的请求同样消耗额度**；
+> 3. 闸门键为**全局单键** `cert_provision:global_acme`（`cert.ts:802`），且 L1 节点级 3 次/24h（`cert.ts:758`）允许**单个 node** 独占最多 3 次全局额度。
+> **故实际语义是**：「每 7 天最多 **40 次**通过 L3 闸门的置备**请求**；能服务的新用户数 ≤ 40，且随重试与多节点重绑**单调递减**」。这同时说明 §十三.4【第一层】的「动态 Retry-After 防刷」不是锦上添花，而是**决定该上限能否守住的关键机制** —— 缺它时惊群重试会瞬间烧尽 40 次。**建议改写**：删除「40 位新用户」的拟人化表述，改为「40 次请求 / 7 天」并附「每用户 1 次才等价于 40 用户」的说明。
 - **撞墙后的用户真实体感（Fail-Soft 保护）**：
   - **绝不致命崩溃**：客户端不会报错闪退，文件收发绝不中断；
   - **自动平滑回退**：开关自动弹回关闭态，弹出提示气泡：`触发证书颁发机构频次限制（已自动切换为局域网高速传输，保护期中）`；
@@ -2719,6 +2764,8 @@ Google Trust Services (GTS) 作为公共 WebPKI CA，遵循 RFC 8555 规范并�
 │ (规模爆发期) │ 全网海量并发     │ 商业公信瓶颈    │ 2. 域名哈希分片池       │
 └──────────────┴──────────────────┴─────────────────┴─────────────────────────┘
 ```
+
+> ⚠️ **R38-4b（延续 R38-4 · 第 38 轮复核）**：上表「TLS 用户 < 40/周」「TLS 用户 > 100/周」沿用了同一处拟人化口径。按 R38-4 的实测结论，该列应读作「**TLS 置备请求 < 40/周**」「**> 100/周**」；表格结论（阶段二必然击穿）不变，仅计量单位需修正。
 
 1. **阶段一（极早期内测，DAU < 1,000）**：
    - 保持现状，依托 Fail-Soft 降级与动态 `retry_after` 保护，满足核心团队及小范围极客种子用户验证。
@@ -2748,6 +2795,11 @@ Google Trust Services (GTS) 作为公共 WebPKI CA，遵循 RFC 8555 规范并�
 - 根据全球 CA/Browser Forum 国际基准规范，**公共 CA（无论 Google 还是 Let's Encrypt）一旦侦测到私钥泄露，必须在 24 小时内对该通配符证书执行全网强制吊销（CRL / OCSP Revocation）**；
 - **全网雪崩**：这会导致全网所有正在正常运行的数万台 EQT 客户端 TLS 证书瞬间全部爆红报错，造成不可逆的全局灾难。
 
+> ⚠️ **R38-7（🟠 规范引用 + 能力缺口 · 第 38 轮复核 2026-09-13）**：本项需拆成两件事分别定性。
+> - **① 24 小时数字属实，但触发条件被改写。** CA/Browser Forum *Baseline Requirements for the Issuance and Management of Publicly-Trusted TLS Server Certificates* **§4.9.1.1 第 3 项**的原文义务是：当 CA **obtains evidence**（**获得**密钥泄露的证据，含第三方通知/研究报告）时 SHALL 在 **24 小时**内吊销。本项写成 CA「一旦**侦测到**」泄露，把**证据触发**改写成了 **CA 侧主动扫描**——BR 并未要求 CA 全网扫描私钥。**建议**改为「公共 CA 一旦**获得**私钥泄露的**证据**（如被公开披露或被通知）」。
+> - **② 更关键：本仓库没有任何吊销通道。** `pkg/cert` 与 `cloudflare/` 全库检索 **OCSP / CRL / `RevokeCertificate` / 吊销客户端代码全部零命中** —— 即「24 小时内全网强制吊销」在本系统中**无执行主体**：吊销动作只能由 CA 侧发起，而客户端的信任判定仅依赖系统根锚 + 有效期（`pkg/cert/provisioner.go:442` `leaf.Verify(opts)`）。这带来一个**本项未提及的真实风险**：被吊销的通配符证书在**离线/不查 OCSP 的客户端上仍会显示绿锁**，直到证书自然过期。**建议**：补一句「本系统**不实现**吊销查询（无 OCSP Stapling / CRL 检查），吊销只能由 CA 侧生效且存在客户端感知延迟」，并在 §十三.6(4) 结论中体现该残余风险。
+> - 结论方向不变（阶段三确有「爆破半径 = 全网」死穴），但**论据的第 ② 条目前不可用于对外陈述**，因为执行者缺位。
+
 ##### (3) 移动端物理死穴：为弥补私钥共享引入应用层加密，必然导致 iOS Safari 大文件 OOM 闪退
 - 若为了防御同网窃听而在应用层再套一层端到端（E2EE）ECDH/AES-GCM 加密：
   - 手机浏览器（iOS Safari / Android Chrome）从网络层下载的是密文；
@@ -2766,6 +2818,17 @@ Google Trust Services (GTS) 作为公共 WebPKI CA，遵循 RFC 8555 规范并�
 正因为我们坚守“单机单私钥”的高安全红线，证书需求量必然随用户增长呈 $O(N)$ 增长，**“得知触墙（精准感知何时逼近配额、何时触发限流、被哪一层拦截）”由此成为整个系统最关键的运维生命线与业务感知中枢**。
 
 若缺乏敏锐的感知体系，一旦配额在静默中耗尽，用户端将集体发生 TLS 降级，损害产品口碑。系统确立如下**四维立体感知与预警闭环体系**：
+
+> ⚠️ **R38-6（🔴「已建成」语气与实现不符 · 第 38 轮复核 2026-09-13）**：本节以**现在时**把四维体系描述为已建成的闭环，但**第一维（提前量水位感知）在代码中零实现**，且与本文档自身冲突。逐维实测：
+>
+> | 维度 | 本节语气 | 实测结论 | 证据 |
+> |---|---|---|---|
+> | 第一维 提前量水位感知（70% / 85% 阈值 + Admin 预警 + Webhook） | 已建成 | **❌ 零实现** | 全仓无水位/watermark 计算、无 `0.7`/`0.85` 配额阈值、无配额告警 Webhook（仅存在语义无关的 Paddle webhook，`admin.ts:1093`）；**本文档 §十三.3(2) 自述**「目前 Admin 首页尚未提供独立的『Google CA 实时周签发配额水位』可视化卡片」；§十三.4 亦将其归入【第二层】（中期演进） |
+> | 第二维 网关分层拦截 | 已建成 | ✅ **真实** | `cert.ts:758/780/803` 三层闸门 + `logRateLimitHit()`（`rate-limit.ts:238-250`） |
+> | 第三维 上游 CA 穿透感知 | 已建成 | ✅ **真实** | `cert.ts:1222-1229` `logSystemError(env, 'CERT_PROVISION_ERROR', 'ERROR', err, …)` + 原文入 D1 |
+> | 第四维 端侧无恐慌流转 | 已建成 | ✅ **真实** | `app.go:2412-2418` `persistDisableTLS()` + `IsRateLimitedActive`（`app.go:75`）+ 前端五状态机 |
+>
+> **建议**：把本节标题与首段改为**设计目标**语气（「拟建设」/「目标架构」），并在拓扑图每一维上方标注 **【已建成】/【部分】/【未建成】** 三态标签，与 §十三.3(2) 的自述保持一致。当前写法会让运维方误以为已有水位告警，而**实际唯一的触墙感知路径是「第 41 次请求被拒」**——这正是 §十三.7 开篇所反对的「后知后觉」。
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────┐
@@ -2808,6 +2871,15 @@ Google Trust Services (GTS) 作为公共 WebPKI CA，遵循 RFC 8555 规范并�
   - `context`: `{ node_id, device_id, client_ip, trace_id, current_count, max_limit }`
   - 管理员可在 Admin API 快速检索全景报表。
 
+> ⚠️ **R38-5（🟠 虚构标识符 · 第 38 轮复核 2026-09-13）**：上列 **5 个标识符中有 3 个在本仓库不存在**，属虚构引用，逐条核对：
+> - `RATE_LIMIT_CERT_PROVISION_NODE` —— **❌ 不存在**。`logRateLimitHit()` 写入的是 `category = 'RATE_LIMIT_' + limiterName`（`rate-limit.ts:249`），而 `cert.ts` 传入的 `limiterName` 只有三个值：`'CERT_PROVISION'`（`cert.ts:760` → 得到 `RATE_LIMIT_CERT_PROVISION`）、`'CERT_PROVISION_IP'`（`cert.ts:782`）、`'CERT_PROVISION_GLOBAL'`（`cert.ts:805`）。**不存在 `_NODE` 变体**（`rg -n 'CERT_PROVISION_NODE'` 全仓**零命中**）。即 L1 的 category 是 `RATE_LIMIT_CERT_PROVISION`（无后缀），写 `_NODE` 会使运维过滤不到任何记录。
+> - `current_count` —— **❌ 不存在**。全仓 `rg` 零命中。
+> - `max_limit` —— **❌ 不存在**。全仓 `rg` 零命中。
+>   实际 `context` 仅为 `{ node_id, device_id, client_ip, trace_id }`（`cert.ts:761-764` / `cert.ts:806-809`）。
+> - ✅ `RATE_LIMIT_CERT_PROVISION_GLOBAL`、`RATE_LIMIT_CERT_PROVISION_IP` 与 `node_id`/`client_ip`/`trace_id` 均**真实**。
+>
+> **进一步的含义**：正因为日志里**没有** `current_count` / `max_limit` 字段，Admin 目前**无法从日志算出「已用 / 上限」水位** —— 这是 R38-6「第一维未建成」的技术根因，而非单纯没做前端卡片。若要把第一维真正落地，**先决条件是让 `isD1RateLimited()` 回传当前计数**（现签名 `Promise<boolean>`，见 `rate-limit.ts:202-207`），再在 `logRateLimitHit()` 中落库。
+
 ##### (3) 第三维：上游 Google CA 原始错误无损穿透感知（Upstream CA Problem Capture）
 - 若请求穿透网关但在与 Google Trust Services 通信时收到异常（如主域名被 Google 官方限制）：
   - Worker 异常捕获块精确提取 RFC 7807 报文字段：`type`, `detail`, `status`；
@@ -2819,6 +2891,83 @@ Google Trust Services (GTS) 作为公共 WebPKI CA，遵循 RFC 8555 规范并�
 - **确定性状态回传**：通过响应头 `Retry-After` 告知客户端确切的冷却时间（如 86,400 秒或 604,800 秒）；
 - **动态防刷锁定**：客户端在冷却期内将 TLS 开关锁定并展示剩余倒计时，鼠标悬浮显示警示说明，防止用户因好奇不断狂点重试造成惊群；
 - **业务零阻断**：卡片状态清晰标明 `HTTP (降级明文)`，传输功能毫秒级就绪，普通文件收发体验丝毫不受影响。
+
+---
+
+## 十四、第 38 轮独立复核报告（2026-09-13，基线 `48642d39` / v1.36.123）
+
+> **复核人**：审查方（独立于实现方）
+> **复核对象**：本文档 §十二、§十三（基线 v1.36.110 及以后新增章节）+ 全文 `file:line` 锚点
+> **复核方式**：全部结论以**仓库实测**为准，不采信文档自述。逐条给出 `rg` / 文件行内容证据，可复现。
+> **工具自检**：本轮锚点核对器 `/tmp/r38_anchor.py` 在采信输出前先跑**正/负对照**（`pkg/version/version.go:12` 须含 `version =`；`:99999` 须判为越界），对照通过后才使用其输出（延续红线【131】「检查器本身须先自检」）。
+
+### 14.1 缺陷清单（按严重度排序）
+
+| 编号 | 级别 | 位置 | 文档断言 | 实测结论 | 证据 |
+|---|---|---|---|---|---|
+| **R38-1** | 🔴 | §十二.1(4) | Worker「在 **Cloudflare DNS** 添加 `_acme-challenge` TXT」 | **与实现不符，且被本文档 §四(538 行) 自身列为被否决选项 (c)** | `wrangler.toml:35/86` 指向自建 `ns1-dns.eqt.net.im`/`ns2-dns.eqt.net.im`；`cert.ts:514/553` 调 `{ep}/acme/challenge`；`cert.ts` 内 `api.cloudflare.com`、`/dns_records` **零命中** |
+| **R38-2** | 🔴 | §十二.1(1) | 「检测到本地不存在 `identity.json` 与私钥文件，本地自动派生 nodeID」 | **`identity.json` 不存在（虚构）；且 nodeID 派生与文件存在性无因果** | `rg 'identity\.json'`（排除 `*.md`）**零命中**；`hardware.go:550-572` 实为 `sha256(uuidHash:cpuHash:diskHash[:salt])[:12]`，指纹全空时返回 `""` |
+| **R38-6** | 🔴 | §十三.7 首段 + 拓扑图 | 四维感知体系以现在时呈现为已建成 | **第一维（70%/85% 水位 + Webhook）零实现，且与本文档 §十三.3(2) 自述直接冲突** | 全仓无水位阈值 / 配额告警 Webhook；§十三.3(2) 自述「尚未提供独立可视化卡片」；§十三.4 归入【第二层】（中期演进） |
+| **R38-3** | 🟠 | §十三.1 | GTS 施加 300 订单/3h、5 失败验证/主机名/小时、以 eTLD+1 为边界 | **数字系 Let's Encrypt 的公开规则，被误归给 GTS；且与第 30 行「免受 eTLD+1 约束」自相矛盾** | CA 实为 GTS（`wrangler.toml:33/84` pki.goog）；Google 官方 ACME 文档**不公布**任何此类数字配额，仅要求遵守 `429` + `Retry-After` |
+| **R38-4** | 🟠 | §十三.5(2) + 阶段表 | 「全球每周仅有**前 40 位**…**新用户**能签发」 | **计数对象是「请求」不是「用户」；失败/重试同样消耗额度** | `rate-limit.ts:202-230` 每次调用即 `count = count + 1`；判定在签发**之前**（`cert.ts:758→780→803`）；闸门为全局单键 `cert_provision:global_acme`（`cert.ts:802`） |
+| **R38-5** | 🟠 | §十三.7(2) | `category: …_NODE`；`context: { …, current_count, max_limit }` | **3 个标识符不存在（虚构引用）** | `RATE_LIMIT_CERT_PROVISION_NODE` 全仓**零命中**（L1 实为 `RATE_LIMIT_CERT_PROVISION`，`cert.ts:760`）；`current_count`、`max_limit` 全仓**零命中**；实际 `context` 仅 `{node_id, device_id, client_ip, trace_id}`（`cert.ts:761-764` / `cert.ts:806-809`） |
+| **R38-7** | 🟠 | §十三.6(2) | 「公共 CA 一旦**侦测到**私钥泄露，必须在 24 小时内…全网强制吊销」 | **24h 属实但触发条件被改写（BR 为「obtains evidence」）；且本仓无任何吊销通道** | BR §4.9.1.1(3) 为**证据/通知触发**；`pkg/cert` + `cloudflare/` 的 OCSP/CRL/吊销调用**全部零命中** |
+| **R38-10** | 🟠 | §十三.3(3) vs §十二.5 vs 头部第 9 行 | Fail-Closed / Fail-Soft「正交职责」 | **同一对术语在三处含义各不相同，无唯一定义** | §十三.3(3) 称 Fail-Closed=关 TLS；§十二.5 称 Fail-Soft=同路径降级明文；技术报告 §9.4 又按 CLI/Desktop 划分 |
+| **R38-12** | 🟠 | §10.2（539 行）/ §11 表格（842 行） | 受限入口「已决」为 `ns1-dns.301098.xyz` / `ns2-dns.301098.xyz` | **与现网部署不一致** | `wrangler.toml:35/86` 实为 `ns1-dns.eqt.net.im`/`ns2-dns.eqt.net.im`（`134233b9` 迁移）；`301098.xyz` 在非文档代码中**仅**作邮件服务器与测试邮箱 |
+| **R38-13** | 🟠 | 头部第 30 行 | 「全库对齐联系邮箱为 `leeyelon@gmail.com`」 | **与现网部署不符**（实际提交给 GTS 的是另一邮箱） | `wrangler.toml:36/87` `ACME_EMAIL = "forpersuit@gmail.com"`，即 `cert.ts:1085-1086` 实际使用的账户邮箱（`f68f9963`/`3a8c4ea7` 引入） |
+| **R38-8** | 🟡 | §十二.1(4) | 「第 1106 行统一错误处理」 | **引文逐字正确，仅行号漂移约 125 行** | 500 响应块现位于 `cert.ts:1231-1233`（`catch` 起于 `:1221`） |
+| **R38-9** | 🟡 | §十三.3(1) | L1 与 L2 均返回 `reason_key: 'rate_limited'` | **L2 实为 `ip_rate_limited`** | `cert.ts:791`（L2）vs `cert.ts:769`（L1） |
+| **R38-11** | 🟡 | §十二.3.3 | 「补齐全语言 …8 个词条」 | **8 个均真实，但非全集（实为 14 个）** | `i18n.js` 中 `tls_` 前缀键 14 个 × 7 语言；漏列 `tls_failed_auto_disabled`（本次交付新增，`i18n.js:17`）等 6 个 |
+| **R38-14** | 🟡 | 头部第 16 行 | 「Let's Encrypt Staging 配额高达 30,000 张/周」 | **无来源** | 仓库与 LE 官方文档均无该数字 |
+| **R38-15** | 🟡 | 头部第 16 行 vs 配置 | 测试环境用 LE 先行闭环 | **现网 `[env.test]` 指向 GTS 生产目录 + 生产权威 DNS** | `wrangler.toml:84-86`；仅 D1 库为 `eqt-drm-db-test` |
+| **R38-16** | 🟡 | §十三.3(3) | 气泡文案单一 | **同一提示存在两套文案，后端版本为死文案** | `app.go:2244/2361`「保护**冷却**中」vs `i18n.js:10`「保护**期**中」；`main.js:5227` 优先取 i18n |
+
+> **级别定义**：🔴 = 会让读者/审计方形成错误结论，须改；🟠 = 事实或归属错误，须改或补注；🟡 = 精度/一致性缺陷，建议改。
+
+### 14.2 修正处方（可直接执行）
+
+1. **R38-1**：把「在 Cloudflare DNS 添加」改为「向**自建权威名称服务器** `ns1-dns`/`ns2-dns` 的受限端点写入 `_acme-challenge.<node>.direct.eqt.net.im.` TXT」；并在该段补一句「已否决 Cloudflare DNS API 路线，理由见 §四」。
+2. **R38-2**：删除 `identity.json` 全文引用（`rg` 确认无第二处），nodeID 派生句改为「由主板/CPU/磁盘硬件指纹级联 SHA-256（+ 可选 node salt）确定性派生 12 位小写 hex」。
+3. **R38-6**：§十三.7 首段改设计目标语气；拓扑图四维各加 `【已建成】/【部分】/【未建成】` 标签（第一维 = 未建成）。**若决定真正落地第一维**，先决改造为：`isD1RateLimited()` 由 `Promise<boolean>` 升级为回传当前计数，再经 `logRateLimitHit()` 落 `current_count`/`max_limit` —— 与 R38-5 的字段缺口是同一件事。
+4. **R38-3**：三条数字前加限定语「以下为 **Let's Encrypt** 的公开规则（此处用于对比）」，或整段删除；**同时**在第 30 行与 §十三.1 之间补取代声明，明确 GTS 是否受 eTLD+1 约束（二者当前互斥）。
+5. **R38-4 / R38-4b**：全文档把「40 位新用户」改为「40 次置备请求 / 7 天」，阶段表列头同步；补一句「仅当每用户恰好 1 次且全部成功时，40 请求才等价于 40 用户」。
+6. **R38-5**：`category` 一行改为 `RATE_LIMIT_CERT_PROVISION` / `RATE_LIMIT_CERT_PROVISION_IP` / `RATE_LIMIT_CERT_PROVISION_GLOBAL`；`context` 一行删去 `current_count`、`max_limit`（或在改造落地后再加回）。
+7. **R38-7**：「侦测到」→「**获得**（被通知/被披露）证据」；补一句「本系统不实现吊销查询（无 OCSP/CRL 检查），吊销由 CA 侧生效且客户端存在感知延迟」。
+8. **R38-10**：头部第 9 行给出唯一术语定义（建议按故障域：TLS 特性域 Fail-Closed / 传输服务域 Fail-Soft），并全文档统一引用；同步与技术报告 §9.4 对齐。
+9. **R38-12 / R38-13 / R38-15**：三处「文档—部署」分歧各补一行**改判注记**（含改判 commit 与现值），不要静默重写历史段落。
+10. **R38-8 / R38-9 / R38-11 / R38-14 / R38-16**：按上表逐条修正；其中 R38-8 建议整体改用**符号锚**（如「`reason_key: 'internal_error'` 响应块」）以免疫后续漂移。
+
+### 14.3 本轮正向确认（实测为真，应予保留）
+
+| 确认项 | 结论 | 证据 |
+|---|---|---|
+| 五状态机 `disabled/ready/mismatch/failed/preparing` | ✅ 真实 | `tls_status.js:52-64`；`renderLockSvg`/`renderAlertSvg`/`renderSpinnerSvg` 均存在 |
+| L3 全局熔断 40/7d + `global_rate_limited` + `retry_after: 604800` | ✅ 真实且**行号 `cert.ts:803` 正确** | `cert.ts:803/806-807` |
+| `logRateLimitHit()` → D1 `system_error_logs` | ✅ 真实 | `rate-limit.ts:238-250` |
+| `logSystemError(env,'CERT_PROVISION_ERROR','ERROR',err,…)` 捕获上游 CA 原文 | ✅ 真实 | `cert.ts:1222-1229` |
+| Admin `GET /api/v1/admin/error-logs` 与 `rate_limit_hits_24h` | ✅ 真实 | `admin.ts:34`、`admin.ts:1191/1207` |
+| 动态 `Retry-After` 冷却 + 落盘 `enableTLS:false` + `IsRateLimitedActive` | ✅ 真实（**第 36 轮 R36-2/R36-3 两处缺陷均已闭环**） | `provisioner.go:795-805/856`；`app.go:2326/2412-2418`；`app.go:75` |
+| §十三.3(3) 气泡文案 | ✅ **逐字正确** | `i18n.js:10` |
+| §十三.5(1) 出厂默认 `enableTLS: false` | ✅ 真实 | `settings.go:181` |
+| §十二.3.3 所列 8 个 i18n 词条 | ✅ 8/8 存在（各 7 语言） | `rg -c` 全部 = 7 |
+| 头部「双文档协同与现役基线声明」取代关系 | ✅ **已生效（第 37 轮 R37-14 意见已落地）** | 本文档第 4-5 行 + 技术报告对应声明 |
+
+### 14.4 放行判据（Exit Criteria）
+
+- **E1**：R38-1 / R38-2 / R38-6 三条 🔴 **必须在文档中改毕**（只需改文档，不涉及代码改动 —— 这三条都是**文档描述与既有实现不符**，改文档即闭环）。
+- **E2**：R38-3 / R38-4 / R38-5 / R38-7 四条 🟠 须二选一：**(a)** 修正文档以贴合实现；**(b)** 明确标注为「计划中架构」并与 §13.4 的演进层次对齐。**不允许**保持现状（现状会让读者据此做出错误容量规划）。
+- **E3**：R38-10 术语冲突须给出唯一定义；在此之前，任何引用 Fail-Closed/Fail-Soft 的**验收测试用例不得作为放行证据**（术语未定则判据未定）。
+- **E4**：R38-12 / R38-13 / R38-15 三处「文档—部署」分歧须补注记；**若为有意改判**，注记即可；**若为无意漂移**，须回改配置并复跑受影响的联调。
+- **E5**：🟡 项（R38-8/9/11/14/16）建议本轮一并修正，但不阻断放行。
+- **E6（回归保护）**：本轮**未改动任何代码**，故不涉及功能回归验证；上述正向确认项（§14.3）中的行为**须在后续任何改动中保持**，修改 `cert.ts` 限流段或 `tls_status.js` 时须重跑对应的离线套件（`test:cert:offline` / `test:acme:offline`）。
+
+### 14.5 本轮边界声明（未做什么）
+
+- 本轮**只审文档，不改代码**；§14.2 的处方是**实施指令**，交由实现方执行。
+- 本轮**未**验证 `tests/` 离线套件的实际通过数（未运行套件），故**不**对「测试全绿」类声明作背书 —— 该类声明须由实现方在提交时给出运行输出。
+- 本轮**未**核验 Cloudflare 侧线上真实生效的 `ACME_DNS_API_ENDPOINTS` 值（仅核验仓库 `wrangler.toml`）；若线上与仓库配置不一致，以线上为准，本文档应额外注明部署时点。
+- `file:line` 锚点为**基线 `48642d39` 时点**；本文档其他历史轮次的行号锚未逐条重核（历史轮次结论已由各自轮次负责），本轮仅覆盖 §十二、§十三 及全文新引入的锚点。
+- **锚点书写建议（本轮实测发现的通用风险）**：文档中大量使用**裸文件名** `main.go:135` / `main.go:26-27` / `main.go:310` / `main.go:315`（语义上均指 `cmd/eqt-dns/main.go`），但仓库根目录**同时存在**一个 24 行的 `main.go`（根目录遗留文件，非构建入口）。任何按短名解析的检查器（含本轮审查方的锚点核对器）都会**静默解析到错误的文件**并给出「越界」误报 —— 这与红线【131】记录的「检查器须先自检」属同一类风险。**建议**：全文档把此类引用改为**仓库相对全路径**（`cmd/eqt-dns/main.go:135`），一次性消除歧义；根目录遗留的 `main.go` 是否应清理，请实现方自行判定（本轮审查方**未触碰**该文件）。
 
 
 
