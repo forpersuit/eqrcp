@@ -2,7 +2,9 @@ import { Env } from '../types';
 import { logSystemError } from '../utils/error-logger';
 import { isD1RateLimited, logRateLimitHit, clientIpFromRequest } from '../utils/rate-limit';
 import { checkManualBlacklist } from '../utils/blacklist';
-import { AcmeClient, computeDns01ChallengeValue } from '../utils/acme';
+import { AcmeClient, computeDns01ChallengeValue, AcmeHttpError } from '../utils/acme';
+import { canExecuteCircuit, recordCircuitSuccess, recordCircuitFailure } from '../utils/circuit-breaker';
+import { consumeToken } from '../utils/token-bucket';
 
 const CERT_TABLE_ENSURED = new WeakSet<object>();
 
@@ -797,28 +799,38 @@ export async function handleCertRoutes(
     }
   }
 
-  // 5.3 Global Production Safety Guard: Prevent burning Let's Encrypt 50 certs/week ceiling
-  if (env.ENVIRONMENT === 'production' && acmeRequested) {
-    const globalRateLimitKey = 'cert_provision:global_acme';
-    const globalRateLimited = await isD1RateLimited(env, globalRateLimitKey, 40, 7 * 24 * 3600 * 1000);
-    if (globalRateLimited) {
-      await logRateLimitHit(env, 'CERT_PROVISION_GLOBAL', globalRateLimitKey, {
-        node_id: cleanNode,
-        device_id: deviceIdHeader,
-        client_ip: clientIp,
-        trace_id: traceId
-      });
-      console.error(`[LAN-TLS-PROVISION] [RATE-LIMIT] Global ACME production safety threshold reached (40/week)`);
+  // 5.3 Global CA Traffic Smoothing (Token Bucket: 10 req/min, burst=5)
+  if (acmeRequested) {
+    const tbResult = await consumeToken(env, 'cert_provision:acme_smoothing', 5, 10 / 60);
+    if (!tbResult.allowed) {
+      console.warn(`[LAN-TLS-PROVISION] [THROTTLE] Outbound CA token bucket empty, smoothing traffic (retryAfter=${tbResult.retryAfter}s)`);
       return new Response(JSON.stringify({
-        error: 'Global production certificate issuance threshold reached. Plain LAN HTTP fallback active.',
-        reason_key: 'global_rate_limited',
-        retry_after: 604800
+        error: 'Certificate authority request rate smoothed. Please retry shortly.',
+        reason_key: 'ca_traffic_smoothing',
+        retry_after: tbResult.retryAfter
       }), {
         status: 429,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '604800' }
+        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': String(tbResult.retryAfter) }
       });
     }
   }
+
+  // 5.4 Upstream CA Adaptive Circuit Breaker Pre-Flight Check
+  if (acmeRequested) {
+    const cbCheck = await canExecuteCircuit(env, 'gts_ca');
+    if (!cbCheck.allowed) {
+      console.warn(`[LAN-TLS-PROVISION] [CIRCUIT-BREAKER] GTS CA circuit is OPEN (retryAfter=${cbCheck.retryAfter}s)`);
+      return new Response(JSON.stringify({
+        error: 'Certificate authority is temporarily undergoing rate-limit cooldown. Please retry later.',
+        reason_key: 'ca_circuit_open',
+        retry_after: cbCheck.retryAfter
+      }), {
+        status: 429,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': String(cbCheck.retryAfter) }
+      });
+    }
+  }
+
 
   // 6. Cryptographic CSR Parsing & Domain Sanity Check
   let parsedCSR: ParsedCSR;
@@ -1033,152 +1045,176 @@ export async function handleCertRoutes(
         });
       }
 
-      console.log(`[LAN-TLS-PROVISION] [ACME] Starting RFC 8555 DNS-01 certificate issuance for nodeID=${cleanNode}...`);
-      const endpoints = env.ACME_DNS_API_ENDPOINTS.split(',').map(s => s.trim()).filter(Boolean);
-      const dnsToken = env.ACME_DNS_API_TOKEN;
-
-      // Route outbound ACME requests to Let's Encrypt via secure reverse proxies (ns1/ns2)
-      // to circumvent Cloudflare Edge 525 SSL Handshake Loop while maintaining end-to-end JWS integrity
-      const proxyBases = endpoints.map(ep => `${ep.replace(/\/+$/, '')}/le-proxy`);
-      const acmeCustomFetch: typeof fetch = async (input, init) => {
-        const originalUrl = typeof input === 'string' ? input : (input instanceof Request ? input.url : String(input));
-        let proxyPath = '';
-        let isLE = false;
-        if (originalUrl.startsWith('https://acme-v02.api.letsencrypt.org')) {
-          proxyPath = originalUrl.slice('https://acme-v02.api.letsencrypt.org'.length);
-          isLE = true;
-        } else if (originalUrl.startsWith('https://acme-staging-v02.api.letsencrypt.org')) {
-          proxyPath = originalUrl.slice('https://acme-staging-v02.api.letsencrypt.org'.length);
-          isLE = true;
-        }
-
-        if (isLE && proxyBases.length > 0) {
-          let lastErr: any;
-          for (const base of proxyBases) {
-            try {
-              const targetUrl = `${base}${proxyPath}`;
-              const res = await fetch(targetUrl, init);
-              if (res.status !== 502 && res.status !== 504) {
-                return res;
-              }
-            } catch (err: any) {
-              lastErr = err;
-            }
-          }
-          if (lastErr) throw lastErr;
-        }
-
-        return await fetch(input, init);
-      };
-
-      const eabOpts = (env.ACME_EAB_KID && env.ACME_EAB_HMAC_KEY) ? {
-        keyId: env.ACME_EAB_KID,
-        macKey: env.ACME_EAB_HMAC_KEY
-      } : undefined;
-
-      const acmeClient = await AcmeClient.create({
-        directoryUrl: env.ACME_DIRECTORY_URL || 'https://acme-v02.api.letsencrypt.org/directory',
-        accountKeyJWK: env.ACME_ACCOUNT_KEY,
-        customFetch: acmeCustomFetch,
-        eab: eabOpts
-      });
-      if (env.ACME_EMAIL) {
-        await acmeClient.initAccount(env.ACME_EMAIL);
-      }
-
-      const { orderUrl, order } = await acmeClient.newOrder([expectedCommonName, expectedWildcard]);
-      const thumbprint = await acmeClient.getThumbprint();
-
-      const cleanupTasks: Array<() => Promise<void>> = [];
       try {
-        // Phase 1: Collect all authorizations and identify pending challenges
-        const pendingChallenges: Array<{
-          authzUrl: string;
-          domain: string;
-          challengeUrl: string;
-          challengeVal: string;
-          recordName: string;
-        }> = [];
+        console.log(`[LAN-TLS-PROVISION] [ACME] Starting RFC 8555 DNS-01 certificate issuance for nodeID=${cleanNode}...`);
+        const endpoints = env.ACME_DNS_API_ENDPOINTS.split(',').map(s => s.trim()).filter(Boolean);
+        const dnsToken = env.ACME_DNS_API_TOKEN;
 
-        for (const authzUrl of order.authorizations) {
-          const authz = await acmeClient.getAuthorization(authzUrl);
-          if (authz.status === 'valid') {
-            console.log(`[ACME] Authorization for ${authz.identifier.value} is already valid, skipping challenge.`);
-            continue;
+        // Route outbound ACME requests to Let's Encrypt via secure reverse proxies (ns1/ns2)
+        // to circumvent Cloudflare Edge 525 SSL Handshake Loop while maintaining end-to-end JWS integrity
+        const proxyBases = endpoints.map(ep => `${ep.replace(/\/+$/, '')}/le-proxy`);
+        const acmeCustomFetch: typeof fetch = async (input, init) => {
+          const originalUrl = typeof input === 'string' ? input : (input instanceof Request ? input.url : String(input));
+          let proxyPath = '';
+          let isLE = false;
+          if (originalUrl.startsWith('https://acme-v02.api.letsencrypt.org')) {
+            proxyPath = originalUrl.slice('https://acme-v02.api.letsencrypt.org'.length);
+            isLE = true;
+          } else if (originalUrl.startsWith('https://acme-staging-v02.api.letsencrypt.org')) {
+            proxyPath = originalUrl.slice('https://acme-staging-v02.api.letsencrypt.org'.length);
+            isLE = true;
           }
 
-          const dnsChall = authz.challenges.find(c => c.type === 'dns-01');
-          if (!dnsChall) {
-            throw new Error(`no dns-01 challenge found in authorization for ${authz.identifier.value}`);
-          }
-
-          const challengeVal = await computeDns01ChallengeValue(dnsChall.token, thumbprint);
-          const recordName = `_acme-challenge.${cleanNode}.direct.eqt.net.im.`;
-
-          // Pre-register cleanup task before setting challenge to guarantee cleanup on timeout/abort (FINDING 8)
-          cleanupTasks.push(() => clearDns01Challenge(endpoints, dnsToken, recordName, challengeVal));
-
-          pendingChallenges.push({
-            authzUrl,
-            domain: authz.identifier.value,
-            challengeUrl: dnsChall.url,
-            challengeVal,
-            recordName
-          });
-        }
-
-        // Phase 2: Batch write all DNS-01 challenge records to all authoritative DNS endpoints
-        // Crucial: BOTH main domain and wildcard challenge values must exist in DNS before ANY challenge is triggered.
-        for (const pending of pendingChallenges) {
-          await setDns01Challenge(endpoints, dnsToken, pending.recordName, pending.challengeVal);
-          console.log(`[ACME] Injected DNS-01 challenge TXT for ${pending.domain}: ${pending.recordName}`);
-        }
-
-        // Phase 3: Positive confirmation of DNS propagation across all authoritative DNS endpoints (Scheme A)
-        if (pendingChallenges.length > 0) {
-          const valuesByRecord: Record<string, string[]> = {};
-          for (const pending of pendingChallenges) {
-            if (!valuesByRecord[pending.recordName]) {
-              valuesByRecord[pending.recordName] = [];
+          if (isLE && proxyBases.length > 0) {
+            let lastErr: any;
+            for (const base of proxyBases) {
+              try {
+                const targetUrl = `${base}${proxyPath}`;
+                const res = await fetch(targetUrl, init);
+                if (res.status !== 502 && res.status !== 504) {
+                  return res;
+                }
+              } catch (err: any) {
+                lastErr = err;
+              }
             }
-            if (!valuesByRecord[pending.recordName].includes(pending.challengeVal)) {
-              valuesByRecord[pending.recordName].push(pending.challengeVal);
-            }
+            if (lastErr) throw lastErr;
           }
 
-          for (const [recName, expectedVals] of Object.entries(valuesByRecord)) {
-            console.log(`[ACME] Confirming DNS propagation across ${endpoints.length} authoritative nodes for ${recName} (expected: ${expectedVals.join(', ')})...`);
-            // 显式约束 maxAttempts=8 (单次至多 8 轮 * 2 节点 = 16 subrequests，严控在 50 次保守子请求预算内)
-            await confirmDnsPropagation(endpoints, dnsToken, recName, expectedVals, 10000, 1000, 8);
-          }
-          console.log(`[ACME] Confirmed all expected DNS-01 TXT values published across all authoritative endpoints.`);
+          return await fetch(input, init);
+        };
 
-          // Phase 4: Trigger all challenges
-          for (const pending of pendingChallenges) {
-            console.log(`[ACME] Triggering CA validation for ${pending.domain}...`);
-            await acmeClient.triggerChallenge(pending.challengeUrl);
-          }
+        const eabOpts = (env.ACME_EAB_KID && env.ACME_EAB_HMAC_KEY) ? {
+          keyId: env.ACME_EAB_KID,
+          macKey: env.ACME_EAB_HMAC_KEY
+        } : undefined;
+
+        const acmeClient = await AcmeClient.create({
+          directoryUrl: env.ACME_DIRECTORY_URL || 'https://acme-v02.api.letsencrypt.org/directory',
+          accountKeyJWK: env.ACME_ACCOUNT_KEY,
+          customFetch: acmeCustomFetch,
+          eab: eabOpts
+        });
+        if (env.ACME_EMAIL) {
+          await acmeClient.initAccount(env.ACME_EMAIL);
         }
 
-        // Phase 5: Wait for all DNS authorizations to be verified and the order to transition to 'ready'
-        await acmeClient.pollOrder(orderUrl, 'ready', 60000, 2000);
+        const { orderUrl, order } = await acmeClient.newOrder([expectedCommonName, expectedWildcard]);
+        const thumbprint = await acmeClient.getThumbprint();
 
-        await acmeClient.finalizeOrder(order.finalize, parsedCSR.rawDER);
-        const validOrder = await acmeClient.pollOrder(orderUrl, 'valid', 90000, 2500);
-        if (!validOrder.certificate) {
-          throw new Error('ACME order finalized but no certificate URL was returned');
-        }
-
-        certPEM = await acmeClient.downloadCertificate(validOrder.certificate);
+        const cleanupTasks: Array<() => Promise<void>> = [];
         try {
-          expiresAt = parseCertificateExpiry(certPEM).toISOString();
-        } catch (e: any) {
-          console.warn(`[ACME] Failed to parse leaf cert expiry, falling back to 90d default: ${e?.message}`);
-          expiresAt = new Date(Date.now() + 90 * 24 * 3600 * 1000).toISOString();
+          // Phase 1: Collect all authorizations and identify pending challenges
+          const pendingChallenges: Array<{
+            authzUrl: string;
+            domain: string;
+            challengeUrl: string;
+            challengeVal: string;
+            recordName: string;
+          }> = [];
+
+          for (const authzUrl of order.authorizations) {
+            const authz = await acmeClient.getAuthorization(authzUrl);
+            if (authz.status === 'valid') {
+              console.log(`[ACME] Authorization for ${authz.identifier.value} is already valid, skipping challenge.`);
+              continue;
+            }
+
+            const dnsChall = authz.challenges.find(c => c.type === 'dns-01');
+            if (!dnsChall) {
+              throw new Error(`no dns-01 challenge found in authorization for ${authz.identifier.value}`);
+            }
+
+            const challengeVal = await computeDns01ChallengeValue(dnsChall.token, thumbprint);
+            const recordName = `_acme-challenge.${cleanNode}.direct.eqt.net.im.`;
+
+            // Pre-register cleanup task before setting challenge to guarantee cleanup on timeout/abort (FINDING 8)
+            cleanupTasks.push(() => clearDns01Challenge(endpoints, dnsToken, recordName, challengeVal));
+
+            pendingChallenges.push({
+              authzUrl,
+              domain: authz.identifier.value,
+              challengeUrl: dnsChall.url,
+              challengeVal,
+              recordName
+            });
+          }
+
+          // Phase 2: Batch write all DNS-01 challenge records to all authoritative DNS endpoints
+          // Crucial: BOTH main domain and wildcard challenge values must exist in DNS before ANY challenge is triggered.
+          for (const pending of pendingChallenges) {
+            await setDns01Challenge(endpoints, dnsToken, pending.recordName, pending.challengeVal);
+            console.log(`[ACME] Injected DNS-01 challenge TXT for ${pending.domain}: ${pending.recordName}`);
+          }
+
+          // Phase 3: Positive confirmation of DNS propagation across all authoritative DNS endpoints (Scheme A)
+          if (pendingChallenges.length > 0) {
+            const valuesByRecord: Record<string, string[]> = {};
+            for (const pending of pendingChallenges) {
+              if (!valuesByRecord[pending.recordName]) {
+                valuesByRecord[pending.recordName] = [];
+              }
+              if (!valuesByRecord[pending.recordName].includes(pending.challengeVal)) {
+                valuesByRecord[pending.recordName].push(pending.challengeVal);
+              }
+            }
+
+            for (const [recName, expectedVals] of Object.entries(valuesByRecord)) {
+              console.log(`[ACME] Confirming DNS propagation across ${endpoints.length} authoritative nodes for ${recName} (expected: ${expectedVals.join(', ')})...`);
+              // 显式约束 maxAttempts=8 (单次至多 8 轮 * 2 节点 = 16 subrequests，严控在 50 次保守子请求预算内)
+              await confirmDnsPropagation(endpoints, dnsToken, recName, expectedVals, 10000, 1000, 8);
+            }
+            console.log(`[ACME] Confirmed all expected DNS-01 TXT values published across all authoritative endpoints.`);
+
+            // Phase 4: Trigger all challenges
+            for (const pending of pendingChallenges) {
+              console.log(`[ACME] Triggering CA validation for ${pending.domain}...`);
+              await acmeClient.triggerChallenge(pending.challengeUrl);
+            }
+          }
+
+          // Phase 5: Wait for all DNS authorizations to be verified and the order to transition to 'ready'
+          await acmeClient.pollOrder(orderUrl, 'ready', 60000, 2000);
+
+          await acmeClient.finalizeOrder(order.finalize, parsedCSR.rawDER);
+          const validOrder = await acmeClient.pollOrder(orderUrl, 'valid', 90000, 2500);
+          if (!validOrder.certificate) {
+            throw new Error('ACME order finalized but no certificate URL was returned');
+          }
+
+          certPEM = await acmeClient.downloadCertificate(validOrder.certificate);
+          try {
+            expiresAt = parseCertificateExpiry(certPEM).toISOString();
+          } catch (e: any) {
+            console.warn(`[ACME] Failed to parse leaf cert expiry, falling back to 90d default: ${e?.message}`);
+            expiresAt = new Date(Date.now() + 90 * 24 * 3600 * 1000).toISOString();
+          }
+        } finally {
+          ctx.waitUntil(Promise.all(cleanupTasks.map(fn => fn().catch(err => console.warn('[ACME] DNS cleanup warning:', err)))));
         }
-      } finally {
-        ctx.waitUntil(Promise.all(cleanupTasks.map(fn => fn().catch(err => console.warn('[ACME] DNS cleanup warning:', err)))));
+
+        await recordCircuitSuccess(env, 'gts_ca');
+      } catch (acmeErr: any) {
+        if (acmeErr instanceof AcmeHttpError) {
+          if (acmeErr.status === 429) {
+            const retrySec = acmeErr.retryAfter || 60;
+            await recordCircuitFailure(env, 'gts_ca', retrySec, true);
+            console.error(`[LAN-TLS-PROVISION] [CIRCUIT-BREAKER] Tripped to OPEN due to upstream 429 (retryAfter=${retrySec}s): ${acmeErr.message}`);
+            return new Response(JSON.stringify({
+              error: 'Upstream Certificate Authority returned rate limit. Circuit cooldown initiated.',
+              reason_key: 'ca_rate_limited',
+              retry_after: retrySec
+            }), {
+              status: 429,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': String(retrySec) }
+            });
+          } else if (acmeErr.status >= 500) {
+            await recordCircuitFailure(env, 'gts_ca', 30, false);
+          }
+        }
+        throw acmeErr;
       }
+
     } else {
       console.log(`[LAN-TLS-PROVISION] [ISSUE] Issuing certificate via standalone CA for nodeID=${cleanNode}...`);
       const issued = await issueCertificateFromCSR(parsedCSR, 90);

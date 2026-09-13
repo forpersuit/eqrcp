@@ -10,6 +10,36 @@
  *  - Zero external npm packages, 100% native Web Crypto standard
  */
 
+export class AcmeHttpError extends Error {
+  status: number;
+  retryAfter?: number;
+  details?: any;
+
+  constructor(message: string, status: number, retryAfter?: number, details?: any) {
+    super(message);
+    this.name = 'AcmeHttpError';
+    this.status = status;
+    this.retryAfter = retryAfter;
+    this.details = details;
+  }
+}
+
+export function parseRetryAfterHeader(headerVal: string | null): number | undefined {
+  if (!headerVal) return undefined;
+  const trimmed = headerVal.trim();
+  const seconds = parseInt(trimmed, 10);
+  if (!isNaN(seconds) && seconds >= 0) {
+    return seconds;
+  }
+  const dateParsed = Date.parse(trimmed);
+  if (!isNaN(dateParsed)) {
+    const diffSec = Math.ceil((dateParsed - Date.now()) / 1000);
+    return Math.max(1, diffSec);
+  }
+  return undefined;
+}
+
+
 export function base64UrlEncode(buf: Uint8Array | string): string {
   let binary = '';
   if (typeof buf === 'string') {
@@ -348,7 +378,8 @@ export class AcmeClient {
     const res = await this.postSigned(dir.newAccount, payload);
     if (!res.ok && res.status !== 200 && res.status !== 201) {
       const errText = await res.text();
-      throw new Error(`failed to create/retrieve ACME account (HTTP ${res.status}): ${errText}`);
+      const retryAfter = parseRetryAfterHeader(res.headers.get('Retry-After'));
+      throw new AcmeHttpError(`failed to create/retrieve ACME account (HTTP ${res.status}): ${errText}`, res.status, retryAfter, errText);
     }
 
     const loc = res.headers.get('Location');
@@ -367,7 +398,8 @@ export class AcmeClient {
     const res = await this.postSigned(dir.newOrder, { identifiers });
     if (!res.ok) {
       const errText = await res.text();
-      throw new Error(`failed to create ACME order: HTTP ${res.status}: ${errText}`);
+      const retryAfter = parseRetryAfterHeader(res.headers.get('Retry-After'));
+      throw new AcmeHttpError(`failed to create ACME order: HTTP ${res.status}: ${errText}`, res.status, retryAfter, errText);
     }
 
     const orderUrl = res.headers.get('Location');
@@ -383,7 +415,8 @@ export class AcmeClient {
     const res = await this.postSigned(authzUrl, '');
     if (!res.ok) {
       const errText = await res.text();
-      throw new Error(`failed to get authorization: HTTP ${res.status}: ${errText}`);
+      const retryAfter = parseRetryAfterHeader(res.headers.get('Retry-After'));
+      throw new AcmeHttpError(`failed to get authorization: HTTP ${res.status}: ${errText}`, res.status, retryAfter, errText);
     }
     return await res.json() as AcmeAuthorization;
   }
@@ -392,7 +425,8 @@ export class AcmeClient {
     const res = await this.postSigned(challengeUrl, {});
     if (!res.ok) {
       const errText = await res.text();
-      throw new Error(`failed to trigger challenge: HTTP ${res.status}: ${errText}`);
+      const retryAfter = parseRetryAfterHeader(res.headers.get('Retry-After'));
+      throw new AcmeHttpError(`failed to trigger challenge: HTTP ${res.status}: ${errText}`, res.status, retryAfter, errText);
     }
   }
 
@@ -401,7 +435,8 @@ export class AcmeClient {
     const res = await this.postSigned(finalizeUrl, { csr: csrB64 });
     if (!res.ok) {
       const errText = await res.text();
-      throw new Error(`failed to finalize ACME order: HTTP ${res.status}: ${errText}`);
+      const retryAfter = parseRetryAfterHeader(res.headers.get('Retry-After'));
+      throw new AcmeHttpError(`failed to finalize ACME order: HTTP ${res.status}: ${errText}`, res.status, retryAfter, errText);
     }
     return await res.json() as AcmeOrder;
   }
@@ -416,7 +451,8 @@ export class AcmeClient {
     while (Date.now() - start < maxWaitMs) {
       const res = await this.postSigned(orderUrl, '');
       if (!res.ok) {
-        throw new Error(`failed to poll order: HTTP ${res.status}`);
+        const retryAfter = parseRetryAfterHeader(res.headers.get('Retry-After'));
+        throw new AcmeHttpError(`failed to poll order: HTTP ${res.status}`, res.status, retryAfter);
       }
       const order = await res.json() as AcmeOrder;
       if (order.status === targetStatus || (targetStatus === 'ready' && order.status === 'valid')) {
@@ -455,7 +491,8 @@ export class AcmeClient {
     const res = await this.postSigned(certUrl, '');
     if (!res.ok) {
       const errText = await res.text();
-      throw new Error(`failed to download certificate: HTTP ${res.status}: ${errText}`);
+      const retryAfter = parseRetryAfterHeader(res.headers.get('Retry-After'));
+      throw new AcmeHttpError(`failed to download certificate: HTTP ${res.status}: ${errText}`, res.status, retryAfter);
     }
     return await res.text();
   }

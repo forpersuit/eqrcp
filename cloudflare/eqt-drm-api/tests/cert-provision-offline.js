@@ -52,6 +52,8 @@ function makeMockDb(opts = {}) {
     _provisions: provisions,
     _rateLimits: rateLimits,
     _nodeKeys: nodeKeys,
+    _circuitBreakers: new Map(),
+    _tokenBuckets: new Map(),
     prepare(sql) {
       const stmt = {
         _sql: sql,
@@ -73,6 +75,14 @@ function makeMockDb(opts = {}) {
           if (sql.includes('FROM node_public_keys')) {
             const nodeId = this._binds[0];
             return nodeKeys.get(nodeId) || null;
+          }
+          if (sql.includes('FROM circuit_breakers')) {
+            const name = this._binds[0];
+            return stmt._db ? stmt._db._circuitBreakers.get(name) || null : null;
+          }
+          if (sql.includes('FROM token_buckets')) {
+            const key = this._binds[0];
+            return stmt._db ? stmt._db._tokenBuckets.get(key) || null : null;
           }
           return null;
         },
@@ -151,11 +161,103 @@ function makeMockDb(opts = {}) {
             }
             return { meta: { changes: 1 } };
           }
+          if (sql.includes('INSERT INTO circuit_breakers') || sql.includes('INSERT OR REPLACE INTO circuit_breakers')) {
+            const name = this._binds[0];
+            const state = this._binds[1];
+            const failureCount = this._binds[2];
+            let successCount = 0;
+            let lastFailureTime = null;
+            let cooldownUntil = null;
+            let lastRetryAfter = 0;
+            let updatedAt = new Date().toISOString();
+
+            if (this._binds.length === 8) {
+              lastFailureTime = this._binds[4];
+              cooldownUntil = this._binds[5];
+              lastRetryAfter = this._binds[6];
+              updatedAt = this._binds[7];
+            } else if (this._binds.length === 7) {
+              successCount = this._binds[3];
+              cooldownUntil = this._binds[4];
+              lastRetryAfter = this._binds[5];
+              updatedAt = this._binds[6];
+            } else if (this._binds.length === 4) {
+              updatedAt = this._binds[3];
+            }
+
+            if (stmt._db) {
+              stmt._db._circuitBreakers.set(name, {
+                name,
+                state,
+                failure_count: failureCount,
+                success_count: successCount,
+                last_failure_time: lastFailureTime,
+                cooldown_until: cooldownUntil,
+                last_retry_after: lastRetryAfter,
+                updated_at: updatedAt
+              });
+            }
+            return { meta: { changes: 1 } };
+          }
+          if (sql.includes('UPDATE circuit_breakers')) {
+            if (stmt._db) {
+              if (sql.includes("SET state = 'HALF_OPEN'") || sql.includes("SET state = ?")) {
+                if (sql.includes("failure_count = ?")) {
+                  const state = this._binds[0];
+                  const failureCount = this._binds[1];
+                  const updatedAt = this._binds[2];
+                  const name = this._binds[3];
+                  const row = stmt._db._circuitBreakers.get(name);
+                  if (row) {
+                    row.state = state;
+                    row.failure_count = failureCount;
+                    row.success_count = (row.success_count || 0) + 1;
+                    row.cooldown_until = null;
+                    row.last_retry_after = 0;
+                    row.updated_at = updatedAt;
+                  }
+                } else {
+                  const updatedAt = this._binds[0];
+                  const name = this._binds[1];
+                  const row = stmt._db._circuitBreakers.get(name);
+                  if (row) {
+                    row.state = 'HALF_OPEN';
+                    row.updated_at = updatedAt;
+                  }
+                }
+              }
+            }
+            return { meta: { changes: 1 } };
+          }
+          if (sql.includes('INSERT OR REPLACE INTO token_buckets')) {
+            const key = this._binds[0];
+            const tokens = this._binds[1];
+            const lastRefill = this._binds[2];
+            const capacity = this._binds[3];
+            const refillRate = this._binds[4];
+            if (stmt._db) {
+              stmt._db._tokenBuckets.set(key, { key, tokens, last_refill: lastRefill, capacity, refill_rate: refillRate });
+            }
+            return { meta: { changes: 1 } };
+          }
+          if (sql.includes('UPDATE token_buckets')) {
+            const tokens = this._binds[0];
+            const lastRefill = this._binds[1];
+            const capacity = this._binds[2];
+            const refillRate = this._binds[3];
+            const key = this._binds[4];
+            if (stmt._db) {
+              stmt._db._tokenBuckets.set(key, { key, tokens, last_refill: lastRefill, capacity, refill_rate: refillRate });
+            }
+            return { meta: { changes: 1 } };
+          }
           return { meta: { changes: 1 } };
         }
       };
+      stmt._db = this;
       return stmt;
     }
+
   };
 }
 
@@ -1132,7 +1234,7 @@ async function runTests() {
     const blockedData = await blockedResp.json();
     assert(blockedResp.status === 429 && blockedData.reason_key === 'ip_rate_limited', 'T21.2: 11th request from same IP blocked with 429 ip_rate_limited');
 
-    // T21.3: Third-tier rate limit: Global production ACME 40/week ceiling
+    // T21.3: Adaptive Circuit Breaker & Token Bucket Traffic Smoothing (Abolition of arbitrary 40/week ceiling)
     const prodAcctKey = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
     const prodAcctJwk = prodAcctKey.privateKey.export({ format: 'jwk' });
     const prodEnv = {
@@ -1143,27 +1245,194 @@ async function runTests() {
       ACME_DNS_API_TOKEN: 'secret-dns-token',
       ACME_ACCOUNT_KEY: JSON.stringify(prodAcctJwk)
     };
-    // Pre-seed rate_limits with 40 hits for 'cert_provision:global_acme'
-    const globalKey = 'cert_provision:global_acme';
-    db._rateLimits.set(globalKey, { count: 40, window_start: new Date().toISOString() });
+
+    // Pre-seed rate_limits with 40 hits for obsolete 'cert_provision:global_acme' to prove it is ignored
+    const obsoleteGlobalKey = 'cert_provision:global_acme';
+    db._rateLimits.set(obsoleteGlobalKey, { count: 40, window_start: new Date().toISOString() });
+
+    // T21.3a: Verify that having 40 prior hits does NOT block request with global_rate_limited
+    // Pre-seed token bucket with 5 tokens and circuit breaker in CLOSED state
+    db._tokenBuckets.set('cert_provision:acme_smoothing', {
+      key: 'cert_provision:acme_smoothing',
+      tokens: 5,
+      last_refill: new Date().toISOString(),
+      capacity: 5,
+      refill_rate: 10 / 60
+    });
+    db._circuitBreakers.set('gts_ca', {
+      name: 'gts_ca',
+      state: 'CLOSED',
+      failure_count: 0,
+      success_count: 40,
+      last_failure_time: null,
+      cooldown_until: null,
+      last_retry_after: 0,
+      updated_at: new Date().toISOString()
+    });
 
     const globalNode = 'bb0000000001';
     const { csrPEM: globalCsr, privateKey: globalPriv } = generateTestCSR(globalNode);
     const globalSig = signNodePayload(globalPriv, globalNode, nowTs);
-    const globalReq = new Request('http://api.test/api/v1/cert/provision', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-EQT-Timestamp': String(nowTs),
-        'X-EQT-Device-Signature': globalSig,
-        'X-EQT-Device-ID': 'test_ip_rate_device',
-        'CF-Connecting-IP': '198.51.100.99'
-      },
-      body: JSON.stringify({ node_id: globalNode, csr_pem: globalCsr })
-    });
-    const globalResp = await handleCertRoutes(globalReq, prodEnv, ctx, new URL(globalReq.url), {});
-    const globalData = await globalResp.json();
-    assert(globalResp.status === 429 && globalData.reason_key === 'global_rate_limited', 'T21.3: Production ACME request blocked with 429 global_rate_limited after 40 issuances/week');
+
+    function createGlobalReq() {
+      return new Request('http://api.test/api/v1/cert/provision', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-EQT-Timestamp': String(nowTs),
+          'X-EQT-Device-Signature': globalSig,
+          'X-EQT-Device-ID': 'test_ip_rate_device',
+          'CF-Connecting-IP': '198.51.100.99'
+        },
+        body: JSON.stringify({ node_id: globalNode, csr_pem: globalCsr })
+      });
+    }
+
+    // Mock fetch for ACME calls
+    const originalFetch = globalThis.fetch;
+    let acmeCallCount = 0;
+    try {
+      globalThis.fetch = async (input, init) => {
+        acmeCallCount++;
+        const url = typeof input === 'string' ? input : (input instanceof Request ? input.url : String(input));
+        if (url === 'https://acme.test/directory') {
+          return new Response(JSON.stringify({
+            newNonce: 'https://acme.test/nonce',
+            newAccount: 'https://acme.test/new-acct',
+            newOrder: 'https://acme.test/new-order'
+          }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+        if (url === 'https://acme.test/nonce') {
+          return new Response(null, { status: 200, headers: { 'Replay-Nonce': 'nonce-test-1' } });
+        }
+        if (url === 'https://acme.test/new-acct') {
+          return new Response(JSON.stringify({ status: 'valid' }), {
+            status: 200,
+            headers: { 'Location': 'https://acme.test/acct/1', 'Replay-Nonce': 'nonce-test-2', 'Content-Type': 'application/json' }
+          });
+        }
+        if (url === 'https://acme.test/new-order') {
+          // Simulate upstream CA 429 Too Many Requests with Retry-After: 90
+          return new Response(JSON.stringify({
+            type: 'urn:ietf:params:acme:error:rateLimited',
+            detail: 'Rate limit exceeded on CA operations'
+          }), {
+            status: 429,
+            headers: { 'Content-Type': 'application/json', 'Retry-After': '90' }
+          });
+        }
+        return new Response('not found', { status: 404 });
+      };
+
+      const req1 = createGlobalReq();
+      const resp1 = await handleCertRoutes(req1, prodEnv, ctx, new URL(req1.url), {});
+      const data1 = await resp1.json();
+
+      // T21.3a: Verify request is NOT blocked by arbitrary 40-count ceiling (reason_key !== 'global_rate_limited')
+      assert(data1.reason_key !== 'global_rate_limited', 'T21.3a: Production ACME request is not blocked by arbitrary 40/week ceiling');
+
+      // T21.3c: Verify upstream 429 trips circuit to OPEN and client receives 429 ca_rate_limited with Retry-After 90
+      assert(resp1.status === 429 && data1.reason_key === 'ca_rate_limited' && resp1.headers.get('Retry-After') === '90', 'T21.3c: Upstream CA 429 returns ca_rate_limited with exact Retry-After 90s');
+
+      const cbState = db._circuitBreakers.get('gts_ca');
+      assert(cbState && cbState.state === 'OPEN' && cbState.last_retry_after === 90, 'T21.3c2: Circuit breaker tripped to OPEN in database');
+
+      // T21.3d: Fast rejection while circuit is OPEN
+      // Next request during cooldown is rejected immediately with 429 ca_circuit_open WITHOUT hitting upstream
+      const callCountBefore = acmeCallCount;
+      const req2 = createGlobalReq();
+      const resp2 = await handleCertRoutes(req2, prodEnv, ctx, new URL(req2.url), {});
+      const data2 = await resp2.json();
+      assert(resp2.status === 429 && data2.reason_key === 'ca_circuit_open' && acmeCallCount === callCountBefore, 'T21.3d: Fast rejection with ca_circuit_open while circuit is OPEN (zero upstream calls)');
+
+      // T21.3b: Token Bucket traffic smoothing test
+      // Reset circuit to CLOSED, empty token bucket to 0
+      cbState.state = 'CLOSED';
+      db._tokenBuckets.set('cert_provision:acme_smoothing', {
+        key: 'cert_provision:acme_smoothing',
+        tokens: 0.1,
+        last_refill: new Date().toISOString(),
+        capacity: 5,
+        refill_rate: 10 / 60
+      });
+      const reqTb = createGlobalReq();
+      const respTb = await handleCertRoutes(reqTb, prodEnv, ctx, new URL(reqTb.url), {});
+      const dataTb = await respTb.json();
+      assert(respTb.status === 429 && dataTb.reason_key === 'ca_traffic_smoothing', 'T21.3b: Outbound request smoothed with 429 ca_traffic_smoothing when token bucket empty');
+
+      // T21.3e: Half-Open probe and auto-recovery after cooldown
+      // Refill token bucket, set cooldown_until to the past
+      db._tokenBuckets.set('cert_provision:acme_smoothing', {
+        key: 'cert_provision:acme_smoothing',
+        tokens: 5,
+        last_refill: new Date().toISOString(),
+        capacity: 5,
+        refill_rate: 10 / 60
+      });
+      cbState.state = 'OPEN';
+      cbState.cooldown_until = new Date(Date.now() - 1000).toISOString();
+      db._rateLimits.delete('cert_provision:bb0000000001');
+
+      // Mock successful order for probe
+      const dummyCert = await issueCertificateFromCSR(await parseCSR(globalCsr), 90);
+      globalThis.fetch = async (input, init) => {
+        const url = typeof input === 'string' ? input : (input instanceof Request ? input.url : String(input));
+        if (url === 'https://acme.test/directory') {
+          return new Response(JSON.stringify({
+            newNonce: 'https://acme.test/nonce',
+            newAccount: 'https://acme.test/new-acct',
+            newOrder: 'https://acme.test/new-order'
+          }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+        if (url === 'https://acme.test/nonce') {
+          return new Response(null, { status: 200, headers: { 'Replay-Nonce': 'nonce-probe' } });
+        }
+        if (url === 'https://acme.test/new-acct') {
+          return new Response(JSON.stringify({ status: 'valid' }), {
+            status: 200,
+            headers: { 'Location': 'https://acme.test/acct/1', 'Replay-Nonce': 'nonce-probe-2', 'Content-Type': 'application/json' }
+          });
+        }
+        if (url === 'https://acme.test/new-order') {
+          return new Response(JSON.stringify({
+            status: 'valid',
+            authorizations: [],
+            finalize: 'https://acme.test/finalize/probe',
+            certificate: 'https://acme.test/cert/probe'
+          }), {
+            status: 201,
+            headers: { 'Location': 'https://acme.test/order/probe', 'Replay-Nonce': 'nonce-probe-3', 'Content-Type': 'application/json' }
+          });
+        }
+        if (url === 'https://acme.test/finalize/probe') {
+          return new Response(JSON.stringify({
+            status: 'valid',
+            certificate: 'https://acme.test/cert/probe'
+          }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+        if (url === 'https://acme.test/order/probe') {
+          return new Response(JSON.stringify({
+            status: 'valid',
+            certificate: 'https://acme.test/cert/probe'
+          }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+        if (url === 'https://acme.test/cert/probe') {
+          return new Response(dummyCert.certPEM, { status: 200, headers: { 'Content-Type': 'application/pem-certificate-chain' } });
+        }
+        return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      };
+
+
+      const reqProbe = createGlobalReq();
+      const respProbe = await handleCertRoutes(reqProbe, prodEnv, ctx, new URL(reqProbe.url), {});
+      const dataProbe = await respProbe.json();
+      assert(respProbe.status === 200 && dataProbe.cert_pem != null, 'T21.3e: Probe in HALF_OPEN succeeds with 200 OK');
+      assert(cbState.state === 'CLOSED' && cbState.failure_count === 0, 'T21.3e2: Circuit breaker successfully self-healed back to CLOSED');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+
   }
 
   console.log(`\nResults: ${passed} passed, ${failed} failed`);

@@ -280,3 +280,24 @@ CREATE TABLE IF NOT EXISTS node_public_keys (
 );
 
 CREATE INDEX IF NOT EXISTS idx_node_public_keys_device ON node_public_keys(device_id);
+
+-- Upstream CA Adaptive Circuit Breaker table
+CREATE TABLE IF NOT EXISTS circuit_breakers (
+    name TEXT PRIMARY KEY,
+    state TEXT NOT NULL DEFAULT 'CLOSED', -- 'CLOSED' | 'OPEN' | 'HALF_OPEN'
+    failure_count INTEGER NOT NULL DEFAULT 0,
+    success_count INTEGER NOT NULL DEFAULT 0,
+    last_failure_time TEXT DEFAULT NULL,
+    cooldown_until TEXT DEFAULT NULL,
+    last_retry_after INTEGER DEFAULT 0,
+    updated_at TEXT NOT NULL
+);
+
+-- Token Bucket table for traffic smoothing and per-minute rate protection
+CREATE TABLE IF NOT EXISTS token_buckets (
+    key TEXT PRIMARY KEY,
+    tokens REAL NOT NULL,
+    last_refill TEXT NOT NULL,
+    capacity REAL NOT NULL,
+    refill_rate REAL NOT NULL
+);
