@@ -7,7 +7,7 @@
   import { ChatWebSocketClient } from './services/websocket';
   import { chatActions, currentDevice, peers, connState, messages, transfers, chatSessionStatus, reconnectExhausted, displayFileName } from './state/chatStore';
   import { getThemeColors } from './services/types';
-  import type { Message } from './services/types';
+  import type { Message, BatchDownloadInfo, TransferEvent } from './services/types';
   import { DEFAULT_FREE_MAX_ATTACHMENT_BYTES } from './services/quotaConfig';
   import { resolveDownloadTransferId, applyDownloadCancelled, applyBatchDownloadCancelled } from './services/attachmentPolicy';
 
@@ -50,6 +50,88 @@
   let handleGlobalFocusOut: ((e: FocusEvent) => void) | null = null;
   let handleDocumentPointerDown: ((e: PointerEvent | MouseEvent) => void) | null = null;
   const activeUploads = new Map<string, XMLHttpRequest>();
+
+  interface ActiveBatchRecord {
+    systemMsgId: string;
+    messageIds: Set<string>;
+    completedIds: Set<string>;
+    totalFiles: number;
+    cancelled: boolean;
+    completed: boolean;
+  }
+
+  let activeBatches: ActiveBatchRecord[] = [];
+
+  function registerActiveBatch(systemMsgId: string, messageIds: string[]) {
+    activeBatches.push({
+      systemMsgId,
+      messageIds: new Set(messageIds),
+      completedIds: new Set(),
+      totalFiles: messageIds.length,
+      cancelled: false,
+      completed: false
+    });
+  }
+
+  function markBatchCancelled(messageIds: string[], notifyUser = false) {
+    const peer = client ? client['clientPeer'] : 'desktop';
+    for (const batch of activeBatches) {
+      if (!batch.cancelled && !batch.completed && messageIds.some(id => batch.messageIds.has(id))) {
+        batch.cancelled = true;
+        chatActions.updateBatchStatus(batch.systemMsgId, 'cancelled');
+        if (notifyUser) {
+          chatActions.addSystemMessage(getTranslation('batchDownloadCancelled', currentLang));
+        }
+        Array.from(batch.messageIds).forEach(id => {
+          const tid = resolveDownloadTransferId(id, peer);
+          chatActions.updateTransfer({
+            id: tid,
+            state: 'cancelled',
+            progress: -1,
+            speed: 0,
+            error: ''
+          });
+          if (client) {
+            client.cancelTransfer(tid);
+          }
+        });
+      }
+    }
+  }
+
+  function markBatchItemCompleted(messageId: string, notifyUser = false) {
+    for (const batch of activeBatches) {
+      if (!batch.cancelled && !batch.completed && batch.messageIds.has(messageId)) {
+        batch.completedIds.add(messageId);
+        if (batch.completedIds.size >= batch.totalFiles) {
+          batch.completed = true;
+          chatActions.updateBatchStatus(batch.systemMsgId, 'completed');
+          if (notifyUser) {
+            chatActions.addSystemMessage(getTranslation('batchDownloadCompleted', currentLang));
+          }
+        }
+      }
+    }
+  }
+
+  function handleWebSocketTransferEvent(type: string, transfer: TransferEvent) {
+    if (!transfer) return;
+    const tid = transfer.id || '';
+    let messageId = transfer.messageId || '';
+    if (!messageId && tid.startsWith('dl-')) {
+      const parts = tid.split('-');
+      if (parts.length >= 2) {
+        messageId = parts[1];
+      }
+    }
+    if (!messageId) return;
+
+    if (type === 'transfer_cancelled') {
+      markBatchCancelled([messageId], true);
+    } else if (type === 'transfer_completed') {
+      markBatchItemCompleted(messageId, true);
+    }
+  }
 
   // Generate a dynamic random joinToken for the lifetime of this session page
   function generateJoinToken(): string {
@@ -332,6 +414,7 @@
         speed: 0,
         error: ''
       });
+      markBatchItemCompleted(messageId, true);
     } else if (event.data.type === 'download-failed') {
       const { messageId, error } = event.data;
       const peer = client ? client['clientPeer'] : 'desktop';
@@ -367,6 +450,7 @@
       // Desktop user cancelled the batch save-folder dialog: clear seeded running transfers.
       const ids: string[] = event.data.messageIds || [];
       const peer = client ? client['clientPeer'] : 'desktop';
+      markBatchCancelled(ids, false);
       applyBatchDownloadCancelled(ids, peer, {
         updateTransfer: (u) => chatActions.updateTransfer(u),
         cancelTransfer: (tid) => { if (client) client.cancelTransfer(tid); },
@@ -375,6 +459,7 @@
     } else if (event.data.type === 'download-batch-failed') {
       const ids: string[] = event.data.messageIds || [];
       const peer = client ? client['clientPeer'] : 'desktop';
+      markBatchCancelled(ids, false);
       ids.forEach(messageId => {
         const transferId = resolveDownloadTransferId(messageId, peer);
         chatActions.updateTransfer({
@@ -1014,6 +1099,7 @@
     client.onRequestFileData = (messageId) => {
       // 采用预先落盘暂存模式，下载端直接拉取服务器临时文件，不需要实时向发送端请求流数据。
     };
+    client.onTransferEvent = handleWebSocketTransferEvent;
     client.connect();
     document.addEventListener('contextmenu', handleGlobalContextMenu);
   });
@@ -1384,6 +1470,31 @@
     if (!client) return;
 
     const peer = client['clientPeer'] || 'desktop';
+    const totalBytes = files.reduce((acc: number, f: any) => acc + (f.size || 0), 0);
+    const batchZipFilename = generateBatchZipName(files, currentLang);
+    const batchInfoItems = files.map(msg => ({
+      messageId: msg.id,
+      fileName: msg.fileName || 'attachment',
+      size: msg.size || 0
+    }));
+
+    const batchInfo: BatchDownloadInfo = {
+      zipFilename: batchZipFilename,
+      items: batchInfoItems,
+      totalBytes,
+      status: 'packaging'
+    };
+
+    const batchMsgId = 'batch-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
+    const countStr = String(files.length);
+    const sizeStr = formatBytes(totalBytes);
+    const tip = getTranslation('batchFilesSelected', currentLang)
+      .replace('{count}', countStr)
+      .replace('{size}', sizeStr);
+    const fallbackText = `${getTranslation('batchPackaging', currentLang)} (${tip})`;
+
+    chatActions.addBatchSystemMessage(batchMsgId, batchInfo, fallbackText);
+    registerActiveBatch(batchMsgId, files.map(f => f.id));
 
     if (isEmbedded) {
       const batchItems = files.map(msg => {
@@ -1411,9 +1522,6 @@
     }
 
     // Mobile & Web browser: 直接流式打包下载，系统下载弹窗呈现打包文件名与包含文件的关系
-    const totalBytes = files.reduce((acc: number, f: any) => acc + (f.size || 0), 0);
-    const batchZipFilename = generateBatchZipName(files, currentLang);
-
     const batchItems = files.map(msg => {
       const messageId = msg.id;
       const filename = msg.fileName || 'attachment';
@@ -1432,13 +1540,6 @@
       client.sendLog(`[ACTION] Initiated batch download for file: ${filename} (Size: ${msg.size || 0} bytes, Message ID: ${messageId})`);
       return { messageId, name: filename };
     });
-
-    const countStr = String(files.length);
-    const sizeStr = formatBytes(totalBytes);
-    const tip = getTranslation('batchFilesSelected', currentLang)
-      .replace('{count}', countStr)
-      .replace('{size}', sizeStr);
-    chatActions.addSystemMessage(`${getTranslation('batchPackaging', currentLang)} (${tip})`);
 
     const ids = batchItems.map(item => encodeURIComponent(item.messageId)).join(',');
     const zipURL = `/chat-v2/${token}/files/zip?ids=${ids}&clientId=${peer}&filename=${encodeURIComponent(batchZipFilename)}`;

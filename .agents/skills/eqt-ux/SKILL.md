@@ -72,10 +72,16 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
          - 经 Chrome DevTools MCP（9222 端口）针对移动端触摸视口（375x667）单步仿真测试证实：原应用内模态弹窗在手机上被原生下载弹窗层叠，触摸系统弹窗边缘时触发 WebKit Touch 事件穿透至下方全屏遮罩，直接触发了 `handleCancelBatchModal`，向服务端发送 `download-batch-cancelled`，从而将服务端已就绪任务全部标记为 `TransferCancelled`（引发用户可见的“批量下载变成取消动作”缺陷）。
          - 原规范中的“应用内二次确认模态与系统弹窗协同”正式声明作废（原因为移动端 WebKit 事件穿透造成系统弹窗与遮罩层自相踩踏）。
          - 新规范确立为：移动端多选后点击批量下载，直接由系统顶部 Toast 提示打包信息，由单个 `<a download>` 调起原生系统下载，不再展示应用内模态遮罩。经 9222 MCP 真实全链路回放，验证无重复导航、无事件穿透假取消，顺利完成流式下载，E7⁵ 证据闭环。
-  - **下载取消判定与气泡默认状态恢复 (Cancellation Self-Healing & Default Reset)**：
-    - **客户端取消精确识别**：当对端移动设备在系统弹窗中点击“取消”或关闭网页时，底层的 TCP Socket 将被强行关闭（Windows WSAECONNRESET / Linux EPIPE / context.Canceled）。服务端必须通过 `isClientCanceled` 判定此类对端主动取消，并执行 `CancelJob` 级联取消该批次全部文件，严禁作为 IO 故障触发 `FailJob` 导致气泡报红或卡死在 0%。
-    - **单向消费气泡干净恢复**：接收方取消下载属于单向消费行为，取消后气泡严禁打上“· 已取消”或“· 传输失败 ⚠️”标记，直接恢复为默认状态（仅显示文件大小）；只有发送方在上传时取消才展示“· 已取消”。
-  - **轻量应用内状态通知 (In-App Flow Feedback)**：触发下载的同时，在聊天流中追加一条系统消息（如 `正在打包文件并开始下载... (已选择 N 个文件 (X MB))`），提供直观的状态反馈，避免全屏或半屏遮罩阻断用户后续交互。
+  - **结构化批量下载清单卡片与就地生命周期流转 (Structured Batch Card & Lifecycle Transitions)**：
+    - **结构化卡片承载完整清单**：系统消息不再局限于纯文本摘要，通过包含 `batchInfo` 的 `.system-batch-card` 完整渲染压缩包名称（`zipFilename`）、总大小、文件总数，以及可自适应纵向滚动的嵌入式文件清单（含每个文件的文件名与文件大小），彻底解决移动端在去除全屏遮罩后失去文件清单承载面的痛点。
+    - **就地状态流转 (In-place Status Transition)**：卡片右上角包含语义化状态 Badge（`.batch-status-badge`）：
+      - 打包中：蓝色呼吸灯闪烁 `正在打包并下载...`；
+      - 已取消：浅红底色 `✕ 批量下载已取消`；
+      - 已完成：浅绿底色 `✓ 批量下载已完成`。
+    - **移动端取消感知与双重反馈机制 (Dual Feedback Pattern)**：
+      - 当用户在移动端原生下载弹窗中点击“取消”或关闭网页时，服务端底层检测到连接中断，广播 `transfer_cancelled` WebSocket 事件；
+      - 前端监听到取消事件后，**一是就地更新历史卡片状态**（将 Badge 置为“已取消”，保留清单内容供用户回溯查阅，消除僵死悬挂感）；**二是在聊天流尾部追加轻量系统提示**（`批量下载已取消`，提供底部即时触达）；**三是将所选文件气泡的下载状态恢复干净默认态**。
+      - 批量下载成功后，同理将历史卡片置为“已完成”并追加“批量下载已完成”提示。
   - **服务端零 CPU 零延迟流式组包**：服务端 `/files/zip` 采用 `zip.Store` 纯组包流式传输，边读边推，毫秒级启动，免去 CPU Deflate 运算与移动设备大文件 OOM 风险。
 - **会话结束控件锁定**：
   - 手动退出会话（`chatSessionStatus !== 'active'`）时，所有输入控件（附件 label、textarea、提交按钮、文件输入框）显式设为 `disabled`（或 `pointer-events: none;`），占位符替换为“会话已结束”。

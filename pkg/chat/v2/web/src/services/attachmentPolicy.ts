@@ -1,4 +1,4 @@
-import type { Message, TransferEvent } from './types';
+import type { Message, TransferEvent, BatchDownloadInfo } from './types';
 
 /**
  * attachmentPolicy.ts
@@ -113,4 +113,36 @@ export function isFileSendCancelled(
   }
 
   return false;
+}
+
+/**
+ * 组装批量下载元数据结构 (Batch Download Manifest Policy).
+ */
+export function createBatchDownloadInfo(
+  files: Array<{ id: string; fileName?: string; size?: number }>,
+  batchZipFilename: string
+): BatchDownloadInfo {
+  return {
+    zipFilename: batchZipFilename,
+    items: (files || []).map(f => ({
+      messageId: f.id,
+      fileName: f.fileName || 'attachment',
+      size: f.size || 0
+    })),
+    totalBytes: (files || []).reduce((acc, f) => acc + (f.size || 0), 0),
+    status: 'packaging'
+  };
+}
+
+/**
+ * 就地更新批量下载状态 (packaging -> completed | cancelled).
+ */
+export function updateBatchInfoStatus(
+  info: BatchDownloadInfo,
+  status: 'packaging' | 'completed' | 'cancelled'
+): BatchDownloadInfo {
+  return {
+    ...info,
+    status
+  };
 }

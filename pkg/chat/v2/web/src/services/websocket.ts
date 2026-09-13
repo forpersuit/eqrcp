@@ -1,5 +1,5 @@
 import { get } from 'svelte/store';
-import type { CommandEnvelope, EventEnvelope } from './types';
+import type { CommandEnvelope, EventEnvelope, TransferEvent } from './types';
 import { chatActions, messages, historyHasMore, historyOldestSeq, historyLoading } from '../state/chatStore';
 import { resolveConnectAfterSeq } from './reconnectSeq';
 import { sendTelemetry } from './telemetry';
@@ -38,6 +38,7 @@ export class ChatWebSocketClient {
   private joinParam: string = '';
   private themeParam: string = '';
   public onRequestFileData: ((messageId: string) => void) | null = null;
+  public onTransferEvent: ((type: string, transfer: TransferEvent) => void) | null = null;
   private localJoin: string = '';
 
   constructor(token: string, localJoin?: string) {
@@ -429,6 +430,9 @@ export class ChatWebSocketClient {
         if (event.transfer) {
           // Update local store with all transfer events (so we can display active speeds in the roster)
           chatActions.updateTransfer(event.transfer);
+          if (this.onTransferEvent) {
+            this.onTransferEvent(event.type, event.transfer);
+          }
           
           // Only mark local message status if this transfer belongs to us (the downloader client)
           // or if it's an upload job and we are either the sender or the GUI host

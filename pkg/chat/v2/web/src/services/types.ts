@@ -71,6 +71,19 @@ export type MessageType =
   | 'audio'
   | 'system';
 
+export interface BatchDownloadItem {
+  messageId: string;
+  fileName: string;
+  size: number;
+}
+
+export interface BatchDownloadInfo {
+  zipFilename: string;
+  items: BatchDownloadItem[];
+  totalBytes: number;
+  status: 'packaging' | 'completed' | 'cancelled';
+}
+
 export interface Message {
   id: string;
   recalled?: boolean;
@@ -91,6 +104,7 @@ export interface Message {
   filePath?: string;
   downloaded?: boolean;
   uploading?: boolean;
+  batchInfo?: BatchDownloadInfo;
   createdAt: string;
 }
 

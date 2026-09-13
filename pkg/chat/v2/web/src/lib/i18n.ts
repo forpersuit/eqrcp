@@ -688,6 +688,33 @@ export const translations: Record<string, Record<Lang, string>> = {
     de: 'Dateien zusammenstellen und Download starten...',
     fr: 'Empaquetage des fichiers et début du téléchargement...'
   },
+  batchDownloadCancelled: {
+    zh: '批量下载已取消',
+    en: 'Batch download cancelled',
+    ja: '一括ダウンロードをキャンセルしました',
+    ko: '일괄 다운로드가 취소되었습니다',
+    es: 'Descarga masiva cancelada',
+    de: 'Stapel-Download abgebrochen',
+    fr: 'Téléchargement groupé annulé'
+  },
+  batchDownloadCompleted: {
+    zh: '批量下载已完成',
+    en: 'Batch download completed',
+    ja: '一括ダウンロードが完了しました',
+    ko: '일괄 다운로드가 완료되었습니다',
+    es: 'Descarga masiva completada',
+    de: 'Stapel-Download abgeschlossen',
+    fr: 'Téléchargement groupé terminé'
+  },
+  batchIncludedFiles: {
+    zh: '包含文件清单',
+    en: 'Included files',
+    ja: '含まれるファイル一覧',
+    ko: '포함된 파일 목록',
+    es: 'Archivos incluidos',
+    de: 'Enthaltene Dateien',
+    fr: 'Fichiers inclus'
+  },
   batchFilesSelected: {
     zh: '已选择 {count} 个文件 ({size})',
     en: '{count} files selected ({size})',

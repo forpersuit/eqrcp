@@ -997,7 +997,45 @@
           return text;
         })()}
         <div class="system-message">
-          {#if colors}
+          {#if msg.batchInfo}
+            <div class="system-batch-card">
+              <div class="batch-card-header">
+                <div class="batch-card-title">
+                  <svg class="batch-card-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                    <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                  </svg>
+                  <span class="batch-zip-name" title={msg.batchInfo.zipFilename}>{msg.batchInfo.zipFilename}</span>
+                </div>
+                {#if msg.batchInfo.status === 'packaging'}
+                  <span class="batch-status-badge status-packaging">
+                    <span class="pulse-dot"></span>
+                    {getTranslation('batchDownloading', currentLang)}
+                  </span>
+                {:else if msg.batchInfo.status === 'completed'}
+                  <span class="batch-status-badge status-completed">
+                    ✓ {getTranslation('batchDownloadCompleted', currentLang)}
+                  </span>
+                {:else if msg.batchInfo.status === 'cancelled'}
+                  <span class="batch-status-badge status-cancelled">
+                    ✕ {getTranslation('batchDownloadCancelled', currentLang)}
+                  </span>
+                {/if}
+              </div>
+              <div class="batch-card-meta">
+                <span>{getTranslation('batchFilesSelected', currentLang).replace('{count}', String(msg.batchInfo.items.length)).replace('{size}', formatBytes(msg.batchInfo.totalBytes))}</span>
+              </div>
+              <div class="batch-card-file-list" aria-label={getTranslation('batchIncludedFiles', currentLang)}>
+                {#each msg.batchInfo.items as item (item.messageId)}
+                  <div class="batch-file-row">
+                    <span class="batch-file-name" title={item.fileName}>📄 {item.fileName}</span>
+                    <span class="batch-file-size">{formatBytes(item.size)}</span>
+                  </div>
+                {/each}
+              </div>
+            </div>
+          {:else if colors}
             <span class="system-text" style="background: {colors.bg}; border-color: {colors.border}; color: {colors.text};">{displayText}</span>
           {:else}
             <span class="system-text">{displayText}</span>

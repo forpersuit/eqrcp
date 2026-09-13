@@ -1,5 +1,5 @@
 import { get, writable } from 'svelte/store';
-import type { Message, Device, TransferEvent } from '../services/types';
+import type { Message, Device, TransferEvent, BatchDownloadInfo } from '../services/types';
 import { shouldSurfaceNotice, displayFileName } from './systemNotice';
 
 export { shouldSurfaceNotice, displayFileName } from './systemNotice';
@@ -175,6 +175,42 @@ export const chatActions = {
    */
   addSystemMessage(msg: string) {
     this.pushSystemNotice(msg, false);
+  },
+
+  /**
+   * Post structured batch download notice card (showing zip filename, count, total size, and item list).
+   */
+  addBatchSystemMessage(id: string, batchInfo: BatchDownloadInfo, textFallback: string) {
+    if (!textFallback || !textFallback.trim()) return;
+    const stamped = `${new Date().toLocaleTimeString()}: ${textFallback}`;
+    systemMessages.update(list => [...list, stamped]);
+    const notice: Message = {
+      id,
+      sender: 'system',
+      type: 'system',
+      text: textFallback,
+      batchInfo,
+      createdAt: new Date().toISOString(),
+    };
+    messages.update(list => [...list, notice]);
+  },
+
+  /**
+   * Update the status of a batch download notice card in-place ('packaging' -> 'completed' | 'cancelled').
+   */
+  updateBatchStatus(messageId: string, status: 'packaging' | 'completed' | 'cancelled') {
+    messages.update(list => list.map(m => {
+      if (m.id === messageId && m.batchInfo) {
+        return {
+          ...m,
+          batchInfo: {
+            ...m.batchInfo,
+            status
+          }
+        };
+      }
+      return m;
+    }));
   },
 
   /**

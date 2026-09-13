@@ -8,7 +8,9 @@ import {
   isFileSendCancelled,
   resolveDownloadTransferId,
   applyDownloadCancelled,
-  applyBatchDownloadCancelled
+  applyBatchDownloadCancelled,
+  createBatchDownloadInfo,
+  updateBatchInfoStatus
 } from './attachmentPolicy.ts';
 import type { Message, TransferEvent } from './types.ts';
 import type { TransferUpdatePayload } from './attachmentPolicy.ts';
@@ -215,6 +217,34 @@ if (fs.existsSync(appSveltePath)) {
     !appCode.includes('updateTransfer: (u) => chatActions.updateTransfer(u as any)'),
     'App.svelte MUST NOT use "as any" to bypass TransferEvent contract validation'
   );
+}
+
+// 11. Batch Download Card & Lifecycle Verification:
+// Ensures batch download card info and in-place status transitions work deterministically.
+const rawFiles = [
+  { id: 'm1', fileName: 'report.pdf', size: 1024 },
+  { id: 'm2', fileName: 'sheet.xlsx', size: 2048 }
+];
+const createdInfo = createBatchDownloadInfo(rawFiles, 'report_and_1_more.zip');
+assert(createdInfo.zipFilename === 'report_and_1_more.zip', 'batch filename set correctly');
+assert(createdInfo.status === 'packaging', 'initial status is packaging');
+assert(createdInfo.totalBytes === 3072, 'total bytes calculated correctly');
+assert(createdInfo.items.length === 2, 'all files included in batch manifest');
+
+const cancelledInfo = updateBatchInfoStatus(createdInfo, 'cancelled');
+assert(cancelledInfo.status === 'cancelled', 'batch status updated to cancelled');
+assert(cancelledInfo.items.length === 2, 'items preserved upon cancellation');
+
+const completedInfo = updateBatchInfoStatus(createdInfo, 'completed');
+assert(completedInfo.status === 'completed', 'batch status updated to completed');
+
+// Assembly verification for batch card templates
+const msgListSveltePath = path.resolve(path.dirname(currentFilePath), '../components/MessageList.svelte');
+if (fs.existsSync(msgListSveltePath)) {
+  const listCode = fs.readFileSync(msgListSveltePath, 'utf8');
+  assert(listCode.includes('system-batch-card'), 'MessageList.svelte renders system-batch-card');
+  assert(listCode.includes('batch-card-file-list'), 'MessageList.svelte renders file list inside batch card');
+  assert(listCode.includes('msg.batchInfo.zipFilename'), 'MessageList.svelte renders zip filename');
 }
 
 console.log('attachmentPolicy.test.ts: all assertions passed (including bridge contracts and assembly verification)');
