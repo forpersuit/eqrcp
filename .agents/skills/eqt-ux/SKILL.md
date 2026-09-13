@@ -55,9 +55,17 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
   - 视口宽度 `<= 820px` 时，所有 input / textarea 字体大小不得小于 `16px`，防止 iOS Safari 等移动浏览器强行放大页面。
 - **手势居中弹窗 (Centered Mobile Modals)**：
   - 移动端视口下，二维码分享与退出确认弹窗在水平和垂直方向居中，边缘保留 16px 安全 Padding（宽度 `calc(100% - 32px)`，最大 `340px`），配合 `transform: scale(0.95) -> scale(1)` 微动画。
-- **移动端与 Web 端多选批量下载规范 (Streamlined Batch Download UX)**：
-  - **跨平台体验统一 (Platform Alignment)**：桌面内嵌环境（`isEmbedded`）通过原生宿主 Bridge（`postMessage: download-batch`）调起宿主原生目录选择并直接批量落盘；Web 浏览器与移动端环境（`!isEmbedded`）统一采用单手势流式组包（`zip.Store` 存储模式，无压缩开销）单文件传输。
-  - **零二次确认弹窗与单手势直出 (Modal-Free & Single Activation Gesture)**：多选栏点击【批量下载】即为唯一的、有效的手势（User Activation）。点击瞬间直接发起单文件 zip 下载请求，移动端浏览器仅弹出单次系统原生保存确认（如 iOS Safari “您要下载‘chat-attachments-xxxx.zip’吗？”），完全杜绝弹窗轰炸、Web Share 内存泄露与多层确认模态框。
+- **移动端与 Web 端多选批量下载规范 (Streamlined Batch Download & Manifest UX)**：
+  - **跨平台体验统一 (Platform Alignment)**：桌面内嵌环境（`isEmbedded`）通过原生宿主 Bridge（`postMessage: download-batch`）调起宿主原生目录选择并直接批量落盘；Web 浏览器与移动端环境（`!isEmbedded`）统一采用流式组包（`zip.Store` 存储模式，无压缩 CPU 开销）单文件传输。
+  - **语义化压缩包命名与 RFC 5987 编码 (Semantic Naming & Standard Disposition)**：
+    - 打包名称必须清晰反映所包含文件的关系：单文件为 `<name>.zip`，多文件格式为 `<首文件名>_等N个文件.zip`（英文环境为 `<first>_and_N_more.zip`），截断基名以防超出文件名限制。
+    - 服务端必须严格使用 RFC 5987 / RFC 6266 标准响应头：`Content-Disposition: attachment; filename="<ascii>"; filename*=UTF-8''<percent-encoded>`，确保移动端系统下载弹窗、Safari、Chrome 均可无乱码完整呈现中文文件名。
+  - **应用内打包关系弹窗与系统弹窗协同 (In-App Manifest Modal & System Download)**：
+    - 移动端多选后调出轻量居中模态框，直观呈现生成的压缩包名称、总大小、以及所包含文件的清单关系、单个大小与就绪状态。
+    - 用户点击“立即下载”时才标记并流式直出；用户点击“取消”或关闭弹窗时，直接调用批量取消清理状态，气泡全部平滑恢复为默认状态。
+  - **下载取消判定与气泡默认状态恢复 (Cancellation Self-Healing & Default Reset)**：
+    - **客户端取消精确识别**：当对端移动设备在系统弹窗中点击“取消”或关闭网页时，底层的 TCP Socket 将被强行关闭（Windows WSAECONNRESET / Linux EPIPE / context.Canceled）。服务端必须通过 `isClientCanceled` 判定此类对端主动取消，并执行 `CancelJob` 级联取消该批次全部文件，严禁作为 IO 故障触发 `FailJob` 导致气泡报红或卡死在 0%。
+    - **单向消费气泡干净恢复**：接收方取消下载属于单向消费行为，取消后气泡严禁打上“· 已取消”或“· 传输失败 ⚠️”标记，直接恢复为默认状态（仅显示文件大小）；只有发送方在上传时取消才展示“· 已取消”。
   - **轻量应用内状态通知 (In-App Flow Feedback)**：触发下载的同时，在聊天流中追加一条系统消息（如 `正在打包文件并开始下载... (已选择 N 个文件 (X MB))`），提供直观的状态反馈，避免全屏或半屏遮罩阻断用户后续交互。
   - **服务端零 CPU 零延迟流式组包**：服务端 `/files/zip` 采用 `zip.Store` 纯组包流式传输，边读边推，毫秒级启动，免去 CPU Deflate 运算与移动设备大文件 OOM 风险。
 - **会话结束控件锁定**：
