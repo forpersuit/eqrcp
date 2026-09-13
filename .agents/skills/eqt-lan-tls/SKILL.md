@@ -962,3 +962,19 @@ WantedBy=multi-user.target
 > **方法论沉淀（第 38 轮）**：① 定量声明的**计量单位**要回计数器实现去核，见【136】；② 模板拼接出的标识符要顺拼接规则推导再 `rg` 终值，见【137】；③ 「已决/已对齐」要与**部署配置**交叉核对并留改判注记，见【138】；④ 规范引用取**触发条件原文**并自问**执行者是否存在**，见【139】；⑤ 术语跨文档复用必须有唯一定义，否则判据不成立，见【140】；⑥ 「感知/监控」类最易形态锁，须三态标注并与演进层次互查，见【141】。
 > **正向确认（值得沿用）**：本轮 §十四.3 列出 10 项**实测为真**的声明并逐条附锚点——五状态机（`tls_status.js:52-64`）、L3 40/7d 与 `global_rate_limited`/`retry_after: 604800`（`cert.ts:803/814-815`，**行号锚完全正确**）、`logRateLimitHit`/`logSystemError` 落 D1、Admin `error-logs` 与 `rate_limit_hits_24h`（`admin.ts:34/1191/1207`）、动态 `Retry-After` + 落盘 `enableTLS:false`（**第 36 轮 R36-2/R36-3 两处缺陷均确认闭环**）、气泡文案**逐字相等**、`enableTLS:false` 出厂默认、8/8 i18n 词条 7 语言齐全、双文档取代声明**已生效**。**说明「按实现写文档」的路子是通的，问题集中在描述层而非实现层**。
 > **通用风险（本轮新发现，已写入文档 §14.5）**：文档大量用**裸文件名**锚点（`main.go:135` 等，语义指 `cmd/eqt-dns/main.go`），而仓库根目录**同时存在**一个 24 行的 `main.go`（遗留文件、非构建入口）⇒ 任何按短名解析的检查器会**静默解析到错误文件**并产生「越界」误报（与【131】同类）。**锚点一律写仓库相对全路径**。
+
+---
+
+## 第二十五轮落地推进（Phase 2：两阶段记账 2PC 与 SingleFlight 并发去重 · 基线 `v1.36.125`）
+
+> **对象**：闭环 `docs/plan/lan-tls-google-ca-limit-closure-and-failover-plan.md` 阶段二规划。
+> **成果**：
+> - **【142】⚠️ 两阶段防损记账模型 (2PC Hold & Release · `src/utils/rate-limit.ts`)**：
+>   - 废除无条件扣额，引入 `reserveD1RateLimit(env, key, maxAttempts, windowMs)` 与 `releaseD1RateLimit(env, key)`。
+>   - 凡因 CSR 解析失败 (400)、上游 429 跳闸、网络超时或 DNS 写入异常中断的置备流程，在 `finally` 中通过 `release()` 自动回退计数 (`MAX(0, count - 1)`)；
+>   - 只有成功发证且落盘审计后才将 `provisionCommitted` 设为 `true`（确认扣减），彻底杜绝“网络偶发抖动重试将合法用户 24h 配额耗光”的缺陷。
+> - **【143】⚠️ SingleFlight 并发请求合并与去重 (`src/utils/singleflight.ts` & `src/routes/cert.ts`)**：
+>   - 基于 Go 语言标准 `singleflight.Group` 思想实现边缘网关内存层去重；
+>   - 同一 NodeID 的并发置备请求严格合并至同一个在途 Promise，外部 CA `newOrder` 网络调用与 DNS 写入严格仅执行 1 次，所有等待者毫秒级共享独立 Response；
+>   - 具备冲突防御机制：并发请求若携带不同 CSR（恶意并发竞争同一 NodeID），立即以 409 `concurrent_csr_conflict` 安全阻断，杜绝 DNS TXT 记录污染与 CA 脏订单。
+

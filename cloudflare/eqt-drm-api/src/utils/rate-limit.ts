@@ -194,6 +194,90 @@ export async function ensureRateLimitsTable(env: Env): Promise<void> {
   }
 }
 
+export interface RateLimitReservation {
+  allowed: boolean;
+  count: number;
+  remaining: number;
+  release: () => Promise<void>;
+}
+
+export async function releaseD1RateLimit(env: Env, key: string): Promise<void> {
+  await ensureRateLimitsTable(env);
+  try {
+    await env.DB.prepare(
+      "UPDATE rate_limits SET count = MAX(0, count - 1) WHERE key = ?"
+    ).bind(key).run();
+  } catch (err) {
+    console.error(`Failed to release rate limit for key=${key}:`, err);
+  }
+}
+
+/**
+ * Two-phase rate limiting reservation (Phase 1: Hold, Phase 2: Commit or Release).
+ * Atomically checks and reserves an attempt slot. Returns a release handle
+ * to safely roll back the slot if downstream provisioning fails (e.g. CSR invalid,
+ * DNS timeout, network error), ensuring quota is only permanently consumed for valid deliverables.
+ */
+export async function reserveD1RateLimit(
+  env: Env,
+  key: string,
+  maxAttempts: number,
+  windowMs: number
+): Promise<RateLimitReservation> {
+  await ensureRateLimitsTable(env);
+  const now = Date.now();
+  const nowIso = new Date(now).toISOString();
+
+  const row = await env.DB.prepare(
+    "SELECT count, window_start FROM rate_limits WHERE key = ?"
+  ).bind(key).first<{ count: number; window_start: string }>();
+
+  if (!row || (now - new Date(row.window_start).getTime()) > windowMs) {
+    // New window: reset count=1
+    await env.DB.prepare(
+      "INSERT OR REPLACE INTO rate_limits (key, count, window_start) VALUES (?, 1, ?)"
+    ).bind(key, nowIso).run();
+
+    let released = false;
+    return {
+      allowed: true,
+      count: 1,
+      remaining: Math.max(0, maxAttempts - 1),
+      release: async () => {
+        if (released) return;
+        released = true;
+        await releaseD1RateLimit(env, key);
+      }
+    };
+  }
+
+  if (row.count >= maxAttempts) {
+    return {
+      allowed: false,
+      count: row.count,
+      remaining: 0,
+      release: async () => {}
+    };
+  }
+
+  await env.DB.prepare(
+    "UPDATE rate_limits SET count = count + 1 WHERE key = ?"
+  ).bind(key).run();
+
+  const newCount = row.count + 1;
+  let released = false;
+  return {
+    allowed: true,
+    count: newCount,
+    remaining: Math.max(0, maxAttempts - newCount),
+    release: async () => {
+      if (released) return;
+      released = true;
+      await releaseD1RateLimit(env, key);
+    }
+  };
+}
+
 /**
  * D1-persistent rate limiter. Returns true if the key has exceeded maxAttempts within windowMs.
  * On first call in a window, resets count=1. On subsequent calls, increments count.

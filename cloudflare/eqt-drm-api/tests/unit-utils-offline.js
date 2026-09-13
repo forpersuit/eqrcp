@@ -23,7 +23,7 @@ if (!fs.existsSync(errorLoggerPath) || !fs.existsSync(rateLimitPath)) {
 }
 
 const { logSystemError, ensureAuditLogTable, getSafeUserErrorMessage } = require(errorLoggerPath);
-const { logRateLimitHit, rateLimitStatus } = require(rateLimitPath);
+const { logRateLimitHit, rateLimitStatus, reserveD1RateLimit, releaseD1RateLimit, isD1RateLimited } = require(rateLimitPath);
 
 let passed = 0;
 let failed = 0;
@@ -54,26 +54,51 @@ class MockD1 {
     this.rows = [];
     this.lastSQL = '';
     this.lastBinds = [];
+    this.rateLimits = new Map();
   }
 
   prepare(sql) {
     this.lastSQL = sql;
     const self = this;
+    const handleRun = async (binds) => {
+      self.rows.push({ sql, binds });
+      if (sql.includes('INSERT OR REPLACE INTO rate_limits')) {
+        const [key, nowIso] = binds;
+        self.rateLimits.set(key, { count: 1, window_start: nowIso });
+      } else if (sql.includes('UPDATE rate_limits SET count = count + 1')) {
+        const [key] = binds;
+        const existing = self.rateLimits.get(key);
+        if (existing) {
+          existing.count += 1;
+        }
+      } else if (sql.includes('UPDATE rate_limits SET count = MAX(0, count - 1)')) {
+        const [key] = binds;
+        const existing = self.rateLimits.get(key);
+        if (existing) {
+          existing.count = Math.max(0, existing.count - 1);
+        }
+      }
+      return { meta: { changes: 1 } };
+    };
+
+    const handleFirst = async (binds) => {
+      if (sql.includes('FROM rate_limits WHERE key = ?')) {
+        const [key] = binds;
+        const val = self.rateLimits.get(key);
+        return val ? { ...val } : null;
+      }
+      return null;
+    };
+
     return {
-      run: async () => {
-        self.rows.push({ sql, binds: [] });
-        return { meta: { changes: 1 } };
-      },
-      first: async () => null,
+      run: () => handleRun([]),
+      first: () => handleFirst([]),
       all: async () => ({ results: [] }),
       bind: (...binds) => {
         self.lastBinds = binds;
         return {
-          run: async () => {
-            self.rows.push({ sql, binds });
-            return { meta: { changes: 1 } };
-          },
-          first: async () => null,
+          run: () => handleRun(binds),
+          first: () => handleFirst(binds),
           all: async () => ({ results: [] }),
         };
       },
@@ -288,6 +313,58 @@ console.log('\n=== logSystemError ===');
     assertEqual(getSafeUserErrorMessage('Invalid license code'), 'Invalid license code', 'Passes through safe message');
     assertEqual(getSafeUserErrorMessage('Device not found'), 'Device not found', 'Passes through device not found');
     assertEqual(getSafeUserErrorMessage('Rate limit exceeded'), 'Rate limit exceeded', 'Passes through rate limit message');
+  }
+
+  // ============================================================
+  // Test Suite: Two-Phase Rate Limiting (2PC Hold & Release)
+  // ============================================================
+  console.log('\n=== Two-Phase Rate Limiting (2PC) ===');
+
+  // Test 11: Reservation, exhaustion, rollback, and idempotency
+  {
+    const db = new MockD1();
+    const env = makeEnv(db);
+    const key = 'test_2pc:node123';
+    const windowMs = 60 * 1000;
+    const maxAttempts = 3;
+
+    // First attempt: hold slot 1
+    const r1 = await reserveD1RateLimit(env, key, maxAttempts, windowMs);
+    assert(r1.allowed === true, 'r1 allowed');
+    assertEqual(r1.count, 1, 'r1 count = 1');
+    assertEqual(r1.remaining, 2, 'r1 remaining = 2');
+
+    // Second attempt: hold slot 2
+    const r2 = await reserveD1RateLimit(env, key, maxAttempts, windowMs);
+    assert(r2.allowed === true, 'r2 allowed');
+    assertEqual(r2.count, 2, 'r2 count = 2');
+    assertEqual(r2.remaining, 1, 'r2 remaining = 1');
+
+    // Third attempt: hold slot 3 (max capacity)
+    const r3 = await reserveD1RateLimit(env, key, maxAttempts, windowMs);
+    assert(r3.allowed === true, 'r3 allowed');
+    assertEqual(r3.count, 3, 'r3 count = 3');
+    assertEqual(r3.remaining, 0, 'r3 remaining = 0');
+
+    // Fourth attempt: capacity exhausted
+    const r4 = await reserveD1RateLimit(env, key, maxAttempts, windowMs);
+    assert(r4.allowed === false, 'r4 rejected due to rate limit');
+    assertEqual(r4.remaining, 0, 'r4 remaining = 0');
+
+    // Rollback r3 (downstream failure simulation)
+    await r3.release();
+    const stateAfterRelease = db.rateLimits.get(key);
+    assertEqual(stateAfterRelease.count, 2, 'count decremented from 3 to 2 after release');
+
+    // Retry should now succeed and reclaim the slot
+    const r3Retry = await reserveD1RateLimit(env, key, maxAttempts, windowMs);
+    assert(r3Retry.allowed === true, 'r3Retry succeeds after rollback');
+    assertEqual(r3Retry.count, 3, 'count returns to 3');
+
+    // Double release idempotency check
+    await r3.release(); // Should be a no-op because r3 was already released
+    const stateAfterDoubleRelease = db.rateLimits.get(key);
+    assertEqual(stateAfterDoubleRelease.count, 3, 'count does not double-decrement on duplicate release call');
   }
 
   // ============================================================

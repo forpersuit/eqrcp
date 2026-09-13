@@ -25,7 +25,7 @@ if (!fs.existsSync(compiledPath)) {
   process.exit(1);
 }
 
-const { handleCertRoutes, parseCSR, parseCertificateExpiry, setDns01Challenge, generateCompliantSerialNumber, issueCertificateFromCSR, confirmDnsPropagation } = require(compiledPath);
+const { handleCertRoutes, parseCSR, parseCertificateExpiry, setDns01Challenge, generateCompliantSerialNumber, issueCertificateFromCSR, confirmDnsPropagation, certProvisionSingleFlight } = require(compiledPath);
 
 let passed = 0;
 let failed = 0;
@@ -70,7 +70,8 @@ function makeMockDb(opts = {}) {
           }
           if (sql.includes('FROM rate_limits')) {
             const key = this._binds[0];
-            return rateLimits.get(key) || null;
+            const val = rateLimits.get(key);
+            return val ? { ...val } : null;
           }
           if (sql.includes('FROM node_public_keys')) {
             const nodeId = this._binds[0];
@@ -158,6 +159,14 @@ function makeMockDb(opts = {}) {
             const existing = rateLimits.get(key);
             if (existing) {
               existing.count += 1;
+            }
+            return { meta: { changes: 1 } };
+          }
+          if (sql.includes('UPDATE rate_limits SET count = MAX(0, count - 1)')) {
+            const key = this._binds[0];
+            const existing = rateLimits.get(key);
+            if (existing) {
+              existing.count = Math.max(0, existing.count - 1);
             }
             return { meta: { changes: 1 } };
           }
@@ -1431,8 +1440,205 @@ async function runTests() {
     } finally {
       globalThis.fetch = originalFetch;
     }
+  }
 
+  // ── Test 22: SingleFlight Concurrency Request Coalescing ──────
+  {
+    console.log('\n--- Test 22: SingleFlight Concurrency Coalescing & Conflict Prevention ---');
+    certProvisionSingleFlight.clear();
 
+    const db = makeMockDb();
+    const ctx = { waitUntil: (p) => p };
+    const singleFlightNode = 'cc0000000001';
+    const { csrPEM: singleFlightCsr, privateKey: sfPriv } = generateTestCSR(singleFlightNode);
+    const ts = Math.floor(Date.now() / 1000);
+    const sig = signNodePayload(sfPriv, singleFlightNode, ts);
+
+    const sfAcctKey = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+    const sfAcctJwk = sfAcctKey.privateKey.export({ format: 'jwk' });
+    const dummyCert = await issueCertificateFromCSR(await parseCSR(singleFlightCsr), 90);
+
+    let newOrderCount = 0;
+    let holdOrder;
+    const holdOrderPromise = new Promise(resolve => { holdOrder = resolve; });
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (url, opts) => {
+      if (url === 'https://acme.test/directory') {
+        return new Response(JSON.stringify({
+          newNonce: 'https://acme.test/new-nonce',
+          newAccount: 'https://acme.test/new-acct',
+          newOrder: 'https://acme.test/new-order'
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (url === 'https://acme.test/new-nonce') {
+        return new Response(null, { status: 200, headers: { 'Replay-Nonce': 'nonce-sf' } });
+      }
+      if (url === 'https://acme.test/new-acct') {
+        return new Response(JSON.stringify({ status: 'valid' }), {
+          status: 200,
+          headers: { 'Location': 'https://acme.test/acct/sf', 'Replay-Nonce': 'nonce-sf-2', 'Content-Type': 'application/json' }
+        });
+      }
+      if (url === 'https://acme.test/new-order') {
+        newOrderCount++;
+        await holdOrderPromise; // Hold here to guarantee concurrency
+        return new Response(JSON.stringify({
+          status: 'ready',
+          authorizations: [],
+          finalize: 'https://acme.test/finalize/sf',
+          certificate: 'https://acme.test/cert/sf'
+        }), {
+          status: 201,
+          headers: { 'Location': 'https://acme.test/order/sf', 'Replay-Nonce': 'nonce-sf-2', 'Content-Type': 'application/json' }
+        });
+      }
+      if (url === 'https://acme.test/finalize/sf' || url === 'https://acme.test/order/sf') {
+        return new Response(JSON.stringify({
+          status: 'valid',
+          certificate: 'https://acme.test/cert/sf'
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (url === 'https://acme.test/cert/sf') {
+        return new Response(dummyCert.certPEM, { status: 200, headers: { 'Content-Type': 'application/pem-certificate-chain' } });
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    };
+
+    try {
+      const sfEnv = {
+        DB: db,
+        ENVIRONMENT: 'production',
+        ACME_DIRECTORY_URL: 'https://acme.test/directory',
+        ACME_DNS_API_ENDPOINTS: 'https://ns1.test,https://ns2.test',
+        ACME_DNS_API_TOKEN: 'secret-dns-token',
+        ACME_ACCOUNT_KEY: JSON.stringify(sfAcctJwk)
+      };
+
+      const makeReq = (csrToUse, sigToUse) => new Request('https://drm.eqt.net.im/api/v1/cert/provision', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-EQT-Timestamp': String(ts),
+          'X-EQT-Device-Signature': sigToUse || sig,
+          'X-EQT-Device-ID': 'sf-device-01'
+        },
+        body: JSON.stringify({
+          node_id: singleFlightNode,
+          csr_pem: csrToUse || singleFlightCsr
+        })
+      });
+
+      // Launch 5 concurrent requests with identical NodeID and CSR
+      const p1 = handleCertRoutes(makeReq(), sfEnv, ctx, new URL('https://drm.eqt.net.im/api/v1/cert/provision'), {});
+      const p2 = handleCertRoutes(makeReq(), sfEnv, ctx, new URL('https://drm.eqt.net.im/api/v1/cert/provision'), {});
+      const p3 = handleCertRoutes(makeReq(), sfEnv, ctx, new URL('https://drm.eqt.net.im/api/v1/cert/provision'), {});
+      const p4 = handleCertRoutes(makeReq(), sfEnv, ctx, new URL('https://drm.eqt.net.im/api/v1/cert/provision'), {});
+      const p5 = handleCertRoutes(makeReq(), sfEnv, ctx, new URL('https://drm.eqt.net.im/api/v1/cert/provision'), {});
+
+      // Test conflicting CSR while flight is active
+      const { csrPEM: differentCsr, privateKey: diffPriv } = generateTestCSR(singleFlightNode); // Different keypair!
+      const diffSig = signNodePayload(diffPriv, singleFlightNode, ts);
+      const pConflict = handleCertRoutes(makeReq(differentCsr, diffSig), sfEnv, ctx, new URL('https://drm.eqt.net.im/api/v1/cert/provision'), {});
+
+      const respConflict = await pConflict;
+      assert(respConflict.status === 409, 'T22.1: Concurrent conflicting CSR for same node rejected with 409');
+      const conflictData = await respConflict.json();
+      assert(conflictData.reason_key === 'concurrent_csr_conflict', 'T22.1b: Rejection reason_key is concurrent_csr_conflict');
+
+      // Now release the held order
+      holdOrder();
+
+      const [r1, r2, r3, r4, r5] = await Promise.all([p1, p2, p3, p4, p5]);
+
+      assert(newOrderCount === 1, 'T22.2: Outbound ACME newOrder strictly executed only once for 5 concurrent callers');
+      assert(r1.status === 200, 'T22.3: r1 returned 200 OK');
+      assert(r2.status === 200, 'T22.3: r2 returned 200 OK');
+      assert(r3.status === 200, 'T22.3: r3 returned 200 OK');
+      assert(r4.status === 200, 'T22.3: r4 returned 200 OK');
+      assert(r5.status === 200, 'T22.3: r5 returned 200 OK');
+
+      assert(r1.headers.get('X-SingleFlight-Shared') == null, 'T22.4: Leader request r1 is not marked shared');
+      assert(r2.headers.get('X-SingleFlight-Shared') === 'true', 'T22.4: Follower r2 marked with X-SingleFlight-Shared: true');
+      assert(r3.headers.get('X-SingleFlight-Shared') === 'true', 'T22.4: Follower r3 marked with X-SingleFlight-Shared: true');
+      assert(r4.headers.get('X-SingleFlight-Shared') === 'true', 'T22.4: Follower r4 marked with X-SingleFlight-Shared: true');
+      assert(r5.headers.get('X-SingleFlight-Shared') === 'true', 'T22.4: Follower r5 marked with X-SingleFlight-Shared: true');
+
+      const d1Rate = db._rateLimits.get(`cert_provision:${singleFlightNode}`);
+      assert(d1Rate && d1Rate.count === 1, 'T22.5: D1 rate limit only recorded 1 count instead of 5 for coalesced requests');
+    } finally {
+      globalThis.fetch = originalFetch;
+      certProvisionSingleFlight.clear();
+    }
+  }
+
+  // ── Test 23: Two-Phase Rate Limiting (2PC Hold & Release) ─────
+  {
+    console.log('\n--- Test 23: Two-Phase Rate Limiting (2PC Hold & Release) ---');
+    const db = makeMockDb();
+    const ctx = { waitUntil: (p) => p };
+    const twoPcNode = 'ee0000000001';
+    const { csrPEM: validCsr, privateKey: validPriv } = generateTestCSR(twoPcNode);
+    const ts = Math.floor(Date.now() / 1000);
+    const sig = signNodePayload(validPriv, twoPcNode, ts);
+
+    // 1. Send invalid CSR (fails at parseCSR with 400)
+    const reqInvalid = new Request('https://drm.eqt.net.im/api/v1/cert/provision', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-EQT-Timestamp': String(ts),
+        'X-EQT-Device-Signature': sig,
+        'X-EQT-Device-ID': '2pc-device'
+      },
+      body: JSON.stringify({
+        node_id: twoPcNode,
+        csr_pem: '-----BEGIN CERTIFICATE REQUEST-----\nBADBASE64\n-----END CERTIFICATE REQUEST-----'
+      })
+    });
+
+    const respInvalid = await handleCertRoutes(reqInvalid, { DB: db }, ctx, new URL(reqInvalid.url), {});
+    assert(respInvalid.status === 400, 'T23.1: Invalid CSR returns 400');
+    const rateAfterFail = db._rateLimits.get(`cert_provision:${twoPcNode}`);
+    assert(rateAfterFail && rateAfterFail.count === 0, 'T23.1b: Slot was released after failure, count is 0');
+
+    // 2. Now send valid CSRs: should allow 3 full successes
+    for (let i = 1; i <= 3; i++) {
+      const reqValid = new Request('https://drm.eqt.net.im/api/v1/cert/provision', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-EQT-Timestamp': String(ts),
+          'X-EQT-Device-Signature': sig,
+          'X-EQT-Device-ID': '2pc-device'
+        },
+        body: JSON.stringify({
+          node_id: twoPcNode,
+          csr_pem: validCsr
+        })
+      });
+      const resp = await handleCertRoutes(reqValid, { DB: db }, ctx, new URL(reqValid.url), {});
+      assert(resp.status === 200, `T23.2: Valid issuance ${i}/3 succeeded with 200 OK`);
+      const rateState = db._rateLimits.get(`cert_provision:${twoPcNode}`);
+      assert(rateState.count === i, `T23.2b: D1 rate count committed to ${i}`);
+    }
+
+    // 3. 4th attempt exceeds max 3 limit
+    const reqExceed = new Request('https://drm.eqt.net.im/api/v1/cert/provision', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-EQT-Timestamp': String(ts),
+        'X-EQT-Device-Signature': sig,
+        'X-EQT-Device-ID': '2pc-device'
+      },
+      body: JSON.stringify({
+        node_id: twoPcNode,
+        csr_pem: validCsr
+      })
+    });
+    const respExceed = await handleCertRoutes(reqExceed, { DB: db }, ctx, new URL(reqExceed.url), {});
+    assert(respExceed.status === 429, 'T23.3: 4th attempt correctly blocked with 429 rate_limited');
   }
 
   console.log(`\nResults: ${passed} passed, ${failed} failed`);

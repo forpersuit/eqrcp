@@ -1,10 +1,22 @@
 import { Env } from '../types';
 import { logSystemError } from '../utils/error-logger';
-import { isD1RateLimited, logRateLimitHit, clientIpFromRequest } from '../utils/rate-limit';
+import { reserveD1RateLimit, RateLimitReservation, isD1RateLimited, logRateLimitHit, clientIpFromRequest } from '../utils/rate-limit';
 import { checkManualBlacklist } from '../utils/blacklist';
 import { AcmeClient, computeDns01ChallengeValue, AcmeHttpError } from '../utils/acme';
 import { canExecuteCircuit, recordCircuitSuccess, recordCircuitFailure } from '../utils/circuit-breaker';
 import { consumeToken } from '../utils/token-bucket';
+import { SingleFlightGroup } from '../utils/singleflight';
+
+export interface SerializedResponse {
+  status: number;
+  body: string;
+  headers: Record<string, string>;
+}
+
+export const certProvisionSingleFlight = new SingleFlightGroup<
+  SerializedResponse,
+  { csrHash: string }
+>();
 
 const CERT_TABLE_ENSURED = new WeakSet<object>();
 
@@ -752,297 +764,423 @@ export async function handleCertRoutes(
     }
   }
 
-  const acmeRequested = Boolean(env.ACME_DIRECTORY_URL || (env.ENVIRONMENT === 'test' && env.ACME_DNS_API_ENDPOINTS));
-
-  // 5. Multi-tier Rate Limiting Defense (Node-level, IP-level, Global Production ceiling)
-  // 5.1 Node-ID Rate Limit: Maximum 3 certificate provisions per 24 hours per node_id
-  const rateLimitKey = `cert_provision:${cleanNode}`;
-  const rateLimited = await isD1RateLimited(env, rateLimitKey, 3, 24 * 3600 * 1000);
-  if (rateLimited) {
-    await logRateLimitHit(env, 'CERT_PROVISION', rateLimitKey, {
-      node_id: cleanNode,
-      device_id: deviceIdHeader,
-      client_ip: clientIp,
-      trace_id: traceId
-    });
-    console.warn(`[LAN-TLS-PROVISION] [RATE-LIMIT] nodeID=${cleanNode} exceeded 24h limit`);
-    return new Response(JSON.stringify({
-      error: 'Certificate issuance rate limit exceeded (maximum 3 requests per 24 hours)',
-      reason_key: 'rate_limited',
-      retry_after: 86400
-    }), {
-      status: 429,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '86400' }
-    });
+  // Compute CSR digest for conflict detection in SingleFlight
+  let csrHash = '';
+  try {
+    const hashBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(csr_pem)));
+    csrHash = Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  } catch {
+    csrHash = String(csr_pem).slice(0, 64);
   }
 
-  // 5.2 IP-level Rate Limit: Maximum 10 certificate provisions per 24 hours per IP
-  if (clientIp && clientIp !== 'unknown' && clientIp !== '127.0.0.1') {
-    const ipRateLimitKey = `cert_provision:ip:${clientIp}`;
-    const ipRateLimited = await isD1RateLimited(env, ipRateLimitKey, 10, 24 * 3600 * 1000);
-    if (ipRateLimited) {
-      await logRateLimitHit(env, 'CERT_PROVISION_IP', ipRateLimitKey, {
+  try {
+    const flight = await certProvisionSingleFlight.do(
+      `provision:${cleanNode}`,
+      async () => {
+        return await executeCertProvisioningFlow({
+          request,
+          env,
+          ctx,
+          cleanNode,
+          csrPem: String(csr_pem),
+          deviceIdHeader,
+          clientIp,
+          traceId,
+          startTime,
+          clientTs,
+          sigHeader,
+          corsHeaders
+        });
+      },
+      { csrHash },
+      (existingCtx, incomingCtx) => {
+        if (existingCtx && incomingCtx && existingCtx.csrHash !== incomingCtx.csrHash) {
+          const err: any = new Error('A certificate provisioning request for this node is already in progress with a different CSR');
+          err.status = 409;
+          err.reasonKey = 'concurrent_csr_conflict';
+          return err;
+        }
+      }
+    );
+
+    return new Response(flight.result.body, {
+      status: flight.result.status,
+      headers: {
+        ...flight.result.headers,
+        ...(flight.shared ? { 'X-SingleFlight-Shared': 'true' } : {})
+      }
+    });
+  } catch (err: any) {
+    if (err?.status === 409) {
+      return new Response(JSON.stringify({
+        error: err.message,
+        reason_key: err.reasonKey || 'concurrent_csr_conflict'
+      }), {
+        status: 409,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    console.error(`[LAN-TLS-PROVISION] [ERROR] Issuance failure for nodeID=${cleanNode}:`, err);
+    ctx.waitUntil(logSystemError(
+      env,
+      'CERT_PROVISION_ERROR',
+      'ERROR',
+      err,
+      { node_id: cleanNode, device_id: deviceIdHeader, ip: clientIp },
+      traceId
+    ));
+
+    return new Response(JSON.stringify({
+      error: 'An unexpected error occurred while issuing the certificate',
+      reason_key: 'internal_error'
+    }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+}
+
+interface CertProvisioningParams {
+  request: Request;
+  env: Env;
+  ctx: ExecutionContext;
+  cleanNode: string;
+  csrPem: string;
+  deviceIdHeader: string;
+  clientIp: string;
+  traceId: string;
+  startTime: number;
+  clientTs: number;
+  sigHeader: string;
+  corsHeaders: Record<string, string>;
+}
+
+/**
+ * Heavyweight certificate provisioning flow protected by SingleFlight coalescing and 2PC hold-and-release.
+ */
+async function executeCertProvisioningFlow(params: CertProvisioningParams): Promise<SerializedResponse> {
+  const {
+    env,
+    ctx,
+    cleanNode,
+    csrPem,
+    deviceIdHeader,
+    clientIp,
+    traceId,
+    startTime,
+    clientTs,
+    sigHeader,
+    corsHeaders
+  } = params;
+
+  let nodeRateReservation: RateLimitReservation | null = null;
+  let ipRateReservation: RateLimitReservation | null = null;
+  let provisionCommitted = false;
+
+  try {
+    const acmeRequested = Boolean(env.ACME_DIRECTORY_URL || (env.ENVIRONMENT === 'test' && env.ACME_DNS_API_ENDPOINTS));
+
+    // 5. Multi-tier Rate Limiting Defense with Two-Phase (2PC) Reservation
+    // 5.1 Node-ID Rate Limit: Maximum 3 certificate provisions per 24 hours per node_id
+    const rateLimitKey = `cert_provision:${cleanNode}`;
+    nodeRateReservation = await reserveD1RateLimit(env, rateLimitKey, 3, 24 * 3600 * 1000);
+    if (!nodeRateReservation.allowed) {
+      await logRateLimitHit(env, 'CERT_PROVISION', rateLimitKey, {
         node_id: cleanNode,
         device_id: deviceIdHeader,
         client_ip: clientIp,
         trace_id: traceId
       });
-      console.warn(`[LAN-TLS-PROVISION] [RATE-LIMIT] IP ${clientIp} exceeded 24h limit`);
-      return new Response(JSON.stringify({
-        error: 'Too many certificate requests from this IP address (maximum 10 per 24 hours)',
-        reason_key: 'ip_rate_limited',
-        retry_after: 86400
-      }), {
+      console.warn(`[LAN-TLS-PROVISION] [RATE-LIMIT] nodeID=${cleanNode} exceeded 24h limit`);
+      return {
         status: 429,
+        body: JSON.stringify({
+          error: 'Certificate issuance rate limit exceeded (maximum 3 requests per 24 hours)',
+          reason_key: 'rate_limited',
+          retry_after: 86400
+        }),
         headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '86400' }
-      });
-    }
-  }
-
-  // 5.3 Global CA Traffic Smoothing (Token Bucket: 10 req/min, burst=5)
-  if (acmeRequested) {
-    const tbResult = await consumeToken(env, 'cert_provision:acme_smoothing', 5, 10 / 60);
-    if (!tbResult.allowed) {
-      console.warn(`[LAN-TLS-PROVISION] [THROTTLE] Outbound CA token bucket empty, smoothing traffic (retryAfter=${tbResult.retryAfter}s)`);
-      return new Response(JSON.stringify({
-        error: 'Certificate authority request rate smoothed. Please retry shortly.',
-        reason_key: 'ca_traffic_smoothing',
-        retry_after: tbResult.retryAfter
-      }), {
-        status: 429,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': String(tbResult.retryAfter) }
-      });
-    }
-  }
-
-  // 5.4 Upstream CA Adaptive Circuit Breaker Pre-Flight Check
-  if (acmeRequested) {
-    const cbCheck = await canExecuteCircuit(env, 'gts_ca');
-    if (!cbCheck.allowed) {
-      console.warn(`[LAN-TLS-PROVISION] [CIRCUIT-BREAKER] GTS CA circuit is OPEN (retryAfter=${cbCheck.retryAfter}s)`);
-      return new Response(JSON.stringify({
-        error: 'Certificate authority is temporarily undergoing rate-limit cooldown. Please retry later.',
-        reason_key: 'ca_circuit_open',
-        retry_after: cbCheck.retryAfter
-      }), {
-        status: 429,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': String(cbCheck.retryAfter) }
-      });
-    }
-  }
-
-
-  // 6. Cryptographic CSR Parsing & Domain Sanity Check
-  let parsedCSR: ParsedCSR;
-  try {
-    parsedCSR = parseCSR(String(csr_pem));
-  } catch (err: any) {
-    console.error(`[LAN-TLS-PROVISION] [ERROR] Phase=CSR_PARSE nodeID=${cleanNode} err=${err?.message}`);
-    return new Response(JSON.stringify({
-      error: `Invalid certificate signing request: ${err?.message}`,
-      reason_key: 'invalid_csr'
-    }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
-  }
-
-  const expectedCommonName = `${cleanNode}.direct.eqt.net.im`;
-  const expectedWildcard = `*.${cleanNode}.direct.eqt.net.im`;
-
-  if (parsedCSR.commonName !== expectedCommonName) {
-    console.warn(`[LAN-TLS-PROVISION] [ERROR] CommonName mismatch: got ${parsedCSR.commonName}, want ${expectedCommonName}`);
-    return new Response(JSON.stringify({
-      error: `CommonName in CSR (${parsedCSR.commonName}) does not match required node domain (${expectedCommonName})`,
-      reason_key: 'invalid_csr'
-    }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
-  }
-
-  // Verify SAN contains both exact domain and wildcard subdomain
-  const hasExact = parsedCSR.dnsNames.includes(expectedCommonName);
-  const hasWildcard = parsedCSR.dnsNames.includes(expectedWildcard);
-  if (!hasExact || !hasWildcard) {
-    console.warn(`[LAN-TLS-PROVISION] [ERROR] SAN mismatch: names=${JSON.stringify(parsedCSR.dnsNames)}, need exact and wildcard`);
-    return new Response(JSON.stringify({
-      error: `Subject Alternative Names in CSR must include both ${expectedCommonName} and ${expectedWildcard}`,
-      reason_key: 'invalid_csr'
-    }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
-  }
-
-  // 6.1 Cryptographic Proof of Possession (POPO) Verification
-  try {
-    const clientPubKey = await crypto.subtle.importKey(
-      'spki',
-      parsedCSR.spkiDER,
-      { name: 'ECDSA', namedCurve: 'P-256' },
-      false,
-      ['verify']
-    );
-
-    let sigBinary: string;
-    if (typeof Buffer !== 'undefined') {
-      sigBinary = Buffer.from(sigHeader, 'base64').toString('binary');
-    } else {
-      sigBinary = atob(sigHeader);
-    }
-    const rawSig = new Uint8Array(sigBinary.length);
-    for (let i = 0; i < sigBinary.length; i++) {
-      rawSig[i] = sigBinary.charCodeAt(i);
+      };
     }
 
-    if (rawSig.length !== 64) {
-      throw new Error(`invalid signature length: expected 64 bytes IEEE P1363, got ${rawSig.length}`);
+    // 5.2 IP-level Rate Limit: Maximum 10 certificate provisions per 24 hours per IP
+    if (clientIp && clientIp !== 'unknown' && clientIp !== '127.0.0.1') {
+      const ipRateLimitKey = `cert_provision:ip:${clientIp}`;
+      ipRateReservation = await reserveD1RateLimit(env, ipRateLimitKey, 10, 24 * 3600 * 1000);
+      if (!ipRateReservation.allowed) {
+        await logRateLimitHit(env, 'CERT_PROVISION_IP', ipRateLimitKey, {
+          node_id: cleanNode,
+          device_id: deviceIdHeader,
+          client_ip: clientIp,
+          trace_id: traceId
+        });
+        console.warn(`[LAN-TLS-PROVISION] [RATE-LIMIT] IP ${clientIp} exceeded 24h limit`);
+        return {
+          status: 429,
+          body: JSON.stringify({
+            error: 'Too many certificate requests from this IP address (maximum 10 per 24 hours)',
+            reason_key: 'ip_rate_limited',
+            retry_after: 86400
+          }),
+          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '86400' }
+        };
+      }
     }
 
-    const canonicalMsg = new TextEncoder().encode(`${cleanNode}:${clientTs}`);
-    const valid = await crypto.subtle.verify(
-      { name: 'ECDSA', hash: 'SHA-256' },
-      clientPubKey,
-      rawSig,
-      canonicalMsg
-    );
+    // 5.3 Global CA Traffic Smoothing (Token Bucket: 10 req/min, burst=5)
+    if (acmeRequested) {
+      const tbResult = await consumeToken(env, 'cert_provision:acme_smoothing', 5, 10 / 60);
+      if (!tbResult.allowed) {
+        console.warn(`[LAN-TLS-PROVISION] [THROTTLE] Outbound CA token bucket empty, smoothing traffic (retryAfter=${tbResult.retryAfter}s)`);
+        return {
+          status: 429,
+          body: JSON.stringify({
+            error: 'Certificate authority request rate smoothed. Please retry shortly.',
+            reason_key: 'ca_traffic_smoothing',
+            retry_after: tbResult.retryAfter
+          }),
+          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': String(tbResult.retryAfter) }
+        };
+      }
+    }
 
-    if (!valid) {
-      console.warn(`[LAN-TLS-PROVISION] [REJECT] Signature mismatch for nodeID=${cleanNode}, clientTs=${clientTs}`);
-      return new Response(JSON.stringify({
-        error: 'Invalid device signature: proof-of-possession verification failed',
-        reason_key: 'invalid_signature'
-      }), {
-        status: 401,
+    // 5.4 Upstream CA Adaptive Circuit Breaker Pre-Flight Check
+    if (acmeRequested) {
+      const cbCheck = await canExecuteCircuit(env, 'gts_ca');
+      if (!cbCheck.allowed) {
+        console.warn(`[LAN-TLS-PROVISION] [CIRCUIT-BREAKER] GTS CA circuit is OPEN (retryAfter=${cbCheck.retryAfter}s)`);
+        return {
+          status: 429,
+          body: JSON.stringify({
+            error: 'Certificate authority is temporarily undergoing rate-limit cooldown. Please retry later.',
+            reason_key: 'ca_circuit_open',
+            retry_after: cbCheck.retryAfter
+          }),
+          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': String(cbCheck.retryAfter) }
+        };
+      }
+    }
+
+    // 6. Cryptographic CSR Parsing & Domain Sanity Check
+    let parsedCSR: ParsedCSR;
+    try {
+      parsedCSR = parseCSR(csrPem);
+    } catch (err: any) {
+      console.error(`[LAN-TLS-PROVISION] [ERROR] Phase=CSR_PARSE nodeID=${cleanNode} err=${err?.message}`);
+      return {
+        status: 400,
+        body: JSON.stringify({
+          error: `Invalid certificate signing request: ${err?.message}`,
+          reason_key: 'invalid_csr'
+        }),
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      };
     }
-  } catch (err: any) {
-    console.warn(`[LAN-TLS-PROVISION] [REJECT] Signature verification error nodeID=${cleanNode}: ${err?.message}`);
-    return new Response(JSON.stringify({
-      error: `Device signature verification error: ${err?.message}`,
-      reason_key: 'invalid_signature'
-    }), {
-      status: 401,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
-  }
 
-  // 6.2 Node-to-PublicKey Cryptographic Binding (TOFU / First-Use Binding)
-  try {
-    await ensureCertProvisionsTable(env);
-    const pubKeyHashBuf = await crypto.subtle.digest('SHA-256', parsedCSR.spkiDER);
-    const pubKeyFingerprint = Array.from(new Uint8Array(pubKeyHashBuf))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
+    const expectedCommonName = `${cleanNode}.direct.eqt.net.im`;
+    const expectedWildcard = `*.${cleanNode}.direct.eqt.net.im`;
 
-    const existingKey = await env.DB.prepare(
-      `SELECT public_key_sha256, device_id FROM node_public_keys WHERE node_id = ?`
-    ).bind(cleanNode).first<{ public_key_sha256: string; device_id: string | null }>();
+    if (parsedCSR.commonName !== expectedCommonName) {
+      console.warn(`[LAN-TLS-PROVISION] [ERROR] CommonName mismatch: got ${parsedCSR.commonName}, want ${expectedCommonName}`);
+      return {
+        status: 400,
+        body: JSON.stringify({
+          error: `CommonName in CSR (${parsedCSR.commonName}) does not match required node domain (${expectedCommonName})`,
+          reason_key: 'invalid_csr'
+        }),
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      };
+    }
 
-    if (existingKey) {
-      if (existingKey.public_key_sha256 !== pubKeyFingerprint) {
-        const boundDeviceId = existingKey.device_id ? String(existingKey.device_id).trim().toLowerCase() : '';
-        // Strict Fail-Closed Authorization:
-        // Only allow public key rotation if this node is strongly bound to a device_id
-        // AND the request presents a matching non-empty X-EQT-Device-ID header.
-        // Weak/NULL-bound nodes and mismatched headers are strictly rejected with 403,
-        // completely preventing any third party from hijacking node certificates or locking out the owner.
-        const isAuthorizedRebind = Boolean(boundDeviceId && boundDeviceId === deviceIdHeader);
+    // Verify SAN contains both exact domain and wildcard subdomain
+    const hasExact = parsedCSR.dnsNames.includes(expectedCommonName);
+    const hasWildcard = parsedCSR.dnsNames.includes(expectedWildcard);
+    if (!hasExact || !hasWildcard) {
+      console.warn(`[LAN-TLS-PROVISION] [ERROR] SAN mismatch: names=${JSON.stringify(parsedCSR.dnsNames)}, need exact and wildcard`);
+      return {
+        status: 400,
+        body: JSON.stringify({
+          error: `Subject Alternative Names in CSR must include both ${expectedCommonName} and ${expectedWildcard}`,
+          reason_key: 'invalid_csr'
+        }),
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      };
+    }
 
-        if (isAuthorizedRebind) {
-          // Authorized key rotation on the same physical device (OS reinstall, cleared cache, key deleted)
-          console.log(`[LAN-TLS-PROVISION] [REBIND] Key rotation authorized for nodeID=${cleanNode}, deviceID=${deviceIdHeader}`);
+    // 6.1 Cryptographic Proof of Possession (POPO) Verification
+    try {
+      const clientPubKey = await crypto.subtle.importKey(
+        'spki',
+        parsedCSR.spkiDER,
+        { name: 'ECDSA', namedCurve: 'P-256' },
+        false,
+        ['verify']
+      );
+
+      let sigBinary: string;
+      if (typeof Buffer !== 'undefined') {
+        sigBinary = Buffer.from(sigHeader, 'base64').toString('binary');
+      } else {
+        sigBinary = atob(sigHeader);
+      }
+      const rawSig = new Uint8Array(sigBinary.length);
+      for (let i = 0; i < sigBinary.length; i++) {
+        rawSig[i] = sigBinary.charCodeAt(i);
+      }
+
+      if (rawSig.length !== 64) {
+        throw new Error(`invalid signature length: expected 64 bytes IEEE P1363, got ${rawSig.length}`);
+      }
+
+      const canonicalMsg = new TextEncoder().encode(`${cleanNode}:${clientTs}`);
+      const valid = await crypto.subtle.verify(
+        { name: 'ECDSA', hash: 'SHA-256' },
+        clientPubKey,
+        rawSig,
+        canonicalMsg
+      );
+
+      if (!valid) {
+        console.warn(`[LAN-TLS-PROVISION] [REJECT] Signature mismatch for nodeID=${cleanNode}, clientTs=${clientTs}`);
+        return {
+          status: 401,
+          body: JSON.stringify({
+            error: 'Invalid device signature: proof-of-possession verification failed',
+            reason_key: 'invalid_signature'
+          }),
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        };
+      }
+    } catch (err: any) {
+      console.warn(`[LAN-TLS-PROVISION] [REJECT] Signature verification error nodeID=${cleanNode}: ${err?.message}`);
+      return {
+        status: 401,
+        body: JSON.stringify({
+          error: `Device signature verification error: ${err?.message}`,
+          reason_key: 'invalid_signature'
+        }),
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      };
+    }
+
+    // 6.2 Node-to-PublicKey Cryptographic Binding (TOFU / First-Use Binding)
+    try {
+      await ensureCertProvisionsTable(env);
+      const pubKeyHashBuf = await crypto.subtle.digest('SHA-256', parsedCSR.spkiDER);
+      const pubKeyFingerprint = Array.from(new Uint8Array(pubKeyHashBuf))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+
+      const existingKey = await env.DB.prepare(
+        `SELECT public_key_sha256, device_id FROM node_public_keys WHERE node_id = ?`
+      ).bind(cleanNode).first<{ public_key_sha256: string; device_id: string | null }>();
+
+      if (existingKey) {
+        if (existingKey.public_key_sha256 !== pubKeyFingerprint) {
+          const boundDeviceId = existingKey.device_id ? String(existingKey.device_id).trim().toLowerCase() : '';
+          // Strict Fail-Closed Authorization:
+          // Only allow public key rotation if this node is strongly bound to a device_id
+          // AND the request presents a matching non-empty X-EQT-Device-ID header.
+          // Weak/NULL-bound nodes and mismatched headers are strictly rejected with 403,
+          // completely preventing any third party from hijacking node certificates or locking out the owner.
+          const isAuthorizedRebind = Boolean(boundDeviceId && boundDeviceId === deviceIdHeader);
+
+          if (isAuthorizedRebind) {
+            // Authorized key rotation on the same physical device (OS reinstall, cleared cache, key deleted)
+            console.log(`[LAN-TLS-PROVISION] [REBIND] Key rotation authorized for nodeID=${cleanNode}, deviceID=${deviceIdHeader}`);
+            ctx.waitUntil((async () => {
+              try {
+                await env.DB.prepare(`
+                  UPDATE node_public_keys 
+                  SET public_key_sha256 = ?, 
+                      last_seen_at = ? 
+                  WHERE node_id = ?
+                `).bind(pubKeyFingerprint, new Date().toISOString(), cleanNode).run();
+              } catch (rebindErr) {
+                console.error(`[LAN-TLS-PROVISION] Failed to update rotated public key in D1:`, rebindErr);
+              }
+            })());
+            // Key rotation authorized: do not return 403, proceed to certificate issuance
+          } else {
+            console.warn(`[LAN-TLS-PROVISION] [REJECT] Key mismatch for nodeID=${cleanNode}: bound=${existingKey.public_key_sha256} req=${pubKeyFingerprint}`);
+            return {
+              status: 403,
+              body: JSON.stringify({
+                error: 'Device public key mismatch: this node ID is cryptographically bound to a different keypair',
+                reason_key: 'node_key_mismatch'
+              }),
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            };
+          }
+        } else {
           ctx.waitUntil((async () => {
             try {
               await env.DB.prepare(`
-                UPDATE node_public_keys 
-                SET public_key_sha256 = ?, 
-                    last_seen_at = ? 
-                WHERE node_id = ?
-              `).bind(pubKeyFingerprint, new Date().toISOString(), cleanNode).run();
-            } catch (rebindErr) {
-              console.error(`[LAN-TLS-PROVISION] Failed to update rotated public key in D1:`, rebindErr);
-            }
+                UPDATE node_public_keys SET last_seen_at = ? WHERE node_id = ?
+              `).bind(new Date().toISOString(), cleanNode).run();
+            } catch (_) {}
           })());
-          // Key rotation authorized: do not return 403, proceed to certificate issuance
-        } else {
-          console.warn(`[LAN-TLS-PROVISION] [REJECT] Key mismatch for nodeID=${cleanNode}: bound=${existingKey.public_key_sha256} req=${pubKeyFingerprint}`);
-          return new Response(JSON.stringify({
-            error: 'Device public key mismatch: this node ID is cryptographically bound to a different keypair',
-            reason_key: 'node_key_mismatch'
-          }), {
-            status: 403,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          });
         }
       } else {
         ctx.waitUntil((async () => {
           try {
             await env.DB.prepare(`
-              UPDATE node_public_keys SET last_seen_at = ? WHERE node_id = ?
-            `).bind(new Date().toISOString(), cleanNode).run();
-          } catch (_) {}
+              INSERT INTO node_public_keys (node_id, public_key_sha256, device_id, first_bound_at, last_seen_at)
+              VALUES (?, ?, ?, ?, ?)
+            `).bind(
+              cleanNode,
+              pubKeyFingerprint,
+              deviceIdHeader || null,
+              new Date().toISOString(),
+              new Date().toISOString()
+            ).run();
+          } catch (bindErr) {
+            console.error(`[LAN-TLS-PROVISION] Failed to bind node public key in D1:`, bindErr);
+          }
         })());
       }
-    } else {
-      ctx.waitUntil((async () => {
-        try {
-          await env.DB.prepare(`
-            INSERT INTO node_public_keys (node_id, public_key_sha256, device_id, first_bound_at, last_seen_at)
-            VALUES (?, ?, ?, ?, ?)
-          `).bind(
-            cleanNode,
-            pubKeyFingerprint,
-            deviceIdHeader || null,
-            new Date().toISOString(),
-            new Date().toISOString()
-          ).run();
-        } catch (bindErr) {
-          console.error(`[LAN-TLS-PROVISION] Failed to bind node public key in D1:`, bindErr);
-        }
-      })());
+    } catch (bindingErr: any) {
+      console.warn(`[LAN-TLS-PROVISION] Public key binding check error for nodeID=${cleanNode}:`, bindingErr);
     }
-  } catch (bindingErr: any) {
-    console.warn(`[LAN-TLS-PROVISION] Public key binding check error for nodeID=${cleanNode}:`, bindingErr);
-  }
 
-  // 7. Certificate Issuance Engine (RFC 8555 ACME DNS-01 or Fallback Signer)
-  try {
+    // 7. Certificate Issuance Engine (RFC 8555 ACME DNS-01 or Fallback Signer)
     let certPEM: string;
     let expiresAt: string;
 
     if (acmeRequested) {
       if (!env.ACME_DNS_API_ENDPOINTS) {
         console.error(`[LAN-TLS-PROVISION] [CONFIG-ERROR] ACME requested but ACME_DNS_API_ENDPOINTS is missing`);
-        return new Response(JSON.stringify({
-          error: 'ACME configuration error: ACME_DNS_API_ENDPOINTS is required for DNS-01 challenges',
-          reason_key: 'acme_misconfigured'
-        }), {
+        return {
           status: 500,
+          body: JSON.stringify({
+            error: 'ACME configuration error: ACME_DNS_API_ENDPOINTS is required for DNS-01 challenges',
+            reason_key: 'acme_misconfigured'
+          }),
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
+        };
       }
       if (!env.ACME_DNS_API_TOKEN) {
         console.error(`[LAN-TLS-PROVISION] [CONFIG-ERROR] ACME requested but ACME_DNS_API_TOKEN is missing`);
-        return new Response(JSON.stringify({
-          error: 'ACME configuration error: ACME_DNS_API_TOKEN is required for authoritative DNS updates',
-          reason_key: 'acme_misconfigured'
-        }), {
+        return {
           status: 500,
+          body: JSON.stringify({
+            error: 'ACME configuration error: ACME_DNS_API_TOKEN is required for authoritative DNS updates',
+            reason_key: 'acme_misconfigured'
+          }),
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
+        };
       }
       if (!env.ACME_ACCOUNT_KEY) {
         console.error(`[LAN-TLS-PROVISION] [CONFIG-ERROR] ACME requested but ACME_ACCOUNT_KEY is missing`);
-        return new Response(JSON.stringify({
-          error: 'ACME configuration error: ACME_ACCOUNT_KEY is required to prevent account exhaustion',
-          reason_key: 'acme_misconfigured'
-        }), {
+        return {
           status: 500,
+          body: JSON.stringify({
+            error: 'ACME configuration error: ACME_ACCOUNT_KEY is required to prevent account exhaustion',
+            reason_key: 'acme_misconfigured'
+          }),
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
+        };
       }
 
       try {
@@ -1200,14 +1338,15 @@ export async function handleCertRoutes(
             const retrySec = acmeErr.retryAfter || 60;
             await recordCircuitFailure(env, 'gts_ca', retrySec, true);
             console.error(`[LAN-TLS-PROVISION] [CIRCUIT-BREAKER] Tripped to OPEN due to upstream 429 (retryAfter=${retrySec}s): ${acmeErr.message}`);
-            return new Response(JSON.stringify({
-              error: 'Upstream Certificate Authority returned rate limit. Circuit cooldown initiated.',
-              reason_key: 'ca_rate_limited',
-              retry_after: retrySec
-            }), {
+            return {
               status: 429,
+              body: JSON.stringify({
+                error: 'Upstream Certificate Authority returned rate limit. Circuit cooldown initiated.',
+                reason_key: 'ca_rate_limited',
+                retry_after: retrySec
+              }),
               headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': String(retrySec) }
-            });
+            };
           } else if (acmeErr.status >= 500) {
             await recordCircuitFailure(env, 'gts_ca', 30, false);
           }
@@ -1245,13 +1384,16 @@ export async function handleCertRoutes(
 
     console.log(`[LAN-TLS-PROVISION] [SUCCESS] Certificate issued successfully for nodeID=${cleanNode} in ${Date.now() - startTime}ms (expiresAt=${expiresAt})`);
 
-    return new Response(JSON.stringify({
-      cert_pem: certPEM,
-      expires_at: expiresAt
-    }), {
+    provisionCommitted = true;
+
+    return {
       status: 200,
+      body: JSON.stringify({
+        cert_pem: certPEM,
+        expires_at: expiresAt
+      }),
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+    };
 
   } catch (err: any) {
     console.error(`[LAN-TLS-PROVISION] [ERROR] Issuance failure for nodeID=${cleanNode}:`, err);
@@ -1264,12 +1406,20 @@ export async function handleCertRoutes(
       traceId
     ));
 
-    return new Response(JSON.stringify({
-      error: 'An unexpected error occurred while issuing the certificate',
-      reason_key: 'internal_error'
-    }), {
+    return {
       status: 500,
+      body: JSON.stringify({
+        error: 'An unexpected error occurred while issuing the certificate',
+        reason_key: 'internal_error'
+      }),
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+    };
+  } finally {
+    if (!provisionCommitted) {
+      await Promise.all([
+        nodeRateReservation?.release(),
+        ipRateReservation?.release()
+      ]);
+    }
   }
 }
