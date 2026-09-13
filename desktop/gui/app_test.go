@@ -535,3 +535,112 @@ func TestDevProvisionDeviceTLSCert_PersistsBeforeBroadcastAndTracksRateLimit(t *
 		t.Fatalf("testHookBeforeFailBroadcast was not called on cooldown short-circuit!")
 	}
 }
+
+func TestDevProvisionDeviceTLSCert_ParsesServerRetryAfter86400(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("EQT_CONFIG_DIR", filepath.Join(tempHome, "eqt_conf"))
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error":       "Certificate issuance rate limit exceeded (maximum 3 requests per 24 hours)",
+			"reason_key":  "rate_limited",
+			"retry_after": 86400,
+		})
+	}))
+	defer server.Close()
+
+	t.Setenv("EQT_PROVISION_ENDPOINT", server.URL)
+
+	app := NewApp()
+	app.logger = NewFileLogger(filepath.Join(tempHome, "desktop.log"), true)
+	defer app.logger.Close()
+
+	app.agent = newDesktopAgent(nil)
+	settings, err := app.agent.readSettings()
+	if err != nil {
+		t.Fatalf("readSettings failed: %v", err)
+	}
+	settings.EnableTLS = true
+	if _, err := app.agent.writeSettings(settings); err != nil {
+		t.Fatalf("writeSettings failed: %v", err)
+	}
+
+	success, err := app.DevProvisionDeviceTLSCert()
+	if success {
+		t.Fatalf("expected success=false for rate limit, got true")
+	}
+	if err == nil {
+		t.Fatalf("expected non-nil error, got nil")
+	}
+
+	stats := app.GetTLSIssuanceStats()
+	if stats.RateLimitCount != 1 {
+		t.Fatalf("expected RateLimitCount=1, got %d", stats.RateLimitCount)
+	}
+	if !stats.IsRateLimitedActive {
+		t.Fatalf("expected IsRateLimitedActive=true, got false")
+	}
+	// R36-3: Server specified retry_after: 86400; must not be hardcoded to 3600!
+	if stats.RemainingCoolingSec < 80000 {
+		t.Fatalf("expected RemainingCoolingSec close to 86400, got %d (hardcoded 3600 defect)", stats.RemainingCoolingSec)
+	}
+}
+
+func TestDevProvisionDeviceTLSCert_NonRateLimitQuotaErrorDoesNotTriggerCooldown(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("EQT_CONFIG_DIR", filepath.Join(tempHome, "eqt_conf"))
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error":      "user storage quota exceeded",
+			"reason_key": "quota_error",
+		})
+	}))
+	defer server.Close()
+
+	t.Setenv("EQT_PROVISION_ENDPOINT", server.URL)
+
+	app := NewApp()
+	app.logger = NewFileLogger(filepath.Join(tempHome, "desktop.log"), true)
+	defer app.logger.Close()
+
+	app.agent = newDesktopAgent(nil)
+	settings, err := app.agent.readSettings()
+	if err != nil {
+		t.Fatalf("readSettings failed: %v", err)
+	}
+	settings.EnableTLS = true
+	if _, err := app.agent.writeSettings(settings); err != nil {
+		t.Fatalf("writeSettings failed: %v", err)
+	}
+
+	success, err := app.DevProvisionDeviceTLSCert()
+	if success {
+		t.Fatalf("expected success=false for error, got true")
+	}
+	if err == nil {
+		t.Fatalf("expected non-nil error, got nil")
+	}
+
+	// R36-2: Non-rate-limit error containing "quota" must NOT increment RateLimitCount or activate cooldown!
+	stats := app.GetTLSIssuanceStats()
+	if stats.RateLimitCount != 0 {
+		t.Fatalf("expected RateLimitCount=0 for non-rate-limit quota error, got %d (R36-2 defect)", stats.RateLimitCount)
+	}
+	if stats.FailureCount != 1 {
+		t.Fatalf("expected FailureCount=1, got %d", stats.FailureCount)
+	}
+	if stats.IsRateLimitedActive {
+		t.Fatalf("expected IsRateLimitedActive=false for non-rate-limit quota error, got true (R36-2 defect)")
+	}
+	if stats.RemainingCoolingSec != 0 {
+		t.Fatalf("expected RemainingCoolingSec=0, got %d", stats.RemainingCoolingSec)
+	}
+}
+

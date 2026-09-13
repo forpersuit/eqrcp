@@ -22,6 +22,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -600,6 +602,23 @@ var (
 	ErrNodeKeyMismatch = errors.New("node public key does not match cloud registration")
 )
 
+// RateLimitError represents a certificate provision rate limit error containing RetryAfter seconds.
+type RateLimitError struct {
+	Reason     string
+	RetryAfter int
+}
+
+func (e *RateLimitError) Error() string {
+	if e.RetryAfter > 0 {
+		return fmt.Sprintf("%v: %s (retry after %ds)", ErrRateLimited, e.Reason, e.RetryAfter)
+	}
+	return fmt.Sprintf("%v: %s", ErrRateLimited, e.Reason)
+}
+
+func (e *RateLimitError) Unwrap() error {
+	return ErrRateLimited
+}
+
 // ProvisionOptions configures the client parameters for provisioning a device certificate.
 type ProvisionOptions struct {
 	Endpoint  string                           // Target Gateway URL (defaults to DefaultProvisionEndpoint if empty)
@@ -773,7 +792,18 @@ func RequestDeviceCertificate(ctx context.Context, client *http.Client, opts Pro
 		logger("[LAN-TLS-PROVISION] [ERROR] Phase=GATEWAY_HTTP_STATUS status=%d nodeID=%s reason=%s error=%s",
 			resp.StatusCode, cleanNode, respPayload.ReasonKey, respPayload.Error)
 		if resp.StatusCode == http.StatusTooManyRequests {
-			return nil, fmt.Errorf("%w: %s (retry after %ds)", ErrRateLimited, respPayload.Error, respPayload.RetryAfter)
+			retryAfter := respPayload.RetryAfter
+			if retryAfter <= 0 {
+				if h := resp.Header.Get("Retry-After"); h != "" {
+					if s, err := strconv.Atoi(h); err == nil && s > 0 {
+						retryAfter = s
+					}
+				}
+			}
+			return nil, &RateLimitError{
+				Reason:     respPayload.Error,
+				RetryAfter: retryAfter,
+			}
 		}
 		if resp.StatusCode == http.StatusBadRequest && respPayload.ReasonKey == "invalid_csr" {
 			return nil, fmt.Errorf("%w: %s", ErrInvalidCSR, respPayload.Error)
@@ -817,4 +847,48 @@ func RequestDeviceCertificate(ctx context.Context, client *http.Client, opts Pro
 		ExpiresAt:   expiry,
 		IsNew:       true,
 	}, nil
+}
+
+// ExtractRateLimitRetryAfter extracts the cooldown seconds from a rate limit error.
+// It returns (isRateLimit, retryAfterSec).
+// If it is a rate limit error but has no specific retry_after, defaultSec (or 3600 if defaultSec <= 0) is returned.
+// Non-rate-limit errors containing generic keywords like "quota" are intentionally NOT matched.
+func ExtractRateLimitRetryAfter(err error, defaultSec int) (bool, int) {
+	if err == nil {
+		return false, 0
+	}
+	if defaultSec <= 0 {
+		defaultSec = 3600
+	}
+	var rErr *RateLimitError
+	if errors.As(err, &rErr) {
+		if rErr.RetryAfter > 0 {
+			return true, rErr.RetryAfter
+		}
+		return true, defaultSec
+	}
+	if errors.Is(err, ErrRateLimited) {
+		re := regexp.MustCompile(`retry after (\d+)s`)
+		if matches := re.FindStringSubmatch(err.Error()); len(matches) > 1 {
+			if sec, pErr := strconv.Atoi(matches[1]); pErr == nil && sec > 0 {
+				return true, sec
+			}
+		}
+		return true, defaultSec
+	}
+	errLower := strings.ToLower(err.Error())
+	// Note: Avoid matching standalone "quota" keyword to prevent misclassifying non-rate-limit errors.
+	if strings.Contains(errLower, "rate limit") ||
+		strings.Contains(errLower, "429") ||
+		strings.Contains(errLower, "too many requests") ||
+		strings.Contains(errLower, "resource exhausted") {
+		re := regexp.MustCompile(`retry after (\d+)s`)
+		if matches := re.FindStringSubmatch(err.Error()); len(matches) > 1 {
+			if sec, pErr := strconv.Atoi(matches[1]); pErr == nil && sec > 0 {
+				return true, sec
+			}
+		}
+		return true, defaultSec
+	}
+	return false, 0
 }

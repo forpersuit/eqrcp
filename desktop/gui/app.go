@@ -2323,14 +2323,7 @@ func (a *App) provisionDeviceTLSCertInternal(force bool, allowSelfHeal bool) (bo
 			return false, err
 		}
 
-		isRateLimit := errors.Is(err, cert.ErrRateLimited) ||
-			strings.Contains(strings.ToLower(err.Error()), "rate limit") ||
-			strings.Contains(strings.ToLower(err.Error()), "429") ||
-			strings.Contains(strings.ToLower(err.Error()), "too many requests") ||
-			strings.Contains(strings.ToLower(err.Error()), "resource exhausted") ||
-			strings.Contains(strings.ToLower(err.Error()), "quota")
-
-		retryAfterSec := 3600
+		isRateLimit, retryAfterSec := cert.ExtractRateLimitRetryAfter(err, 3600)
 		a.tlsMu.Lock()
 		a.lastTLSError = err.Error()
 		if isRateLimit {

@@ -1,10 +1,12 @@
 # EQT 局域网 TLS 私钥零泄漏与设备专属 ACME 自动化架构设计方案
 
 > **文档标识**：`docs/mechanism/lan-tls-zero-leak-acme-architecture.md`  
-> **状态**：📘 核心安全架构与演进工程蓝图（Architecture Blueprint）  
+> **状态**：📘 历史安全架构与演进工程蓝图归档（Historical Architecture Blueprint）  
+> **现役权威报告**：👉 [**EQT 局域网 TLS 安全协议与无状态回环架构技术报告**](lan-tls-security-protocol-technical-report.md)（生产最新权威基线）  
 > **面向对象**：核心开发团队、系统架构师、安全与密码学审计人员  
-> **基线分支**：`master`（设计演进预演）  
-> **关联技术**：[`pkg/cert`](file:///home/yelon/develop/me/eqrcp/pkg/cert/cert.go), [`cmd/eqt-dns`](file:///home/yelon/develop/me/eqrcp/cmd/eqt-dns/main.go), [`pkg/server/hardware.go`](file:///home/yelon/develop/me/eqrcp/pkg/server/hardware.go), [`.agents/skills/eqt-lan-tls/SKILL.md`](file:///home/yelon/develop/me/eqrcp/.agents/skills/eqt-lan-tls/SKILL.md)  
+> **基线分支**：`master`  
+> **关联技术**：[`pkg/cert`](../../pkg/cert/cert.go), [`cmd/eqt-dns`](../../cmd/eqt-dns/main.go), [`pkg/server/hardware.go`](../../pkg/server/hardware.go), [`.agents/skills/eqt-lan-tls/SKILL.md`](../../.agents/skills/eqt-lan-tls/SKILL.md)  
+> ⚠️ **双文档协同与现役基线声明**：本文档详细记录了 LAN-TLS 从设计初稿至十轮实测复核的历史演进轨迹。生产环境现役实测基线、最新规范与对外技术报告以 [`lan-tls-security-protocol-technical-report.md`](lan-tls-security-protocol-technical-report.md) 为唯一权威准绳（私钥路径 `certs/<node-id>/privkey.pem`、15天续签周期、A 记录 TTL 300s、Fail-Closed/Fail-Soft 正交职责等）。  
 > **代码事实核实**（首轮审查 2026-09-09，锚定真实符号与行号；实现复核 2026-09-10；测试环境执行方案更新 2026-09-10）：本文为**设计蓝图与工程执行规范**。针对 2026-09-10 审查复核指出的“云端为瞬态自签 CA，公信绿锁 promise 未达成”阻断性问题，确立**“测试环境先行落地真实 RFC 8555 Let's Encrypt DNS-01 代理闭环”**的执行方案。核心原则与两轮核查结论如下：
 >
 > **① 已实现基线（2026-09-09 前）**：`cert.BaseDomain = "direct.eqt.net.im"`（`pkg/cert/cert.go:16`）、`cert.FormatDirectDomain`（同文件 :22，仅单级）、`cmd/eqt-dns` 的回环 IPv4 解析（真实为未导出 `parseIP`，`main.go:135`）、`desktop/gui/agent.go:1031-1034` 的 Fail-Soft 降级、`scripts/sync-certs-from-vps.sh`（旧通配符私钥同步，待 Phase 4 下线）。

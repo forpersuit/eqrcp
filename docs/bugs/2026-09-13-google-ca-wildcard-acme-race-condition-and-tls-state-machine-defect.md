@@ -1331,3 +1331,47 @@ PROBE-CONFIRMED: 非限额错误被误判为 CA 限额（冷却 3599 秒）
 4. **夹具取值与实现常量相等 ⇒ 该测试对「是否读取外部输入」零区分力。** `retry_after: 3600` 恰等于硬编码 `3600`，读与不读同结果。凡测试意在证明「取自服务端 / 取自配置」，夹具值必须**不等于**任何可能的默认常量。
 5. **以 `nil` 表示「无事发生」的多义返回值是缺陷温床。** `startNextLocked()` 返回 nil 同时意味着「无需等待」与「已被替换」；调用方无从分辨，遂产生 R36-4。返回值若要承载「无事发生」，须附独立的 didStart/err 通道。
 6. **统计与绑定存在 ≠ 功能落地。** 本轮已构建完整的 `TLSIssuanceStats` + `GetTLSIssuanceStats` 绑定 + 7 语言文案，但前端零消费、`retryAfter` 写入后无人读取 ⇒ 用户侧**不可观测**。验收「统计/提示类需求」的判据必须是**消费侧**（谁读它、在哪显示），而非产出侧（结构体与绑定是否存在）。
+
+---
+
+## 十四、 第 36 轮与第 37 轮审查意见的全面推进与落地闭环（基线 v1.36.121）
+
+本轮针对第 36 轮审查（R36-1 至 R36-5，出口判据 E1⁗–E4⁗）与第 37 轮审查（R37-1 至 R37-16，出口判据 E1⁵–E7⁵）提出的合理性建设意见，开展了代码级推进与事实级同步，全面达成出口条件：
+
+### 14.1 E1⁗ 闭环：前端 Fail-Closed 强锁彻底消灭 Fail-Open 隐患 (R36-1)
+- **改动位置**：`desktop/gui/frontend/src/main.js`（`autoDisableTLSOnFailure` 函数）；
+- **落地代码**：在 `state.settings = await ReadSettings();` 的 `try-catch` 块后强制注入锁死状态：
+  ```javascript
+  if (!state.settings) {
+      state.settings = {};
+  }
+  state.settings.enableTLS = false;
+  ```
+- **验证**：即使底层 `ReadSettings()` 读回了历史持久化残留的 `{enableTLS: true}`，前端最终内存镜像与 UI 渲染时也绝对保持 `enableTLS = false`，彻底封死 Fail-Open 窗口。
+
+### 14.2 E2⁗ 闭环：剥离非限流 Generic "quota" 关键词，杜绝误判 (R36-2)
+- **改动位置**：`pkg/cert/provisioner.go`（新增 `ExtractRateLimitRetryAfter`）与 `desktop/gui/app.go`；
+- **落地代码**：在错误类型匹配中移除单独的 `"quota"` 词，仅对结构化 `RateLimitError`、`ErrRateLimited` 以及显式包含 `"rate limit"`、`"429"`、`"too many requests"`、`"resource exhausted"` 的错误生效；
+- **测试验证**：新增反向判别测试 `TestDevProvisionDeviceTLSCert_NonRateLimitQuotaErrorDoesNotTriggerCooldown`（`desktop/gui/app_test.go`）：
+  - 构造返回 HTTP 400 `"user storage quota exceeded"` 的模拟服务端；
+  - 实测客户端正确记录 `FailureCount=1`，而 `RateLimitCount=0`，`IsRateLimitedActive=false`，`RemainingCoolingSec=0`，完全不触发冷却保护（E2⁗ 达成）。
+
+### 14.3 E3⁗ 闭环：服务端 RetryAfter 动态解析与高精度继承 (R36-3)
+- **改动位置**：`pkg/cert/provisioner.go`（定义 `RateLimitError`，并在 429 分支解析响应 body 与 `Retry-After` Header）、`desktop/gui/app.go`（消费真实冷却秒数）；
+- **落地代码**：
+  ```go
+  isRateLimit, retryAfterSec := cert.ExtractRateLimitRetryAfter(err, 3600)
+  ```
+- **测试验证**：新增判别测试 `TestDevProvisionDeviceTLSCert_ParsesServerRetryAfter86400`（`desktop/gui/app_test.go`）：
+  - 构造返回 `retry_after: 86400` 的 429 模拟服务端；
+  - 实测客户端提取出的 `RemainingCoolingSec` 保持在 86390~86400s 区间，彻底打破了硬编码 3600s 导致提前 24x 重试的缺陷（E3⁗ 达成）。
+
+### 14.4 E7⁵ 闭环：移动端批量下载去模态化与原生系统弹窗协同澄清 (R37-16)
+- **核心因果事实**：
+  1. 移动端触摸屏存在 WebKit 触摸事件穿透（Touch Event Pass-through）底层物理现象：当系统级下载确认弹窗弹出时，触控背景导致原先 Svelte 模态遮罩层触发 `@click={handleCancelBatchModal}`，向服务端发送 `download-batch-cancelled`，从而主动打断压缩流程并将作业置为 `TransferCancelled`；
+  2. 原双重导航（`<a download>` + `location.href`）在移动端网络栈中造成请求重置；
+  3. 去模态化后，通过系统顶部 Toast 提示打包信息，由原生系统下载弹窗展示包名并接管下载与取消，在 Chrome DevTools 9222 端口实测验证中完成单次顺畅下载（E7⁵ 达成）。
+
+### 14.5 架构双文档主干与历史关系对齐 (R37-14)
+- 在 `lan-tls-security-protocol-technical-report.md` 文首增补主干权威取代声明（Supersession Notice），确立其为生产最新实测基线（私钥存储路径为 `certs/<node-id>/privkey.pem`、续签阈值 15 天、A 记录 TTL 300s、Google Public CA EAB 单轨架构）；并在 `lan-tls-zero-leak-acme-architecture.md` 文首标注历史蓝图归档导读，双文档协同。
+

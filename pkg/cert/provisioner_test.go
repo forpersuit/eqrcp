@@ -149,7 +149,7 @@ func TestLoadOrGenerateDeviceKey(t *testing.T) {
 		if err := os.Chmod(keyPath, 0000); err != nil {
 			t.Skipf("skipping: chmod 0000 not supported in current environment: %v", err)
 		}
-		defer os.Chmod(keyPath, 0600)
+		defer func() { _ = os.Chmod(keyPath, 0600) }()
 		_, testReadErr := os.ReadFile(keyPath)
 		if testReadErr == nil {
 			// Read succeeded despite chmod 0000 (e.g. running as root / CAP_DAC_OVERRIDE / Windows filesystem ACLs)
@@ -848,7 +848,7 @@ func TestMigrateLegacyDeviceCredentials_FailureHandling(t *testing.T) {
 	if err := os.WriteFile(legacyKey, []byte("unreadable-key"), 0000); err != nil {
 		t.Fatal(err)
 	}
-	defer os.Chmod(legacyKey, 0600)
+	defer func() { _ = os.Chmod(legacyKey, 0600) }()
 
 	targetConfigDir := filepath.Join(tempHome, "appdata", "eqt")
 	t.Setenv("EQT_CONFIG_DIR", targetConfigDir)
@@ -873,5 +873,72 @@ func TestMigrateLegacyDeviceCredentials_FailureHandling(t *testing.T) {
 	if !strings.Contains(keyErr.Error(), "refusing to silently generate new key") &&
 		!strings.Contains(keyErr.Error(), "refusing to generate new key") {
 		t.Fatalf("unexpected error message from LoadOrGenerateDeviceKey: %v", keyErr)
+	}
+}
+
+func TestRateLimitError_And_ExtractRetryAfter(t *testing.T) {
+	// 1. RateLimitError unwraps to ErrRateLimited
+	rErr := &RateLimitError{
+		Reason:     "too many requests",
+		RetryAfter: 86400,
+	}
+	if !errors.Is(rErr, ErrRateLimited) {
+		t.Errorf("expected errors.Is(rErr, ErrRateLimited) to be true")
+	}
+	if !strings.Contains(rErr.Error(), "retry after 86400s") {
+		t.Errorf("expected Error() to contain retry after 86400s, got %q", rErr.Error())
+	}
+
+	// 2. ExtractRateLimitRetryAfter with RateLimitError
+	isLimit, sec := ExtractRateLimitRetryAfter(rErr, 3600)
+	if !isLimit || sec != 86400 {
+		t.Errorf("ExtractRateLimitRetryAfter(rErr) = (%v, %d), want (true, 86400)", isLimit, sec)
+	}
+
+	// 3. ExtractRateLimitRetryAfter with RateLimitError but 0 retry_after uses default
+	rErrZero := &RateLimitError{Reason: "throttled", RetryAfter: 0}
+	isLimit, sec = ExtractRateLimitRetryAfter(rErrZero, 1800)
+	if !isLimit || sec != 1800 {
+		t.Errorf("ExtractRateLimitRetryAfter(rErrZero, 1800) = (%v, %d), want (true, 1800)", isLimit, sec)
+	}
+
+	// 4. ExtractRateLimitRetryAfter from formatted ErrRateLimited with string pattern
+	wrappedErr := fmt.Errorf("%w: daily limit exceeded (retry after 604800s)", ErrRateLimited)
+	isLimit, sec = ExtractRateLimitRetryAfter(wrappedErr, 3600)
+	if !isLimit || sec != 604800 {
+		t.Errorf("ExtractRateLimitRetryAfter(wrappedErr) = (%v, %d), want (true, 604800)", isLimit, sec)
+	}
+
+	// 5. ExtractRateLimitRetryAfter from HTTP 429 string with retry after
+	http429Err := errors.New("HTTP 429: Too Many Requests (retry after 86400s)")
+	isLimit, sec = ExtractRateLimitRetryAfter(http429Err, 3600)
+	if !isLimit || sec != 86400 {
+		t.Errorf("ExtractRateLimitRetryAfter(http429Err) = (%v, %d), want (true, 86400)", isLimit, sec)
+	}
+
+	// 6. Discriminating test: non-rate-limit errors containing "quota" must NOT be treated as rate limit!
+	quotaErr := errors.New("storage quota exceeded for user")
+	isLimit, _ = ExtractRateLimitRetryAfter(quotaErr, 3600)
+	if isLimit {
+		t.Errorf("ExtractRateLimitRetryAfter(quotaErr) got isLimit=true, want false (Rule 13 / R36-2)")
+	}
+
+	diskQuotaErr := errors.New("insufficient database quota to write record")
+	isLimit, _ = ExtractRateLimitRetryAfter(diskQuotaErr, 3600)
+	if isLimit {
+		t.Errorf("ExtractRateLimitRetryAfter(diskQuotaErr) got isLimit=true, want false (Rule 13 / R36-2)")
+	}
+
+	// 7. General error
+	normalErr := errors.New("connection reset by peer")
+	isLimit, _ = ExtractRateLimitRetryAfter(normalErr, 3600)
+	if isLimit {
+		t.Errorf("ExtractRateLimitRetryAfter(normalErr) got isLimit=true, want false")
+	}
+
+	// 8. Nil error
+	isLimit, _ = ExtractRateLimitRetryAfter(nil, 3600)
+	if isLimit {
+		t.Errorf("ExtractRateLimitRetryAfter(nil) got isLimit=true, want false")
 	}
 }

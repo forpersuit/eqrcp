@@ -5212,13 +5212,16 @@ async function autoDisableTLSOnFailure(errorMsg, openSettings = false) {
         enableTLSSwitch.checked = false;
     }
 
-    // 后端在 provisionDeviceTLSCertInternal 失败时已原子落盘 settings.EnableTLS = false。
-    // 前端仅刷新本地 settings 镜像，严禁重复全量 SaveSettings，消除并发全量覆写竞争。
     try {
         state.settings = await ReadSettings();
     } catch (e) {
         console.warn('[LAN-TLS] Failed to read latest settings after auto-disable:', e);
     }
+    // Fail-Closed 强制保证：无论 ReadSettings 读回什么，失败自动降级分支必须将 enableTLS 强行锁定为 false，彻底杜绝 fail-open 风险。
+    if (!state.settings) {
+        state.settings = {};
+    }
+    state.settings.enableTLS = false;
     const isRateLimit = state.tlsRateLimited || (errorMsg && (errorMsg.includes('rate limit') || errorMsg.includes('429') || errorMsg.includes('Too Many Requests')));
     const toastMsg = isRateLimit
         ? (t('tls_cert_rate_limited') || '触发证书颁发机构频次限制（已自动切换为局域网高速传输，保护期中）')
