@@ -34,6 +34,8 @@
 24. [第九轮独立复核意见（针对 `b161d543` 落地 diff · 2026-09-13 · 基线 v1.36.107）——对"自愈门控"与"验收数字"的复核](#24-第九轮独立复核意见针对-b161d543-落地-diff--2026-09-13--基线-v136107对自愈门控与验收数字的复核)
 25. [开发方对第九轮复核的裁决与精准落地：自愈门控解耦、测试求真与全场景终局自洽（基线 v1.36.108）](#25-开发方对第九轮复核的裁决与精准落地自愈门控解耦测试求真与全场景终局自洽基线-v136108)
 26. [第十轮独立复核意见（针对 `8247c364` 落地 diff · 2026-09-13 · 基线 v1.36.108）——首次对客户端自愈链做端到端运行时探针](#26-第十轮独立复核意见针对-8247c364-落地-diff--2026-09-13--基线-v136108首次对客户端自愈链做端到端运行时探针)
+27. [开发方对第十轮复核的裁决与精准落地：单向自愈定型、列名求真与测试能力对齐（基线 v1.36.109）](#27-开发方对第十轮复核的裁决与精准落地单向自愈定型列名求真与测试能力对齐基线-v136109)
+28. [第十一轮独立复核意见（针对 `f221e721` 落地 diff · 2026-09-13 · 基线 v1.36.109）——三条闭环实测为真，而承重墙论据第 7 次复发改为借用恒真校验](#28-第十一轮独立复核意见针对-f221e721-落地-diff--2026-09-13--基线-v136109三条闭环实测为真而承重墙论据第-7-次复发改为借用恒真校验)
 
 ---
 
@@ -2811,6 +2813,130 @@ rg -c 'PROBE30' desktop/gui/ pkg/      -> 0（zz_probe30_test.go 已删除，har
 | **版本号对齐升级** | `pkg/version/version.go`, `desktop/gui/wails.json` | 均已按规则小版本递增至 `v1.36.109` / `1.36.109` | ✅ PASS |
 
 至此，第十轮复核提出的所有合理项已 100% 精准落地闭环；不合理项（回滚旧盐）已通过第一性原理完成深度证伪与红线归档。代码审查与架构自愈链达成彻底收敛。
+
+---
+
+## 28. 第十一轮独立复核意见（针对 `f221e721` 落地 diff · 2026-09-13 · 基线 v1.36.109）——三条闭环实测为真，而承重墙论据第 7 次复发改为借用恒真校验
+
+### 28.0 审查对象与取证方式
+
+**审查对象**：`f221e721`（7 文件，+107/−7；`v1.36.108` → `v1.36.109`），声称闭环第十轮 R22/R23/R24 与 R25 可观测性，并否决 R25 的"回滚旧盐"项。
+
+**本轮取证方式**：除静态 `rg` 外，**首次为一处"由审查方自己写下的建议文本"建立运行时探针**——因为本轮唯一的新问题恰好源自该建议（见 §28.3）。
+
+| 探针 | 手段 | 实测结果 | 判定 |
+| :--- | :--- | :--- | :--- |
+| **P31-A** 自愈重试**失败** | 桩网关：第 1 次返 403 `node_key_mismatch`，第 2 次返 500；经真实 `app.go` → `provisionDeviceTLSCertInternal(true,true)` | `request[0]=4bd2649bfcd4` → `request[1]=a3b6809c8dbf`，`success=false`、`err` 外传，新告警逐字命中 | ✅ PASS |
+| **P31-B** 自愈重试**成功** | 同上，但第 2 次以测试 CA 对该请求 CSR 签真证书返回 | `success=true`、`nil` err、**无** `retry deferred` 误报、`cert.GetDeviceCertificate(新身份)` 成功装载 | ✅ PASS |
+| **R31-1** 反向：删去 `InvalidateFingerprintCache` 中的 `lastFingerprintProbeTime = time.Time{}` | 恢复"被修掉的那一行原文"的对偶操作 | `hardware_test.go:126: expected InvalidateFingerprintCache to reset lastFingerprintProbeTime to zero` → **FAIL** | ✅ 判别力成立 |
+
+环境隔离：`t.Setenv("EQT_CONFIG_DIR", t.TempDir())` + `t.Setenv("EQT_PROVISION_ENDPOINT", srv.URL)`；`pkg/config.DefaultConfigDir()` **每次调用读环境变量、无 `sync.Once` 缓存**（`pkg/config/config.go:260-278`），故隔离可靠，未触碰真实用户配置目录。
+
+### 28.1 ✅ 逐条实测为真（本轮 diff 的三处代码改动无一为假）
+
+1. **R23（列名求真）——完全闭环**：`rg -n 'updated_at'` 全仓仅剩 `schema.sql:216`（`free_daily_usage`）、`drm.ts:1236-1241`、`auth.ts:319`（均为**其他表**），以及本文档 §26.3 对旧错的历史记录。`node_public_keys` 相关 SQL 现统一使用真列名 `last_seen_at`（`docs/mechanism/lan-tls-zero-leak-acme-architecture.md:1188`、本文档 §25.1.2 第 2 项）。**历史上同表同类错第二次已被消除。**
+
+2. **R24（断言闭环）——完全闭环且具备判别力**：`hardware_test.go:120-127` 新增 `probeTimeZero := lastFingerprintProbeTime.IsZero()` 断言；**R31-1 反向探针证明该断言非装饰**——禁用时间戳重置后立即 FAIL。上一轮我指出该调用"标注 `Cleanup` 而无断言"，本轮已变为真断言。
+
+3. **R25 可观测性——完全闭环**：`app.go:2202-2212` 捕获 `(success, retryErr)` 并在非 mismatch 失败时输出摘要；**P31-A 逐字命中**：
+   `[LAN-TLS-PROVISION] [SELF-HEALING] … Node identity successfully rotated to a3b6809c8dbf, but retry deferred: remote certification gateway request failed: HTTP 500: upstream unavailable. New identity will persist for next attempt.`
+   **P31-B 证明无假阳性**（成功路径不输出该告警）。且 `GetDeviceNodeID()` 在轮换后返回新身份 ⇒ 前进式持久化确已落到磁盘。
+
+4. **R25"回滚旧盐"的否决——论证成立，审查方撤回自己的回滚建议**：`RotateDeviceNodeIdentity` 生产调用点全仓唯一（`rg` = `desktop/gui/app.go:2193`），且**仅**位于 `errors.Is(err, cert.ErrNodeKeyMismatch)` 分支内 ⇒ 触发轮换的前提恒为"旧 `node_id` 已收到云端 403"，旧身份对本机已是不可用资产。开发方"回滚将导致 `403 → 换盐 → 抖动 → 回滚 → 再次 403` 振荡、并以每轮一个新随机身份无界累积云端孤儿行"的证伪，**审查方接受**。§26.8【出口 1】中"重试失败时回滚旧盐"一句，**由审查方在此正式撤回**。
+
+5. **§27.2 验收表——逐行复核为真**：`go test -count=1 ./cmd/... ./pkg/...` = **16 个含测试套件全 `ok`，0 FAIL**；`npm run test:cert:offline` = **67 passed, 0 failed**；`npm run test:offline` = 8 个聚合套件 42+27+64+21+17+67+24+131 = **393，0 failed**；`npm run typecheck` = `tsc --noEmit` 0 error；`desktop/gui` `go build` 通过；`pkg/version/version.go` = `v1.36.109`、`wails.json` = `1.36.109`，**无旧版本串残留**（历史章节内的 `v1.36.108` 为正确的基线标注）。
+
+6. **R22 的"删除频控 = 承重墙"部分——成立**：删去限频作为授权依据的表述，正是本轮的正确修正方向（限频桶键 `cert_provision:${cleanNode}` 恰为自愈会主动轮换的 `node_id`）。
+
+### 28.2 🟠 R26：承重墙论据**第 7 次复发**——这次被借走强度的是一个"恒真校验"
+
+**改写后的原文**（§25.1.1 第 6 项）：
+> 「换绑防线的物理实质在于**服务端行绑定的原主凭据强一致比对 ∧ 客户端持有对应私钥**；云端频控仅降低未授权探测速率…」
+
+§27.1.1 第 2 项复述为：「换绑防线的**真正承重墙**在于 **服务端 D1 行绑定的强一致匹配 ∧ 客户端持有对应私钥**」。
+
+**代码事实**（两条独立确证）：
+
+- **换绑的唯一判定点**是 `cloudflare/eqt-drm-api/src/routes/cert.ts:877`：
+  `isAuthorizedRebind = Boolean(boundDeviceId && boundDeviceId === deviceIdHeader)`——**只做 `device_id` 字符串相等**，无签名、无挑战。
+- **全链路唯一的密码学校验**是 `cert.ts:803-845` 的 "Proof of Possession (POPO)"，它用 **`crypto.subtle.importKey('spki', parsedCSR.spkiDER, …)`，即本请求自带 CSR 的公钥**去验 `node:ts` 的签名；而客户端 `SignProvisionPayload(priv, cleanNode, ts)`（`pkg/cert/provisioner.go`）用的是**它自己的设备私钥**。
+
+⇒ 该校验所证明的命题是"**提交者持有其自身 CSR 之私钥**"。任何人在本地生成一对密钥后即自动满足该命题——攻击者亦然。**它对换绑授权零判别力，不构成防线的一环**，与 `device_id` 比对也不是"∧"关系（二者正交，后者在前者的判定式里根本不出现）。
+
+**具体失效场景（文档失真的可执行后果）**：读者据该句可推出"仅泄露 `device_id` 不足以换绑，攻击者还需要私钥"。而真实攻击链只需：取 32 位 `device_id`（About 面板 `title` 明文可见 + 复制按钮原值导出，§23.1.4 已确证）→ 本地生成密钥对 → 携 `X-EQT-Device-ID` 发起 `/api/v1/cert/provision` → 经 `cert.ts:877` 通过 → 获 `*.<受害 node>.direct.eqt.net.im` 公信证书。文档把"**知道 `device_id` 即可换绑**"这一真实强度**向上调**了。
+
+**同族计数**：⑪ → ⑭ →【51】→【58】→§24.6 残余登记 2 → R22 → **R26**，第 7 次。
+
+### 28.3 审查方自我更正（本轮核心，连续第五轮）
+
+**R22 的"修法"由审查方给出**：§26.2【修法】与 §26.8【出口 1】原文写的正是"换绑防线 = 服务端行强绑定 ∧ **请求方持有被绑定私钥**"。开发方在 §27.1.1 第 2 项**逐字采纳**了该措辞。
+
+⇒ **本次失真是审查方引入的**：我给"持有私钥"一词签发了强度背书，却**未对"服务端是否在判定点验证该持有"做反向探针**。前六次复发是"开发方书面断言未经代码核验"；**第 7 次是"审查方建议文本未经代码核验"**。这一条比前六次更值得记录：审查方的修法文本本身也进入了承重墙的位置。
+
+**方法论补丁（已同步进 skill）**：**审查方提出的修法文本，其每一个 `∧` 合取项都必须能落到具体文件的具体判定行号；落不到行号的合取项，不得作为"强度项"写入文档。** 换言之，审查方给出替换句时，必须与开发方同样接受"逐合取项 grep 到判定点"的检验。
+
+### 28.4 建议的替换文本（单句改写，可直接粘贴）
+
+> **换绑放行的唯一条件是**：请求方出示的 `X-EQT-Device-ID` 与 `node_public_keys` 行内 `device_id` **字符串相等**（`cert.ts:877`）。该值在本产品内被当作**非秘密**（About 面板 `title` 可见、复制按钮全值导出），故该防线是**知识型**而非密码学型——其真实强度等于"知道 `device_id`"。
+> `cert.ts:803-845` 的 POPO 校验以请求自带 CSR 的公钥验签，仅证明"提交者持有其自身 CSR 之私钥"，用于阻止"重放他人 CSR 而无对应私钥"，**对任何发起者恒真，不提供换绑授权强度**。云端频控仅降低未授权探测速率，不构成授权，且其 per-node 桶键随客户端轮换而重置。
+
+**删除两处强度措辞即不失真**：「承重墙」三字、以及「客户端持有对应私钥」这一合取项。**该改写同时适用于三处**：§25.1.1 第 6 项、§27.1.1 第 2 项（同一措辞的复述），以及 `.agents/skills/eqt-lan-tls/SKILL.md:538`（「换绑安全严格建立在服务端 D1 行绑定匹配与**客户端私钥持有**之上」）。
+
+### 28.5 残余与观察
+
+- **本轮无任何新的代码缺陷**：三处代码改动（`app.go` 可观测性、`hardware_test.go` 断言、版本号）经 E2E 与反向探针验收全部为真，**Rule 13 无回归**——自愈链在改动后仍能完成"403 → 轮换 → 重试成功 → 证书装载"全链。
+- **文档 housekeeping（非发现，仅记录）**：`f221e721` 新增的 §27 未登记进目录，本轮一并补上 §27 与 §28 两条目录项。
+- 机制文档 `docs/mechanism/lan-tls-zero-leak-acme-architecture.md:1187` 仍标注"终局闭环于 v1.36.108"，而当前基线为 `v1.36.109`；该处指代的是引入版本，非当前版本，**不构成失真**。
+
+### 28.6 取证记录（原文）
+
+```
+# P31-A：自愈重试失败（403 mismatch → 500）
+PROBE31 mode=500 before_node=4bd2649bfcd4 requests=2 after_node=a3b6809c8dbf success=false
+         retErr=remote certification gateway request failed: HTTP 500: upstream unavailable
+PROBE31   request[0] node_id=4bd2649bfcd4
+PROBE31   request[1] node_id=a3b6809c8dbf
+PROBE31   log> [WARN] [LAN-TLS-PROVISION] [SELF-HEALING] Node key mismatch for nodeID=4bd2649bfcd4. Automatically rotated node identity to a3b6809c8dbf and retrying via TOFU...
+PROBE31   log> [WARN] [LAN-TLS-PROVISION] [SELF-HEALING] Node identity successfully rotated to a3b6809c8dbf, but retry deferred: remote certification gateway request failed: HTTP 500: upstream unavailable. New identity will persist for next attempt.
+
+# P31-B：自愈重试成功（403 mismatch → 200 + 真证书）
+PROBE31 mode=ok before_node=4bd2649bfcd4 requests=2 after_node=15f3f5ef6e34 success=true retErr=<nil>
+PROBE31   request[0] node_id=4bd2649bfcd4
+PROBE31   request[1] node_id=15f3f5ef6e34
+（无 "but retry deferred" 行 ⇒ 无假阳性；GetDeviceCertificate(15f3f5ef6e34) 装载成功）
+
+# R31-1：反向探针（禁用 InvalidateFingerprintCache 的时间戳重置）
+--- FAIL: TestHardwareThrottleCooldown (0.00s)
+    hardware_test.go:126: expected InvalidateFingerprintCache to reset lastFingerprintProbeTime to zero
+
+# R26 取证
+$ rg -n 'updated_at' -> 仅 schema.sql:216 / drm.ts:1236,1241 / auth.ts:319（均非 node_public_keys）
+$ rg -n 'RotateDeviceNodeIdentity' --glob '!*_test.go' -> desktop/gui/app.go:2193（唯一）
+cert.ts:877          isAuthorizedRebind = Boolean(boundDeviceId && boundDeviceId === deviceIdHeader)
+cert.ts:805-811      crypto.subtle.importKey('spki', parsedCSR.spkiDER, ...)   ← 用本请求 CSR 的公钥
+provisioner.go       SignProvisionPayload(priv, cleanNode, ts)                  ← 用客户端自己的私钥
+rg -c 'PROBE31' desktop/gui pkg -> 0（zz_probe31_test.go 已删除，hardware.go 已逐字还原）
+
+# 基线复核
+go test -count=1 ./cmd/... ./pkg/...          -> 16 个含测试套件全 ok / 0 FAIL
+npm run test:cert:offline                     -> Results: 67 passed, 0 failed
+npm run test:offline                          -> 8 聚合 = 42+27+64+21+17+67+24+131 = 393, 0 failed
+npm run typecheck                             -> tsc --noEmit, 0 error
+desktop/gui: go build                         -> OK
+pkg/version/version.go -> v1.36.109 ; wails.json -> 1.36.109
+```
+
+### 28.7 收敛评估与出口
+
+- **代码侧：已收敛。** 本轮 diff 的三处代码改动全部为真、全部具备判别力/可观测性，且自愈链端到端无回归。**无新代码缺陷。**
+- **文档侧：仅剩一处。** R23/R24/R22-频控/R25 说明均为真；唯一残留是 R26——「承重墙」一词与其"持有对应私钥"合取项把强度借给了一个恒真校验（第 7 次同族复发）。
+- **出口（单句改写，无爆炸半径）**：按 §28.4 的文本替换 §25.1.1 第 6 项与 §27.1.1 第 2 项中的对应句子。**因该措辞的原始建议来自审查方，本轮直接给出可粘贴文本，不再要求开发方自行推导。**
+- **下一轮验收方式**：仅需 `rg -n '承重墙' docs/`（期望：仅剩本文档的历史章节）与 `rg -n '持有对应私钥' docs/`（期望 0 命中）两条反向确认，无需再开新战线。
+
+### 28.8 发布建议
+
+`f221e721`（`v1.36.109`）**可发布**：三处代码改动均为真实改进且经运行时探针验收，R25 的回滚否决在技术上正确。R26 属文档描述级、单句可改，建议随下一次文档更新一并落地——它不影响本版功能正确性，但会把"换绑防线强度"这一威胁模型结论留在偏乐观的一侧。
+
 
 
 
