@@ -285,3 +285,184 @@ SUCCESS! Google Trust Services full certificate provisioning completed cleanly!
 - 生产网关部署：通过 `npx wrangler deploy` 发布至 `lic.eqt.net.im`（Version ID: `9ae18be7-82eb-46b2-a92b-f1f417785aa1`）；
 - Windows 3-in-1 最终产物：执行 `scripts/deploy-windows-results.sh`，生成最新 `eqt.exe` 并打包分发至 `/mnt/e/developer/results/eqt-desktop-windows-amd64.zip`；
 - 代码提交与推送：Commit `f2292436`，已通过 `scripts/git-push-smart.sh` 推送到 GitHub 远程仓库。
+
+---
+
+## 五、 审查意见（第 32 轮独立复核 · 2026-09-13）
+
+> **复核基线**：文档提交 `ea012953`，代码基线 `f2292436`，产物基线 `v1.36.114`。
+> **复核方法**：把本文每一条声称映射到可判定的代码行或可重复的命令；凡有疑点先做反向探针或同批对照，再做结论。编号沿用本轮前缀 `R32-n`。
+> **结论摘录**：实现侧**属实**（逐行核对通过）；文档侧有 **4 处声明失真、1 处数字不符、1 处措辞与实际持久状态相反**；风险侧有 **1 项唯一会实际降低用户结局的未闭合项**（R32-6）。最高效的修法只需一处改动即可同时消解 R32-1 与 R32-2（见 §5.3 方案 A）。
+
+### 5.1 逐条核验（属实项，✅）
+
+| 文档声称 | 判定 | 证据（file:line / 命令） |
+| :--- | :---: | :--- |
+| §2.3 旧版"写入即触发 0ms 冷却"的单步循环 | ✅ 引用忠实 | `git show f2292436 -- src/routes/cert.ts`：被删代码确为 `await setDns01Challenge(...)` 紧接 `await acmeClient.triggerChallenge(dnsChall.url)` 同循环体 |
+| §3.1 两阶段批量 + 传播等待 + 批量触发 | ✅ 逐行一致 | `cert.ts:1032-1084`（Phase 1 收集 → Phase 2 全量写入 → Phase 3 `setTimeout(3000)` → Phase 4 批量 trigger → Phase 5 `pollOrder('ready')`） |
+| §3.2 错误穿透反吞没（抓 subproblems） | ✅ 逐行一致 | `acme.ts:425-447`，含 `order.error` / `challenges[].error` / `subproblems` 三级抓取，无细节时回落 `no details` |
+| §3.3 五态状态机 | ✅ 全部落地 | `tls_status.js:6` 状态联集 `'disabled'\|'ready'\|'mismatch'\|'failed'\|'preparing'`；`:34-45` 设置图标、`:113-123` 顶栏图标分支齐全 |
+| §3.5 顶栏全局安全指示器 | ✅ 已接线 | `tls_status.js:110 renderTopbarTLSIndicator`；`main.js:18` 引入、`main.js:572-573` 挂入 `top-actions` |
+| §3.4 后端自动关断并落盘 | ✅ 已落地 | `app.go:2283-2288`（read-modify-write 后 `writeSettings`） |
+| §3.4 前端自动关断 | ✅ 已落地 | `main.js:5201-5227 autoDisableTLSOnFailure`；触发点 `:4075/:4089/:4352/:4357`（reject）与 `:6896/:6912`（`eqt:tls-node-key-mismatch` / `eqt:tls-cert-failed`） |
+| §3.3 `Mismatch → Disabled`（"无法自愈时自动关闭"） | ✅ 已落地 | `main.js:6881-6900`：`eqt:tls-node-key-mismatch` 且 `enableTLS` 为真时调用 `autoDisableTLSOnFailure`（注：审查方初判此边未实现，经反向核对后撤回） |
+| §4.2 `npm run test:cert:offline` ➔ 67 PASS | ✅ 实测一致 | 实跑：`Results: 67 passed, 0 failed` |
+| §4.2 `npm run test:acme:offline` ➔ 24 PASS | ✅ 实测一致 | 实跑：`Results: 24 passed, 0 failed` |
+| §4.3 `version.go` = `v1.36.114`；`wails.json` = `1.36.114` | ✅ 一致 | `pkg/version/version.go:12`；`desktop/gui/wails.json:15 productVersion`（键名与文档简称不同，值一致） |
+| §4.3 Commit `f2292436` 存在且含所述 cert.ts 改动 | ✅ 一致 | `git cat-file -t f2292436` = commit；`git show --stat` 8 文件 / +136 −9 |
+
+### 5.2 主要问题
+
+#### R32-1 🟠 §2.3 的机制归因与修法不同构，且其中一个数值不实
+
+- **事实**：文档 §2.3 第 3 条称缓存应答"带有 `TTL=60s`"。实测该 TXT 的 TTL 由网关按 `setDns01Challenge(..., ttl = 300)`（`cert.ts:503`）下发，权威侧按请求体 ttl 落库（`cmd/eqt-dns/main.go:386-390`），SOA `Minttl: 300`（`main.go:275`）。**实际 TTL = 300s，不是 60s。**
+- **同构性缺陷**：文档用"递归解析器缓存了仅含 `val_1` 的单记录应答"来解释失败，却用"3 秒固定等待"来修复。在 300s TTL 下，3 秒既不足以让缓存过期，也不是让缓存变"正确"的手段——真正让缓存变正确的是**"阶段 2 先写全两条值"**（此后无论缓存与否，被缓存下来的应答本身就是完整应答）。因此：**修法正确，但文档把功劳记在了错误的机制上**，并因此留下一个无依据的魔法常数。
+- **失败场景**：读者据文档认为"3s 已覆盖 TTL 量级"，日后将 3s 调小或把"先写全"的顺序改回交错时，无任何东西会变红。
+
+#### R32-2 🟠 §3.1 阶段 4 声称的"确认"在代码中不存在
+
+- 文档第 158 行注释：`// 阶段 4：确认双机已稳定挂载全部双值后，再批量触发 CA 校验`。
+- 代码 `cert.ts:1074-1084`：阶段 3 的注释是 `Wait ... (3000ms)`，实现只有 `await new Promise(resolve => setTimeout(resolve, 3000))`；阶段 4 的注释是 `Trigger all challenges`，**没有任何查询、读回或确认动作**。
+- **后果**：整个修复所依赖的前置条件"两条值已在 ns1/ns2 生效"从未被验证。竞态只是从"必然"降级为"低概率"，而文档把它表述成了已确认。这正是本线程连续多轮复现的同一类缺陷：**声称超出实现**。
+- **失败场景**：ns1→ns2 复制延迟在某次高于 3s 时，同一 500 会以更低频率复现，而日志与文档都会指向"已修复"。
+
+#### R32-3 🟠 修复核心不变量零测试锁定
+
+- `git show --stat f2292436` 的 8 个文件**不含任何测试文件**；`tests/cert-provision-offline.js` 中与 DNS 相关的断言仅覆盖 `setDns01Challenge` 自身（T16 单端点失败即 loud fail、T17.1 部分失败回滚），对 `handleCertRoutes` 的**相位顺序无任何断言**。
+- **后果**：不变量"所有 `setDns01Challenge` 必须早于所有 `triggerChallenge`"无测试锁定，可被静默改回（Rule 9 / Rule 13）。
+- **成本收益**：该单测不需要真 CA、不需要网络——在 stub 上记录调用序，断言 `max(setDns 下标) < min(trigger 下标)` 且 `trigger 次数 == 待写值数`。一行不变量换取永久防回归，是本轮性价比最高的一项。
+
+#### R32-4 🟠 §4.1 证据不可复现，且缺反向对照（n=1）
+
+- §4.1 的 live 脚本**未入库**：`cloudflare/eqt-drm-api/tests/` 下无对应文件，`git show --stat f2292436` 中亦无，`rg 'FULL LIVE TEST WITH GOOGLE CA'` 全仓无命中。
+- 结论句"Google CA 探测节点 **100% 检索到正确记录**"建立在**一次**成功运行上。竞态类修复用一次成功无法区分"修好了"与"这次没踩上"。
+- **缺失的对照**：同一 harness 下运行**旧代码**应能复现 `invalid`（至少 N 次）。没有该对照，§4.1 只能证明"方案可行"，不能证明"竞态已消除"。
+
+#### R32-5 🟠 §3.4 的"前后端双保险"实为并发双写（丢失更新）
+
+- Go 侧 `app.go:2283-2288` 为 read-modify-write 整份 settings；前端 `SaveSettings`（`app.go:1115-1119` → `agent.writeSettings`）为**整份覆盖**，数据源是前端内存快照 `state.settings`（`main.js:5213-5219` 的 `{...state.settings, ...}`）。
+- 两个独立写者对同一 JSON 做整份覆盖 ⇒ **谁后落盘谁赢整份文件**。窗口内用户改动的其它字段（或 Go 侧刚读到的更新值）可能被前端旧快照回退。
+- **后果**：文档把这组关系称为"双保险"（互备语义）；实际是"双写"（竞争语义）。二者对读者后续维护的指引完全相反。
+
+#### R32-6 🟠 组合后果：自动关断把"残余竞态"放大为比修复前更差的用户结局
+
+- **修复前**：竞态命中 → HTTP 500 → fail-soft 明文，开关仍为 ON（视觉误导），但下次启动 `silentProvisionDeviceTLSCert` 仍会自动重试 ⇒ **可自愈**。
+- **修复后**：竞态残余命中 → 自动关断并把 `EnableTLS=false` 落盘（`app.go:2283-2288`）+ 前端同样落盘（`main.js:5201-5227`）；而 `silentProvisionDeviceTLSCert` 在 `EnableTLS=false` 时**直接 return**（`app.go:2131-2137`，并在 3s 睡眠后二次确认 `app.go:2154-2159`）⇒ **再无任何自动重试**。
+- 于是：一个"尚未被验证已消除"的竞态，其残余命中被新引入的自动关断升级为**"用户 TLS 被永久关闭、必须人工重新打开"**。两处改动各自都合理，但**文档没有任何一处分析二者的组合**，而组合结果恰恰比修复前更差。
+- **根因**：代码没有区分**瞬时可重试**（ACME 竞态 / 上游 5xx / 网络超时）与**结构性不可重试**（403 绑定冲突）。自动关断只应施加于后者。这是本轮唯一会实际降低用户结局的项。
+
+#### R32-7 🟠 措辞承诺了门控已禁止的"重试"
+
+- 与自动关断同一代码路径上，日志仍为 `[LAN-TLS-PROVISION] [FAIL-SOFT] Provisioning deferred: ... (plain HTTP fallback active)`（`app.go:2290`），事件 `eqt:tls-cert-failed` 携带 `fallback: plain_http`（`app.go:2296-2300`）。但该路径**刚刚把开关持久化为 OFF**，而唯一自动重试点在 OFF 下不会运行 ⇒ `deferred` / "fallback active" 所暗示的"稍后自动重试"已不成立。
+- 同类问题波及上一轮文案：`app.go:2246` 的 `New identity will persist for next attempt` —— 自动关断生效后，`next attempt` 不会自动到来。
+- **后果**：运维与用户依据日志判断"稍后会好"，实际需要人工介入。属于"日志与实际持久状态相反"的失真。
+
+#### R32-8 🔵 交付归属与零头数字
+
+- 文档自称"代码提交与推送：Commit `f2292436`"，但本文描述的 TLS 状态机、自动关断、顶栏指示器来自更早的 5 个提交（`a0f4f649` → `08941686` → `1d58d317` → `6c2d432f` → `dcf0c9a6`），`f2292436` 只含 ACME 竞态修复 + 顶栏（8 文件 / +136 −9）。建议按提交哈希分段署名，便于日后考古。
+- §4.2"`go test ./...` ➔ **16** 个套件全部 PASS"：实测为 **17** 个 `ok`、0 FAIL（多出 `eqt/cmd/eqt-dns`）。数字需更正，否则与"零静默跳过"的声明自相矛盾。
+- 非阻塞小节：
+  - §3.3 的 Mermaid 缺 `Ready → Disabled`（手动关闭）与 `Failed → Preparing`（手动重试）两条边；代码支持，但既称"完整的生命周期流转状态机"就应补齐。
+  - `cert.ts:1053` 的 `recordName` 硬编码为 `_acme-challenge.${cleanNode}.direct.eqt.net.im.`。§2.2 论证的核心正是"通配符授权标识符去掉 `*.` 后与该名字相同"（RFC 8555 §7.1.3）——直接用 `_acme-challenge.${authz.identifier.value}.` 可让该不变量自证，而非依赖一个与之并行的硬编码。
+
+### 5.3 最高效的解决方案（按性价比排序）
+
+**方案 A（首选：一处改动，同时消解 R32-1 与 R32-2）— 把"睡 3 秒"换成"双权威节点正向确认"**
+
+在阶段 3 与阶段 4 之间插入：对每个待写 `recordName`，向**全部**权威节点查询，要求**每个节点**都返回该名字下的**全部期望值**；轮询 500ms、最长 15~30s；全部满足才进入阶段 4，超时则带实测值 fail loud。
+
+- **可行性已核实（零新增服务端代码）**：`cmd/eqt-dns/main.go:399-402` 的 `GET /acme/challenge` **已存在**，返回 `store.GetAllRecords()`，形状为 `map[recordName][]value`（`main.go:107-125`，且会自动剔除过期值）；鉴权与 `POST`/`DELETE` 共用同一 Bearer 校验（`main.go:345`）。因此 Worker 侧只需 15 行左右的读回+轮询，复用已有的 `endpoints` 与 `dnsToken`。
+- **收益**：(1) 修复所依赖的前置条件**第一次被真正验证**（消解 R32-2）；(2) 去掉 3s 这个无依据常数；(3) 把残余竞态从"低概率静默失败"变为"显式、可诊断、带观测值的失败"；(4) **时间**彻底退出这个修复的成败判定——不再需要任何 TTL 推理（消解 R32-1）。
+- **成本**：每次签发多 2×N 次内部 HTTP 读（走已有管理端点），**不消耗任何 CA 配额**。
+- 参考实现（可直接粘贴）：
+
+```typescript
+async function confirmDnsPropagation(
+  endpoints: string[], token: string, recordName: string, expected: string[], timeoutMs = 20000
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  const observed: Record<string, string[]> = {};
+  while (Date.now() < deadline) {
+    let allConfirmed = true;
+    for (const ep of endpoints) {
+      try {
+        const res = await fetch(`${ep.replace(/\/+$/, '')}/acme/challenge`, {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        });
+        const body: any = res.ok ? await res.json() : {};
+        observed[ep] = body?.records?.[recordName] || [];
+      } catch {
+        observed[ep] = [];
+      }
+      if (!expected.every(v => observed[ep].includes(v))) allConfirmed = false;
+    }
+    if (allConfirmed) return;
+    await new Promise(r => setTimeout(r, 500));
+  }
+  throw new Error(
+    `DNS-01 propagation not confirmed on all authoritative endpoints for ${recordName}; ` +
+    `expected=[${expected.join(',')}] observed=${JSON.stringify(observed)}`
+  );
+}
+```
+
+**方案 B（次选：消解 R32-6）— 服务端对 `invalid` 做有界重下单**
+
+清理旧值 → 新 order → 新 token → 重走方案 A 流程，**最多 1 次**，再失败才向上抛。
+
+- **为什么可行且便宜**：全局 40 次/周的护栏是在**每次 provision 请求入口**评估的（`cert.ts:738-742`，键 `cert_provision:global_acme`），一次有界重下单不额外消耗该护栏；ACME 侧的 order 限额远高于此。
+- **收益**：客户端不再把"瞬时竞态"当成结构性失败，自动关断得以只用于真正的结构性问题。
+
+**方案 C（客户端侧，与 B 二选一或叠加）— 失败分类**
+
+给 ACME 类瞬时失败一个可重试的 `reason_key`（如 `acme_transient`），前端对该类不自动关断、仅做一次退避重试；自动关断只用于 `node_key_mismatch` 等结构性原因。
+
+**方案 D（结构性消除，前置条件当前不成立）**
+
+若确认**任何客户端都不会以裸 `<nodeID>.direct.eqt.net.im` 作为连接目标**，则可只申请 `*.<nodeID>.direct.eqt.net.im` 一张通配证书，授权对象由 2 个降为 1 个 ⇒ **同一记录名下的双值争用由构造消失**，不再需要任何时序或传播手段。
+
+- **现状核查（本次实测）**：`pkg/cert/provisioner.go:44-45` 的传输连接目标是 `192-168-0-201.<nodeID>.direct.eqt.net.im`（由通配覆盖）；裸名按 §2.1 保留用于"单节点根路由/鉴权"。⇒ **前置条件当前不成立，D 暂不可采用**。但建议登记为"若日后根路由改走通配子域，即可用一行改动结构性消灭本缺陷"。
+
+### 5.4 可直接粘贴的替换文本
+
+**（1）§2.3 第 3 条（TTL 数值与归因）**
+
+> ~~带有 `TTL=60s`~~ → 该 TXT 的 TTL 由网关按 `setDns01Challenge(..., ttl = 300)` 下发（`cert.ts:503`），权威侧按请求体 ttl 落库（`cmd/eqt-dns/main.go:386-390`），即 **300s**。因此本缺陷的可复现部分**不能**归因于"3 秒等待不足以等缓存过期"；真正消解缓存风险的是**"先写全两条值"**——此后被缓存下来的应答本身即为完整应答。3 秒等待的作用域仅是**权威节点间的写入可见性**，且其充分性未经验证（见 §5.2 R32-2）。
+
+**（2）§3.1 阶段 4 注释**
+
+> ~~阶段 4：确认双机已稳定挂载全部双值后，再批量触发 CA 校验~~ → 阶段 4：在固定 3000ms 等待后批量触发 CA 校验。**本阶段不校验 DNS 是否已生效**；该前置条件目前仅由时间假设保证，建议按 §5.3 方案 A 补正向确认。
+
+**（3）§3.4 首句**
+
+> ~~前后端双保险自动关闭开关~~ → 前后端两侧的冗余自动关闭（redundant disable）。**两侧均以"整份 settings 快照覆盖写入"落盘**（Go `app.go:2283-2288`、前端 `main.js:5213-5219` → `SaveSettings` → `writeSettings`），属并发写同一文件，存在丢失更新；**不是互备关系**。
+
+**（4）§4.1 结论句**
+
+> ~~Google CA 探测节点 100% 检索到正确记录~~ → 在 1 次实测（1 次成功、0 次反向对照）中，Google CA 于 3s 等待后成功检索到两条记录并签发证书。**该结果证明方案可行，不证明竞态已消除**；脚本未入库，不可复现。
+
+**（5）§4.2 数字**
+
+> ~~16 个套件全部 PASS~~ → **17** 个套件 `ok`、0 FAIL（含 `eqt/cmd/eqt-dns`）。
+
+**（6）§3.4 自动关断路径的日志/事件语义（对应 R32-7）**
+
+> 该路径应改为显式的持久语义，例如 `[LAN-TLS-PROVISION] [AUTO-DISABLED] Certificate provisioning failed (%v); settings.EnableTLS persisted to false and automatic retry is disabled until the user re-enables it.`；`deferred` / `next attempt` 一类措辞只保留给真正会重试的路径（即方案 B/C 落地后的瞬时失败）。
+
+### 5.5 收敛与出口判定
+
+- **实现侧属实**：`f2292436` 的两阶段 ACME 重构、错误穿透反吞没、5 态状态机、顶栏指示器、前后端自动关断，均已逐行核对存在且与文档一致。
+- **文档侧待修**：§5.4 的 6 段替换文本（对应 R32-1 / R32-2 / R32-4 / R32-5 / R32-7 / R32-8）。
+- **风险侧唯一未闭合项**：**R32-2 + R32-3** —— 修复所依赖的前置条件从未被验证，且没有一条测试锁定它。这是本缺陷在未来静默复发的唯一通道。
+- **建议作为下一轮验收项（出口条件）**：
+  - **E1**（最高性价比，1 条单测）：调用序不变量断言 `max(setDns01Challenge 下标) < min(triggerChallenge 下标)`。
+  - **E2**：阶段 3 改为双权威节点正向确认（方案 A），并配离线单测：stub 两节点，仅 ns2 可见时断言**不**进入阶段 4；两节点均可见时断言进入。
+  - **E3**：`handleCertRoutes` 相位顺序测试纳入 `test:cert:offline`，并更新计数（应为 67 + 新增，不得静默跳过）。
+  - **E4**：瞬时 vs 结构的失败分类落地（方案 B 或 C），自动关断只作用于结构性问题。
+  - **E5**：§5.4 六段替换文本 + 17 套件数字 + 分段署名落地。
+
+### 5.6 发布建议
+
+`f2292436` 的**代码可以发布**：竞态修复方向正确，错误穿透真实可用，状态机与自动关断均已实现且无回归（17 套件 ok / 0 FAIL、`test:cert:offline` 67-0、`test:acme:offline` 24-0、typecheck 干净、GUI build OK、`v1.36.114` 一致）。
+
+但建议按以下优先级跟进：**E1（一行单测，成本最低、防回归收益最高）→ E2/方案 A（把时间假设换成状态验证）→ E4/方案 B 或 C（消解自动关断对瞬时失败的放大）→ §5.4 文档修正**。其中 **R32-6 是唯一会实际降低用户结局的项，建议在下一个版本内解决**。

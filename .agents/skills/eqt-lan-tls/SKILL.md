@@ -624,6 +624,24 @@ WantedBy=multi-user.target
 > - **✅【87】Go 后端置备失败自动重置 EnableTLS**：
 >   - 在 Go 后端 `provisionDeviceTLSCertInternal` 失败分支中，直接重置并持久化 `settings.EnableTLS = false`，双保险防止配置漂移。
 
+---
+
+## 第十五轮复核沉淀（第 32 轮审查 · 对 `f2292436` 的独立复核 · 基线 `v1.36.114`）
+
+> 本节与上一节【83】–【87】是**同一提交的两个视角**。凡有冲突处以本节为准，每条均给出可复核的行号。
+> **⚠️ 冲突更正（三处）**：下文【88】【89】【90】直接修正上一节的【84】【83】，引用时勿再沿用【84】的百分比结论与【83】的 TTL 数值。
+
+> - **🔴【88】更正【84】的"实测 100% 避免时序竞态"**：该结论建立在 **1 次**成功运行、**0 次**反向对照之上，且 live 脚本**未入库**（`rg 'FULL LIVE TEST WITH GOOGLE CA'` 全仓无命中）。竞态类修复用一次成功无法区分"修好了"与"这次没踩上"⇒ 只能表述为"方案可行"，不得书写百分比，除非同时给出"旧代码在同一 harness 下复现失败"的对照。
+> - **🔴【89】更正【83】第 3 条的 TTL 数值（应为 300s，非 60s）**：权威侧实际 TTL 为 **300s**——`cert.ts:503` `setDns01Challenge(..., ttl = 300)`，`cmd/eqt-dns/main.go:386-390` 按请求体 ttl 落库，SOA `Minttl: 300`（`main.go:275`）。⇒ **不能用"等缓存过期"来解释 3s 等待**；消解缓存风险的是"先写全两条值"这一**顺序**，不是等待时长。
+> - **🔴【90】阶段 4 只睡不验（修复依赖的前置条件从未被验证）**：`cert.ts:1074-1084` 只有 `await new Promise(setTimeout(3000))` 与批量 trigger，**没有任何读回/确认动作**。**首选修法（零新增服务端代码）**：`cmd/eqt-dns/main.go:399-402` 的 `GET /acme/challenge` **已存在**，返回 `map[recordName][]value`（`main.go:107-125`，自动剔除过期值），鉴权与 POST/DELETE 共用同一 Bearer（`main.go:345`）⇒ Worker 侧约 15 行即可对**每个**权威节点做正向确认，把"时间假设"换成"状态验证"，并使 3s 魔法常数消失。
+> - **🔴【91】修复的核心不变量零测试锁定**：`git show --stat f2292436` 的 8 个文件中**无任何测试文件**；`tests/cert-provision-offline.js` 仅覆盖 `setDns01Challenge` 自身（T16/T17），对 `handleCertRoutes` 的相位顺序无断言。必须补一条确定性单测：stub 记录调用序，断言 `max(setDns01Challenge 下标) < min(triggerChallenge 下标)` 且 `trigger 次数 == 待写值数`（无需网络与真 CA）。
+> - **🟠【92】自动关断 × 瞬时失败 = 比修复前更差的用户结局**：`EnableTLS=false` 落盘后，`silentProvisionDeviceTLSCert` 直接 return（`app.go:2131-2137`，并在 3s 睡眠后二次确认 `app.go:2154-2159`）⇒ 残余竞态命中将**永久关闭 TLS 且无任何自动重试**；而修复前是 fail-soft + 下次启动自动重试。根因是**未区分"瞬时可重试"与"结构性不可重试"**。建议服务端对 `invalid` 做**有界重下单（1 次，清理旧值→新 order→新 token）**：全局 40 次/周护栏在**请求入口**评估（`cert.ts:738-742`），有界重下单不额外消耗该护栏。
+> - **🟠【93】"前后端双保险"实为并发双写（丢失更新）**：Go 侧 `app.go:2283-2288` 读-改-写整份 settings，前端 `SaveSettings`（`app.go:1115-1119` → `writeSettings`）**整份覆盖**，数据源是前端内存快照（`main.js:5213-5219`）⇒ 两个写者、谁后落盘谁赢整份文件。前端应改为"只更新本地视图 + 重新 `ReadSettings()`"，**不得用可能过期的内存快照回写**。
+> - **🔵【94】措辞与实际持久状态相反**：自动关断路径仍打印 `[LAN-TLS-PROVISION] [FAIL-SOFT] Provisioning deferred ... (plain HTTP fallback active)`（`app.go:2290`），事件携带 `fallback: plain_http`（`:2296-2300`）；且上一轮文案 `New identity will persist for next attempt`（`:2246`）在该门控下不会自动兑现。`deferred` / `next attempt` 只应保留给真正会重试的路径。
+>
+> **方法论沉淀（本轮新增，可复用于任何"竞态修复"审查）**：审竞态修复先问三问——(1) 修法依赖的前置条件是被**验证**了，还是被**时间**假定了？(2) 结论中的百分比有几次运行、有无**反向对照**？(3) 该修复与同期引入的其它机制（本例为自动关断）**组合**后，失败结局是变好还是变坏？第 (3) 问在本轮首次产出结论，且是唯一会实际降低用户结局的项。
+> **另**：§3.3 的 Mermaid 缺 `Ready → Disabled`（手动关闭）与 `Failed → Preparing`（手动重试）两条边；`cert.ts:1053` 的 `recordName` 硬编码为 `_acme-challenge.${cleanNode}...`，而用 `_acme-challenge.${authz.identifier.value}.` 可让 RFC 8555 §7.1.3 的等价性**自证**，不再依赖并行硬编码。
+
 
 
 
