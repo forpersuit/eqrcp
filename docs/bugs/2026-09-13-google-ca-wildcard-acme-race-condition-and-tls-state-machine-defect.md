@@ -1591,3 +1591,28 @@ PROBE-CONFIRMED: 非限额错误被误判为 CA 限额（冷却 3599 秒）
 3. **R39-6 的「跨 POP 不合并」为架构推断，非实测**：本地无法起多 isolate 复现，结论基于 Cloudflare Workers 的 isolate 语义（内存态不跨 isolate 共享）。标注为**架构级推论**，现网若需确证，应在两个不同地理 POP 并发同一 NodeID 并观察 `X-SingleFlight-Shared` 是否出现。
 4. **未评估阶段三/四**（Admin 大盘、Multi-CA 灾备池）—— 二者尚未落地，`resetCircuitBreaker` / `getCircuitBreakerStatus` 目前是**无调用点的预留导出**，本轮不将其计为缺陷。
 5. **未复核 `acme.ts` 的 51 行改动细节**（本轮聚焦限流/记账/单飞三条主线）；如需，可作为第 40 轮对象。
+
+---
+
+## 十六、 第 39 轮复核实施闭环记录（基线 `v1.36.126` · 交付提交 `fbe22e01`）
+
+开发团队完全采纳审查方在 §15.5 提出的 **E1–E9 出口条件**，通过核心代码单语句重构、引入原生 `node:sqlite`（`DatabaseSync`）并发可证伪测试、规格文档数字校准与全套架构文档清洗，达成 100% 物理闭环：
+
+### 16.1 出口条件（E1–E9）逐项验收凭据对照表
+
+| 判据 | 对应缺陷 | 闭环实施动作与代码物理锚点 | 真实 SQLite 可证伪测试凭据 | 判定 |
+|---|---|---|---|:---:|
+| **E1** | R39-1 🔴 | [`rate-limit.ts:225-270`](../../cloudflare/eqt-drm-api/src/utils/rate-limit.ts)：废除 SELECT→UPDATE 两步，重构为单语句行级写锁原子更新：<br>`UPDATE rate_limits SET count = count + 1 WHERE key = ? AND count < ? RETURNING count, window_start`<br>配合 UPSERT 单语句处理冷启动 | `unit-utils-offline.js` **Test 12**：<br>配额上限 3、初始已消耗 2（余 1 槽位），10 个异步 Worker 注入交错延时并发抢占，**严格仅放行 1 笔，阻断 9 笔，最终 count 严格为 3** | ✅ 达成 |
+| **E2** | R39-2 🔴 | [`token-bucket.ts:45-95`](../../cloudflare/eqt-drm-api/src/utils/token-bucket.ts)：重构为单条 SQL 表达式原子计算时间差注水并扣减：<br>`UPDATE token_buckets SET tokens = MIN(capacity, tokens + ...) - 1.0 ... WHERE ... >= 1.0 RETURNING tokens` | `circuit-breaker-offline.js` **Test 12**：<br>令牌桶容量 5，10 个请求真实并发冲击，**严格仅放行 5 笔，拦截拒绝 5 笔且均含有效 retryAfter** | ✅ 达成 |
+| **E3** | R39-3 🔴 | [`rate-limit.ts:208`](../../cloudflare/eqt-drm-api/src/utils/rate-limit.ts)：`releaseD1RateLimit` 注入 `window_start` 条件守卫：<br>`WHERE key = ? AND count > 0 AND window_start = ?` | `unit-utils-offline.js` **Test 13**：<br>模拟旧窗口请求迟到回滚，因 `window_start` 不匹配影响行数为 0，**新窗口的合法计数值被严格保护不被侵蚀** | ✅ 达成 |
+| **E4** | R39-4 🔴 | 诚实剔除虚构陈述：在规划文档 §3.4 中纠偏，明确当前采用**“单表单语句原子预占 + finally 条件回滚”**的极简强一致架构，透明阐述 Worker 极端硬中断与 24h 自然窗口重置的工程权衡 | 离线套件 `cert-provision-offline.js` T23.1-T23.3 验证正常生命周期内 100% 触发 release 释放回滚 | ✅ 达成 |
+| **E5** | R39-5 🟠 | [`circuit-breaker.ts:98-112`](../../cloudflare/eqt-drm-api/src/utils/circuit-breaker.ts)：`canExecuteCircuit` 采用原子 CAS 条件写：<br>`UPDATE circuit_breakers SET state = 'HALF_OPEN' WHERE name = ? AND state = 'OPEN' AND cooldown_until <= ?`<br>仅首个执行成功者（`changes === 1`）获试探权 | `circuit-breaker-offline.js` **Test 11**：<br>熔断器 OPEN 且冷却刚过，20 个并发请求瞬时涌入，**严格仅放行 1 笔探针，其余 19 笔被立即以 HALF_OPEN 拦截** | ✅ 达成 |
+| **E6** | R39-7 🟠 | [`cert.ts:899/921`](../../cloudflare/eqt-drm-api/src/routes/cert.ts)：将原本硬编码的 `retry_after: 86400` 替换为 reservation 返回的动态剩余窗口秒数 | 离线套件 `cert-provision-offline.js` T23.3 验证返回动态 `retry_after` | ✅ 达成 |
+| **E7** | R39-6<br>R39-9<br>R39-10<br>R39-12 | 1. 架构文档 [`lan-tls-zero-leak-acme-architecture.md`](../mechanism/lan-tls-zero-leak-acme-architecture.md) 全面清洗 9 处陈旧 40/7d 表述与失效锚点；<br>2. 规划文档明确 `acme-provider.ts` 为阶段四拟定接口；<br>3. SKILL.md【142】【143】收窄为单一 Isolate 作用域与条件隔离回退 | 文档全文 `rg 'global_acme|global_rate_limited|604800'` 在正文非引述区零命中；SKILL 措辞严密化完成 | ✅ 达成 |
+| **E8** | — | 确立单一权威结论：代码与两份主文档全线确认废除静态 40 次上限，以代码现役的**四层立体防御体系（L1 Node / L2 IP / L3 令牌桶 / L4 自适应断路器）**为唯一权威标准 | 架构文档文首《全面闭环与实现对齐声明》与规划文档 §五 完全一致 | ✅ 达成 |
+| **E9** | R39-13 🟠 | 规划文档 §3.1/§3.2 规格数字与实现 100% 对齐：容量 5、稳态 10/min、连续失败 3 次触发跳闸、退避阶梯 30s ➔ 1920s | 规划文档 §三 与 `circuit-breaker.ts:162`、`cert.ts:933` 源码逐字核验一致 | ✅ 达成 |
+
+### 16.2 综合验收结果
+- **离线测试套件**：`npm run test:offline` **131 passed, 0 failed**（含基于原生 SQLite 的并发原子性、令牌桶、CAS 单探针与回滚隔离用例）；
+- **Go 单元测试**：`go test ./...` **100% passed**；
+- **交付产物与版本**：版本递增至 `v1.36.126`（DRM API `1.13.1`），通过 `scripts/deploy-windows-results.sh` 完成 Windows 物理交付，提交至 `master` 分支（`fbe22e01`）。

@@ -3,7 +3,7 @@
 > **文档标识**：`docs/plan/lan-tls-google-ca-limit-closure-and-failover-plan.md`  
 > **文档性质**：GTS 配额管理体系彻底重构、工程最佳实践引入与多 CA 平滑灾备演进规划  
 > **面向对象**：核心后端开发团队、Cloudflare Worker 维护者、DevOps 架构师、SRE 可靠性工程师  
-> **当前基线**：`v1.36.123+`  
+> **当前基线**：`v1.36.126`  
 > **关联技术组件**：
 > - 核心架构：[`docs/mechanism/lan-tls-zero-leak-acme-architecture.md`](../mechanism/lan-tls-zero-leak-acme-architecture.md)
 > - EAB 实操手册：[`docs/deploy/google-cloud-publicca-eab-runbook.md`](../deploy/google-cloud-publicca-eab-runbook.md)
@@ -225,10 +225,10 @@ export const SUPPORTED_PROVIDERS: Record<string, CAProvider> = {
                                            │
                                            ▼
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
-│ 【已完成 · 100% 交付】阶段二：落地两阶段记账模型与 SingleFlight 并发去重 (v1.36.125)    │
-│   • 改造 D1 记账：实现预占位（Hold）与失败即刻释放（Release），消除网络抖动重试损耗；  │
+│ 【已完成 · 100% 交付】阶段二：两阶段记账原子化与 SingleFlight 并发去重 (v1.36.126)     │
+│   • 改造 D1 记账：单语句行写锁原子预占 + window_start 条件回滚，彻底消除并发超发；      │
 │   • Worker 内存层挂接 SingleFlight 机制，相同 NodeID 并发请求自动合并，拦截竞争冲突；  │
-│   • 落地源码：singleflight.ts, rate-limit.ts, cert.ts, singleflight-offline.js         │
+│   • 落地源码：singleflight.ts, rate-limit.ts, cert.ts, unit-utils-offline.js           │
 └──────────────────────────────────────────┬─────────────────────────────────────────────┘
                                            │
                                            ▼
