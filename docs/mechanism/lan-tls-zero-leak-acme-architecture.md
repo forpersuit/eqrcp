@@ -10,6 +10,7 @@
 > - 权威 DNS 服务：[`cmd/eqt-dns/main.go`](../../cmd/eqt-dns/main.go)（权威节点 `ns1.eqt.net.im`, `ns2.eqt.net.im`）
 > - 云端置备网关：[`cloudflare/eqt-drm-api/src/routes/cert.ts`](../../cloudflare/eqt-drm-api/src/routes/cert.ts), [`cloudflare/eqt-drm-api/src/utils/acme.ts`](../../cloudflare/eqt-drm-api/src/utils/acme.ts)
 > - 现役技术报告：[`docs/mechanism/lan-tls-security-protocol-technical-report.md`](lan-tls-security-protocol-technical-report.md)
+> - 闭环落地规划：👉 [`docs/plan/lan-tls-google-ca-limit-closure-and-failover-plan.md`](../plan/lan-tls-google-ca-limit-closure-and-failover-plan.md)
 
 ---
 
@@ -544,6 +545,8 @@ routes = [
 │   • [终局方案 C] Mozilla Public Suffix List (PSL) 收录：彻底数学脱钩，实现无限扩展容量 │
 └────────────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+> 📘 **详尽工程落地规划**：针对上述第二层（态势大盘/Webhook/一键解封通道）与第三层（Multi-CA 容灾/GCP 提额工单/Let's Encrypt 迁移）的模块代码设计、接口契约与测试判据，详见专属规划方案：👉 [**EQT LAN-TLS Google Public CA 限制墙彻底闭环与多 CA 灾备演进实现规划方案**](../plan/lan-tls-google-ca-limit-closure-and-failover-plan.md)。
 
 ### 7.4 为什么现阶段坚决摒弃“集中通配符共享”？三大死穴深度推演
 
