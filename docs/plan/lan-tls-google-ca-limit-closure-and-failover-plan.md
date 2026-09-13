@@ -619,3 +619,59 @@ export const SUPPORTED_PROVIDERS: Record<string, CAProvider> = {
   - `=== Results: N/N passed, 0 failed ===` 型（4 个套件）：23 + 78 + 33 + 35 = **169** passed；
   - 格式化断言合计：510 + 169 = **679** passed（净增 20 项断言，无跳步，无假绿）；
   - 文本自报套件（6 个套件）：`test:env-guard` (9 项)、`subscription`、`portal`、`portal:toggle`、`zero-payment`、`telemetry` 全部退出码 0。
+
+#### 3.6.7 第 45 轮审查更正（对 `6c380956` 的复核 · 2026-09-14 · 基线 `v1.36.133` / `1.13.6`）
+
+> **留痕纪律声明**：本节以独立小节 append-only 追加，不触碰上方任何轮次原文（红线【155】）。
+
+第 45 轮复核针对开发方对第 44 轮 10 项缺陷的闭环实施。复核以**反向探针实跑**为唯一判据：11 个变体（V1–V5、V7–V12）逐一注入缺陷并记录翻红明细，全量门禁逐套件独立加总。
+
+**一、正向确认（实跑证据）**
+
+| 项 | 证据 |
+|---|---|
+| **R44-1 🔴 实质闭环** | V1（将 5xx 分支还原为改前行为）→ `test:cert:offline` **109 passed / 3 failed**，翻红 `T21.3g1`（响应 502）、`T21.3g2`（`reason_key`）、`T21.3g3`（`system_error_logs` 落行）。写入侧因果链**首次**由「删除实现即翻红」证得 |
+| **R44-2 🔴 实质闭环** | V2（删 429 分支 `logSystemError`）→ **111 / 1 failed**，精准翻红 `T21.3c3` |
+| **R44-3 🟠 闭环** | `22 = 1 + 21`，与 `package.json` 中 `test:offline` 链的机器解析一致 |
+| **R44-4 🟠 闭环** | 全仓 `rg previous_count` 仅剩两处**引述**（第 44 轮缺陷表与本节更正说明），无任何**声明** |
+| **R44-5 🟠 闭环** | `schema.sql:113-115` 注释登记（实测行号准确）；`docs/admin/api-contract.md` 新增 §2.11（`:559`）/ §2.12（`:609`），路径与 `admin.ts:1874` / `:1977` **逐字一致** |
+| **R44-6 🟡 闭环** | `Test 24` 四条；V9（删 `cert.ts:43` 的热迁移 `ALTER`）→ `T24.2` 翻红，且 `T24.3` 以 `ERR_SQLITE_ERROR` 中断进程（`exit 1`，无假绿） |
+| **R44-7 🟡 闭环** | V12（文案回退为无条件成功）→ `T4.6c` 翻红 |
+| **R44-8 🟡 闭环** | V8（`duration_ms` 恒写 `null`）→ `T21.3e3` 翻红 |
+| **R44-9 半闭环** | 空库 `null` 回退有效：V11（回退 `1.0`）→ `T2.4b` 翻红；**对账等式零判别力，见 R45-1** |
+| **R44-10 🟡 闭环** | 门禁脚本真实路径已标注 |
+| **V3/V4/V5 基座保持** | 复测：V3 → `T4.2`/`T4.5`、V4 → `T4.3a`/`T4.3b`、V5 → `T3.2` 均保持翻红（2 / 2 / 1 failed） |
+| **全量真值独立加总** | `EXIT=0`；11 个 `Results:` 型 42+27+64+21+17+112+24+15+21+36+131 = **510**，4 个 `===` 型 23+78+33+35 = **169**，合计 **679**，零 `✗`，逐项与自述吻合 |
+| **无消费方回归** | 全仓无前端消费 `/api/v1/admin/tls/*`；`success_rate: null` 与既有 `activation_success_rate: number \| null`（`eqt-admin/src/lib/types.ts:237`，`Metrics.svelte:75` 已做 null 判定）惯例一致 |
+
+**二、反向探针实测明细**
+
+| 变体 | 注入缺陷 | 本轮实测 |
+|---|---|---|
+| V1 | 还原 `cert.ts` 5xx 分支（删 `logSystemError` + `return 502`） | **3 failed**：`T21.3g1` / `T21.3g2` / `T21.3g3` |
+| V2 | 删 429 分支 `logSystemError` | **1 failed**：`T21.3c3` |
+| V3 | `resetD1RateLimit`：`DELETE … WHERE` → `UPDATE … SET count=0` | **2 failed**：`T4.2` / `T4.5` |
+| V4 | `DELETE FROM rate_limits` 删去 `WHERE` | **2 failed**：`T4.3a` / `T4.3b` |
+| V5 | `resetCircuitBreaker` 不复位 `cooldown_until` | **1 failed**：`T3.2` |
+| V7 | 删 `cert.ts:1357` 的 `recordCircuitFailure` | **1 failed**：`T21.3g4` |
+| V8 | `duration_ms` 恒写 `null` | **1 failed**：`T21.3e3` |
+| V9 | 删 `cert.ts:43` 的 `ALTER TABLE` 热迁移 | **1 failed**：`T24.2`（`T24.3` 抛 `ERR_SQLITE_ERROR`，进程 `exit 1`） |
+| V10 | `totalAttempts` 构成中移除 `otherCertErrors` | **0 failed（36 / 36 全绿）** ⇒ 见 R45-1 |
+| V11 | 空库 `success_rate` 回退 `1.0` | **1 failed**：`T2.4b` |
+| V12 | 重置文案回退为无条件 “reset successfully” | **1 failed**：`T4.6c` |
+
+**三、残留缺陷**
+
+| 编号 | 级别 | 类别 | 事实 |
+|---|:---:|---|---|
+| **R45-1** | 🔴 | 违反【151】【157】/ 新增【164】 | `T2.3e1` / `T2.3e2` 的对账等式**零判别力**：V10 把 `otherCertErrors` 从 `admin.ts:1951` 的 `totalAttempts` 构成中删除后 **36 passed / 0 failed 全绿**。根因：同一夹具中 `other_cert_errors === 0`（`admin-tls-dashboard-offline.js:195` 断言其为 0），「缺项」与「含零项」数值不可区分，等式恒成立。该字段的分类实现（`admin.ts:1944` 的 `else { otherCertErrors++ }`）因此在**全部交付测试中恒不被激活**。而上方第 9 项明文宣称「实现分母对账等式闭环」「严格验证对账公式」⇒ 声称超出实现 |
+| **R45-2** | 🟠 | 违反【158】/ 新增【165】 | 上方探针表首行单元格标注「**修复后实测结果（本轮）**」为 `4 failed`，并点名 `T21.3g1`–`T21.3g4` 全部翻红；**实测 3 failed**，`T21.3g4` 在 V1 下保持绿。根因：V1 的删除区间起点为 `cert.ts:1367`，而 `recordCircuitFailure` 在其**之前**（`cert.ts:1357`），不在删除范围内；`T21.3g4` 的判别力须由 V7 才能证得。以「删除范围」推断出的结果被标注为「实测」 |
+| **R45-3** | 🟡 | 违反「功能增加则小版本 +1」 | `cloudflare/eqt-drm-api/package.json` 版本停在 `1.13.6`，而本轮向公开契约新增响应字段 `total_attempts` / `other_cert_errors`（已登记于 `docs/admin/api-contract.md` §2.11）并将 `success_rate` 的空库语义由 `1.0` 改为 `null`，属 API 面变更。对照 `400b8579` 新增端点时确将 worker 升至 `1.13.6`（`git show 400b8579 --stat` 含 `package.json`） |
+| **R45-4** | 🟡 | 违反【158】标注纪律 | 上方探针表对 V3/V4/V5 标注「保持翻红（继承阶段三判别力）」，为**未标实测的继承值**；审查方复测确认三项确实保持翻红（2 / 2 / 1 failed），**结论无误**，但同表其余各行均带实跑字样，唯此三项为推断补写 |
+
+**四、判定**
+
+- **第 44 轮 10 项中 9 项实质闭环**（R44-1 / R44-2 两条 🔴 的写入侧因果链**首次**由反向探针证得，为本项目迄今最强的闭环证据）；R44-9 的「空库 null 回退」成立，**对账等式半残留**（R45-1）。
+- **本轮变更未引入回归**：无消费方断裂，V3/V4/V5 基座判别力经复测保持，全量 679 项 0 failed。
+- **准入结论**：阶段三**可继续推进**；R45-1 须在下一轮前补齐 —— 处方：夹具注入至少 1 条 `reason_key` 既非 `ca_rate_limited` 亦非 `ca_5xx_error` 的 `CERT_PROVISION_ERROR` 日志，令 `other_cert_errors = 1`、`total_attempts = 5`，使 V10 型变体必然翻红。R45-3 的版本号与 R45-2 / R45-4 的文档标注随轮次顺带更正。
+- **新增准入约束**：凡断言形如「合计 = 各项之和」的恒等式，其夹具中被加总各项须**两两不等且非零**（R45-1 沉淀）；文档表格中凡标注「实测」的单元格，须可由一条列明的命令复现，由删除范围推断出的结果不得标注为「实测」（R45-2 沉淀）。
