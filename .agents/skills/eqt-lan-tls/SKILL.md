@@ -575,6 +575,29 @@ WantedBy=multi-user.target
 > - **✅【78】任务与详情处的安全微标（Security Badge）设计**：
 >   传输任务卡片与二维码详情处必须显式标注协议安全等级（`🔒 HTTPS` / `⚠️ HTTP (降级明文)` / `🔓 HTTP`），彻底消除用户对于当前传输是否加密的认知不确定性。
 
+---
+
+## 第十三轮复核沉淀（ACME 重入互斥防踩踏、HTTP 500 根因闭环与置备失败自动关闭 TLS 开关 · 基线 `v1.36.111`）
+
+> - **🔴【79】HTTP 500 真实根因实锤（D1 审计日志确证）**：
+>   - **现象**：清空目录或首次启动开启 TLS 时网关频现 HTTP 500 `internal_error`。
+>   - **根因证据（D1 `system_error_logs` 记录 166 & 167）**：
+>     1. 启动后台协程首先发起第一次置备（请求 A），CA 创建订单写入权威 DNS TXT 记录并进入 `pollOrder` 轮询校验；
+>     2. 用户随后在 UI 手动拨开 TLS 开关，发起了第二次置备（请求 B，同一 `nodeID`）；
+>     3. 请求 B 再次调用 `triggerChallenge`，CA 报错 HTTP 400：`Only "pending" challenges may be validated`；
+>     4. 请求 B 异常退出并在 `finally` 中清除了权威 DNS 上的 TXT 记录；
+>     5. 请求 A 轮询因 TXT 被删导致 CA 将订单判定为 `invalid`；
+>     6. 两路请求同时在 Worker 顶层未捕获异常块中以 HTTP 500 崩溃退出。
+>
+> - **✅【80】单机 ACME 置备 Single-Flight 互斥屏障**：
+>   - 在客户端 Go 后端 `App` 结构体引入 `provisionMu sync.Mutex`，在 `provisionDeviceTLSCert` 入口加锁，彻底杜绝单机内启动静默申请与用户手动开启/刷新之间的并发重入与 DNS 记录踩踏。
+>
+> - **✅【81】置备失败自动切回关闭（UI 与物理链路强自洽）**：
+>   - **第一性原理**：系统降级保障传输可用（Fail-Soft 回退明文 HTTP）时，UI 开关绝不可继续保持为“开启（ON）”，否则会造成“开关开着但底层在裸奔”的认知分裂。
+>   - **状态机闭环**：无论是手动拨开关失败、开发者选项刷新失败，还是后台异步广播 `eqt:tls-cert-failed` 或 `eqt:tls-node-key-mismatch`，一旦本地无有效证书，前端立即将 `state.settings.enableTLS = false` 并持久化落盘；
+>   - **视觉联动**：开关自动弹回 OFF，图标自洽呈现为 🔓（明文），通过非侵入式应用内 Toast（`tls_failed_auto_disabled`）告知用户已自动转为标准明文传输保障可用；开发者选项内保留上次失败的错误细节以供排查。
+
+
 
 
 

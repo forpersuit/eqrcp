@@ -43,8 +43,14 @@ export function renderTLSSettingIcon(state, t, escapeAttr) {
         case 'preparing':
             return `<span class="tls-status-icon preparing" role="img" aria-label="${escapeAttr(t('tls_cert_preparing'))}" title="${escapeAttr(t('tls_cert_preparing'))}" style="margin-left: 6px; font-size: 12px; vertical-align: baseline; display: inline-block;">⏳</span>`;
         case 'disabled':
-        default:
+        default: {
+            const lastErr = state?.tlsProvisionError || state?.appInfo?.tlsError;
+            if (lastErr && state?.tlsProvisionFailed) {
+                const tooltip = (t('tls_failed_auto_disabled') || '证书置备遇到异常，已自动关闭局域网 TLS 并保持标准明文传输') + ` [${lastErr}]`;
+                return `<span class="tls-status-icon disabled" role="img" aria-label="${escapeAttr(tooltip)}" title="${escapeAttr(tooltip)}" style="margin-left: 6px; font-size: 12px; vertical-align: baseline; display: inline-block; opacity: 0.85; cursor: help;">🔓</span>`;
+            }
             return `<span class="tls-status-icon disabled" role="img" aria-label="${escapeAttr(t('tls_disabled_tooltip'))}" title="${escapeAttr(t('tls_disabled_tooltip'))}" style="margin-left: 6px; font-size: 12px; vertical-align: baseline; display: inline-block; opacity: 0.65;">🔓</span>`;
+        }
     }
 }
 
@@ -55,22 +61,23 @@ export function renderTLSSettingIcon(state, t, escapeAttr) {
  * @returns {string} 状态展示文本
  */
 export function getDevTLSStatusText(state, t) {
-    const status = getTLSState(state);
-    switch (status) {
-        case 'ready':
-            return '✅ ' + (t('tls_cert_ready') || 'Ready');
-        case 'mismatch':
-            return '⚠️ ' + (t('tls_key_mismatch_msg') || 'Key Mismatch');
-        case 'failed': {
-            const err = state?.tlsProvisionError || state?.appInfo?.tlsError || '';
-            return '⚠️ ' + (t('tls_cert_failed_status') || 'Provision Failed / HTTP Fallback') + (err ? ` (${err})` : '');
-        }
-        case 'preparing':
-            return '⏳ ' + (t('tls_cert_preparing') || 'Preparing...');
-        case 'disabled':
-        default:
-            return '🔓 ' + (t('tls_disabled_tooltip') || 'Disabled (HTTP)');
+    if (state?.appInfo?.hasValidTLSCert) {
+        return '✅ ' + (t('tls_cert_ready') || 'Ready');
     }
+    if (state?.tlsProvisioning || state?.devProvisioningTLS) {
+        return '⏳ ' + (t('tls_cert_preparing') || 'Preparing...');
+    }
+    if (state?.tlsKeyMismatch) {
+        return '⚠️ ' + (t('tls_key_mismatch_msg') || 'Key Mismatch');
+    }
+    const err = state?.tlsProvisionError || state?.appInfo?.tlsError || '';
+    if (state?.tlsProvisionFailed || err) {
+        return '⚠️ ' + (t('tls_cert_failed_status') || 'Provision Failed / HTTP Fallback') + (err ? ` (${err})` : '');
+    }
+    if (!Boolean(state?.settings?.enableTLS)) {
+        return '🔓 ' + (t('tls_disabled_tooltip') || 'Disabled (HTTP)');
+    }
+    return '⏳ ' + (t('tls_cert_preparing') || 'Preparing...');
 }
 
 /**

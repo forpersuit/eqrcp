@@ -4054,27 +4054,38 @@ function bindEvents() {
                     } catch (_) {}
                     state.devProvisioningTLS = false;
                     state.devProvisionTLSError = !success;
-                    if (success) {
+                    if (success && state.appInfo?.hasValidTLSCert) {
                         state.tlsProvisionFailed = false;
                         state.tlsProvisionError = '';
                         state.devProvisionTLSResult = t('dev_tls_success') || '✅ 证书申请成功，已通过系统全局根信任校验并已落盘！';
+                        showToast(state.devProvisionTLSResult);
+                        render();
+                        openPanel('settings');
                     } else {
                         state.tlsProvisionFailed = true;
                         state.tlsProvisionError = state.appInfo?.tlsError || 'Fail-soft active';
                         state.devProvisionTLSResult = (t('dev_tls_failed') || '⚠️ 证书置备未完成（局域网普通 HTTP 降级保障中）') + (state.appInfo?.tlsError ? `: ${state.appInfo.tlsError}` : '');
+                        showToast(state.devProvisionTLSResult);
+                        if (Boolean(state.settings?.enableTLS)) {
+                            await autoDisableTLSOnFailure(state.tlsProvisionError, true);
+                        } else {
+                            render();
+                            openPanel('settings');
+                        }
                     }
-                    showToast(state.devProvisionTLSResult);
-                    render();
-                    openPanel('settings');
-                }).catch((err) => {
+                }).catch(async (err) => {
                     state.devProvisioningTLS = false;
                     state.devProvisionTLSError = true;
                     state.tlsProvisionFailed = true;
                     state.tlsProvisionError = err?.message || String(err) || 'Error';
                     state.devProvisionTLSResult = '❌ ' + (err?.message || err || '申请证书异常');
                     showToast(state.devProvisionTLSResult);
-                    render();
-                    openPanel('settings');
+                    if (Boolean(state.settings?.enableTLS)) {
+                        await autoDisableTLSOnFailure(state.tlsProvisionError, true);
+                    } else {
+                        render();
+                        openPanel('settings');
+                    }
                 });
                 return;
             }
@@ -4325,25 +4336,20 @@ function bindEvents() {
                                 try {
                                     state.appInfo = await GetAppInfo();
                                 } catch (_) {}
-                                if (success) {
+                                if (success && state.appInfo?.hasValidTLSCert) {
                                     state.tlsProvisionFailed = false;
                                     state.tlsProvisionError = '';
                                     showToast(t('tls_cert_ready') || '✅ 官方公信 TLS 证书就绪！');
+                                    render();
+                                    openPanel('settings');
                                 } else {
-                                    state.tlsProvisionFailed = true;
-                                    state.tlsProvisionError = state.appInfo?.tlsError || 'Provisioning deferred (plain HTTP fallback active)';
-                                    showToast(t('tls_cert_failed_tooltip') || '⚠️ 证书置备遇到异常（已自动降级为标准明文传输保障传输）');
+                                    const errMsg = state.appInfo?.tlsError || 'Provisioning deferred (plain HTTP fallback active)';
+                                    await autoDisableTLSOnFailure(errMsg, true);
                                 }
-                                render();
-                                openPanel('settings');
-                            }).catch((err) => {
+                            }).catch(async (err) => {
                                 console.warn('[LAN-TLS] Auto provision on switch toggle failed:', err);
-                                state.tlsProvisioning = false;
-                                state.tlsProvisionFailed = true;
-                                state.tlsProvisionError = err?.message || String(err) || 'Error';
-                                showToast(t('tls_cert_failed_tooltip') || '⚠️ 证书置备遇到异常（已自动降级为标准明文传输保障传输）');
-                                render();
-                                openPanel('settings');
+                                const errMsg = err?.message || String(err) || 'Error';
+                                await autoDisableTLSOnFailure(errMsg, true);
                             });
                         } else {
                             showToast(t('tls_cert_ready') || '✅ 官方公信 TLS 证书已就绪！');
@@ -5185,6 +5191,37 @@ async function saveSettingsData() {
     state.closeBehavior = state.settings.closeBehavior === 'quit' ? 'quit' : 'tray';
     syncViewportDebugToChatFrame();
     syncIdentityToChatFrame();
+}
+
+async function autoDisableTLSOnFailure(errorMsg, openSettings = false) {
+    if (!state.settings) state.settings = {};
+    state.settings.enableTLS = false;
+    state.tlsProvisioning = false;
+    state.tlsProvisionFailed = true;
+    state.tlsProvisionError = errorMsg || '';
+
+    const enableTLSSwitch = document.querySelector('#settings-enable-tls');
+    if (enableTLSSwitch) {
+        enableTLSSwitch.checked = false;
+    }
+
+    try {
+        const settings = {
+            ...(state.settings || {}),
+            devMode: Boolean(state.settings?.devMode ?? false),
+            debugLog: Boolean(state.settings?.debugLog ?? false),
+            viewportDebug: Boolean(state.settings?.viewportDebug ?? false),
+        };
+        state.settings = await SaveSettings(settings);
+    } catch (e) {
+        console.warn('[LAN-TLS] Failed to persist settings after TLS auto-disable:', e);
+    }
+
+    showToast(t('tls_failed_auto_disabled') || '⚠️ 证书置备遇到异常，已自动关闭局域网 TLS 并保持标准明文传输。可稍后在开发者选项重试。');
+    render();
+    if (openSettings || state.activePanel === 'settings') {
+        openPanel('settings');
+    }
 }
 
 function syncViewportDebugToChatFrame() {
@@ -6836,7 +6873,7 @@ EventsOn('eqt:tls-cert-ready', async () => {
     render();
 });
 
-EventsOn('eqt:tls-node-key-mismatch', (payload) => {
+EventsOn('eqt:tls-node-key-mismatch', async (payload) => {
     console.warn('[LAN-TLS] Device key mismatch received:', payload);
     const REASON_KEY_MAP = Object.freeze(Object.assign(Object.create(null), {
         'node_key_mismatch': 'tls_key_mismatch_msg',
@@ -6850,16 +6887,27 @@ EventsOn('eqt:tls-node-key-mismatch', (payload) => {
     state.tlsKeyMismatch = true;
     state.tlsKeyMismatchMsg = msgText;
     state.tlsProvisioning = false;
-    showToast('⚠️ ' + msgText);
-    render();
+    if (Boolean(state.settings?.enableTLS)) {
+        await autoDisableTLSOnFailure(msgText, false);
+    } else {
+        showToast('⚠️ ' + msgText);
+        render();
+    }
 });
 
-EventsOn('eqt:tls-cert-failed', (payload) => {
+EventsOn('eqt:tls-cert-failed', async (payload) => {
     console.warn('[LAN-TLS] Certificate provisioning failed (fail-soft active):', payload);
     state.tlsProvisioning = false;
     state.tlsProvisionFailed = true;
     state.tlsProvisionError = (payload && payload.error) || 'Certificate provisioning deferred';
-    render();
+    try {
+        state.appInfo = await GetAppInfo();
+    } catch (_) {}
+    if (Boolean(state.settings?.enableTLS) && !state.appInfo?.hasValidTLSCert) {
+        await autoDisableTLSOnFailure(state.tlsProvisionError, false);
+    } else {
+        render();
+    }
 });
 
 EventsOn('eqt:install-update-error', (errMsg) => {

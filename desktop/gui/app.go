@@ -57,6 +57,7 @@ type App struct {
 	downloads     map[string]context.CancelFunc
 	tlsMu         sync.RWMutex
 	lastTLSError  string
+	provisionMu   sync.Mutex
 }
 
 type AgentTask struct {
@@ -2138,7 +2139,11 @@ func (a *App) silentProvisionDeviceTLSCert() {
 
 // provisionDeviceTLSCert requests a dedicated device certificate from the provisioner gateway.
 // When force is false, it skips requesting if a valid certificate (>15 days remaining) already exists.
+// Single-flight mutual exclusion prevents concurrent overlapping ACME requests for the same nodeID
+// from corrupting DNS challenges or colliding with CA rate-limits.
 func (a *App) provisionDeviceTLSCert(force bool) (bool, error) {
+	a.provisionMu.Lock()
+	defer a.provisionMu.Unlock()
 	return a.provisionDeviceTLSCertInternal(force, true)
 }
 
