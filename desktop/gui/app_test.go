@@ -349,4 +349,40 @@ func TestDevProvisionDeviceTLSCert_Gateway500ErrorSetsLastTLSError(t *testing.T)
 	}
 }
 
+func TestSilentProvisionDeviceTLSCert_SkipsWhenTLSDisabled(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("EQT_CONFIG_DIR", filepath.Join(tempHome, "eqt_conf"))
+
+	// Create a mock server that fails the test if any request is received
+	requestReceived := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestReceived = true
+		t.Errorf("unsolicited network request received by provisioner endpoint: %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	t.Setenv("EQT_PROVISION_ENDPOINT", server.URL)
+
+	app := NewApp()
+	app.agent = newDesktopAgent(nil)
+	// Explicitly ensure EnableTLS is false
+	settings, _ := app.agent.readSettings()
+	settings.EnableTLS = false
+	_, _ = app.agent.writeSettings(settings)
+
+	// Call silentProvisionDeviceTLSCert directly; it must immediately return without sleeping or sending requests
+	start := time.Now()
+	app.silentProvisionDeviceTLSCert()
+	elapsed := time.Since(start)
+
+	if requestReceived {
+		t.Fatalf("expected NO network request when EnableTLS is false, but request was sent!")
+	}
+	if elapsed > 1*time.Second {
+		t.Fatalf("silentProvisionDeviceTLSCert took %v, expected near-instant return (<1s) when TLS is disabled", elapsed)
+	}
+}
+
 

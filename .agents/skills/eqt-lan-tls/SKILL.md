@@ -596,6 +596,11 @@ WantedBy=multi-user.target
 >   - **第一性原理**：系统降级保障传输可用（Fail-Soft 回退明文 HTTP）时，UI 开关绝不可继续保持为“开启（ON）”，否则会造成“开关开着但底层在裸奔”的认知分裂。
 >   - **状态机闭环**：无论是手动拨开关失败、开发者选项刷新失败，还是后台异步广播 `eqt:tls-cert-failed` 或 `eqt:tls-node-key-mismatch`，一旦本地无有效证书，前端立即将 `state.settings.enableTLS = false` 并持久化落盘；
 >   - **视觉联动**：开关自动弹回 OFF，图标自洽呈现为 🔓（明文），通过非侵入式应用内 Toast（`tls_failed_auto_disabled`）告知用户已自动转为标准明文传输保障可用；开发者选项内保留上次失败的错误细节以供排查。
+>
+> - **🔴【82】彻底根绝未开开关擅自静默置备（用户主权与零无端副作用）**：
+>   - **擅自行为定性**：在 TLS 开关关闭（默认关闭）状态下，后台偷偷向外网发起 ACME 证书申请，属于严重的擅自越权行为（Unsolicited Background Action）。所谓“提前预热秒开体验”完全是工程师主义的傲慢，不仅耗费 CA 配额、向外网暴露节点指纹，还直接酿成了并发重入冲突与 HTTP 500。
+>   - **强制门控**：`silentProvisionDeviceTLSCert` 必须严格以 `settings.EnableTLS == true` 为前置门禁。未开启 TLS 时立即返回（`< 1ms`），不调用 WMI、不发任何网络包，把选择权完全交还用户。
+
 
 
 

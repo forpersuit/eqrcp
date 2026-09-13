@@ -265,8 +265,16 @@ func (a *App) startup(ctx context.Context) {
 		server.CleanLingeringOldExecutables()
 	}()
 
-	// 异步静默置备 LAN-TLS 设备专属证书（Phase 2: Tailscale 路线单机专属证书，全自动零泄露闭环）
-	go a.silentProvisionDeviceTLSCert()
+	// 严格遵循用户主权与第一性原理：仅在用户配置显式开启了 LAN-TLS 的情况下，才在后台检查证书就绪/续期状态
+	// 未开启时绝对禁止发起任何后台置备或网络请求（禁止任何擅自越权行为）
+	go func() {
+		if a.agent != nil {
+			settings, err := a.agent.readSettings()
+			if err == nil && settings.EnableTLS {
+				a.silentProvisionDeviceTLSCert()
+			}
+		}
+	}()
 }
 
 func (a *App) showWindow() {
@@ -2115,11 +2123,19 @@ func (a *App) DevProvisionDeviceTLSCert() (bool, error) {
 }
 
 // silentProvisionDeviceTLSCert runs in a background goroutine after GUI startup.
-// It checks whether a dedicated certificate exists for the current nodeID.
-// If missing or near expiration, it requests one from the Cloudflare provisioner gateway.
+// It checks whether a dedicated certificate exists for the current nodeID ONLY when EnableTLS is explicitly enabled by the user.
+// If EnableTLS is off/false, it MUST NOT make any unsolicited network requests to the gateway or CA (First Principle & User Sovereignty).
 // On success, it notifies the GUI via the "eqt:tls-cert-ready" event.
 // Adheres strictly to fail-soft and non-blocking rules.
 func (a *App) silentProvisionDeviceTLSCert() {
+	if a.agent != nil {
+		settings, err := a.agent.readSettings()
+		if err != nil || !settings.EnableTLS {
+			// 用户未开启 TLS，严格保持网络静默，严禁任何擅自置备行为
+			return
+		}
+	}
+
 	// 1. Initial grace delay to let main startup finish smoothly without competing for network/CPU
 	time.Sleep(3 * time.Second)
 
@@ -2132,6 +2148,14 @@ func (a *App) silentProvisionDeviceTLSCert() {
 		}
 		time.Sleep(1500 * time.Millisecond)
 		server.InvalidateFingerprintCache()
+	}
+
+	// 再次确认设置：睡眠延迟之后用户是否依然开启了 TLS 开关
+	if a.agent != nil {
+		settings, err := a.agent.readSettings()
+		if err != nil || !settings.EnableTLS {
+			return
+		}
 	}
 
 	_, _ = a.provisionDeviceTLSCert(false)
