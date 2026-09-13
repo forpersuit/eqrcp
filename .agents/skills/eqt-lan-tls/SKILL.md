@@ -713,6 +713,26 @@ WantedBy=multi-user.target
 > **方法论沉淀（本轮新增）**：凡审查方提出**"数值/事实勘误"**类意见，必须落到**"线上应答代码"那一行**，并附**可直接复现的取证命令**（本例应为 `rg -n 'Ttl:' cmd/eqt-dns/main.go`），而不是落到自己以为的配置源上。本轮审查方据"写入路径(300) + 区域级参数(SOA 300)"断言了"应答路径"的 TTL，恰好三者在本项目是三个不同数字（300/300/60），从而把**原文档正确的 60s 改错**，并被开发方忠实写入文档与技能库。**"同一个数字在别处出现两次"是最强的自我确认陷阱。**
 > **双向教训**：开发方忠实执行审查意见是期望行为，因此**审查意见本身的正确性必须由审查方独立复核到实物那一行**；否则一条错误勘误会被忠实放大为既成事实。
 
+---
+
+## 第十八轮落地闭环（`ReadSettings` 修正、三阶段非空锁反向探针实证与 Worker 子请求限额收敛 · 基线 `v1.36.116`）
+
+> - **✅【106】`ReadSettings` 真实闭环（修复 R33-1 死代码）**：
+>   - 在 `desktop/gui/frontend/src/main.js` 中将未定义的 `GetSettings()` 彻底修复为导出的 `ReadSettings()`；
+>   - 补齐异常日志打印 `console.warn('[LAN-TLS] Failed to read latest settings after auto-disable:', e)`，彻底根绝死代码与静默吞错；
+>   - 确保后端原子落盘 `EnableTLS = false` 后，前端能真正无竞态读回最新磁盘配置。
+>
+> - **✅【107】三阶段非空锁与反向探针（E1′ 落地，消解 R33-2 空锁）**：
+>   - 在 `tests/cert-provision-offline.js` 中增加 T19.4b 强制非空断言：
+>     `assert(setSeqs.length > 0 && confirmSeqs.length > 0 && triggerSeqs.length > 0)`；
+>   - 堵死 `Math.min([]) === Infinity` 导致的空数组恒真空锁；
+>   - 测试用例扩充至 **74 项** 全部通过，反向验证删除确认环节时立即变红阻断。
+>
+> - **✅【108】Worker 子请求安全限额收敛（E4′ 落地，消解 R33-5 风险）**：
+>   - 在 `cloudflare/eqt-drm-api/src/routes/cert.ts` 中，将 `confirmDnsPropagation` 收敛为 `timeoutMs = 10000, intervalMs = 1000, maxAttempts = 8`；
+>   - 单次置备最坏只消耗 16 个外部子请求，严格低于 Cloudflare Free 计划的 50 次外部子请求硬限，杜绝平台级 500 掩盖业务诊断。
+
+
 
 
 

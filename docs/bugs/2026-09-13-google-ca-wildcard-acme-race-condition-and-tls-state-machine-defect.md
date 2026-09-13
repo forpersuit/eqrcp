@@ -657,3 +657,70 @@ async function confirmDnsPropagation(
 - **方法论沉淀（本轮新增，已写入技能库）**：**审查方提出的"数值勘误"必须落到"线上应答代码"那一行，而不是落到自己以为的配置源上。** 我这次的错误路径是：读到了 *写入* 路径（POST body ttl）与 *区域级* 参数（SOA Minttl），就断言了 *应答* 路径的 TTL。三者在本项目里恰好是三个不同的数值（300 / 300 / 60），这正是最容易被"同一个数字出现两次"所误导的结构。
 - **对协作流程的提示**：本轮的教训是**双向**的——开发方对审查意见的执行是忠实的（这正是我们想要的），所以**审查意见本身的正确性必须由审查方独立复核到实物那一行**；否则一条错误的勘误会被忠实放大成文档与技能库里的既成事实。建议自本轮起，凡属"数值/事实勘误"类的审查意见，一律附**可直接复现的取证命令**（本例应为 `rg -n 'Ttl:' cmd/eqt-dns/main.go`），供开发方在执行前二次确认。
 
+---
+
+## 八、 开发方响应与落地成果（第 33 轮复核完全闭环）
+
+开发团队对审查员在 Commit `2f9de1d8`（§7）中提出的第 33 轮独立复核意见及 E1′~E4′ 出口条件进行了逐项技术核验与工程落地：
+
+### 1. 实锤缺陷与测试隐患彻底消除
+
+#### 1.1 修复 R33-1（`GetSettings` ➔ `ReadSettings`）
+- **改造点**：[`desktop/gui/frontend/src/main.js`](file:///home/yelon/develop/me/eqrcp/desktop/gui/frontend/src/main.js#L5216)
+- **修复措施**：
+  - 将 `await GetSettings()` 修正为已导入的合法方法 `await ReadSettings()`；
+  - 在 `catch` 异常分支中补齐 `console.warn('[LAN-TLS] Failed to read latest settings after auto-disable:', e)` 日志，杜绝静默吞错；
+  - 确保前端在后端原子落盘 `EnableTLS = false` 后，能真正读回磁盘权威镜像。
+
+#### 1.2 修复 R33-2（三阶段非空断言 T19.4b，堵死 `Infinity` 恒真空锁）
+- **改造点**：[`cloudflare/eqt-drm-api/tests/cert-provision-offline.js`](file:///home/yelon/develop/me/eqrcp/cloudflare/eqt-drm-api/tests/cert-provision-offline.js#L879-L880)
+- **修复措施**：
+  - 在 `maxSet < minConfirm` 与 `maxConfirm < minTrigger` 两项比较之前，前置强制断言：
+    ```javascript
+    assert(setSeqs.length > 0 && confirmSeqs.length > 0 && triggerSeqs.length > 0,
+      'T19.4b: callTracer captured all three phases (guards against vacuous Infinity comparison)');
+    ```
+  - **反向探针验证**：若确认阶段被绕过或被整体删除，`confirmSeqs.length === 0` 立即变红拦截，从根本上消除了 `Math.min([]) === Infinity` 导致的恒真全绿缺陷；
+  - 离线测试用例扩充至 **74 项**，全部通过（`Results: 74 passed, 0 failed`）。
+
+#### 1.3 消除 R33-5 平台级子请求预算溢出风险（Cloudflare Worker Free 计划安全防线）
+- **改造点**：[`cloudflare/eqt-drm-api/src/routes/cert.ts`](file:///home/yelon/develop/me/eqrcp/cloudflare/eqt-drm-api/src/routes/cert.ts#L570-L585)
+- **修复措施**：
+  - 将 `confirmDnsPropagation` 轮询预算由 `20000ms / 500ms` 收敛为 `timeoutMs = 10000, intervalMs = 1000, maxAttempts = 8`；
+  - 单次置备确认阶段最坏只产生 `8 × 2 = 16` 个外部子请求，严格低于 Cloudflare Free 计划 50 次外部子请求的硬限；
+  - 既能保证权威双机（内网或高速通道）秒级确认，又杜绝了平台抛出 `Too many subrequests` 500 导致有效诊断信息被抹杀的风险。
+
+---
+
+### 2. 因果归因与事实校准（E3′ & §7.5）
+
+#### 2.1 竞态消除的真实因果归属
+- **Commit `f2292436`（第 4 号改动）**：
+  - 落地**“阶段 2 先写全两条值，再批量触发”的调用顺序**；
+  - 真正消除了 Google CA 探测节点命中仅含 `val_1` 缓存的根本时序竞态（此后被缓存下来的应答本身即为完整双值应答）。
+- **Commit `7637ef21`（方案 A，第 6 号改动）**：
+  - 彻底废除 3000ms 盲等魔法常数；
+  - 建立显式可观测性，提供带实测 observed 状态的精准诊断；
+  - 防范未来可能出现的从库异步复制延迟或管理网关代理抖动，作为前置防御性守卫；
+  - **注意**：正向确认访问的是权威 DNS 节点的 HTTP 管理端点，无法观测公共递归解析器缓存，亦无法观测 NODATA 负缓存（上限 300s，由 SOA Minttl 决定）。
+
+#### 2.2 TTL 数值事实纠偏
+- 依据 `cmd/eqt-dns/main.go:224` 实物代码硬编码 `Ttl: 60`：
+  - **正应答 wire TTL**：确为 **60s**；
+  - **300s**：系存储过期保留时间（`store.Set`）与 SOA `Minttl`（RFC 2308 负缓存 NODATA 持续时间上限）。
+- 采纳审查员在 §7.5 的公开撤回说明，统一校准事实口径。
+
+---
+
+### 3. 第 33 轮验收出口核验表
+
+| 验收项 | 目标 | 状态 | 证明位置 |
+| :--- | :--- | :---: | :--- |
+| **E1′** | 三阶段非空锁反向防空 | ✅ 已锁定 | `tests/cert-provision-offline.js:879-880`（T19.4b 阻断 `Infinity` 恒真） |
+| **E2′** | 修复 `GetSettings` 死代码 | ✅ 已修复 | `desktop/gui/frontend/src/main.js:5216`（`ReadSettings()` + warn 日志） |
+| **E3′** | 纠正因果归因与提交归属 | ✅ 已同步 | 本节 §8.2.1 明确 `f2292436` 顺序承重，`7637ef21` 观测承重 |
+| **E4′** | 收敛 Worker 子请求预算 | ✅ 已收敛 | `src/routes/cert.ts:570-585`（10s / 1s / max 8 轮 = 16 subrequests ≤ 50） |
+| **TTL** | 撤回与事实归位 | ✅ 已同步 | 正应答 wire TTL=60s / 负缓存上限=300s |
+| **版本** | 递增小版本号 | ✅ 已升级 | `pkg/version/version.go`: `v1.36.116`，`wails.json`: `1.36.116` |
+
+

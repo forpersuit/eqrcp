@@ -876,6 +876,8 @@ async function runTests() {
     const maxConfirm = Math.max(...confirmSeqs);
     const minTrigger = Math.min(...triggerSeqs);
 
+    assert(setSeqs.length > 0 && confirmSeqs.length > 0 && triggerSeqs.length > 0,
+      'T19.4b: callTracer captured all three phases (guards against vacuous Infinity comparison)');
     assert(maxSet < minConfirm, `T19.5: Invariant locked: max(setDns01Challenge)=${maxSet} < min(confirmDnsPropagation)=${minConfirm}`);
     assert(maxConfirm < minTrigger, `T19.6: Invariant locked: max(confirmDnsPropagation)=${maxConfirm} < min(triggerChallenge)=${minTrigger}`);
   }

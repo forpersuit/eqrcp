@@ -5213,8 +5213,9 @@ async function autoDisableTLSOnFailure(errorMsg, openSettings = false) {
     // 后端在 provisionDeviceTLSCertInternal 失败时已原子落盘 settings.EnableTLS = false。
     // 前端仅刷新本地 settings 镜像，严禁重复全量 SaveSettings，消除并发全量覆写竞争。
     try {
-        state.settings = await GetSettings();
-    } catch (_) {
+        state.settings = await ReadSettings();
+    } catch (e) {
+        console.warn('[LAN-TLS] Failed to read latest settings after auto-disable:', e);
         state.settings.enableTLS = false;
     }
 

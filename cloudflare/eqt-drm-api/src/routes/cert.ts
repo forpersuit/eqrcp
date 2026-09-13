@@ -572,14 +572,17 @@ export async function confirmDnsPropagation(
   token: string,
   recordName: string,
   expectedValues: string[],
-  timeoutMs = 20000,
-  intervalMs = 500
+  timeoutMs = 10000,
+  intervalMs = 1000,
+  maxAttempts = 8
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   const canonicalRecord = recordName.toLowerCase().replace(/\.+$/, '') + '.';
   const observed: Record<string, string[]> = {};
+  let attempts = 0;
 
-  while (Date.now() < deadline) {
+  while (Date.now() < deadline && attempts < maxAttempts) {
+    attempts++;
     let allConfirmed = true;
     for (const ep of endpoints) {
       try {
@@ -1145,7 +1148,7 @@ export async function handleCertRoutes(
 
           for (const [recName, expectedVals] of Object.entries(valuesByRecord)) {
             console.log(`[ACME] Confirming DNS propagation across ${endpoints.length} authoritative nodes for ${recName} (expected: ${expectedVals.join(', ')})...`);
-            await confirmDnsPropagation(endpoints, dnsToken, recName, expectedVals, 20000, 500);
+            await confirmDnsPropagation(endpoints, dnsToken, recName, expectedVals, 10000, 1000);
           }
           console.log(`[ACME] Confirmed all expected DNS-01 TXT values published across all authoritative endpoints.`);
 
