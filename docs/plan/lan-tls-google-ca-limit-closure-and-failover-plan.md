@@ -103,13 +103,15 @@ if (env.ENVIRONMENT === 'production' && acmeRequested) {
 
 > ⚠️ **R39-15（🔴 · 第 39 轮后置复核改判）**：以上「严格仅放行 1 笔」的闸门**成立**，但**半开态没有出口保障**，会把断路器钉死成永久停摆。`HALF_OPEN` 的**唯一出口**是 `recordCircuitSuccess` / `recordCircuitFailure`（`cert.ts:1336/1341/1353`）；而探针获准点（`cert.ts:952`）之后、写回点之前存在 **10 条提前 return 路径**（`:974`/`:989`/`:1004` 400 `invalid_csr`、`:1049`/`:1060` 401 `invalid_signature`、`:1110` 403 `node_key_mismatch`、`:1157`/`:1168`/`:1179` 500 `acme_misconfigured`、`:1412` **外层 catch** 500 `internal_error`），加上 Worker isolate 被宿主硬终止，任何一条发生 ⇒ **没有任何一方写回结果** ⇒ `state` 永久停留 `HALF_OPEN`；此时 CAS 不再触发（它只认 `state='OPEN'`），`cooldown_until` 即使早已过期也不再被读取，而 `resetCircuitBreaker`（`circuit-breaker.ts:200`）**全仓无调用点** ⇒ **全网证书置备永久 429（`ca_circuit_open`），且无运维出口**。
 > **实测（真实 `node:sqlite` 探针）**：冷却过期后第 1 次调用 `allowed=true, state=HALF_OPEN`；此后**冷却已过期 5 秒**，连续 5 次调用全部 `allowed=false (retryAfter=15)`，DB 终态仍为 `HALF_OPEN`。
-> **处方（E11）**：① 给半开态加**探针租约**——第二次 CAS 增加 `OR (state='HALF_OPEN' AND updated_at <= now - probeLeaseSec)` 分支（`updated_at` 字段已存在，**无需改 schema**），`HALF_OPEN` 分支回传真实剩余秒数而非写死 `15`；② 在 `cert.ts` **外层 `finally`** 统一兜底：若本请求曾获准探针而未写回任何结果，则补记 `recordCircuitFailure`；③ 把 `resetCircuitBreaker` 接入 Admin 复位接口，保留人工出口。**完整处方与出口条件见 `docs/bugs/2026-09-13-google-ca-wildcard-acme-race-condition-and-tls-state-machine-defect.md` §17.4 E11。**
+> **处方（E11）**：① 给半开态加**探针租约**——第二次 CAS 增加 `OR (state='HALF_OPEN' AND updated_at <= now - probeLeaseSec)` 分支（`updated_at` 字段已存在，**无需改 schema**），`HALF_OPEN` 分支回传真实剩余秒数而非写死 `15`；~~② 在 `cert.ts` **外层 `finally`** 统一兜底：若本请求曾获准探针而未写回任何结果，则补记 `recordCircuitFailure`；~~ **🚫 第②项已由审查方于第 40 轮后置复核撤回（见 bugs 文档 §19.2 R40-1 / §19.4 E15）** —— 探针获准点（`cert.ts:966-968`，第 5.4 步）**早于全部客户端身份/参数校验**（CSR/CN/SAN 在第 6 步、验签更晚），该兜底会把 **9 条客户端/配置错误路径（400/401/403/500）** 计成「上游 CA 失败」，污染断路器信号并使已跳闸状态可被**无凭据者无限期劫持**；且实测其**不提供任何出口**（完全不写回时 90 秒租约已自动重新放行）。③ 把 `resetCircuitBreaker` 接入 Admin 复位接口，保留人工出口。**完整处方与出口条件见 `docs/bugs/2026-09-13-google-ca-wildcard-acme-race-condition-and-tls-state-machine-defect.md` §17.4 E11。**
 >
 > ✅ **落地终验（基线 `v1.36.127` · E11 彻底闭环）**：
 > 1. `circuit-breaker.ts` 的 CAS 闸门落地 90 秒租约守卫：
 >    `UPDATE circuit_breakers SET state = 'HALF_OPEN', updated_at = ? WHERE name = ? AND ((state = 'OPEN' AND (cooldown_until IS NULL OR cooldown_until <= ?)) OR (state = 'HALF_OPEN' AND updated_at <= ?))`；并在处于试探在途时动态计算返回 `ceil((updated_at + 90s - now)/1000)` 剩余租约秒数；
 > 2. `cert.ts` 外层 `finally` 挂载 `cbProbeGranted` 兜底写回：若曾获准探针且未写回任何结果，统一补调用 `recordCircuitFailure(env, 'gts_ca', 30, false)`；
 > 3. 真实 SQLite 探针用例 `circuit-breaker-offline.js` **T13**（动态 retryAfter 拦截）与 **T14**（租约期满死锁自愈）**100% 通过（15/15 passed）**。
+>
+> ⚠️ **第 40 轮后置复核改判（基线 `v1.36.127` · 提交 `f7601055` + `3fc593c0`）**：**E11 属部分闭环。** ①③ 成立（CAS 逐字采用 4 参绑定；动态 `retryAfter` 实测 `=90`），`T13`/`T14` 全绿，**吸收态确已消灭**；**但第②项（我方处方的 `finally` 兜底）不成立且引入 R40-1 🔴**：实测一条 **401 伪造签名**（从未触达 CA）即可把 `state` 打回 `OPEN`、`failure_count` 3→4，循环 3 次后 5→6→7 而状态恒为 `OPEN`（冷却恒 30s 不升级），即**无凭据者可无限期劫持已跳闸的断路器**；正向对照（探针持有者报成功 → `CLOSED`）证明该断言**有判别力**；反事实（**完全不写回**）证明 90 秒租约**已独立提供出口**，故该兜底**无出口增益、只有信号污染**。另 R40-3 🟡：90s 租约短于「慢而合法」的 DNS-01 签发，t+95s 实测**第二笔探针被放行**，故本节「严格仅放行 1 笔」只在签发耗时 < 90s 时成立。**处置：§19.4 E15（删除兜底）/ E15′（置位点下移到上游调用前）。**
 
 ```mermaid
 stateDiagram-v2
@@ -199,6 +201,23 @@ stateDiagram-v2
   - **实时配额与断路器态势看板**：在 Admin 提供 `GET /api/v1/admin/tls/circuit-status`，直观展示断路器当前状态（Closed/Open/Half-Open）、当前令牌桶余量、近 24 小时签发成功率与平均耗时；
   - **安全审计可逆解封接口**：提供 `POST /api/v1/admin/tls/reset-rate-limit`，允许管理员在研发测试或误封时手动复位断路器或特定 Node 计数，操作强审计入库。
 
+#### 3.6.1 开工准入结论（第 40 轮后置复核 · 2026-09-14）
+
+**结论：可以推进，但有 3 条前置与 2 条设计约束。**
+
+**已核验的事实基础**（`rg` 机器回读）：
+- 两个端点**均不存在**：`rg 'tls/circuit-status|tls/reset-rate-limit'` 在 `src/routes/` 下**零命中** ⇒ 阶段三确为未开工。
+- 底层已备：`getCircuitBreakerStatus`（读侧，读侧逻辑已被 `circuit-breaker-offline.js:T7` 覆盖）、`resetCircuitBreaker`（写侧，**生产调用点仍为零**，仅测试引用）、`admin_audit_logs` 表已在 `src/routes/admin.ts` 中被 5 处使用。
+
+**3 条前置**：
+1. **必须先修 R40-1 🔴（或与阶段三同批交付）。** 否则大盘展示的是**被客户端错误污染的断路器状态** —— 仪表盘在度量错误的量。更关键：阶段三要交付的「可逆运维解封通道」正是 R40-1 所需的人工出口；**把缺陷修在一行里（§19.4 E15），比交付一套例行需要人值守按的 break-glass 更根本**。
+2. **E16 的数字更正须先落地。** 阶段三的验收同样要引用套件计数；带着已知错误的口径进入下一阶段，等于把【151】的债滚下去 —— 本轮已实证它会**跨文档传播**（审查方写错 → 开发方原样复制进 bugs §十八 与本文档）。
+3. **`resetCircuitBreaker` 从「零调用点 util」变为「生产写操作」，须补三件事**：① **Admin 鉴权**（该函数目前**无任何鉴权概念**）；② **`admin_audit_logs` 强制入库**（含操作人、时间，以及复位前的 `state`/`failure_count`/`cooldown_until` 快照）；③ **复位范围写入文档** —— 现实现同时清 `state→'CLOSED'`、`failure_count→0`、`cooldown_until→NULL`、`last_retry_after→0`。**该语义是正确的**（一次人工复位把「教训计数」一并清零，避免复位后立即再次跳闸），但必须显式成文并落入审计快照，否则运维无法解释复位后的行为。
+
+**2 条设计约束**：
+1. **大盘必须区分跳闸归因。** R40-1 修复后请把「`OPEN` 只由上游 429 或上游 5xx 连续 ≥3 触发」固化为不变式；在修复前，大盘必须给出**按 `reason_key` 分类的跳闸计数**，否则运维会把客户端错误误判为 GTS 故障。
+2. **阶段三自身的验收必须机器可证伪**：`reset-rate-limit` 至少需 ① 复位后同一 key 立即恢复 `allowed=true`；② 复位写入 **1 条** `admin_audit_logs`；③ 复位**不影响**其它 key 与其它窗口的计数（这是 R39-3 `window_start` 守卫的**反向用例**）；④ 未鉴权调用返回 401/403 且**不**写入审计。
+
 ---
 
 ## 四、面向未来向 Let's Encrypt / ZeroSSL 扩展的统一抽象层
@@ -246,6 +265,10 @@ export const SUPPORTED_PROVIDERS: Record<string, CAProvider> = {
 ## 五、实施里程碑与落地路线图
 
 > ⚠️ **审查演进说明**：下图阶段一 / 阶段二两处「【已完成 · 100% 交付】」标记曾于第 39 轮后置复核改判为 ⚠️ 部分闭环（阶段一 → R39-15；阶段二 → R39-14）；**现已在基线 `v1.36.127` 中全面落实 E10–E14 整改，真实 SQLite 并发测试全绿（15/15, 78/78），阶段一与阶段二正式达成 100% 实质闭环**。下文完整保留第 39 轮审查员的后置复核改判记录与最终 E10–E14 终验全量通过凭证。
+>
+> ⚠️⚠️ **第 40 轮后置复核再次改判（基线 `v1.36.127` · 提交 `f7601055` + `3fc593c0`）：「阶段一/二 100% 实质闭环」不成立。** 逐项复核 E10–E14 得：**E10 ✅ 真闭环**（处方逐字采用，`T12.1–T12.4` 精确锁定审查方 E10 验证表的 5 个场景）；**E11 ⚠️ 部分闭环** —— ①③ 成立、吸收态确已消灭，但**我方处方的第②条（`finally` 兜底）不成立且引入 R40-1 🔴**（客户端错误被记成上游 CA 失败；已跳闸状态可被无凭据者无限期劫持；实测该兜底**无出口增益**）；**E12 ✅ / E13 ✅ 成立**（伪标识符零残留、锚点与守卫 SQL 已对齐）；**E14 ❌ 不成立** —— 本文档中「16 个套件 / 462 + 161」经实测**两处皆错**（R40-2 🔴，**错误源头在审查方 §17.4，开发方为忠实复制**）。另新增 R40-3 🟡（90s 租约 < 慢签发）、R40-4 🟠（新测试的 D1 假体 6 处**吞掉 SQL 错误**，非法语句会退化成「无行」⇒ 假绿）。**处置：bugs 文档 §19.4 E15–E17。**
+>
+> 📍 **对下图「阶段三」的准入影响**：可以推进，但 **R40-1 必须先修或与阶段三同批交付**（否则大盘度量的是被客户端错误污染的信号，且阶段三的 break-glass 通道会从「应急」退化为「例行」）。完整准入结论（3 条前置 + 2 条设计约束 + 已核验的事实基础）见 **§3.6.1 开工准入结论**。
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
@@ -345,9 +368,9 @@ export const SUPPORTED_PROVIDERS: Record<string, CAProvider> = {
 > 4. **E13 (R39-17 / R39-19 🟡 彻底闭环)**：
 >    - 机器回读纠偏所有代码锚点，回滚守卫 SQL 纠偏为 `WHERE key = ? AND window_start = ?`（删除多余的 `count > 0`）；
 > 5. **E14 (R39-18 🟡 彻底闭环)**：
->    - 纠偏测试报告数字，清晰区分整链 16 个套件全绿（退出码 0，462 + 161 断言）与单一分项计数；
+>    - ~~纠偏测试报告数字，清晰区分整链 16 个套件全绿（退出码 0，462 + 161 断言）与单一分项计数；~~ **🚫 数字更正（§19.2 R40-2）**：实测 `npm run test:offline` 为 **20 个 `test:*` 套件 + 1 道 `typecheck` 门禁（顶层链式脚本 21，退出码 0）**；有数字自报的 14 个套件合计 **631 = 462 + 169**（`Results: N passed` 型 10 个 = 462；`N/N passed` 型 4 个 = 169），另 6 个套件以文本自报。「16」与「161」两处皆错，**纠正口径见 §19.4 E16**；
 > 6. **全链自动化回归**：
->    - `npm run test:offline`（16 套件全部通过，退出码 0）；
+>    - `npm run test:offline`（**20 个 `test:*` 套件 + 1 道 `typecheck` 门禁**全部通过，顶层链式脚本 21，退出码 0）；
 >    - `go test ./...`（100% 通过）。
 >
 > 判定：**阶段一（自适应限流与弹性熔断）与阶段二（并发去重与两阶段记账）已 100% 实质闭环**。
