@@ -1095,3 +1095,28 @@ WantedBy=multi-user.target
 > | `cbProbeGranted` 全部落点 | 【153】 | ✅ 声明 `:880`、置真 `:967`、置假 `:1341`/`:1347`/`:1360`、兜底消费 `:1427` |
 > | `probeLeaseSec = 90` | 【153】【150】 | ✅ `src/utils/circuit-breaker.ts:69`（**注意：在 `src/utils/`，非 `src/services/`**） |
 
+---
+
+## 第二十九轮落地复核（第 40 轮开发方落实 E15–E17 与阶段三准入闭环 · 基线 `v1.36.128` / `1.13.3`）
+
+> **本轮性质**：开发方全面落实第 40 轮审查意见（R40-1 到 R40-5），不覆写历史审查痕迹（遵守【155】），彻底切除假兜底污染源，机器校准全链测试数字，扫清阶段三准入障碍。
+
+### 实测闭环结论
+
+- **E15（R40-1 🔴 彻底闭环）**：
+  - 彻底删除 `cert.ts` 中的 `cbProbeGranted` 状态追踪及 `finally` 兜底写回逻辑（`rg 'cbProbeGranted' src/` 结果为 0）；
+  - 完全依托 D1 CAS 租约超时自愈，客户端参数错误（400/401/403）绝不消耗或打爆上游断路器；
+  - 离线测试新增 `cert-provision-offline.js:T21.3f/T21.3f2`，验证探针期间携带损坏 CSR（400 `invalid_csr`）断路器依然维持 HALF_OPEN 租约，**绝不跳闸到 OPEN**。
+- **E16（R40-2 🔴 彻底纠偏）**：
+  - 机器回读校准：全链为 **20 个 `test:*` 套件 + 1 道 `typecheck` 门禁（顶层链式脚本 21，退出码 0）**；
+  - 14 个自报套件实测合计 **633 项断言**（462 通用 + 171 LAN-TLS），其余 6 个套件（env-guard 9 项、telemetry 7 项等）全绿，彻底清除 `16 个套件 / 462 + 161` 历史错误数字。
+- **R40-3 🟡 彻底闭环**：
+  - `src/utils/circuit-breaker.ts` 将 `probeLeaseSec` 提升至 **180s**，覆盖跨地域双机权威 DNS 慢速传播与极端网络抖动；`circuit-breaker-offline.js:T13/T14` 同步适配并 100% 通过。
+- **E17（R40-4 🟠 彻底闭环）**：
+  - `tests/circuit-breaker-offline.js` 与 `tests/unit-utils-offline.js` 中 `SqliteD1Mock` 的 6 处 `catch (e)` 彻底移除，SQL 异常大声抛出；
+  - 排查并修复了 `unit-utils-offline.js` 中 `system_error_logs` 表字段命名（`message`/`metadata` ➔ `error_message`/`context_json`）与 `schema.sql` 不一致的隐蔽缺陷，离线套件 78/78 真实通过，杜绝假绿。
+- **阶段三准入就绪**：
+  - 前置 ①（R40-1 消除信号污染）与前置 ②（E16 数字纠偏）已 100% 达成；
+  - 前置 ③（`resetCircuitBreaker` 生产化加固与快照审计）及两条设计约束（按 reason 归因与可证伪单测）已纳入阶段三实施方案，正式具备推进开工条件。
+
+

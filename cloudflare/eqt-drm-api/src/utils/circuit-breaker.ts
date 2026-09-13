@@ -64,9 +64,10 @@ export async function canExecuteCircuit(
   const now = Date.now();
   const nowIso = new Date(now).toISOString();
 
-  // 1. Atomic CAS transition: OPEN -> HALF_OPEN, or expired HALF_OPEN -> renewed HALF_OPEN (E11 / R39-15)
-  // Ensures HALF_OPEN has a probe lease and cannot become an absorbing deadlock state if probe never records.
-  const probeLeaseSec = 90;
+  // 1. Atomic CAS transition: OPEN -> HALF_OPEN, or expired HALF_OPEN -> renewed HALF_OPEN (E11 / R39-15 / R40-3)
+  // Ensures HALF_OPEN has a probe lease (180s to cover multi-region authoritative DNS propagation)
+  // and cannot become an absorbing deadlock state if probe never records.
+  const probeLeaseSec = 180;
   const leaseCutoffIso = new Date(now - probeLeaseSec * 1000).toISOString();
 
   const casRes = await env.DB.prepare(`

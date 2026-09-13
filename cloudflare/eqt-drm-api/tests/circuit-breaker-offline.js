@@ -47,30 +47,18 @@ class SqliteD1Mock {
   _mk(sql, binds) {
     return {
       all: async () => {
-        try {
-          const stmt = this.db.prepare(sql);
-          return { results: stmt.all(...(binds || [])) };
-        } catch (e) {
-          return { results: [] };
-        }
+        const stmt = this.db.prepare(sql);
+        return { results: stmt.all(...(binds || [])) };
       },
       first: async () => {
-        try {
-          const stmt = this.db.prepare(sql);
-          const row = stmt.get(...(binds || []));
-          return row || null;
-        } catch (e) {
-          return null;
-        }
+        const stmt = this.db.prepare(sql);
+        const row = stmt.get(...(binds || []));
+        return row || null;
       },
       run: async () => {
-        try {
-          const stmt = this.db.prepare(sql);
-          const res = stmt.run(...(binds || []));
-          return { success: true, meta: { changes: res.changes, last_row_id: res.lastInsertRowid } };
-        } catch (e) {
-          return { success: false, error: e.message, meta: { changes: 0 } };
-        }
+        const stmt = this.db.prepare(sql);
+        const res = stmt.run(...(binds || []));
+        return { success: true, meta: { changes: res.changes, last_row_id: res.lastInsertRowid } };
       },
       bind: (...args) => this._mk(sql, args)
     };
@@ -174,28 +162,28 @@ async function runTests() {
     `T12: Token bucket burst concurrency allows exactly capacity=5 (got ${allowedTb.length}) and rejects 5 with retryAfter`
   );
 
-  // --- Test 13: HALF_OPEN Probe Lease Enforcement and Dynamic retryAfter (R39-15 / E11) ---
+  // --- Test 13: HALF_OPEN Probe Lease Enforcement and Dynamic retryAfter (R39-15 / E11 / R40-3) ---
   // cbConcKey is currently HALF_OPEN with updated_at ~ now.
-  // Verify that subsequent probes are rejected with dynamic retryAfter <= 90
+  // Verify that subsequent probes are rejected with dynamic retryAfter <= 180
   const midLeaseProbe = await canExecuteCircuit(env, cbConcKey);
   assert(
     !midLeaseProbe.allowed &&
     midLeaseProbe.state === 'HALF_OPEN' &&
     midLeaseProbe.retryAfter > 0 &&
-    midLeaseProbe.retryAfter <= 90,
+    midLeaseProbe.retryAfter <= 180,
     `T13: In-flight HALF_OPEN probe blocks concurrent callers with dynamic retryAfter (${midLeaseProbe.retryAfter}s)`
   );
 
-  // --- Test 14: HALF_OPEN Probe Crash / Lease Expiry Self-Healing (R39-15 / E11) ---
-  // Simulate probe crash/loss: updated_at expired beyond 90s lease
-  const expiredProbeIso = new Date(Date.now() - 95000).toISOString();
+  // --- Test 14: HALF_OPEN Probe Crash / Lease Expiry Self-Healing (R39-15 / E11 / R40-3) ---
+  // Simulate probe crash/loss: updated_at expired beyond 180s lease
+  const expiredProbeIso = new Date(Date.now() - 185000).toISOString();
   db.db.prepare("UPDATE circuit_breakers SET updated_at = ? WHERE name = ?").run(expiredProbeIso, cbConcKey);
 
   // Next caller must succeed in reclaiming the probe slot (deadlock broken)
   const reclaimedProbe = await canExecuteCircuit(env, cbConcKey);
   assert(
     reclaimedProbe.allowed && reclaimedProbe.state === 'HALF_OPEN',
-    'T14: Expired HALF_OPEN probe lease (>90s) allows next caller to reclaim probe (absorptive deadlock eliminated)'
+    'T14: Expired HALF_OPEN probe lease (>180s) allows next caller to reclaim probe (absorptive deadlock eliminated)'
   );
   const reclaimedRow = db.db.prepare("SELECT updated_at FROM circuit_breakers WHERE name = ?").get(cbConcKey);
   const refreshedAt = new Date(reclaimedRow.updated_at).getTime();

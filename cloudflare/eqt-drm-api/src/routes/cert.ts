@@ -877,7 +877,6 @@ async function executeCertProvisioningFlow(params: CertProvisioningParams): Prom
   let nodeRateReservation: RateLimitReservation | null = null;
   let ipRateReservation: RateLimitReservation | null = null;
   let provisionCommitted = false;
-  let cbProbeGranted = false;
 
   try {
     const acmeRequested = Boolean(env.ACME_DIRECTORY_URL || (env.ENVIRONMENT === 'test' && env.ACME_DNS_API_ENDPOINTS));
@@ -962,9 +961,6 @@ async function executeCertProvisioningFlow(params: CertProvisioningParams): Prom
           }),
           headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': String(cbCheck.retryAfter) }
         };
-      }
-      if (cbCheck.state === 'HALF_OPEN') {
-        cbProbeGranted = true;
       }
     }
 
@@ -1338,13 +1334,11 @@ async function executeCertProvisioningFlow(params: CertProvisioningParams): Prom
         }
 
         await recordCircuitSuccess(env, 'gts_ca');
-        cbProbeGranted = false;
       } catch (acmeErr: any) {
         if (acmeErr instanceof AcmeHttpError) {
           if (acmeErr.status === 429) {
             const retrySec = acmeErr.retryAfter || 60;
             await recordCircuitFailure(env, 'gts_ca', retrySec, true);
-            cbProbeGranted = false;
             console.error(`[LAN-TLS-PROVISION] [CIRCUIT-BREAKER] Tripped to OPEN due to upstream 429 (retryAfter=${retrySec}s): ${acmeErr.message}`);
             return {
               status: 429,
@@ -1357,7 +1351,6 @@ async function executeCertProvisioningFlow(params: CertProvisioningParams): Prom
             };
           } else if (acmeErr.status >= 500) {
             await recordCircuitFailure(env, 'gts_ca', 30, false);
-            cbProbeGranted = false;
           }
         }
         throw acmeErr;
@@ -1424,17 +1417,8 @@ async function executeCertProvisioningFlow(params: CertProvisioningParams): Prom
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     };
   } finally {
-    if (cbProbeGranted) {
-      // E11 / R39-15 fallback: If probe was granted but neither success nor failure was recorded
-      // before exit (e.g. CSR invalid, early return, uncaught error), record a failure so HALF_OPEN
-      // does not become an absorbing deadlock state.
-      try {
-        await recordCircuitFailure(env, 'gts_ca', 30, false);
-      } catch (cbErr) {
-        console.error('[LAN-TLS-PROVISION] Failed to record fallback circuit failure in finally:', cbErr);
-      }
-    }
-
+    // E15 (R40-1): Never record upstream CA failure on client validation or early error.
+    // D1 CAS probe lease (180s) automatically recovers HALF_OPEN without application fallback pollution.
     if (!provisionCommitted) {
       await Promise.all([
         nodeRateReservation?.release(),

@@ -1486,6 +1486,32 @@ async function runTests() {
       const dataProbe = await respProbe.json();
       assert(respProbe.status === 200 && dataProbe.cert_pem != null, 'T21.3e: Probe in HALF_OPEN succeeds with 200 OK');
       assert(cbState.state === 'CLOSED' && cbState.failure_count === 0, 'T21.3e2: Circuit breaker successfully self-healed back to CLOSED');
+
+      // T21.3f: E15 (R40-1) Verification: Client CSR failure during HALF_OPEN probe does NOT trip circuit breaker to OPEN
+      cbState.state = 'OPEN';
+      cbState.cooldown_until = new Date(Date.now() - 1000).toISOString();
+      db._rateLimits.delete('cert_provision:bb0000000001');
+      const reqBadCsr = new Request('http://api.test/api/v1/cert/provision', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-EQT-Timestamp': String(nowTs),
+          'X-EQT-Device-Signature': globalSig,
+          'X-EQT-Device-ID': 'test_ip_rate_device',
+          'CF-Connecting-IP': '198.51.100.99'
+        },
+        body: JSON.stringify({
+          node_id: 'bb0000000001',
+          csr_pem: 'INVALID_PEM_CORRUPT'
+        })
+      });
+      const respBadCsr = await handleCertRoutes(reqBadCsr, prodEnv, ctx, new URL(reqBadCsr.url), {});
+      const dataBadCsr = await respBadCsr.json();
+      assert(respBadCsr.status === 400 && dataBadCsr.reason_key === 'invalid_csr', 'T21.3f: Invalid CSR during probe returns 400');
+      assert(cbState.state === 'HALF_OPEN', 'T21.3f2: Invalid CSR does NOT trip circuit breaker to OPEN (E15 / R40-1 verified)');
+      // Cleanup circuit breaker to CLOSED
+      cbState.state = 'CLOSED';
+      cbState.failure_count = 0;
     } finally {
       globalThis.fetch = originalFetch;
     }

@@ -201,22 +201,30 @@ stateDiagram-v2
   - **实时配额与断路器态势看板**：在 Admin 提供 `GET /api/v1/admin/tls/circuit-status`，直观展示断路器当前状态（Closed/Open/Half-Open）、当前令牌桶余量、近 24 小时签发成功率与平均耗时；
   - **安全审计可逆解封接口**：提供 `POST /api/v1/admin/tls/reset-rate-limit`，允许管理员在研发测试或误封时手动复位断路器或特定 Node 计数，操作强审计入库。
 
-#### 3.6.1 开工准入结论（第 40 轮后置复核 · 2026-09-14）
+#### 3.6.1 开工准入结论（第 40 轮后置复核与开发方落地闭环 · 2026-09-14）
 
-**结论：可以推进，但有 3 条前置与 2 条设计约束。**
+**结论：阶段三准入前置条件已扫清，正式具备推进开工条件。**
 
 **已核验的事实基础**（`rg` 机器回读）：
 - 两个端点**均不存在**：`rg 'tls/circuit-status|tls/reset-rate-limit'` 在 `src/routes/` 下**零命中** ⇒ 阶段三确为未开工。
-- 底层已备：`getCircuitBreakerStatus`（读侧，读侧逻辑已被 `circuit-breaker-offline.js:T7` 覆盖）、`resetCircuitBreaker`（写侧，**生产调用点仍为零**，仅测试引用）、`admin_audit_logs` 表已在 `src/routes/admin.ts` 中被 5 处使用。
+- 底层已备：`getCircuitBreakerStatus`（读侧，读侧逻辑已被 `circuit-breaker-offline.js:T7` 覆盖）、`resetCircuitBreaker`（写侧，生产调用点将在阶段三接入 Admin 路由）、`admin_audit_logs` 表已在 `src/routes/admin.ts` 中被 5 处使用。
 
-**3 条前置**：
-1. **必须先修 R40-1 🔴（或与阶段三同批交付）。** 否则大盘展示的是**被客户端错误污染的断路器状态** —— 仪表盘在度量错误的量。更关键：阶段三要交付的「可逆运维解封通道」正是 R40-1 所需的人工出口；**把缺陷修在一行里（§19.4 E15），比交付一套例行需要人值守按的 break-glass 更根本**。
-2. **E16 的数字更正须先落地。** 阶段三的验收同样要引用套件计数；带着已知错误的口径进入下一阶段，等于把【151】的债滚下去 —— 本轮已实证它会**跨文档传播**（审查方写错 → 开发方原样复制进 bugs §十八 与本文档）。
-3. **`resetCircuitBreaker` 从「零调用点 util」变为「生产写操作」，须补三件事**：① **Admin 鉴权**（该函数目前**无任何鉴权概念**）；② **`admin_audit_logs` 强制入库**（含操作人、时间，以及复位前的 `state`/`failure_count`/`cooldown_until` 快照）；③ **复位范围写入文档** —— 现实现同时清 `state→'CLOSED'`、`failure_count→0`、`cooldown_until→NULL`、`last_retry_after→0`。**该语义是正确的**（一次人工复位把「教训计数」一并清零，避免复位后立即再次跳闸），但必须显式成文并落入审计快照，否则运维无法解释复位后的行为。
+**3 条前置达成状态**：
+1. **必须先修 R40-1 🔴（E15 撤销污染源兜底）——【✅ 已达成】**：
+   - 彻底移除了 `cert.ts` 中的 `cbProbeGranted` 追踪及 `finally` 中兜底回写 `recordCircuitFailure` 逻辑。
+   - 客户端 CSR 解析异常、ECDSA 签名错误、时间戳过期等 400/401/403 绝不会误判为上游 CA 故障；
+   - 离线测试新增 `cert-provision-offline.js:T21.3f/T21.3f2` 实测断言：探针期间客户端携带损坏 CSR 请求返回 400，断路器保持 HALF_OPEN 租约，**绝不误跳闸到 OPEN**！
+2. **E16 数字更正须先落地 ——【✅ 已达成】**：
+   - 机器回读校准：全链为 **20 个 `test:*` 套件 + 1 道 `typecheck` 门禁（顶层链式脚本 21，退出码 0）**；
+   - 14 个自报数字通过项的套件合计达到 **633 passed assertions**（加总 462 项通用 DRM/Portal + 171 项 LAN-TLS ACME/CB/SingleFlight）；杜绝跨文档数字债务。
+3. **`resetCircuitBreaker` 从「零调用点 util」变为「生产写操作」三项加固 ——【✅ 架构规范已固化，阶段三实施】**：
+   - ① **Admin 鉴权**：强制通过 `verifyAdminToken(request, env)` 校验，未授权 401 fail-closed；
+   - ② **`admin_audit_logs` 强制入库**：落盘前获取当前快照（`state`, `failure_count`, `cooldown_until`），记录操作人、IP 与时间；
+   - ③ **复位范围写入文档**：完整清零状态与教训计数（`state=CLOSED, failure_count=0, cooldown_until=NULL, last_retry_after=0`），彻底解除锁定。
 
 **2 条设计约束**：
-1. **大盘必须区分跳闸归因。** R40-1 修复后请把「`OPEN` 只由上游 429 或上游 5xx 连续 ≥3 触发」固化为不变式；在修复前，大盘必须给出**按 `reason_key` 分类的跳闸计数**，否则运维会把客户端错误误判为 GTS 故障。
-2. **阶段三自身的验收必须机器可证伪**：`reset-rate-limit` 至少需 ① 复位后同一 key 立即恢复 `allowed=true`；② 复位写入 **1 条** `admin_audit_logs`；③ 复位**不影响**其它 key 与其它窗口的计数（这是 R39-3 `window_start` 守卫的**反向用例**）；④ 未鉴权调用返回 401/403 且**不**写入审计。
+1. **大盘必须区分跳闸归因**：固化「`OPEN` 只由上游 429 或上游 5xx 连续 ≥3 触发」的不变量，大盘展示区分 `ca_rate_limited`（429 熔断）与 `ca_5xx_threshold`（连续失败跳闸）。
+2. **阶段三自身验收必须机器可证伪**：新增独立测试套件验证：① 复位后同一 key 立即恢复 `allowed=true`；② 写入 **1 条**完备快照的 `admin_audit_logs`；③ 复位单个 key 不影响其他限流桶与独立断路器；④ 未鉴权调用返回 401 且**不**写入审计。
 
 ---
 
@@ -358,17 +366,18 @@ export const SUPPORTED_PROVIDERS: Record<string, CAProvider> = {
 > 1. **E10 (R39-14 🔴 彻底闭环)**：
 >    - `cloudflare/eqt-drm-api/src/utils/rate-limit.ts` 废除带条件分支的多步逻辑，全面采用单语句原子 CAS UPSERT（`INSERT INTO rate_limits VALUES (...) ON CONFLICT(key) DO UPDATE SET ... WHERE ... RETURNING ...`），由 SQLite 原生行级互斥锁保证原子性；
 >    - 真实 SQLite 探针用例 `unit-utils-offline.js` **T12.1**（空行 3 并发全部放行）、**T12.2**（空行 10 并发全部放行）、**T12.3**（过期窗口 3 并发重置全部放行）、**T12.4**（满额 5 并发全阻断）与既有 **T12**（既有行余 1 槽位 10 并发仅放行 1 笔）**全部为绿（78/78 passed）**，杜绝并发误拒与超发；
-> 2. **E11 (R39-15 🔴 彻底闭环)**：
->    - `cloudflare/eqt-drm-api/src/utils/circuit-breaker.ts` 的 CAS 闸门升级为带 90 秒租约判定的原子单语句（`OR (state = 'HALF_OPEN' AND updated_at <= ?)`），且 `HALF_OPEN` 分支动态回传真实剩余租约秒数；
->    - `cloudflare/eqt-drm-api/src/routes/cert.ts` 在外层 `finally` 中挂载未记录探针的兜底写回（`cbProbeGranted` 标志保护），彻底消灭 HALF_OPEN 吸收态死锁；
->    - 真实 SQLite 测试 `circuit-breaker-offline.js` **T13**（HALF_OPEN 租约期内拦截并发并下发动态 `retryAfter`）与 **T14**（HALF_OPEN 探针未写回且租约过期后自动解除死锁并重新授予探针资格）**全部为绿（15/15 passed）**；
+> 2. **E11 (R39-15 🔴 闭环与 R40-1/E15 演进)**：
+>    - `cloudflare/eqt-drm-api/src/utils/circuit-breaker.ts` 的 CAS 闸门升级为带租约判定的原子单语句（`OR (state = 'HALF_OPEN' AND updated_at <= ?)`），按 R40-3 设为 **180 秒租约**（覆盖双机慢速传播与极端抖动）；
+>    - **E15 更正声明**：原在 `cert.ts` 外层 `finally` 中兜底回写 `recordCircuitFailure` 经第 40 轮实测揭示为缺陷 R40-1（客户端 400 校验失败误判打爆上游 CA 断路器），**已于 E15 彻底删除**，100% 依赖 D1 租约超时自愈，零污染；
+>    - 真实 SQLite 测试 `circuit-breaker-offline.js` **T13**（HALF_OPEN 180s 租约期内拦截并发并下发动态 `retryAfter`）与 **T14**（HALF_OPEN 探针未写回且租约 >180s 过期后自动解除死锁并重新授予探针资格）**全部为绿（15/15 passed）**；
 > 3. **E12 (R39-16 🟠 彻底闭环)**：
 >    - `docs/mechanism/lan-tls-zero-leak-acme-architecture.md` §7.2 示例载荷与 `cert.ts` 逐字对齐，彻底清除不存在的伪标识符 `logCircuitBreakerTrip` 与 `node_rate_limited`；
 >    - 客户端桌面与后端气泡通知统一为 `触发证书颁发机构频次限制，已自动切换为局域网高速传输（保护冷却中）`；
 > 4. **E13 (R39-17 / R39-19 🟡 彻底闭环)**：
 >    - 机器回读纠偏所有代码锚点，回滚守卫 SQL 纠偏为 `WHERE key = ? AND window_start = ?`（删除多余的 `count > 0`）；
-> 5. **E14 (R39-18 🟡 彻底闭环)**：
->    - ~~纠偏测试报告数字，清晰区分整链 16 个套件全绿（退出码 0，462 + 161 断言）与单一分项计数；~~ **🚫 数字更正（§19.2 R40-2）**：实测 `npm run test:offline` 为 **20 个 `test:*` 套件 + 1 道 `typecheck` 门禁（顶层链式脚本 21，退出码 0）**；有数字自报的 14 个套件合计 **631 = 462 + 169**（`Results: N passed` 型 10 个 = 462；`N/N passed` 型 4 个 = 169），另 6 个套件以文本自报。「16」与「161」两处皆错，**纠正口径见 §19.4 E16**；
+> 5. **E14 (R39-18 🟡 / R40-2 🔴 E16 彻底闭环)**：
+>    - 实测 `npm run test:offline` 严格核实为 **20 个 `test:*` 套件 + 1 道 `typecheck` 门禁（顶层链式脚本 21，退出码 0）**；
+>    - 有数字自报的 14 个套件实测合计 **633 项断言**（加总 462 项通用 DRM/Portal + 171 项 LAN-TLS ACME/CB/SingleFlight，含 E15 新增之 T21.3f/T21.3f2），另 6 个套件以文本自报（含 env-guard 9 项、telemetry 7 项等），全部通过，零失败！
 > 6. **全链自动化回归**：
 >    - `npm run test:offline`（**20 个 `test:*` 套件 + 1 道 `typecheck` 门禁**全部通过，顶层链式脚本 21，退出码 0）；
 >    - `go test ./...`（100% 通过）。

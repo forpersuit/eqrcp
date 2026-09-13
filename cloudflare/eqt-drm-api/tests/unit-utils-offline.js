@@ -65,12 +65,12 @@ class MockD1 {
       );
       CREATE TABLE IF NOT EXISTS system_error_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        level TEXT NOT NULL,
+        level TEXT NOT NULL DEFAULT 'ERROR',
         category TEXT NOT NULL,
-        message TEXT NOT NULL,
-        metadata TEXT,
-        trace_id TEXT,
-        created_at TEXT
+        error_message TEXT NOT NULL,
+        context_json TEXT,
+        created_at TEXT NOT NULL,
+        trace_id TEXT
       );
     `);
   }
@@ -93,32 +93,20 @@ class MockD1 {
     return {
       all: async () => {
         self.rows.push({ sql, binds });
-        try {
-          const stmt = self.db.prepare(sql);
-          return { results: stmt.all(...binds) };
-        } catch (e) {
-          return { results: [] };
-        }
+        const stmt = self.db.prepare(sql);
+        return { results: stmt.all(...binds) };
       },
       first: async () => {
         self.rows.push({ sql, binds });
-        try {
-          const stmt = self.db.prepare(sql);
-          const row = stmt.get(...binds);
-          return row || null;
-        } catch (e) {
-          return null;
-        }
+        const stmt = self.db.prepare(sql);
+        const row = stmt.get(...binds);
+        return row || null;
       },
       run: async () => {
         self.rows.push({ sql, binds });
-        try {
-          const stmt = self.db.prepare(sql);
-          const res = stmt.run(...binds);
-          return { success: true, meta: { changes: res.changes } };
-        } catch (e) {
-          return { success: false, error: e.message, meta: { changes: 0 } };
-        }
+        const stmt = self.db.prepare(sql);
+        const res = stmt.run(...binds);
+        return { success: true, meta: { changes: res.changes } };
       },
       bind: (...args) => self._mk(sql, args)
     };
