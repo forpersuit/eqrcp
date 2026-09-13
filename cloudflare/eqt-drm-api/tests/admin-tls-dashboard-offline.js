@@ -157,7 +157,7 @@ async function runTests() {
       VALUES ('node_002', 'node_002.direct.eqt.net.im', ?, ?, 80)
     `).run(nowIso, nowIso);
 
-    // Seed system_error_logs: 1 ca_rate_limited (429) + 1 ca_5xx_error (502) + 1 rate_limit hit
+    // Seed system_error_logs: 1 ca_rate_limited (429) + 1 ca_5xx_error (502) + 1 other CERT_PROVISION_ERROR + 1 rate_limit hit
     d1.db.prepare(`
       INSERT INTO system_error_logs (category, error_message, context_json, created_at)
       VALUES ('CERT_PROVISION_ERROR', 'HTTP 429', ?, ?)
@@ -167,6 +167,11 @@ async function runTests() {
       INSERT INTO system_error_logs (category, error_message, context_json, created_at)
       VALUES ('CERT_PROVISION_ERROR', 'HTTP 502', ?, ?)
     `).run(JSON.stringify({ reason_key: 'ca_5xx_error', status_code: 502 }), nowIso);
+
+    d1.db.prepare(`
+      INSERT INTO system_error_logs (category, error_message, context_json, created_at)
+      VALUES ('CERT_PROVISION_ERROR', 'Internal error', ?, ?)
+    `).run(JSON.stringify({ reason_key: 'internal_error', error: 'crypto error' }), nowIso);
 
     d1.db.prepare(`
       INSERT INTO system_error_logs (category, error_message, context_json, created_at)
@@ -192,13 +197,13 @@ async function runTests() {
     assert(m && m.avg_duration_ms === 100, `T2.3b: 24h average issuance duration accurately calculated (expected 100ms, got ${m.avg_duration_ms}ms)`);
     assert(m && m.trip_reasons.ca_rate_limited === 1, `T2.3c: Trip attribution tracks exactly 1 ca_rate_limited`);
     assert(m && m.trip_reasons.ca_5xx_error === 1, `T2.3d: Trip attribution tracks exactly 1 ca_5xx_error (distinguished from internal_error)`);
-    assert(m && m.trip_reasons.other_cert_errors === 0, `T2.3d2: Trip attribution tracks exactly 0 other_cert_errors`);
-    assert(m && m.total_attempts === 4, `T2.3e1: Total attempts matches sum of provisions and all trip reasons (expected 4, got ${m.total_attempts})`);
+    assert(m && m.trip_reasons.other_cert_errors === 1, `T2.3d2: Trip attribution tracks exactly 1 other_cert_errors`);
+    assert(m && m.total_attempts === 5, `T2.3e1: Total attempts matches sum of provisions and all trip reasons (expected 5, got ${m.total_attempts})`);
     assert(
       m.total_attempts === m.provisions_success + m.trip_reasons.ca_rate_limited + m.trip_reasons.ca_5xx_error + m.trip_reasons.other_cert_errors,
       'T2.3e2: Strict reconciliation: total_attempts equals provisions_success + all trip reasons'
     );
-    assert(m && m.success_rate === 0.5, `T2.3e3: Accurate success rate calculation 2/4 = 0.5 (got ${m.success_rate})`);
+    assert(m && m.success_rate === 0.4, `T2.3e3: Accurate success rate calculation 2/5 = 0.4 (got ${m.success_rate})`);
     assert(m && m.rate_limit_hits === 1, `T2.3f: Rate limit hits tracked accurately (1)`);
 
     // T2.4: Empty database baseline returns null success_rate instead of false 100% (R44-9)

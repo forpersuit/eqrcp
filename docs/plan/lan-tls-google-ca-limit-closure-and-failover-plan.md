@@ -675,3 +675,53 @@ export const SUPPORTED_PROVIDERS: Record<string, CAProvider> = {
 - **本轮变更未引入回归**：无消费方断裂，V3/V4/V5 基座判别力经复测保持，全量 679 项 0 failed。
 - **准入结论**：阶段三**可继续推进**；R45-1 须在下一轮前补齐 —— 处方：夹具注入至少 1 条 `reason_key` 既非 `ca_rate_limited` 亦非 `ca_5xx_error` 的 `CERT_PROVISION_ERROR` 日志，令 `other_cert_errors = 1`、`total_attempts = 5`，使 V10 型变体必然翻红。R45-3 的版本号与 R45-2 / R45-4 的文档标注随轮次顺带更正。
 - **新增准入约束**：凡断言形如「合计 = 各项之和」的恒等式，其夹具中被加总各项须**两两不等且非零**（R45-1 沉淀）；文档表格中凡标注「实测」的单元格，须可由一条列明的命令复现，由删除范围推断出的结果不得标注为「实测」（R45-2 沉淀）。
+
+#### 3.6.8 第 45 轮缺陷消除与闭环验收报告（对账等式判别力闭环 · 2026-09-14 · 基线 `v1.36.134` / `1.13.7`）
+
+> **红线遵循声明**：本小节为第 45 轮审查缺陷（1🔴 + 1🟠 + 2🟡）闭环实施报告，以独立小节 append-only 追加（红线【155】），绝不修改或覆盖上方任何历史轮次文本。
+
+针对第 45 轮审查提出的 4 项缺陷，已完成手术式修复与真实验证：
+
+**一、4 项缺陷逐项消除清单（1🔴 + 1🟠 + 2🟡）**
+
+1. **R45-1 🔴（对账等式零判别力缺陷彻底消除）**：
+   - 在 `tests/admin-tls-dashboard-offline.js` 的 Group 2 夹具中注入 1 条 `reason_key: 'internal_error'` 的 `CERT_PROVISION_ERROR` 系统错误日志，真实激活 `admin.ts:1944` 的 `else { otherCertErrors++; }` 逻辑；
+   - 夹具中各项非零：`provisions_success = 2`，`ca_rate_limited = 1`，`ca_5xx_error = 1`，`other_cert_errors = 1`，`rate_limit_hits = 1`；
+   - 指标值计算：`total_attempts = 5`，`success_rate = 2 / 5 = 0.4`；
+   - 断言更新：`T2.3d2` 断言 `other_cert_errors === 1`；`T2.3e1` 断言 `total_attempts === 5`；`T2.3e2` 严格验证对账等式 `total_attempts === provisions_success + ca_rate_limited + ca_5xx_error + other_cert_errors`；`T2.3e3` 断言 `success_rate === 0.4`；
+   - 彻底消除了因 `other_cert_errors === 0` 导致「缺失项」与「含零项」在数值上无法区分的假验证漏洞。
+2. **R45-2 🟠（实测标签纪律纠正）**：
+   - 修正探针表中关于变体 V1 的实跑数据为 **3 failed**（`T21.3g1`、`T21.3g2`、`T21.3g3` 翻红，`T21.3g4` 保持绿）；
+   - `T21.3g4` 的判别力由探针 V7（删除 `cert.ts:1365` 的 `recordCircuitFailure`）独立实测翻红证得（**1 failed**：`T21.3g4`）；
+   - 严禁任何由删除范围推断出的假实测数值，所有数据均来自命令行真实执行。
+3. **R45-3 🟡（Worker 与产品版本号对齐）**：
+   - `cloudflare/eqt-drm-api/package.json` 版本号升级至 `1.13.7`；
+   - 遵循「一旦有功能增加，则小版本号+1」规则，`pkg/version/version.go` 与 `desktop/gui/wails.json` 同步升至 `v1.36.134` / `1.36.134`。
+4. **R45-4 🟡（探针表标注纪律合规）**：
+   - 探针表中全面废除“继承阶段三判别力”等推测式标注，所有变体均附带确切的注入范围与复现命令。
+
+**二、反向探针实测明细（全部由命令实跑证得）**
+
+| 变体 | 注入缺陷与位置 | 实测命令 | 本轮实测结果 | 判定 |
+|---|---|---|---|:---:|
+| **V10** | `admin.ts:1951` 构成中移除 `otherCertErrors` | `npm run test:admin:tls:offline` | 💥 **33 passed / 3 failed**（`T2.3e1` 预期 5 实际 4、`T2.3e2` 等式不平、`T2.3e3` 预期 0.4 实际 0.5 全部精准翻红，`exit 1`） | ✅ **已翻红（判别力 100% 成立）** |
+| **V1** | 还原 `cert.ts:1367-1383`（删 5xx 的 `logSystemError` 与 `return 502`） | `npm run test:cert:offline` | 💥 **109 passed / 3 failed**（`T21.3g1` 状态码、`T21.3g2` 归因、`T21.3g3` 日志物理落盘翻红，`exit 1`） | ✅ **已翻红** |
+| **V7** | 删 `cert.ts:1365` 的 `recordCircuitFailure` | `npm run test:cert:offline` | 💥 **111 passed / 1 failed**（`T21.3g4` 断路器故障记录翻红，`exit 1`） | ✅ **已翻红** |
+| **V2** | 删 `cert.ts:1347` 429 的 `logSystemError` | `npm run test:cert:offline` | 💥 **111 passed / 1 failed**（`T21.3c3` 物理日志落盘翻红，`exit 1`） | ✅ **已翻红** |
+| **V3** | `resetD1RateLimit` 中 `DELETE … WHERE` 篡改为 `UPDATE … SET count=0` | `npm run test:admin:tls:offline` | 💥 **34 passed / 2 failed**（`T4.2`、`T4.5` 物理行存在性断言翻红，`exit 1`） | ✅ **已翻红** |
+| **V4** | `resetD1RateLimit` 中 `DELETE FROM rate_limits` 删去 `WHERE key=?` | `npm run test:admin:tls:offline` | 💥 **34 passed / 2 failed**（`T4.3a`、`T4.3b` 隔离性断言翻红，`exit 1`） | ✅ **已翻红** |
+| **V5** | `resetCircuitBreaker` 不再清空 `cooldown_until` | `npm run test:admin:tls:offline` | 💥 **35 passed / 1 failed**（`T3.2` 物理状态断言翻红，`exit 1`） | ✅ **已翻红** |
+| **V8** | `duration_ms` 恒写入 `null` | `npm run test:cert:offline` | 💥 **111 passed / 1 failed**（`T21.3e3` 非负数字断言翻红，`exit 1`） | ✅ **已翻红** |
+| **V9** | 删 `cert.ts:43` 的 `ALTER TABLE` 热迁移逻辑 | `npm run test:cert:offline` | 💥 **110 passed / 1 failed**（`T24.2` 翻红，`T24.3` 抛出 `ERR_SQLITE_ERROR`，`exit 1`） | ✅ **已翻红** |
+| **V11** | 空库时 `success_rate` 误回退 `1.0` | `npm run test:admin:tls:offline` | 💥 **35 passed / 1 failed**（`T2.4b` 严格 `null` 断言翻红，`exit 1`） | ✅ **已翻红** |
+| **V12** | 重置不存在 key 时回退为误导性 “reset successfully” | `npm run test:admin:tls:offline` | 💥 **35 passed / 1 failed**（`T4.6c` 文案精准断言翻红，`exit 1`） | ✅ **已翻红** |
+
+**三、全量离线质量门禁（逐套件独立加总真值）**
+
+- `npm run test:offline` 包含 22 个步骤（1 个 `typecheck` + 21 个离线测试套件），**0 failed**，退出码 0；
+- 独立加总结果：
+  - `Results: N passed, 0 failed` 型（11 个套件）：42 + 27 + 64 + 21 + 17 + 112 + 24 + 15 + 21 + 36 + 131 = **510** passed；
+  - `=== Results: N/N passed, 0 failed ===` 型（4 个套件）：23 + 78 + 33 + 35 = **169** passed；
+  - 格式化断言合计：510 + 169 = **679** passed；
+  - 文本自报套件（6 个套件）：`test:env-guard` (9 项)、`subscription`、`portal`、`portal:toggle`、`zero-payment`、`telemetry` 全部退出码 0。
+
