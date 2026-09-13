@@ -44,6 +44,18 @@ description: Architectural guidelines, disaster recovery, authoritative DNS oper
 - **双节点委派**: `ns1.eqt.net.im` (Ubuntu 53) 与 `ns2.eqt.net.im` (Ubuntu 53)，RFC 1035 双 NS 冗余，HTTP 管理端口强锁 `127.0.0.1:5380`。
 - **ACME 账户三地冷备**: 生产豁免账户私钥严格同步至 ns1、ns2 与离线运维机（权限 0400）。
 
+> ### ⚠️ 第 43 轮审查方更正（对上方 §2.2 / §2.4 的机制描述 · 2026-09-14 · 基线 `v1.36.129`）
+>
+> **上方 §2.2 与 §2.4 有三处机制描述与实现不符，不得作为规格源使用（详见 `review-history.md` 第三十一轮 / bugs 文档 §二十三 R43-1）。追加式更正，原文保留不改（红线【155】）。**
+>
+> 1. **§2.2 的 `lease_expires_at` 租约模型不存在**：「`UPDATE rate_limits SET count = count + 1, lease_expires_at = ? WHERE …`」「超时默认 180s 租约」「孤儿租约 Sweep 冲正回收」三者**均为虚构** —— `rg -n 'lease_expires_at' cloudflare/eqt-drm-api/schema.sql cloudflare/eqt-drm-api/src/` **零命中**。真实现：`schema.sql:65-69` 的 `rate_limits` 只有 `key / count / window_start`；`src/utils/rate-limit.ts:250-257` 为单语句 `INSERT INTO rate_limits … ON CONFLICT(key) DO UPDATE SET count = CASE … END`，**无租约列、无 180s 记账租约、无 Sweep 回收器**。（180s 是**断路器探针租约**，在 `src/utils/circuit-breaker.ts:68-71`，与限流记账无关 —— 勿跨节挪借。）
+> 2. **§2.4 的「熔断冷却 300s」无出处**：`rg -n '300' src/utils/circuit-breaker.ts` **零命中**；真实退避为 **90s**（上游 429 的 `Retry-After`）/ **30s**（上游 5xx 连续失败）。
+> 3. **§2.4 的「快速失败（503）」状态码错误**：熔断开路拒绝为 **429** + `reason_key='ca_circuit_open'`（`src/routes/cert.ts:959`，`tests/cert-provision-offline.js` `T21.3d` 断言）；`rg -n 'status: 503' src/routes/cert.ts` **零命中**。
+>
+> **阶段三实现须以 `rate-limit.ts` / `circuit-breaker.ts` 源码与 `schema.sql` 为唯一规格源，不得引用 §2.2 / §2.4 的机制描述。**
+>
+> 另：§3.2 第 3 步原引「红线【48】」为**悬空引用**（本库编号域为 ①~㊿ 与【51】~【159】，不存在【48】），审查方已就地修正为 **㊽**（`references/red-lines-ledger.md:153`）。
+
 ---
 
 ## 3. 质量门禁与离线全套自动化验证 SOP (Verification & Quality Gate SOP)
@@ -61,7 +73,7 @@ bash .agents/skills/eqt-lan-tls/scripts/check-tls-offline.sh
 ### 3.2 审查与防退化核查四步法 (The 4-Step Verification Method)
 1. **反向探针自证判别力 (红线【157】)**: 凡声称修复缺陷的测试断言，必须先还原缺陷验证测试能否翻红，杜绝夹具伪装的“假通过”。
 2. **写语句与真实表结构反查 (红线【68】【157】)**: 凡涉及 D1 数据库操作，必须逐列与 `schema.sql` 对齐，反查真实的 `UPDATE/INSERT` 写语句而非仅看读语句。
-3. **孤儿产物枚举 (红线【48】)**: 任何删除、收紧或变更身份的改动，必须枚举并处理磁盘存量证书、既有绑定与孤儿行的迁移或兼容。
+3. **孤儿产物枚举 (红线㊽ ／ 原引【48】)**: 任何删除、收紧或变更身份的改动，必须枚举并处理磁盘存量证书、既有绑定与孤儿行的迁移或兼容。
 4. **恒真校验识别 (红线【72】)**: 严禁将来自请求体自身公钥的自签名当作身份防线；身份必须依赖服务端 D1 持久化的绑定锚点。
 
 ---
@@ -80,7 +92,7 @@ bash .agents/skills/eqt-lan-tls/scripts/check-tls-offline.sh
 * **权威 DNS 双机部署、ACME 容灾与系统集成**: 参阅 [authoritative-dns-ha.md](references/authoritative-dns-ha.md)
   * *包含 ns1/ns2 节点 IP、Systemd 守护配置、Let's Encrypt 账户三地容灾、WebView2/移动端代理穿透。*
 * **159 条审查红线与工程方法论总账本**: 参阅 [red-lines-ledger.md](references/red-lines-ledger.md)
-  * *完整收录 ①~㊿ 及 【51】~【159】全部审查红线、触发场景、反例与不可逆操作判据。*
+  * *完整收录 ①~㊿ 及 【51】~【159】全部审查红线、触发场景、反例与不可逆操作判据。（第 43 轮后为【51】~【162】）*
 * **历史审查、落地复核与实测闭环全景**: 参阅 [review-history.md](references/review-history.md)
   * *完整记录第 1 轮至第 30 轮（对应外部第 42 轮）独立复核留痕、代码 diff 评审与锚点回读。*
 * **WebKit / Safari HTTPS 下载与媒体安全规范**: 参阅 [webkit-safari-attachment.md](references/webkit-safari-attachment.md)
