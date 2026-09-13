@@ -174,6 +174,36 @@ async function runTests() {
     `T12: Token bucket burst concurrency allows exactly capacity=5 (got ${allowedTb.length}) and rejects 5 with retryAfter`
   );
 
+  // --- Test 13: HALF_OPEN Probe Lease Enforcement and Dynamic retryAfter (R39-15 / E11) ---
+  // cbConcKey is currently HALF_OPEN with updated_at ~ now.
+  // Verify that subsequent probes are rejected with dynamic retryAfter <= 90
+  const midLeaseProbe = await canExecuteCircuit(env, cbConcKey);
+  assert(
+    !midLeaseProbe.allowed &&
+    midLeaseProbe.state === 'HALF_OPEN' &&
+    midLeaseProbe.retryAfter > 0 &&
+    midLeaseProbe.retryAfter <= 90,
+    `T13: In-flight HALF_OPEN probe blocks concurrent callers with dynamic retryAfter (${midLeaseProbe.retryAfter}s)`
+  );
+
+  // --- Test 14: HALF_OPEN Probe Crash / Lease Expiry Self-Healing (R39-15 / E11) ---
+  // Simulate probe crash/loss: updated_at expired beyond 90s lease
+  const expiredProbeIso = new Date(Date.now() - 95000).toISOString();
+  db.db.prepare("UPDATE circuit_breakers SET updated_at = ? WHERE name = ?").run(expiredProbeIso, cbConcKey);
+
+  // Next caller must succeed in reclaiming the probe slot (deadlock broken)
+  const reclaimedProbe = await canExecuteCircuit(env, cbConcKey);
+  assert(
+    reclaimedProbe.allowed && reclaimedProbe.state === 'HALF_OPEN',
+    'T14: Expired HALF_OPEN probe lease (>90s) allows next caller to reclaim probe (absorptive deadlock eliminated)'
+  );
+  const reclaimedRow = db.db.prepare("SELECT updated_at FROM circuit_breakers WHERE name = ?").get(cbConcKey);
+  const refreshedAt = new Date(reclaimedRow.updated_at).getTime();
+  assert(
+    Date.now() - refreshedAt < 5000,
+    'T14: Reclaiming expired probe refreshed updated_at timestamp'
+  );
+
   console.log(`\nResults: ${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
 }

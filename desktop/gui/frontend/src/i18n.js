@@ -7,7 +7,7 @@ const translations = {
         "tls_cert_ready": "官方公信 TLS 已就绪 (单机专属安全认证)",
         "tls_cert_failed_tooltip": "证书置备遇到异常（已自动降级为标准明文传输保障传输），点击查看详情或重试",
         "tls_cert_failed_status": "置备异常 / 降级明文",
-        "tls_cert_rate_limited": "触发证书颁发机构频次限制（已自动切换为局域网高速传输，保护期中）",
+        "tls_cert_rate_limited": "触发证书颁发机构频次限制，已自动切换为局域网高速传输（保护冷却中）",
         "tls_active_https": "局域网 TLS 加密传输",
         "tls_fallback_http": "TLS 暂未就绪，已降级为 HTTP 明文传输保障可用",
         "tls_fallback_label": "降级明文",

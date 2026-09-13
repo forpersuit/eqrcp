@@ -242,47 +242,32 @@ export async function reserveD1RateLimit(
   const now = Date.now();
   const nowIso = new Date(now).toISOString();
 
-  // 1. Atomically increment slot if existing window is active and under maxAttempts (R39-1)
-  const updateRes = await env.DB.prepare(`
-    UPDATE rate_limits
-    SET count = count + 1
-    WHERE key = ?
-      AND count < ?
-      AND (julianday(?) - julianday(window_start)) * 86400000.0 <= ?
-    RETURNING count, window_start;
-  `).bind(key, maxAttempts, nowIso, windowMs).first<{ count: number; window_start: string }>();
-
-  if (updateRes) {
-    const windowStart = updateRes.window_start;
-    let released = false;
-    return {
-      allowed: true,
-      count: updateRes.count,
-      remaining: Math.max(0, maxAttempts - updateRes.count),
-      windowStart,
-      release: async () => {
-        if (released) return;
-        released = true;
-        await releaseD1RateLimit(env, key, windowStart);
-      }
-    };
-  }
-
-  // 2. If not updated, atomically initialize new key or reset an expired window
-  const upsertRes = await env.DB.prepare(`
-    INSERT INTO rate_limits (key, count, window_start) VALUES (?, 1, ?)
-    ON CONFLICT(key) DO UPDATE SET count = 1, window_start = ?
+  // Single-statement atomic CAS upsert (E10 / R39-14):
+  // 1. If key absent -> INSERTs with count=1, window_start=now
+  // 2. If key exists & window expired -> resets count=1, window_start=now
+  // 3. If key exists & window valid & count < maxAttempts -> increments count=count+1
+  // 4. If key exists & window valid & count >= maxAttempts -> WHERE clause fails, returns 0 rows (genuine exhaustion)
+  const res = await env.DB.prepare(`
+    INSERT INTO rate_limits (key, count, window_start)
+    VALUES (?, 1, ?)
+    ON CONFLICT(key) DO UPDATE SET
+      count = CASE WHEN (julianday(?) - julianday(rate_limits.window_start)) * 86400000.0 > ?
+                   THEN 1 ELSE rate_limits.count + 1 END,
+      window_start = CASE WHEN (julianday(?) - julianday(rate_limits.window_start)) * 86400000.0 > ?
+                          THEN ? ELSE rate_limits.window_start END
     WHERE (julianday(?) - julianday(rate_limits.window_start)) * 86400000.0 > ?
+       OR rate_limits.count < ?
     RETURNING count, window_start;
-  `).bind(key, nowIso, nowIso, nowIso, windowMs).first<{ count: number; window_start: string }>();
+  `).bind(key, nowIso, nowIso, windowMs, nowIso, windowMs, nowIso, nowIso, windowMs, maxAttempts)
+    .first<{ count: number; window_start: string }>();
 
-  if (upsertRes) {
-    const windowStart = upsertRes.window_start;
+  if (res) {
+    const windowStart = res.window_start;
     let released = false;
     return {
       allowed: true,
-      count: 1,
-      remaining: Math.max(0, maxAttempts - 1),
+      count: res.count,
+      remaining: Math.max(0, maxAttempts - res.count),
       windowStart,
       release: async () => {
         if (released) return;
@@ -292,7 +277,7 @@ export async function reserveD1RateLimit(
     };
   }
 
-  // 3. Otherwise: current window is active and quota is exhausted (count >= maxAttempts)
+  // Quota genuinely exhausted (WHERE clause prevented UPDATE)
   const cur = await env.DB.prepare(
     "SELECT count, window_start FROM rate_limits WHERE key = ?"
   ).bind(key).first<{ count: number; window_start: string }>();

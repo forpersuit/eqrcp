@@ -5224,7 +5224,7 @@ async function autoDisableTLSOnFailure(errorMsg, openSettings = false) {
     state.settings.enableTLS = false;
     const isRateLimit = state.tlsRateLimited || (errorMsg && (errorMsg.includes('rate limit') || errorMsg.includes('429') || errorMsg.includes('Too Many Requests')));
     const toastMsg = isRateLimit
-        ? (t('tls_cert_rate_limited') || '触发证书颁发机构频次限制（已自动切换为局域网高速传输，保护期中）')
+        ? (t('tls_cert_rate_limited') || '触发证书颁发机构频次限制，已自动切换为局域网高速传输（保护冷却中）')
         : (t('tls_failed_auto_disabled') || '⚠️ 证书置备遇到异常，已自动关闭局域网 TLS 并保持标准明文传输。可稍后在开发者选项重试。');
     showToast(toastMsg);
     render();

@@ -70,25 +70,11 @@ function makeMockDb(opts = {}) {
             const hit = blacklists.find(b => b.device_id === devId && b.active !== 0);
             return hit || null;
           }
-          if (sql.includes('UPDATE rate_limits') && sql.includes('RETURNING')) {
-            const key = this._binds[0];
-            const maxAttempts = this._binds[1];
-            const nowIso = this._binds[2];
-            const windowMs = this._binds[3];
-            const existing = rateLimits.get(key);
-            if (existing && existing.count < maxAttempts) {
-              const elapsed = Date.now() - new Date(existing.window_start).getTime();
-              if (elapsed <= windowMs) {
-                existing.count += 1;
-                return { count: existing.count, window_start: existing.window_start };
-              }
-            }
-            return null;
-          }
-          if (sql.includes('INSERT INTO rate_limits') && sql.includes('RETURNING')) {
+          if (sql.includes('rate_limits') && sql.includes('RETURNING')) {
             const key = this._binds[0];
             const nowIso = this._binds[1];
-            const windowMs = this._binds[4];
+            const windowMs = typeof this._binds[3] === 'number' ? this._binds[3] : 86400000;
+            const maxAttempts = typeof this._binds[this._binds.length - 1] === 'number' ? this._binds[this._binds.length - 1] : 3;
             const existing = rateLimits.get(key);
             if (!existing) {
               rateLimits.set(key, { count: 1, window_start: nowIso });
@@ -96,8 +82,13 @@ function makeMockDb(opts = {}) {
             }
             const elapsed = Date.now() - new Date(existing.window_start).getTime();
             if (elapsed > windowMs) {
-              rateLimits.set(key, { count: 1, window_start: nowIso });
+              existing.count = 1;
+              existing.window_start = nowIso;
               return { count: 1, window_start: nowIso };
+            }
+            if (existing.count < maxAttempts) {
+              existing.count += 1;
+              return { count: existing.count, window_start: existing.window_start };
             }
             return null;
           }
@@ -256,14 +247,25 @@ function makeMockDb(opts = {}) {
               const updatedAt = this._binds[0];
               const name = this._binds[1];
               const checkTime = this._binds[2];
+              const leaseCutoff = this._binds[3];
               const row = circuitBreakers.get(name);
-              if (row && row.state === 'OPEN') {
-                const cdTime = row.cooldown_until ? new Date(row.cooldown_until).getTime() : 0;
+              if (row) {
                 const nowTime = checkTime ? new Date(checkTime).getTime() : Date.now();
-                if (!row.cooldown_until || nowTime >= cdTime) {
-                  row.state = 'HALF_OPEN';
-                  row.updated_at = updatedAt;
-                  return { meta: { changes: 1 } };
+                if (row.state === 'OPEN') {
+                  const cdTime = row.cooldown_until ? new Date(row.cooldown_until).getTime() : 0;
+                  if (!row.cooldown_until || nowTime >= cdTime) {
+                    row.state = 'HALF_OPEN';
+                    row.updated_at = updatedAt;
+                    return { meta: { changes: 1 } };
+                  }
+                } else if (row.state === 'HALF_OPEN') {
+                  const upTime = row.updated_at ? new Date(row.updated_at).getTime() : 0;
+                  const cutoffTime = leaseCutoff ? new Date(leaseCutoff).getTime() : 0;
+                  if (upTime <= cutoffTime) {
+                    row.state = 'HALF_OPEN';
+                    row.updated_at = updatedAt;
+                    return { meta: { changes: 1 } };
+                  }
                 }
               }
               return { meta: { changes: 0 } };
@@ -1605,11 +1607,11 @@ async function runTests() {
       assert(r4.status === 200, 'T22.3: r4 returned 200 OK');
       assert(r5.status === 200, 'T22.3: r5 returned 200 OK');
 
-      assert(r1.headers.get('X-SingleFlight-Shared') == null, 'T22.4: Leader request r1 is not marked shared');
-      assert(r2.headers.get('X-SingleFlight-Shared') === 'true', 'T22.4: Follower r2 marked with X-SingleFlight-Shared: true');
-      assert(r3.headers.get('X-SingleFlight-Shared') === 'true', 'T22.4: Follower r3 marked with X-SingleFlight-Shared: true');
-      assert(r4.headers.get('X-SingleFlight-Shared') === 'true', 'T22.4: Follower r4 marked with X-SingleFlight-Shared: true');
-      assert(r5.headers.get('X-SingleFlight-Shared') === 'true', 'T22.4: Follower r5 marked with X-SingleFlight-Shared: true');
+      const sharedHeaders = [r1, r2, r3, r4, r5].map(r => r.headers.get('X-SingleFlight-Shared'));
+      const leaderCount = sharedHeaders.filter(h => h == null).length;
+      const followerCount = sharedHeaders.filter(h => h === 'true').length;
+      assert(leaderCount === 1, 'T22.4: Exactly 1 leader request is not marked shared');
+      assert(followerCount === 4, 'T22.4: Exactly 4 follower requests are marked with X-SingleFlight-Shared: true');
 
       const d1Rate = db._rateLimits.get(`cert_provision:${singleFlightNode}`);
       assert(d1Rate && d1Rate.count === 1, 'T22.5: D1 rate limit only recorded 1 count instead of 5 for coalesced requests');

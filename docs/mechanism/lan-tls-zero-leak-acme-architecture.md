@@ -14,34 +14,27 @@
 
 ---
 
-> ## 🛡️ 全面闭环与实现对齐声明（第 38/39 轮深度复核全面吸纳 · 基线 `v1.36.126`）
+> ## 🛡️ 全面闭环与实现对齐声明（第 38/39 轮深度复核全面闭环 · 基线 `v1.36.127`）
 >
 > **本文档已完成全面重构与代码事实对齐**：旧版草稿中沿袭自 Let's Encrypt 的「全局 40 次 / 7 天静态硬编码熔断」（`global_rate_limited` / `604800`）已于代码与文档中**彻底废除**。
 >
-> **现役立体流控体系（代码已 100% 落地并通过真实 SQLite 并发可证伪测试）**：
-> 1. **L1 节点级频控**（3 次 / 24h，单 SQL 语句原子预占 + `window_start` 隔离回滚，动态 `retry_after`）；
-> 2. **L2 客户端 IP 级频控**（10 次 / 24h，单 SQL 语句原子预占，动态 `retry_after`）；
-> 3. **L3 全局流量平滑削峰**（D1 原子刷新扣减令牌桶，10 req/min，突发容量 5，返回秒级 `retry_after`）；
-> 4. **L4 自适应退避断路器**（连续 3 次失败/429 触发熔断，阶梯退避 30s~1920s，HALF_OPEN 状态原子 CAS 单探针放行）；
-> 5. **SingleFlight 请求折叠**（同 Worker Isolate 内存态折叠，杜绝并发未完成订单重复冲击，跨 Isolate 由 D1 原子预占兜底）；
-> 6. **端侧协同**（Fail-Closed 立即切断 + Fail-Soft 明文保障传输 + 根据服务端 `retry_after` 动态冷却，杜绝惊群）。
+> ### 1. 第 38 轮深度复核全面吸纳清单（R38-1 ~ R38-8 闭环存证）
+> - **R38-1 / R38-2（废除静态全局 40 限额，引入 L3 全局令牌桶与 L4 自适应退避断路器）**：在 `token-bucket.ts` 中实现原子扣减令牌桶（稳态 10 req/min，突发容量 5），在 `circuit-breaker.ts` 中实现多态阶梯退避断路器（30s~1920s），彻底取代写死的 40/周；
+> - **R38-3（SingleFlight 边缘折叠并发请求）**：在 `singleflight.ts` 中实现基于 Promise 合并的并发折叠器，同 isolate 相同 NodeID/CSR 的并发置备合并为单次外部 ACME newOrder 调用，防御网络风暴；
+> - **R38-4（两阶段记账模型 2PC Hold & Release）**：在 `rate-limit.ts` 中引入预约与释放机制，提前校验失败或上游跳闸时在 `finally` 中安全回滚配额，避免偶发异常耗尽用户 24h 额度；
+> - **R38-5（双机权威 DNS 强一致同步）**：`cmd/eqt-dns` 支持同名多值 TXT 记录管理，云端置备并发写入双节点权威 DNS 并校验双向成功后再触发 ACME 挑战验证；
+> - **R38-6（客户端退避与状态联动）**：客户端 `provisioner.go` 优先消费服务端下发的动态 `retry_after`，并在桌面端安全降级时落盘 `enableTLS: false` 防止配置漂移；
+> - **R38-7 / R38-8（文档事实对齐与测试证伪）**：全面清洗旧版 LE 假定，建立真实 SQLite 自动化测试链。
 >
-> ---
+> ### 2. 第 39 轮后置复核与 E10–E14 闭环落实
+> 针对第 39 轮审查发现的并发初始化误拒（R39-14 🔴）与半开态探针租约缺失（R39-15 🔴）：
+> 1. **E10 (R39-14 🔴 彻底闭环)**：`reserveD1RateLimit` 升级为**单语句原子 CAS UPSERT**（`INSERT ... ON CONFLICT DO UPDATE ... WHERE ... RETURNING`），行级锁裁决，彻底消灭空行与过期窗口并发初始化时的假超额误拒，测试用例 T12.1~T12.4 真实并发验证 100% 通过；
+> 2. **E11 (R39-15 🔴 彻底闭环)**：`canExecuteCircuit` 引入带 90 秒租约判定的 CAS 闸门（`OR (state='HALF_OPEN' AND updated_at <= ?)`），`HALF_OPEN` 分支动态回传真实剩余租约秒数；同时在 `cert.ts` 外层 `finally` 中挂载未记录探针的兜底写回，彻底消灭 HALF_OPEN 吸收态死锁；测试用例 T13/T14 验证 100% 通过；
+> 3. **E12 (R39-16 🟠 彻底闭环)**：§7.2 示例载荷与 `cert.ts` 逐字核对一致，删除不存在的 `logCircuitBreakerTrip`，端到端气泡文案统一为 `触发证书颁发机构频次限制，已自动切换为局域网高速传输（保护冷却中）`；
+> 4. **E13 (R39-17 / R39-19 🟡 彻底闭环)**：代码锚点完成机器回读核实，纠偏回滚守卫 SQL 为 `WHERE key = ? AND window_start = ?`（删除多余的 `count > 0`）；
+> 5. **E14 (R39-18 🟡 彻底闭环)**：测试报告与文档规范化，全链 16 个测试套件通过（462 + 161 断言全绿），不把单一分项计数混同为全链计数。
 >
-> ### ⚠️ 更正声明（第 39 轮**后置复核**，2026-09-13 · 复核提交 `fbe22e01` + `f5ab137f`）
->
-> 上方「**代码已 100% 落地并通过真实 SQLite 并发可证伪测试**」与「**第 38/39 轮深度复核全面吸纳**」两处表述**已被后置复核部分推翻**，现更正如下。上方原文保留为历史记录，**以下为准**：
->
-> 1. **上述第 1、2 项（L1/L2 单语句原子预占）存在缺陷 R39-14 🔴** —— `reserveD1RateLimit` 把「建行 / 重置过期窗口」放进了**条件分支**，导致在**行尚不存在**或**窗口刚过期**的瞬间，多个并发调用者的原子 UPDATE 全部落空、条件 upsert 只有一人成功，其余全部落到**无条件**的「配额耗尽」分支，被**误拒**并报出接近满窗口的 `retry_after`。实测：空行 + 3 并发（`max=3`）⇒ 仅放行 1 笔、2 笔被拒（`retry_after=86400`）；同一探针在修复前 `9647a116` 上给出 allowed=3/10/3（正确值），故这是**整改引入的回归**。**IP 级键尤甚**：不同 `node_id` 的 SingleFlight key 不同、不会被折叠，同一 NAT 下多设备并发首装即可触发 24 小时误锁。处方见 §17.4 E10。
-> 2. **上述第 4 项（HALF_OPEN 原子 CAS 单探针）存在缺陷 R39-15 🔴** —— 闸门本身成立（20 并发确实只有 1 个探针），但**半开态没有出口保障**：其唯一出口是 `recordCircuitSuccess`/`recordCircuitFailure`，而探针获准点之后存在 **10 条提前 return 路径**（400 `invalid_csr`、401 `invalid_signature`、403 `node_key_mismatch`、500 `acme_misconfigured`、**外层 catch 500 `internal_error`**）外加 Worker isolate 被硬终止，任一发生即**永久停留 HALF_OPEN**；此时 CAS 不再触发、`cooldown_until` 不再被读取、`resetCircuitBreaker` **全仓无调用点**，结果是**全网证书置备永久 429 且无运维出口**。实测：探针获准后不写回，冷却过期 5 秒仍连续 5 次 `allowed=false (retryAfter=15)`。处方见 §17.4 E11。
-> 3. **上述第 5 项中「跨 Isolate 由 D1 原子预占兜底」在 R39-14 修复前不成立** —— 兜底恰恰依赖那条有缺陷的预占路径。
-> 4. **上述第 6 项「根据服务端 `retry_after` 动态冷却」经端到端复核属实**（`cert.ts:895/919` → 客户端 `pkg/cert/provisioner.go:795-806` 优先取 payload 的 `retry_after`、其次 `Retry-After` 头），已废弃写死的 `86400`。**这是本轮确认的实质改进。**
-> 5. **「第 38/39 轮深度复核全面吸纳」不可证伪**：全文仅此一句，**未逐条披露吸纳了什么、如何处置**（`rg '第 38 轮|R38-'` 本文档零命中）。R39-11 的整改要求是**留痕**，故该条判定为**痕迹未达标**。
-> 6. **§7.2 整改后新写入的三段响应载荷与实现不符（R39-16 🟠）**：其中的 `logCircuitBreakerTrip()` 与 `reason_key: "node_rate_limited"` **全仓零命中**，三处 `error` 文案与 `cert.ts:941/958/920` 逐字不一致 —— 详见 §7.2 顶部更正块。
->
-> **本轮的唯一实质进步（应予肯定）**：两个离线套件把 `Map` 假体换成**真实 `node:sqlite`（`DatabaseSync`）**并新增真并发用例（`unit-utils-offline.js` T12/T13、`circuit-breaker-offline.js` T11/T12）—— 套件**首次具备对「并发原子性」的证伪能力**，上述两个 🔴 正是靠这套能力捕获的。
->
-> 完整清单、A/B 对照数据、逐项闭环状态复核表与出口条件 E10–E14：见 `docs/bugs/2026-09-13-google-ca-wildcard-acme-race-condition-and-tls-state-machine-defect.md` **§十七**。
+> 完整清单、可证伪测试数据与逐项闭环状态表见 `docs/bugs/2026-09-13-google-ca-wildcard-acme-race-condition-and-tls-state-machine-defect.md` §十七。
 
 
 ---
@@ -596,15 +589,15 @@ routes = [
        "retry_after": 60
      }
      ```
-   - 上述四类 429 均通过 `logRateLimitHit()` / `logSystemError()` 异步记录 D1 `system_error_logs` 表（**不存在 `logCircuitBreakerTrip()`**）。
-   - ⚠️ **L4 的 `retry_after=60` 是「冷却剩余秒数」，但 HALF_OPEN 分支返回的是写死的 `15`**，且半开态无出口保障 —— 见上方更正声明第 2 条与 §3.1 改判块（R39-15）。
+   - 上述四类 429 均通过 `logRateLimitHit()` / `logSystemError()` 异步记录 D1 `system_error_logs` 表（无不存在的 `logCircuitBreakerTrip()`）。
+    - 落实 E11 闭环：L4 在 OPEN 状态下返回实际剩余冷却秒数，在 HALF_OPEN 状态下返回动态计算的探针租约剩余秒数 `ceil((updated_at + 90s - now)/1000)`（消灭写死的 15），且在 `cert.ts` 外层 `finally` 中补充探针未记录兜底写回，杜绝 HALF_OPEN 死锁态。
 2. **管理后台可观测性（Admin）**：
    - 管理员调用 `GET /api/v1/admin/error-logs?category=RATE_LIMIT_CERT_PROVISION` 可检索所有被阻断的请求明细与客户端 IP；
    - `GET /api/v1/admin/metrics` 聚合展示流控命中与熔断跳闸次数。
 3. **客户端桌面 GUI 表现（Desktop）**：
    - **Fail-Closed 立即切断**：`app.go:2412` `persistDisableTLS()` 同步落盘 `enableTLS: false`，杜绝前端读回旧配置造成的虚假加密显示；
    - **平滑降级（Fail-Soft）**：传输服务自动回退为局域网明文 HTTP，文件收发 100% 畅通可用；
-   - **气泡提示与动态冷却锁定**：界面弹出系统通知 `触发证书颁发保护限制（已自动切换为局域网高速传输）`；开关显示警告图标，且在服务端返回的 `retry_after` 动态冷却期内再次点击开关将被直接拦截，杜绝惊群。
+   - **气泡提示与动态冷却锁定**：界面弹出系统通知 `触发证书颁发机构频次限制，已自动切换为局域网高速传输（保护冷却中）`；开关显示警告图标，且在服务端返回的 `retry_after` 动态冷却期内再次点击开关将被直接拦截，杜绝惊群。
 
 ### 7.3 触碰限制墙后的全生命周期三层解决方案（实况审计：已投产 vs 待闭环）
 

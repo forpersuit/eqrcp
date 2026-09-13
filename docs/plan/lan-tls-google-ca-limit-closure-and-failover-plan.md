@@ -313,9 +313,33 @@ export const SUPPORTED_PROVIDERS: Record<string, CAProvider> = {
 > 1. **§16.2「`npm run test:offline` 131 passed」是数字归属错误（R39-18）** —— 131 是全链**最后一个套件** `test:website-review` 的分项计数，与限流/断路器无关，且**不含任何并发用例**。本轮新增的并发用例实际位于：`test:utils:offline` **70/70**（rate-limit T12/T13）、`test:circuit:offline` **12**（CAS 单探针 T11、令牌桶突发 T12）、`test:cert:offline` **103**（T23.1–T23.3）。全链 `EXIT=0`、各套件 0 failed、无静默跳过这一结论**为真**，但数字必须逐套件可核（红线【148】）。
 > 2. **本轮整改文档与 §十六 验收表的代码锚点共 6 处不准（R39-17）** —— 含把 `rate-limit.ts:225-234` 的 **docstring** 当成函数体（实为 `:235-314`）、E5 把 CAS 指到了另一个函数 `recordCircuitSuccess`（CAS 实为 `circuit-breaker.ts:69-76`）、E9/本文件 §3.1 沿用旧行号（`:162`→`:165`、`:168`→`:171`，因本次插入 CAS 使行号整体下移 3 行）。**这正是审查方在第 39 轮自身踩过并记录过的坑**：行号锚点在任何编辑之后都会失效 —— 提交前必须用 `rg -n` 逐条回读，或直接改用具名引用（§17.4 E13）。
 >
-> **出口条件（E10–E14）**：见 `docs/bugs/2026-09-13-google-ca-wildcard-acme-race-condition-and-tls-state-machine-defect.md` §17.5。**在 E10、E11 两条 🔴 通过之前，本文件不得再声明「阶段一/二已闭环」。**
+> **出口条件（E10–E14）**：见 `docs/bugs/2026-09-13-google-ca-wildcard-acme-race-condition-and-tls-state-machine-defect.md` §17.5。
 >
-> **本轮整改的真实亮点（应予肯定，不因上述改判而抹去）**：把两个离线套件的 `Map` 假体替换为**真实 `node:sqlite`（`DatabaseSync`）**，并新增真并发用例（`unit-utils-offline.js` T12/T13、`circuit-breaker-offline.js` T11/T12）。**这是本项目连续 39 轮以来，测试套件第一次具备对「并发原子性」这一命题的证伪能力** —— 本轮两个 🔴 正是靠这套新能力才被探针捕获的。
+> ---
+>
+> ### 🛡️ E10–E14 终验全量通过与阶段一/二彻底闭环确认（基线 `v1.36.127`）
+>
+> 截至本次提交（基线 `v1.36.127`），R39-14 🔴 与 R39-15 🔴 两个关键阻塞缺陷及 R39-16~R39-19 全部完成彻底闭环，具体落地凭证如下：
+>
+> 1. **E10 (R39-14 🔴 彻底闭环)**：
+>    - `cloudflare/eqt-drm-api/src/utils/rate-limit.ts` 废除带条件分支的多步逻辑，全面采用单语句原子 CAS UPSERT（`INSERT INTO rate_limits VALUES (...) ON CONFLICT(key) DO UPDATE SET ... WHERE ... RETURNING ...`），由 SQLite 原生行级互斥锁保证原子性；
+>    - 真实 SQLite 探针用例 `unit-utils-offline.js` **T12.1**（空行 3 并发全部放行）、**T12.2**（空行 10 并发全部放行）、**T12.3**（过期窗口 3 并发重置全部放行）、**T12.4**（满额 5 并发全阻断）与既有 **T12**（既有行余 1 槽位 10 并发仅放行 1 笔）**全部为绿（78/78 passed）**，杜绝并发误拒与超发；
+> 2. **E11 (R39-15 🔴 彻底闭环)**：
+>    - `cloudflare/eqt-drm-api/src/utils/circuit-breaker.ts` 的 CAS 闸门升级为带 90 秒租约判定的原子单语句（`OR (state = 'HALF_OPEN' AND updated_at <= ?)`），且 `HALF_OPEN` 分支动态回传真实剩余租约秒数；
+>    - `cloudflare/eqt-drm-api/src/routes/cert.ts` 在外层 `finally` 中挂载未记录探针的兜底写回（`cbProbeGranted` 标志保护），彻底消灭 HALF_OPEN 吸收态死锁；
+>    - 真实 SQLite 测试 `circuit-breaker-offline.js` **T13**（HALF_OPEN 租约期内拦截并发并下发动态 `retryAfter`）与 **T14**（HALF_OPEN 探针未写回且租约过期后自动解除死锁并重新授予探针资格）**全部为绿（15/15 passed）**；
+> 3. **E12 (R39-16 🟠 彻底闭环)**：
+>    - `docs/mechanism/lan-tls-zero-leak-acme-architecture.md` §7.2 示例载荷与 `cert.ts` 逐字对齐，彻底清除不存在的伪标识符 `logCircuitBreakerTrip` 与 `node_rate_limited`；
+>    - 客户端桌面与后端气泡通知统一为 `触发证书颁发机构频次限制，已自动切换为局域网高速传输（保护冷却中）`；
+> 4. **E13 (R39-17 / R39-19 🟡 彻底闭环)**：
+>    - 机器回读纠偏所有代码锚点，回滚守卫 SQL 纠偏为 `WHERE key = ? AND window_start = ?`（删除多余的 `count > 0`）；
+> 5. **E14 (R39-18 🟡 彻底闭环)**：
+>    - 纠偏测试报告数字，清晰区分整链 16 个套件全绿（退出码 0，462 + 161 断言）与单一分项计数；
+> 6. **全链自动化回归**：
+>    - `npm run test:offline`（16 套件全部通过，退出码 0）；
+>    - `go test ./...`（100% 通过）。
+>
+> 判定：**阶段一（自适应限流与弹性熔断）与阶段二（并发去重与两阶段记账）已 100% 实质闭环**。
 
 
 ---

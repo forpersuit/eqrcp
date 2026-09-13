@@ -419,6 +419,87 @@ console.log('\n=== logSystemError ===');
     assertEqual(finalCount, 3, 'T12: Final DB count is exactly maxAttempts=3 (no over-increment inflation)');
   }
 
+  // Test 12.1: Empty row concurrency (R39-14 / E10) - 3 concurrent requests at empty row (max=3)
+  {
+    const db = new MockD1();
+    const env = makeEnv(db);
+    const key = 'test_conc:empty_row_3';
+    const windowMs = 60 * 1000;
+    const maxAttempts = 3;
+
+    const results = await Promise.all(
+      Array.from({ length: 3 }, () => reserveD1RateLimit(env, key, maxAttempts, windowMs))
+    );
+
+    const allowed = results.filter(r => r.allowed);
+    assert(allowed.length === 3, `T12.1: Empty row + 3 concurrent requests (max=3) allows all 3 (got ${allowed.length})`);
+    const finalCount = db.rateLimits.get(key).count;
+    assertEqual(finalCount, 3, 'T12.1: Final DB count is exactly 3');
+  }
+
+  // Test 12.2: Empty row concurrency (R39-14 / E10) - 10 concurrent requests at empty row (max=10)
+  {
+    const db = new MockD1();
+    const env = makeEnv(db);
+    const key = 'test_conc:empty_row_10';
+    const windowMs = 60 * 1000;
+    const maxAttempts = 10;
+
+    const results = await Promise.all(
+      Array.from({ length: 10 }, () => reserveD1RateLimit(env, key, maxAttempts, windowMs))
+    );
+
+    const allowed = results.filter(r => r.allowed);
+    assert(allowed.length === 10, `T12.2: Empty row + 10 concurrent requests (max=10) allows all 10 (got ${allowed.length})`);
+    const finalCount = db.rateLimits.get(key).count;
+    assertEqual(finalCount, 10, 'T12.2: Final DB count is exactly 10');
+  }
+
+  // Test 12.3: Expired window concurrency (R39-14 / E10) - 3 concurrent requests on expired row
+  {
+    const db = new MockD1();
+    const env = makeEnv(db);
+    const key = 'test_conc:expired_window';
+    const windowMs = 60 * 1000;
+    const maxAttempts = 3;
+
+    // Seed expired window (2 hours ago) with full count
+    const expiredIso = new Date(Date.now() - 7200 * 1000).toISOString();
+    db.rateLimits.set(key, { count: 3, window_start: expiredIso });
+
+    const results = await Promise.all(
+      Array.from({ length: 3 }, () => reserveD1RateLimit(env, key, maxAttempts, windowMs))
+    );
+
+    const allowed = results.filter(r => r.allowed);
+    assert(allowed.length === 3, `T12.3: Expired window + 3 concurrent requests (max=3) resets and allows all 3 (got ${allowed.length})`);
+    const finalCount = db.rateLimits.get(key).count;
+    assertEqual(finalCount, 3, 'T12.3: Final DB count is reset and incremented to 3');
+  }
+
+  // Test 12.4: Full quota rejection concurrency - 5 concurrent requests on exhausted row
+  {
+    const db = new MockD1();
+    const env = makeEnv(db);
+    const key = 'test_conc:fully_exhausted';
+    const windowMs = 60 * 1000;
+    const maxAttempts = 3;
+
+    // Seed active window with count = 3
+    const nowIso = new Date().toISOString();
+    db.rateLimits.set(key, { count: 3, window_start: nowIso });
+
+    const results = await Promise.all(
+      Array.from({ length: 5 }, () => reserveD1RateLimit(env, key, maxAttempts, windowMs))
+    );
+
+    const allowed = results.filter(r => r.allowed);
+    const rejected = results.filter(r => !r.allowed && r.retryAfter > 0);
+    assert(allowed.length === 0 && rejected.length === 5, `T12.4: Exhausted quota correctly rejects all 5 concurrent requests`);
+    const finalCount = db.rateLimits.get(key).count;
+    assertEqual(finalCount, 3, 'T12.4: Final DB count remains 3');
+  }
+
   // Test 13: Window-Guarded Rollback Protection (R39-3 / E3)
   {
     const db = new MockD1();

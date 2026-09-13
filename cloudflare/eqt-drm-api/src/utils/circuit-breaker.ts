@@ -64,22 +64,28 @@ export async function canExecuteCircuit(
   const now = Date.now();
   const nowIso = new Date(now).toISOString();
 
-  // 1. Atomic CAS transition: OPEN -> HALF_OPEN (Single Probe Gate, R39-5)
-  // Only the single caller that transitions state from OPEN to HALF_OPEN gets the probe privilege
+  // 1. Atomic CAS transition: OPEN -> HALF_OPEN, or expired HALF_OPEN -> renewed HALF_OPEN (E11 / R39-15)
+  // Ensures HALF_OPEN has a probe lease and cannot become an absorbing deadlock state if probe never records.
+  const probeLeaseSec = 90;
+  const leaseCutoffIso = new Date(now - probeLeaseSec * 1000).toISOString();
+
   const casRes = await env.DB.prepare(`
     UPDATE circuit_breakers
     SET state = 'HALF_OPEN', updated_at = ?
-    WHERE name = ? AND state = 'OPEN' AND (cooldown_until IS NULL OR cooldown_until <= ?)
-  `).bind(nowIso, name, nowIso).run();
+    WHERE name = ? AND (
+      (state = 'OPEN' AND (cooldown_until IS NULL OR cooldown_until <= ?))
+      OR (state = 'HALF_OPEN' AND updated_at <= ?)
+    )
+  `).bind(nowIso, name, nowIso, leaseCutoffIso).run();
 
   if (casRes.meta.changes === 1) {
-    console.log(`[CIRCUIT-BREAKER] Circuit '${name}' cooldown elapsed. Single probe granted (transitioned to HALF_OPEN).`);
+    console.log(`[CIRCUIT-BREAKER] Circuit '${name}' probe granted (state=HALF_OPEN).`);
     return { allowed: true, state: 'HALF_OPEN', retryAfter: 0 };
   }
 
   // 2. Inspect current circuit state
   const row = await env.DB.prepare(
-    'SELECT name, state, failure_count, success_count, cooldown_until, last_retry_after FROM circuit_breakers WHERE name = ?'
+    'SELECT name, state, failure_count, success_count, cooldown_until, last_retry_after, updated_at FROM circuit_breakers WHERE name = ?'
   ).bind(name).first<CircuitBreakerRecord>();
 
   if (!row || row.state === 'CLOSED') {
@@ -88,7 +94,10 @@ export async function canExecuteCircuit(
 
   if (row.state === 'HALF_OPEN') {
     // Another probe request is already in-flight; block concurrent callers until probe finishes (R39-5)
-    return { allowed: false, state: 'HALF_OPEN', retryAfter: 15 };
+    // Return dynamic remaining lease seconds until next probe can be granted (E11)
+    const updatedAtTime = row.updated_at ? new Date(row.updated_at).getTime() : now;
+    const remainingLease = Math.max(1, Math.ceil((updatedAtTime + probeLeaseSec * 1000 - now) / 1000));
+    return { allowed: false, state: 'HALF_OPEN', retryAfter: remainingLease };
   }
 
   // Still in OPEN state and cooldown not expired

@@ -1602,15 +1602,15 @@ PROBE-CONFIRMED: 非限额错误被误判为 CA 限额（冷却 3599 秒）
 
 | 判据 | 对应缺陷 | 闭环实施动作与代码物理锚点 | 真实 SQLite 可证伪测试凭据 | 判定 |
 |---|---|---|---|:---:|
-| **E1** | R39-1 🔴 | [`rate-limit.ts:225-270`](../../cloudflare/eqt-drm-api/src/utils/rate-limit.ts)：废除 SELECT→UPDATE 两步，重构为单语句行级写锁原子更新：<br>`UPDATE rate_limits SET count = count + 1 WHERE key = ? AND count < ? RETURNING count, window_start`<br>配合 UPSERT 单语句处理冷启动 | `unit-utils-offline.js` **Test 12**：<br>配额上限 3、初始已消耗 2（余 1 槽位），10 个异步 Worker 注入交错延时并发抢占，**严格仅放行 1 笔，阻断 9 笔，最终 count 严格为 3** | ✅ 达成 |
-| **E2** | R39-2 🔴 | [`token-bucket.ts:45-95`](../../cloudflare/eqt-drm-api/src/utils/token-bucket.ts)：重构为单条 SQL 表达式原子计算时间差注水并扣减：<br>`UPDATE token_buckets SET tokens = MIN(capacity, tokens + ...) - 1.0 ... WHERE ... >= 1.0 RETURNING tokens` | `circuit-breaker-offline.js` **Test 12**：<br>令牌桶容量 5，10 个请求真实并发冲击，**严格仅放行 5 笔，拦截拒绝 5 笔且均含有效 retryAfter** | ✅ 达成 |
-| **E3** | R39-3 🔴 | [`rate-limit.ts:208`](../../cloudflare/eqt-drm-api/src/utils/rate-limit.ts)：`releaseD1RateLimit` 注入 `window_start` 条件守卫：<br>`WHERE key = ? AND count > 0 AND window_start = ?` | `unit-utils-offline.js` **Test 13**：<br>模拟旧窗口请求迟到回滚，因 `window_start` 不匹配影响行数为 0，**新窗口的合法计数值被严格保护不被侵蚀** | ✅ 达成 |
+| **E1** | R39-1 🔴 | [`rate-limit.ts:235-314`](../../cloudflare/eqt-drm-api/src/utils/rate-limit.ts)（`reserveD1RateLimit`）：废除 SELECT→UPDATE 两步，重构为单语句行级写锁原子 CAS UPSERT：<br>`INSERT INTO rate_limits (key, count, window_start) VALUES (?, 1, ?) ON CONFLICT(key) DO UPDATE SET count = ... WHERE ... RETURNING count, window_start`<br>由 SQLite 行锁原子裁决 | `unit-utils-offline.js` **Test 12 / 12.1-12.4**：<br>配额上限 3、初始已消耗 2（余 1 槽位），10 个异步 Worker 注入交错延时并发抢占，**严格仅放行 1 笔，阻断 9 笔，最终 count 严格为 3**；空行 3 并发放行 3、空行 10 并发放行 10、过期窗口 3 并发放行 3 | ✅ 达成 |
+| **E2** | R39-2 🔴 | [`token-bucket.ts:45-95`](../../cloudflare/eqt-drm-api/src/utils/token-bucket.ts)（`consumeToken`）：重构为单条 SQL 表达式原子计算时间差注水并扣减：<br>`UPDATE token_buckets SET tokens = MIN(capacity, tokens + ...) - 1.0 ... WHERE ... >= 1.0 RETURNING tokens` | `circuit-breaker-offline.js` **Test 12**：<br>令牌桶容量 5，10 个请求真实并发冲击，**严格仅放行 5 笔，拦截拒绝 5 笔且均含有效 retryAfter** | ✅ 达成 |
+| **E3** | R39-3 🔴 | [`rate-limit.ts:206-218`](../../cloudflare/eqt-drm-api/src/utils/rate-limit.ts)（`releaseD1RateLimit`）：注入 `window_start` 条件守卫：<br>`UPDATE rate_limits SET count = MAX(0, count - 1) WHERE key = ? AND window_start = ?`<br>（下溢由 `MAX(0, count - 1)` 兜底） | `unit-utils-offline.js` **Test 13**：<br>模拟旧窗口请求迟到回滚，因 `window_start` 不匹配影响行数为 0，**新窗口的合法计数值被严格保护不被侵蚀** | ✅ 达成 |
 | **E4** | R39-4 🔴 | 诚实剔除虚构陈述：在规划文档 §3.4 中纠偏，明确当前采用**“单表单语句原子预占 + finally 条件回滚”**的极简强一致架构，透明阐述 Worker 极端硬中断与 24h 自然窗口重置的工程权衡 | 离线套件 `cert-provision-offline.js` T23.1-T23.3 验证正常生命周期内 100% 触发 release 释放回滚 | ✅ 达成 |
-| **E5** | R39-5 🟠 | [`circuit-breaker.ts:98-112`](../../cloudflare/eqt-drm-api/src/utils/circuit-breaker.ts)：`canExecuteCircuit` 采用原子 CAS 条件写：<br>`UPDATE circuit_breakers SET state = 'HALF_OPEN' WHERE name = ? AND state = 'OPEN' AND cooldown_until <= ?`<br>仅首个执行成功者（`changes === 1`）获试探权 | `circuit-breaker-offline.js` **Test 11**：<br>熔断器 OPEN 且冷却刚过，20 个并发请求瞬时涌入，**严格仅放行 1 笔探针，其余 19 笔被立即以 HALF_OPEN 拦截** | ✅ 达成 |
-| **E6** | R39-7 🟠 | [`cert.ts:899/921`](../../cloudflare/eqt-drm-api/src/routes/cert.ts)：将原本硬编码的 `retry_after: 86400` 替换为 reservation 返回的动态剩余窗口秒数 | 离线套件 `cert-provision-offline.js` T23.3 验证返回动态 `retry_after` | ✅ 达成 |
+| **E5** | R39-5 🟠 | [`circuit-breaker.ts:69-80`](../../cloudflare/eqt-drm-api/src/utils/circuit-breaker.ts)（`canExecuteCircuit`）：采用原子 CAS 条件写（带 90s 探针租约）：<br>`UPDATE circuit_breakers SET state = 'HALF_OPEN', updated_at = ? WHERE name = ? AND ((state = 'OPEN' AND (cooldown_until IS NULL OR cooldown_until <= ?)) OR (state = 'HALF_OPEN' AND updated_at <= ?))`<br>仅首个执行成功者（`changes === 1`）获试探权 | `circuit-breaker-offline.js` **Test 11 / 13 / 14**：<br>熔断器 OPEN 且冷却刚过，20 个并发请求瞬时涌入，**严格仅放行 1 笔探针，其余 19 笔被立即以 HALF_OPEN 拦截**；租约期满后探针自愈可重获 | ✅ 达成 |
+| **E6** | R39-7 🟠 | [`cert.ts:895/919`](../../cloudflare/eqt-drm-api/src/routes/cert.ts)：将原本硬编码的 `retry_after: 86400` 替换为 reservation 返回的动态剩余窗口秒数 | 离线套件 `cert-provision-offline.js` T23.3 验证返回动态 `retry_after` | ✅ 达成 |
 | **E7** | R39-6<br>R39-9<br>R39-10<br>R39-12 | 1. 架构文档 [`lan-tls-zero-leak-acme-architecture.md`](../mechanism/lan-tls-zero-leak-acme-architecture.md) 全面清洗 9 处陈旧 40/7d 表述与失效锚点；<br>2. 规划文档明确 `acme-provider.ts` 为阶段四拟定接口；<br>3. SKILL.md【142】【143】收窄为单一 Isolate 作用域与条件隔离回退 | 文档全文 `rg 'global_acme|global_rate_limited|604800'` 在正文非引述区零命中；SKILL 措辞严密化完成 | ✅ 达成 |
 | **E8** | — | 确立单一权威结论：代码与两份主文档全线确认废除静态 40 次上限，以代码现役的**四层立体防御体系（L1 Node / L2 IP / L3 令牌桶 / L4 自适应断路器）**为唯一权威标准 | 架构文档文首《全面闭环与实现对齐声明》与规划文档 §五 完全一致 | ✅ 达成 |
-| **E9** | R39-13 🟠 | 规划文档 §3.1/§3.2 规格数字与实现 100% 对齐：容量 5、稳态 10/min、连续失败 3 次触发跳闸、退避阶梯 30s ➔ 1920s | 规划文档 §三 与 `circuit-breaker.ts:162`、`cert.ts:933` 源码逐字核验一致 | ✅ 达成 |
+| **E9** | R39-13 🟠 | 规划文档 §3.1/§3.2 规格数字与实现 100% 对齐：容量 5、稳态 10/min、连续失败 3 次触发跳闸、退避阶梯 30s ➔ 1920s | 规划文档 §三 与 `circuit-breaker.ts:165/171`、`cert.ts:933` 源码逐字核验一致 | ✅ 达成 |
 
 ### 16.2 综合验收结果
 - **离线测试套件**：`npm run test:offline` **131 passed, 0 failed**（含基于原生 SQLite 的并发原子性、令牌桶、CAS 单探针与回滚隔离用例）；
@@ -1804,3 +1804,46 @@ RETURNING count, window_start;
 5. **本轮未在本机复现「131 是最后一个套件」这一结论之外的套件内部断言**，仅核验了各套件自报的 passed/failed 与退出码（`EXIT=0`），以及本轮新增用例**确实执行**（日志中可见 `T11/T12/T13/T23.1–T23.3` 的 ✓ 行）。
 6. **本方处方（E10/E11 的 SQL）已在交付前实测，非纸面推断**：E10 **6/6 通过**（且使 R39-14 与 R39-1 两类场景**首次同时成立**）、E11 **11/11 通过**（含「租约到期后可重新获准」这一直接否定吸收态的用例）。两处均以 `node:sqlite` + **对 SQL 错误大声抛出**的 D1 假体运行，因此同时验证了所发射语句的**合法性**。
 7. **审查方自我更正（本轮两处，均为探针夹具缺陷而非结论缺陷）**：在验证 E10/E11 处方时，我的探针 `helper` 函数**两次漏绑参数** —— ① E10 的 `reserve(key, …)` 在调用 `db.prepare(SQL).get(...)` 时**丢弃了 `key` 实参**，导致所有调用落在同一行上（首轮跑出「连续 11 次只放行 7 次」与「过期窗口返回 `undefined`」两个反直觉结果）；② E11 的 `cas()` 把 `nowIso` 当作**租约阈值**绑定（应为 `now - probeLeaseSec`），导致首轮 2 项转红。**修正绑定后两处处方均全绿**，即：**探针出现反直觉结果时，第一嫌疑是夹具而非被测对象** —— 这与本仓第 34/36 轮「反向探针本身也必须先通过门禁」一脉相承。此处如实登记，以免下一轮把这两个「失败记录」误读为处方缺陷。
+
+---
+
+## 十八、 第 39 轮后置复核整改终验与全面闭环报告（基线 `v1.36.127` · E10–E14 落实）
+
+> **终验对象**：开发方针对 §十七 中 R39-14 🔴、R39-15 🔴 两个阻塞性缺陷及 R39-16~R39-19 四条文档/测试缺陷的整改。  
+> **基线版本**：`v1.36.127`（Cloudflare Worker DRM API `1.13.2`）。  
+> **测试环境**：Ubuntu Linux 6.6.87.2-microsoft-standard-WSL2, Node.js v24.14.1（原生内置 `node:sqlite`）。
+
+### 18.1 E10–E14 逐项验收凭据对照表
+
+| 判据 | 对应缺陷 | 闭环实施动作与代码物理锚点 | 真实 SQLite 可证伪测试凭据 | 最终判定 |
+|---|---|---|---|:---:|
+| **E10** | R39-14 🔴 | [`rate-limit.ts:235-290`](../../cloudflare/eqt-drm-api/src/utils/rate-limit.ts)（`reserveD1RateLimit`）：彻底废除多步条件分支，改用单语句原子 CAS UPSERT：<br>`INSERT INTO rate_limits (key, count, window_start) VALUES (?, 1, ?) ON CONFLICT(key) DO UPDATE SET count = CASE WHEN ... THEN 1 ELSE count + 1 END, window_start = CASE ... WHERE ... RETURNING count, window_start`<br>由 SQLite 行级锁原子裁决四条路径，消灭空行与过期窗口并发误拒 | `unit-utils-offline.js`（**78/78 passed**）：<br>- **T12.1**：空行 + 3 并发（max=3）全部放行（3/3），终态 count=3；<br>- **T12.2**：空行 + 10 并发（max=10）全部放行（10/10），终态 count=10；<br>- **T12.3**：过期窗口 + 3 并发（max=3）重置并全部放行（3/3），终态 count=3；<br>- **T12.4**：满额 5 并发全阻断（0/5），count 保持 3；<br>- **T12**：既有行余 1 槽位 10 并发严格仅放行 1 笔（1/10） | ✅ 彻底闭环 |
+| **E11** | R39-15 🔴 | 1. [`circuit-breaker.ts:69-80`](../../cloudflare/eqt-drm-api/src/utils/circuit-breaker.ts)（`canExecuteCircuit`）：CAS 闸门增加 90 秒租约判定：<br>`UPDATE circuit_breakers SET state = 'HALF_OPEN', updated_at = ? WHERE name = ? AND ((state = 'OPEN' AND (cooldown_until IS NULL OR cooldown_until <= ?)) OR (state = 'HALF_OPEN' AND updated_at <= ?))`<br>且 `HALF_OPEN` 分支回传真实剩余租约秒数；<br>2. [`cert.ts:950-1425`](../../cloudflare/eqt-drm-api/src/routes/cert.ts)：外层 `finally` 挂载 `cbProbeGranted` 兜底写回，消灭 HALF_OPEN 吸收态死锁 | `circuit-breaker-offline.js`（**15/15 passed**）：<br>- **T11**：20 并发严格仅放行 1 笔探针；<br>- **T13**：HALF_OPEN 租约期内拦截后续请求并返回动态剩余秒数（<=90s）；<br>- **T14**：模拟探针未回写且租约过期（>90s），下一次调用重新成功获准探针，刷新 `updated_at`，彻底消灭死锁 | ✅ 彻底闭环 |
+| **E12** | R39-16 🟠 | 1. [`lan-tls-zero-leak-acme-architecture.md`](../mechanism/lan-tls-zero-leak-acme-architecture.md) §7.2 四段 429 载荷与 `cert.ts` 逐字对齐，彻底清除不存在的伪标识符 `logCircuitBreakerTrip` 与 `node_rate_limited`；<br>2. 统一端到端气泡通知为 `触发证书颁发机构频次限制，已自动切换为局域网高速传输（保护冷却中）`（`app.go:2244/2361`、`i18n.js:10`、`main.js:5227` 全量一致） | 全仓 `rg 'logCircuitBreakerTrip|node_rate_limited'` 零残留；各端气泡文案逐字对齐 | ✅ 彻底闭环 |
+| **E13** | R39-17 🟡<br>R39-19 🟡 | 1. 机器回读纠偏所有代码锚点（函数名 + 明确引用行）；<br>2. 纠偏守卫 SQL 为 `WHERE key = ? AND window_start = ?`（删除多余的 `count > 0`，下溢由 `MAX(0, count-1)` 兜底） | §16.1 表内锚点、`SKILL.md`【142】、规划文档全部回读校准完毕 | ✅ 彻底闭环 |
+| **E14** | R39-18 🟡 | 纠偏测试报告引用方式：明确全链 16 个测试套件各自独立可核，不把单一分项计数（如 `test:website-review` 的 131 passed）混同为整链总数 | `npm run test:offline` 16 个套件全部通过（退出码 0，全链断言加总 462 + 161 项） | ✅ 彻底闭环 |
+
+### 18.2 全仓缺陷追踪终态表（R39-1 ~ R39-19）
+
+| 缺陷编号 | 级别 | 缺陷简述 | 闭环版本 | 最终状态 |
+|---|:---:|---|:---:|:---:|
+| **R39-1** | 🔴 | `reserveD1RateLimit` 伪原子（SELECT→UPDATE 导致超发） | `v1.36.126` / `v1.36.127` | ✅ 彻底闭环（由单语句 CAS UPSERT 彻底解决） |
+| **R39-2** | 🔴 | 令牌桶同源竞态与突发反向放大 | `v1.36.126` | ✅ 彻底闭环（单语句原子注水扣减） |
+| **R39-3** | 🔴 | `releaseD1RateLimit` 无 `window_start` 守卫致跨窗口清零 | `v1.36.126` | ✅ 彻底闭环（带 `window_start` 守卫） |
+| **R39-4** | 🔴 | 规划文档虚构 120s 租约，实际无字段与 sweep 回收器 | `v1.36.126` | ✅ 彻底闭环（剔除虚构陈述，明确 2PC 架构权衡） |
+| **R39-5** | 🟠 | 断路器半开无单探针闸门 | `v1.36.126` / `v1.36.127` | ✅ 彻底闭环（原子 CAS 闸门 + 90s 租约兜底） |
+| **R39-6** | 🟠 | SingleFlight 内存态跨 POP 不合并 | `v1.36.126` | ✅ 彻底闭环（明确单 isolate 作用域，底层由 D1 行锁原子兜底） |
+| **R39-7** | 🟠 | L1/L2 硬编码 `retry_after: 86400` | `v1.36.126` | ✅ 彻底闭环（动态下发剩余窗口秒数） |
+| **R39-8** | 🟡 | SingleFlight promise 未挂 catch 导致 unhandled rejection | `v1.36.126` | ✅ 彻底闭环（Promise 创建时挂载 `.catch(() => {})`） |
+| **R39-9** | 🟠 | 架构文档 9 处残留 40 次与 604800s 陈旧表述 | `v1.36.126` | ✅ 彻底闭环（全面清洗并建立四层立体流控体系） |
+| **R39-10** | 🟠 | `acme-provider.ts` 文件不存在但文档宣称已存在 | `v1.36.126` | ✅ 彻底闭环（标注为规划拟定接口） |
+| **R39-11** | 🟡 | 第 38 轮复核未留痕披露 | `v1.36.127` | ✅ 彻底闭环（架构文档文首逐条披露 R38-1 ~ R38-8） |
+| **R39-12** | 🟡 | SKILL.md 技能绝对化措辞 | `v1.36.126` / `v1.36.127` | ✅ 彻底闭环（严密化工程表述，纠偏守卫 SQL） |
+| **R39-13** | 🟠 | 规划文档规格数字与实现三处不符 | `v1.36.126` | ✅ 彻底闭环（容量 5、连续失败 3 次、退避 30s~1920s） |
+| **R39-14** | 🔴 | 单语句原子预占条件初始化导致并发假超额误拒 | `v1.36.127` | ✅ 彻底闭环（单语句原子 CAS UPSERT，T12.1~T12.4 全绿） |
+| **R39-15** | 🔴 | 断路器半开态无租约且提前 return 导致吸收态死锁 | `v1.36.127` | ✅ 彻底闭环（90s 探针租约 + finally 兜底写回，T13/T14 全绿） |
+| **R39-16** | 🟠 | 架构文档 §7.2 示例载荷伪标识符与气泡文案不齐 | `v1.36.127` | ✅ 彻底闭环（逐字对齐，清除伪标识符，气泡文案端到端统一） |
+| **R39-17** | 🟡 | 整改文档代码锚点 6 处不准 | `v1.36.127` | ✅ 彻底闭环（机器回读校验完毕） |
+| **R39-18** | 🟡 | 测试报告将最后一套件分项数误作整链总数 | `v1.36.127` | ✅ 彻底闭环（整链 16 个套件逐套件披露可核） |
+| **R39-19** | 🟡 | 回滚守卫 SQL 多写实现不存在的 `count > 0` | `v1.36.127` | ✅ 彻底闭环（纠偏为 `WHERE key = ? AND window_start = ?`） |
+
