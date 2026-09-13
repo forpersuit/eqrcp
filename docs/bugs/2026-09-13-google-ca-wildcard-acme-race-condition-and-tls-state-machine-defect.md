@@ -1616,3 +1616,191 @@ PROBE-CONFIRMED: 非限额错误被误判为 CA 限额（冷却 3599 秒）
 - **离线测试套件**：`npm run test:offline` **131 passed, 0 failed**（含基于原生 SQLite 的并发原子性、令牌桶、CAS 单探针与回滚隔离用例）；
 - **Go 单元测试**：`go test ./...` **100% passed**；
 - **交付产物与版本**：版本递增至 `v1.36.126`（DRM API `1.13.1`），通过 `scripts/deploy-windows-results.sh` 完成 Windows 物理交付，提交至 `master` 分支（`fbe22e01`）。
+
+> ⚠️ **本节（§十六）的 9 项「✅ 达成」判定已被 §十七 后置复核部分改判**：13 条中 **11 条实质闭环**，R39-1 与 R39-5 属**部分闭环且各自引入一个新缺陷**（R39-14 / R39-15，均为 🔴）。§十六保留为开发方原始记录，不做删改；**以 §十七 为准**。
+
+---
+
+## 十七、 第 39 轮后置复核（对整改提交 `fbe22e01` + `f5ab137f` 的落地复核 · 基线 `v1.36.126`）
+
+> **复核对象**：开发方针对 §十五 的整改（代码 + 测试 + 文档）与 §十六 / 规划文档 §五中「**13 条全部闭环**」的定级自述。
+> **方法**：所有结论均由**真实 `node:sqlite`（`DatabaseSync`）承载的可证伪探针**产出，并对**修复前提交 `9647a116` 跑同一探针对照**（A/B 对照），以区分「既有缺陷」与「整改引入的回归」。
+
+### 17.1 结论摘要
+
+**整改方向正确、工程质量显著提升（最大亮点是把 `Map` 假体换成真实 SQLite，套件第一次具备证伪能力），但「13 条全部闭环」的定级不成立。**
+
+- **11 条实质闭环**：R39-2 / R39-3 / R39-4 / R39-6 / R39-7 / R39-8 / R39-9 / R39-10 / R39-13（另 R39-11 见下「痕迹待补」）。
+- **2 条部分闭环，且各自引入一个新的 🔴**：R39-1 → **R39-14**；R39-5 → **R39-15**。
+- **4 条文档/汇报层新缺陷**：R39-16 / R39-17 / R39-18 / R39-19。
+- **1 条痕迹未达标**：R39-11 的整改只是在文首标题写了「第 38/39 轮深度复核全面吸纳」，**未逐条披露吸纳了什么、如何处置**（`rg '第 38 轮|R38-'` 于该文档零命中）——「全面吸纳」是一个不可证伪的断言，与本项目连续 39 轮复现的「声称超出实现」同源。**不单独编号，计入状态表。**
+
+**A/B 对照（同一探针、同一组场景，仅替换 `rate-limit.ts` 的实现）**：
+
+| 场景（`maxAttempts`） | 修复前 `9647a116` | 修复后 `fbe22e01` | 理论正确值 |
+|---|---|---|---|
+| 既有行 count=2、10 并发（余 1 槽） | allowed=**10**、终态 count=**12** ❌ 超发 | allowed=**1**、终态 count=**3** ✅ | 1 |
+| **空行**、3 并发（max=3） | allowed=3 ✅ | allowed=**1** ❌ 误拒 | 3 |
+| **空行**、10 并发（max=10） | allowed=10 ✅ | allowed=**1** ❌ 误拒 | 10 |
+| **窗口已过期**、3 并发（max=3） | allowed=3 ✅ | allowed=**1** ❌ 误拒 | 3 |
+
+**即：整改把「超发」翻转成了「误拒」，二者并未同时成立。** 修复前在「既有行」场景的失败（count=12，超发 4 倍）证明探针有判别力；修复后同一探针在「空行/过期窗口」场景全数转红，证明这些是**整改引入的新行为**，而非既有缺陷。
+
+### 17.2 新缺陷清单（R39-14 … R39-19）
+
+#### R39-14 🔴 — 原子化修复不完整：**窗口「创建/重置」瞬间的并发被误拒**（整改引入的回归）
+
+- **位置**：`cloudflare/eqt-drm-api/src/utils/rate-limit.ts` — 第 2 步「初始化新键或重置过期窗口」的条件 upsert（**第 272-277 行**，其 `WHERE` 是 `DO UPDATE` 的**额外条件**），与第 3 步「配额耗尽」判定（**第 295-313 行**）。
+- **机理**：新实现把「建行/重置窗口」放进了**条件分支**。两个并发调用者的第 1 步（`UPDATE … RETURNING`，第 246-253 行）若**都在行尚不存在（或窗口尚未重置）时落空**，则第 2 步的 upsert 只有**一个**能真正写入；失败者（`RETURNING` 无行返回）直接落到第 3 步，而第 3 步是**无条件**的「配额耗尽」分支 —— 于是它被误判为超限，`remaining: 0`，并按 `Math.max(60, windowMs - elapsed)`（**第 304 行**）报出**接近满窗口的 `retry_after`**（实测 86400）。
+- **实测（探针，n 为并发数）**：空行 + n=3/max=3 → `allowed=1, denied=2, retry_after=86400`，终态 `count=1`；空行 + n=10/max=10 → `allowed=1, denied=9`；过期窗口 + n=3 → `allowed=1, denied=2`。
+- **可达性（不是理论）：IP 级键尤甚。** `cert_provision:<ip>` 的两个调用者来自**不同 `node_id`**，因而 SingleFlight 的 key 不同、**不会被折叠**——同一 isolate 内的并发即可触发。首装/首跑的局域网内多设备同时置备、或窗口刚滚过时的并发重试，都是真实入口。后果不只是少发一张证书：客户端会收到 `ip_rate_limited` + `Retry-After: 86400`（`cert.ts:919-928`），并按 `pkg/cert/provisioner.go:795-806` 的 `RateLimitError.RetryAfter` **把 TLS 特性锁死 24 小时**——用户实测只发起了 1 次请求。
+- **根因对照（同一个仓库里已有正确写法）**：`token-bucket.ts` **第 58-62 行**把建行做成了**无条件** `INSERT OR IGNORE`（先保证行存在，再执行原子扣减），因此它**没有**这个误拒（实测 10 并发恰好 5 笔，见 §17.3 R39-2）。`rate-limit.ts` 的差别仅在于把「建行」塞进了**条件**分支。
+- **处方**：见 §17.4 E10。
+
+#### R39-15 🔴 — 单探针闸门把 HALF_OPEN 变成**吸收态**：探针不记录结果 ⇒ 断路器永久停摆（整改引入的回归）
+
+- **位置**：`circuit-breaker.ts` **第 69-76 行**（CAS：`UPDATE … SET state='HALF_OPEN' WHERE name=? AND state='OPEN' AND cooldown_until <= ?`，以 `changes === 1` 判胜）与 **第 89-91 行**（`state === 'HALF_OPEN'` ⇒ `{ allowed: false, retryAfter: 15 }`）。
+- **机理**：HALF_OPEN 的**唯一出口**是 `recordCircuitSuccess`（`cert.ts:1336`，置 CLOSED）或 `recordCircuitFailure`（`cert.ts:1341/1353`，置回 OPEN）。而 CAS 闸门**没有任何租约/超时/回收器**：`cooldown_until` 已过期也不再被读取（CAS 只在 `state='OPEN'` 时触发），`resetCircuitBreaker`（`circuit-breaker.ts:200`）**在全仓无任何调用点**。因此一旦探针获准后**没有任何一方写回结果**，该行将**永久**停留在 HALF_OPEN。
+- **实测（探针）**：置 OPEN 且冷却已过 → 第 1 次 `canExecuteCircuit` 返回 `allowed=true, state=HALF_OPEN`；此后**冷却已过期 5 秒**，连续 5 次调用全部 `allowed=false, retryAfter=15`，DB 终态仍为 `HALF_OPEN`，`getCircuitBreakerStatus` 亦为 HALF_OPEN。
+- **不记录结果的路径是**真实存在**的（`cert.ts`，探针获准点 `:952` 之后、写回点 `:1336` 之前的全部提前 return）**：
+  `:974` / `:989` / `:1004`（400 `invalid_csr`）、`:1049` / `:1060`（401 `invalid_signature`）、`:1110`（403 `node_key_mismatch`）、`:1157` / `:1168` / `:1179`（500 `acme_misconfigured`）、`:1412`（**外层 catch** 的 500 `internal_error`，位于 ACME 子 `try` 之外，因此**不会**走到 `:1341`）。此外 Worker isolate 在探针期间被硬终止（本仓已在 R39-4 承认该风险）同样不写回。
+- **后果**：**全网证书置备永久 429**（`ca_circuit_open`，`retryAfter=15`），且无运维出口（无调用点、无 Admin 接口）。这是**用「泄漏」换来的「砖化」**——比原缺陷更严重，因为原缺陷只是多放行，而它使功能彻底不可用。且触发只需一次：**首个在冷却到期瞬间到达且自身校验失败的请求**。
+- **处方**：见 §17.4 E11。
+
+#### R39-16 🟠 — 架构文档 §7.2 整改后新写入的 JSON / 文案 / 标识符**与实现不符**（第 37 轮「虚构代码块」同类复发）
+
+| 文档写法（`lan-tls-zero-leak-acme-architecture.md`） | 实现事实 |
+|---|---|
+| 「调用 `logRateLimitHit()` 或 **`logCircuitBreakerTrip()`** 异步记录 D1」 | **`logCircuitBreakerTrip` 全仓零命中**（`rg -S --glob '!*.md'`），该标识符不存在 |
+| `"reason_key": "node_rate_limited"` | 节点级实际返回 **`"rate_limited"`**（`cert.ts:901`；IP 级为 `ip_rate_limited` `:925`）。**`node_rate_limited` 零命中** |
+| `"error": "Upstream CA traffic burst limit reached. Please retry shortly."` | 实为 `"Certificate authority request rate smoothed. Please retry shortly."`（`cert.ts:941`） |
+| `"error": "Upstream CA service is temporarily degraded. Circuit breaker OPEN."` | 实为 `"Certificate authority is temporarily undergoing rate-limit cooldown. Please retry later."`（`cert.ts:958`） |
+| `"error": "Cert provision rate limit exceeded for node. Please retry later."` | 实为 `"Certificate issuance rate limit exceeded (maximum 3 requests per 24 hours)"`（`cert.ts:920`） |
+| 气泡文案 `触发证书颁发保护限制（已自动切换为局域网高速传输）` | `app.go:2244` / `:2361` 实为 `触发证书颁发机构频次限制，已自动切换为局域网高速传输（保护冷却中）`，且代码内仍是**两套文案**（第 38 轮已记） |
+
+- **判定**：**方向与结构是对的**（三层 → 四层、动态 `Retry-After` 的表述已改正），但**示例载荷是照设计意图重写的，不是从代码抄的**。这类「看起来更专业」的文案比旧文案更危险：它让下一轮读者以为已核对过。**处方**：E12。
+
+#### R39-17 🟡 — 闭环验收表与整改文档的**代码锚点 6 处不准**（4/5 表行 + 2 处正文）
+
+| 引用处 | 所引锚点 | 实际内容 |
+|---|---|---|
+| §16.1 **E1** | `rate-limit.ts:225-270` | `:225-234` 是 **docstring**（含「Atomically」句），函数体为 **`:235-314`** —— 把注释当成了函数 |
+| §16.1 **E3** | `rate-limit.ts:208` | `releaseD1RateLimit` 定义为 **`:206`**，守卫 UPDATE 在 **`:217`** |
+| §16.1 **E5** | `circuit-breaker.ts:98-112` | CAS 在 **`:69-76`**；`:98-112` 是**另一个函数** `recordCircuitSuccess` 的注释与开头 |
+| §16.1 **E6** | `cert.ts:899/921` | 实为 **`:895` / `:919`** |
+| §16.1 **E9** | `circuit-breaker.ts:162` | 实为 **`:165`**；同文件触发条件实为 `:171`（**非** `:168`）—— 因本次插入 CAS 使后续行号整体下移 3 行 |
+| 规划文档 §3.1（整改后） | `circuit-breaker.ts:168` / `:162` | 同上，实为 **`:171` / `:165`** —— 整改**照抄了审查方的旧行号而未复核** |
+| 架构文档 §7.2（整改后） | `cert.ts:936` / `cert.ts:953` | `:936`/`:953` 是 `if` 条件行，真正的 `return {status: 429}` 在 **`:938` / `:956`** |
+
+- **判定**：**这正是审查方在 §十五自己踩过并记录过的坑**（插横幅导致自身行号 +12 漂移，见 §15.6）：**行号锚点在任何编辑之后都会失效**。整改方在同一个文件里插入 24 行代码后仍沿用旧行号，说明「锚点必须机器复核」尚未成为团队惯例。**处方**：E13。
+
+#### R39-18 🟡 — 「`npm run test:offline` **131 passed**」**数字归属错误**
+
+- 实测（本轮 `npm run test:offline`，`EXIT=0`）：**131 是链路最后一个套件 `test:website-review`（`tests/verify-website-review-fixes.mjs`）的分项计数**，与限流/断路器无关。本轮新增的并发用例分布在：`test:utils:offline`（**70/70**，含 rate-limit T12/T13）、`test:circuit:offline`（**12**，含 CAS 单探针 T11、令牌桶突发 T12）、`test:cert:offline`（**103**，含 T23.1–T23.3）。全链路各套件加总为 **462**（另有 4 个套件以 `n/m` 格式合计 **161**）。
+- **判定**：**「全绿」这个结论为真**（每套件均 0 failed，无静默跳过，退出码 0），但**引用为假**：把最后一个套件的分项数当成了整链合计，并把它与「含基于原生 SQLite 的并发用例」硬绑定 —— 而 131 那个套件里**一条并发用例都没有**。按红线【148】（规格文档里的每个数字都必须与交付实现逐项对齐），此类数字必须在报告中单独可核。**处方**：E14。
+
+#### R39-19 🟡 — 「回滚守卫」的 SQL 在文档中被多写了一个**实现中不存在**的条件
+
+- 两处（§16.1 E3 与 `SKILL.md` 【142】）均写作 `WHERE key = ? AND count > 0 AND window_start = ?`；实现为 **`UPDATE rate_limits SET count = MAX(0, count - 1) WHERE key = ? AND window_start = ?`**（`rate-limit.ts:217`）——**没有 `count > 0`**，下溢由 `MAX(0, …)` 兜底。
+- **判定**：功能等价（不会误判为缺陷），但**「文档里描述的守卫比代码更严」正是本项目连续 39 轮的病根形态**。属我自己的红线【148】的直接违反，故不放过。**处方**：E13 一并修正。
+
+### 17.3 逐项闭环状态复核表
+
+| 编号 | 开发方判定 | 后置复核判定 | 依据 |
+|---|---|---|---|
+| **R39-1** 🔴 | ✅ 已闭环 | **⚠️ 部分闭环** —— 原缺陷（超发）确已修复（既有行场景 10 并发 ⇒ allowed=1、count=3），但**引入 R39-14**（窗口创建/重置瞬间误拒） | 探针 A/B 对照；`unit-utils-offline.js` **T12** 只覆盖「既有行」起点，故未触及 |
+| **R39-2** 🔴 | ✅ 已闭环 | **✅ 实质闭环** | 探针：空桶 + 10 并发 ⇒ 恰好 5 放行、5 拒绝；`circuit-breaker-offline.js` **T12** 真并发且可证伪。**根因是「无条件建行」这一处正确设计** |
+| **R39-3** 🔴 | ✅ 已闭环 | **✅ 实质闭环** | 守卫落到 `window_start` 等值比较（`:217`）；`unit-utils-offline.js` **T13** 覆盖迟到回滚 |
+| **R39-4** 🔴 | ✅ 已闭环 | **✅ 闭环（措辞待精确）** | 选择「改文档为实」是我方 E4 给出的合法路径之一，且规划文档 §3.4 现已如实说明。惟「未释放的预占位将随该 key 的 24 小时**自然**窗口刷新」措辞不严谨：窗口**不会自己**刷新，必须是**下一次请求**发现过期后才重置（惰性重置）；对用户的实际影响是「该窗口剩余时间内少若干名额」，而非「24 小时后自动补回」 |
+| **R39-5** 🟠 | ✅ 已闭环 | **⚠️ 部分闭环** —— 闸门本身成立（20 并发仅 1 探针），但**引入 R39-15**（HALF_OPEN 吸收态、无租约、无运维出口） | 探针：冷却已过期 5s 仍全数 429；`:200` `resetCircuitBreaker` 无调用点 |
+| **R39-6** 🟠 | ✅ 已闭环 | **✅ 实质闭环** | 作用域限定已写入架构文档、规划文档 §3.3、SKILL【143】。惟「跨 isolate 由 D1 单语句原子预占兜底」这句**因 R39-14 而暂时不成立**，修好 R39-14 后才成立 |
+| **R39-7** 🟠 | ✅ 已闭环 | **✅ 实质闭环（端到端可验）** | `cert.ts:895/919` 改为 `reservation.retryAfter`，并且客户端 `provisioner.go:795-806` 确实优先取 payload 的 `retry_after`、其次 `Retry-After` 头 ⇒ 动态冷却**真的到达端侧** |
+| **R39-8** 🟡 | ✅ 已闭环 | **✅ 实质闭环** | `singleflight.ts` 已挂 `promise.catch(() => {})` |
+| **R39-9** 🟠 | ✅ 已闭环 | **✅ 实质闭环** | 机制文档已清洗：`global_acme`/`global_rate_limited`/`604800` 仅余 **2 处历史引述**（文首声明行、§7.1 第 3 点「早期草稿曾拟定」），§三.1 时序图、§五.2 三态图与清单、§六 映射表、§7.1/§7.2/§7.3/§7.5/§九 均已改写为四层体系 |
+| **R39-10** 🟠 | ✅ 已闭环 | **✅ 实质闭环** | §四 TS 块已标「【规划中 · 尚未落地】拟定路径」 |
+| **R39-11** 🟡 | ✅ 已闭环 | **⚠️ 痕迹未达标** | 文首改为「第 38/39 轮深度复核全面吸纳」，但**无逐条处置披露**（`rg '第 38 轮\|R38-'` 零命中）。「全面吸纳」不可证伪 |
+| **R39-12** 🟡 | ✅ 已闭环 | **⚠️ 部分闭环** | 【142】【143】的作用域收窄**已做到**；但【142】内新写的守卫 SQL 即 **R39-19**（多 `count > 0`），另【142】未提及「无条件建行 vs 条件建行」这一真正决定成败的差异 |
+| **R39-13** 🟠 | ✅ 已闭环 | **✅ 实质闭环** | 规划文档 §3.1/§3.2 数字已对齐实现（容量 5、`failure_count >= 3`、30→1920 阶梯）；惟其**行号引用已漂移**（见 R39-17） |
+| **R39-14 / 15** 🔴 | — | **新增（本轮）** | 见 §17.2 |
+| **R39-16…19** | — | **新增（本轮）** | 见 §17.2 |
+
+### 17.4 修正处方（E10–E14）
+
+**E10（🔴，对应 R39-14）——把「建行/重置窗口」与「占位」合并为单条语句，或先无条件建行再重试。**
+推荐单条语句：
+
+```sql
+INSERT INTO rate_limits (key, count, window_start)
+VALUES (?, 1, ?)
+ON CONFLICT(key) DO UPDATE SET
+  count = CASE WHEN (julianday(?) - julianday(rate_limits.window_start)) * 86400000.0 > ?
+               THEN 1 ELSE rate_limits.count + 1 END,
+  window_start = CASE WHEN (julianday(?) - julianday(rate_limits.window_start)) * 86400000.0 > ?
+                      THEN ? ELSE rate_limits.window_start END
+WHERE (julianday(?) - julianday(rate_limits.window_start)) * 86400000.0 > ?
+   OR rate_limits.count < ?
+RETURNING count, window_start;
+```
+- **绑定顺序（10 个参数，与上列 `?` 出现次序一一对应）**：`key, nowIso, nowIso, windowMs, nowIso, windowMs, nowIso, nowIso, windowMs, maxAttempts`。
+- **四条路径互斥且完备**：行不存在 ⇒ INSERT，得 `count=1`；窗口已过期 ⇒ 第一个析取项为真 ⇒ 重置为 1；窗口有效且未满 ⇒ `count+1`；**窗口有效且已满 ⇒ `WHERE` 全假 ⇒ 无行返回 ⇒ 只有落到这个分支才是真·配额耗尽**。**没有任何分支会把「并发初始化」误判成「耗尽」。**
+- **本方已实测该语句（本轮交付前验证，非纸面推断）** —— 用真实 `node:sqlite` + 对 SQL 错误**大声抛出**的 D1 假体（异步 tick 模拟 D1 往返交错），**6/6 通过，且 R39-14 与 R39-1 两类场景首次同时成立**：
+
+  | 用例 | 结果 |
+  |---|---|
+  | 正对照·空行单调用者（最大 3） | allowed=1，终态 `count=1` ✅ |
+  | **空行 + 3 并发（`max=3`）** —— R39-14 误拒场景 | allowed=**3**，终态 `count=3` ✅ |
+  | **空行 + 10 并发（`max=10`）** | allowed=**10**，终态 `count=10` ✅ |
+  | **过期窗口 + 3 并发** | allowed=**3**，终态 `count=3` ✅ |
+  | 既有行 `count=2` + 10 并发（余 1 槽）—— R39-1 超发场景 | allowed=**1**，终态 `count=3` ✅ |
+  | 边界·既有行 `count=3/3` + 5 并发 | allowed=**0**，终态 `count=3` ✅ |
+
+  ⇒ **该语句同时满足 E10 验收判据的两侧**（「空行/过期窗口不得误拒」与「既有行不得超发」），这正是整改版 `reserveD1RateLimit` 未能做到的。
+- 最小改动版（保留现有三步骨架）：① 把第 2 步换成**无条件** `INSERT OR IGNORE INTO rate_limits (key, count, window_start) VALUES (?, 0, ?)`（只建行、不占额）+ 一条 `UPDATE … SET count = 0, window_start = ? WHERE key = ? AND (julianday(?) - julianday(window_start)) * 86400000.0 > ?`（重置过期窗口）；② **重跑第 1 步**的 `UPDATE … RETURNING`；③ 只有重跑仍无返回时才判定耗尽。**这一步「重跑」是本处方的核心** —— 令牌桶正是因为它先无条件建行、随后单语句扣减，才没有这个 bug。
+- **验收判据（必须新增，且必须与既有 T12 并列）**：
+  - **空行 + 3 并发（max=3）⇒ 恰好 3 笔放行**；
+  - **空行 + 10 并发（max=10）⇒ 恰好 10 笔放行**；
+  - **窗口已过期 + 3 并发（max=3）⇒ 恰好 3 笔放行、终态 `count=3`**；
+  - 并保留现有 T12（既有行 count=2 + 10 并发 ⇒ 恰好 1 笔）——**两侧都要绿，才算修好**。
+
+**E11（🔴，对应 R39-15）——给 HALF_OPEN 加租约，并让「探针不写回」不可能发生。**
+1. **给半开态一个期限（首选）**：把闸门从「只认 `state='OPEN'`」放宽为「`OPEN` 且冷却到期，**或** `HALF_OPEN` 且 `updated_at <= now - <probeLeaseSec>`」，即第二次 CAS：
+   ```sql
+   UPDATE circuit_breakers SET state='HALF_OPEN', updated_at=?
+   WHERE name=? AND ((state='OPEN' AND (cooldown_until IS NULL OR cooldown_until <= ?))
+                  OR (state='HALF_OPEN' AND updated_at <= ?))
+   ```
+   **绑定顺序（4 个参数）**：`nowIso, name, nowIso, leaseCutoffIso`，其中 `leaseCutoffIso = new Date(Date.now() - probeLeaseSec * 1000).toISOString()`（建议 `probeLeaseSec` 取 **60–120 秒**，覆盖一次完整 ACME 流程）。`updated_at` 字段已存在，**无需改 schema**。并在 `HALF_OPEN` 分支的 `retryAfter` 里回传「距下一次可探针的秒数」，而不是写死 `15`。
+   **本方已实测该语句（`node:sqlite`，`probeLeaseSec=90`），11/11 通过**，含关键的两条：① `HALF_OPEN` 且 `updated_at` 已过租约（120s）⇒ **重新放行**（`changes=1`）；② `HALF_OPEN` 租约内（10s）⇒ 拒绝（`changes=0`）；③ `OPEN` 且冷却未到 ⇒ 拒绝；④ 模拟 R39-15 的「探针获准后无人写回」⇒ **时间推进后可重新获准，不再永久停摆**。原闸门（只认 `state='OPEN'`）在同一探针下给出的是「永久拒绝」。
+2. **消灭「不写回」路径（必须同时做）**：在 `cert.ts` 探针获准点（`:952`）之后的**所有**提前 return 之前写回 —— 最简且不会遗漏的做法是在**外层 `finally`（`:1419`）**里统一补一条：若本次请求曾获准探针（`cbProbeGranted === true`）且未写过任何结果，则调用 `recordCircuitFailure(env, 'gts_ca', 30, false)`。**「最后一道防线放在 finally」比在 10 个 return 点各加一行更可靠**。
+3. **给运维留出口**：把 `resetCircuitBreaker`（`:200`，现无调用点）接入规划文档 §3.6 的 `POST /api/v1/admin/tls/reset-rate-limit`；在此之前，任何一次误入 HALF_OPEN 都只能靠改 D1 恢复。
+- **验收判据**：① 模拟「探针获准但请求在 CSR 校验处失败」后，**下一次**调用在租约到期后仍能获得探针资格（不再永久 429）；② 20 并发仍严格只有 1 个探针；③ 断言「探针期间 Worker 异常终止」可用一个直接调用 `canExecuteCircuit` 而不调用任何 `recordCircuit*` 的用例来模拟（这正是本轮探针的做法）。
+- ⚠️ **一处必须留意的语义**：`updated_at <= leaseCutoff` 依赖 `updated_at` **只在 CAS 获准那一刻被写**。若后续任何代码路径（例如 `recordCircuitSuccess/Failure` 之外的日志写入）也更新 `updated_at`，租约会被不断续期而退化成「永不重新放行」。**实现时请把「`updated_at` 的一次写入者」作为不变量测试锁定。**
+
+
+**E12（🟠，对应 R39-16）——§7.2 的三段示例载荷改为「从代码抄写」，并删除不存在的标识符。**
+`logCircuitBreakerTrip` 要么实现，要么从文档删除（建议删除，断路器跳闸目前由 `console.warn` 表达，落库走 `logSystemError`）；`node_rate_limited` 改为 `rate_limited`；三处 `error` 文案与 `app.go` 的气泡文案逐字对齐 **或** 在代码块上标注「示意，非逐字」。**并请顺带消解第 38 轮已记的「气泡两套文案」（`app.go:2244` 与 `:2361`）**。
+
+**E13（🟡，对应 R39-17 / R39-19）——锚点与 SQL 一律机器复核后写入。**
+沿用本仓已确立的做法：**优先写「章节 + 原文引述」，行号仅作辅助**；若写行号，则提交前用 `rg -n` 逐条回读。同时把 `SKILL.md`【142】与 §16.1 E3 的守卫 SQL 修正为实际形态 `WHERE key = ? AND window_start = ?`（下溢由 `MAX(0, count-1)` 兜底）。
+
+**E14（🟡，对应 R39-18）——测试数字的写法。**
+报告与文档中不得把「某一个套件的分项计数」写成整链合计。建议句式：`npm run test:offline` 全链 **16 个套件、exit 0、零 failed**（本轮实测：`test:utils:offline` 70/70、`test:circuit:offline` 12、`test:cert:offline` 103、`test:website-review` 131；各套件加总 462 + 161）。
+
+### 17.5 出口条件（Exit Criteria · 第 39 轮后置 · E10–E14）
+
+| 编号 | 出口条件（可证伪） | 对应 |
+|---|---|---|
+| **E10** | 三条**窗口创建/重置**并发用例（空行 3 并发、空行 10 并发、过期窗口 3 并发）与既有「既有行」用例**同时**为绿 | R39-14 🔴 |
+| **E11** | ① 半开探针租约生效：探针获准后不写回，**下一次**调用在租约到期后重新获准；② 20 并发仍只 1 探针；③ `HALF_OPEN` 分支回传真实剩余秒数而非 `15`；④ `cert.ts` 外层 `finally` 对「获准探针但未写回」兜底 | R39-15 🔴 || **E12** | §7.2 示例载荷与 `cert.ts:941/958/920` 逐字一致；`logCircuitBreakerTrip`、`node_rate_limited` 零残留 | R39-16 🟠 |
+| **E13** | §16.1 表内 5 个锚点 + 规划文档 §3.1 两处 + 架构文档 §7.2 两处全部机器回读通过；【142】/E3 的守卫 SQL 与 `rate-limit.ts:217` 一致 | R39-17/19 🟡 |
+| **E14** | 测试报告中的数字可逐套件复现，不再出现「分项当合计」 | R39-18 🟡 |
+
+### 17.6 本轮边界声明（未做什么）
+
+1. **未做多 isolate / 多 POP 实测**：R39-15 中「Worker 硬终止导致探针不写回」属**架构级推论**（依据依旧是 Workers 的 isolate 语义）；本轮**直接实测**的是「获准探针后不调用任何 `recordCircuit*` ⇒ 永久 HALF_OPEN」，这一条已足以成立。
+2. **未评估阶段三/四**（Admin 大盘、Multi-CA 灾备池）：仍未落地。
+3. **未复核 `acme.ts` 的改动细节**（`test:acme:offline` 24 passed 仅说明其自测通过）。
+4. **探针不经网络**：以 `node:sqlite` 的**同步单语句原子性**模拟 D1 的**逐语句原子性**；D1 的跨语句行为在本探针下等同（这正是 R39-14 成立的前提：**单条语句原子，两条语句之间不是**）。若 D1 实际提供更强的事务语义，则 R39-14 的窗口更窄 —— 但 Cloudflare D1 的官方语义并未承诺跨语句原子性，故按最保守假设判定。
+5. **本轮未在本机复现「131 是最后一个套件」这一结论之外的套件内部断言**，仅核验了各套件自报的 passed/failed 与退出码（`EXIT=0`），以及本轮新增用例**确实执行**（日志中可见 `T11/T12/T13/T23.1–T23.3` 的 ✓ 行）。
+6. **本方处方（E10/E11 的 SQL）已在交付前实测，非纸面推断**：E10 **6/6 通过**（且使 R39-14 与 R39-1 两类场景**首次同时成立**）、E11 **11/11 通过**（含「租约到期后可重新获准」这一直接否定吸收态的用例）。两处均以 `node:sqlite` + **对 SQL 错误大声抛出**的 D1 假体运行，因此同时验证了所发射语句的**合法性**。
+7. **审查方自我更正（本轮两处，均为探针夹具缺陷而非结论缺陷）**：在验证 E10/E11 处方时，我的探针 `helper` 函数**两次漏绑参数** —— ① E10 的 `reserve(key, …)` 在调用 `db.prepare(SQL).get(...)` 时**丢弃了 `key` 实参**，导致所有调用落在同一行上（首轮跑出「连续 11 次只放行 7 次」与「过期窗口返回 `undefined`」两个反直觉结果）；② E11 的 `cas()` 把 `nowIso` 当作**租约阈值**绑定（应为 `now - probeLeaseSec`），导致首轮 2 项转红。**修正绑定后两处处方均全绿**，即：**探针出现反直觉结果时，第一嫌疑是夹具而非被测对象** —— 这与本仓第 34/36 轮「反向探针本身也必须先通过门禁」一脉相承。此处如实登记，以免下一轮把这两个「失败记录」误读为处方缺陷。

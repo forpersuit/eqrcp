@@ -25,6 +25,24 @@
 > 4. **L4 自适应退避断路器**（连续 3 次失败/429 触发熔断，阶梯退避 30s~1920s，HALF_OPEN 状态原子 CAS 单探针放行）；
 > 5. **SingleFlight 请求折叠**（同 Worker Isolate 内存态折叠，杜绝并发未完成订单重复冲击，跨 Isolate 由 D1 原子预占兜底）；
 > 6. **端侧协同**（Fail-Closed 立即切断 + Fail-Soft 明文保障传输 + 根据服务端 `retry_after` 动态冷却，杜绝惊群）。
+>
+> ---
+>
+> ### ⚠️ 更正声明（第 39 轮**后置复核**，2026-09-13 · 复核提交 `fbe22e01` + `f5ab137f`）
+>
+> 上方「**代码已 100% 落地并通过真实 SQLite 并发可证伪测试**」与「**第 38/39 轮深度复核全面吸纳**」两处表述**已被后置复核部分推翻**，现更正如下。上方原文保留为历史记录，**以下为准**：
+>
+> 1. **上述第 1、2 项（L1/L2 单语句原子预占）存在缺陷 R39-14 🔴** —— `reserveD1RateLimit` 把「建行 / 重置过期窗口」放进了**条件分支**，导致在**行尚不存在**或**窗口刚过期**的瞬间，多个并发调用者的原子 UPDATE 全部落空、条件 upsert 只有一人成功，其余全部落到**无条件**的「配额耗尽」分支，被**误拒**并报出接近满窗口的 `retry_after`。实测：空行 + 3 并发（`max=3`）⇒ 仅放行 1 笔、2 笔被拒（`retry_after=86400`）；同一探针在修复前 `9647a116` 上给出 allowed=3/10/3（正确值），故这是**整改引入的回归**。**IP 级键尤甚**：不同 `node_id` 的 SingleFlight key 不同、不会被折叠，同一 NAT 下多设备并发首装即可触发 24 小时误锁。处方见 §17.4 E10。
+> 2. **上述第 4 项（HALF_OPEN 原子 CAS 单探针）存在缺陷 R39-15 🔴** —— 闸门本身成立（20 并发确实只有 1 个探针），但**半开态没有出口保障**：其唯一出口是 `recordCircuitSuccess`/`recordCircuitFailure`，而探针获准点之后存在 **10 条提前 return 路径**（400 `invalid_csr`、401 `invalid_signature`、403 `node_key_mismatch`、500 `acme_misconfigured`、**外层 catch 500 `internal_error`**）外加 Worker isolate 被硬终止，任一发生即**永久停留 HALF_OPEN**；此时 CAS 不再触发、`cooldown_until` 不再被读取、`resetCircuitBreaker` **全仓无调用点**，结果是**全网证书置备永久 429 且无运维出口**。实测：探针获准后不写回，冷却过期 5 秒仍连续 5 次 `allowed=false (retryAfter=15)`。处方见 §17.4 E11。
+> 3. **上述第 5 项中「跨 Isolate 由 D1 原子预占兜底」在 R39-14 修复前不成立** —— 兜底恰恰依赖那条有缺陷的预占路径。
+> 4. **上述第 6 项「根据服务端 `retry_after` 动态冷却」经端到端复核属实**（`cert.ts:895/919` → 客户端 `pkg/cert/provisioner.go:795-806` 优先取 payload 的 `retry_after`、其次 `Retry-After` 头），已废弃写死的 `86400`。**这是本轮确认的实质改进。**
+> 5. **「第 38/39 轮深度复核全面吸纳」不可证伪**：全文仅此一句，**未逐条披露吸纳了什么、如何处置**（`rg '第 38 轮|R38-'` 本文档零命中）。R39-11 的整改要求是**留痕**，故该条判定为**痕迹未达标**。
+> 6. **§7.2 整改后新写入的三段响应载荷与实现不符（R39-16 🟠）**：其中的 `logCircuitBreakerTrip()` 与 `reason_key: "node_rate_limited"` **全仓零命中**，三处 `error` 文案与 `cert.ts:941/958/920` 逐字不一致 —— 详见 §7.2 顶部更正块。
+>
+> **本轮的唯一实质进步（应予肯定）**：两个离线套件把 `Map` 假体换成**真实 `node:sqlite`（`DatabaseSync`）**并新增真并发用例（`unit-utils-offline.js` T12/T13、`circuit-breaker-offline.js` T11/T12）—— 套件**首次具备对「并发原子性」的证伪能力**，上述两个 🔴 正是靠这套能力捕获的。
+>
+> 完整清单、A/B 对照数据、逐项闭环状态复核表与出口条件 E10–E14：见 `docs/bugs/2026-09-13-google-ca-wildcard-acme-race-condition-and-tls-state-machine-defect.md` **§十七**。
+
 
 ---
 
@@ -443,9 +461,9 @@ routes = [
 | **私钥泄露连坐危机 (Global Blast Radius)** | 某一用户的私钥被木马窃取并在公网公开 | **全网瘫痪**：CA 启动全网证书吊销，全球所有用户的 TLS 功能连坐瘫痪 | **风险隔离**：仅泄露该特定 Node 的子域访问，其他千万台设备证书与密钥完全不受影响 |
 | **重放攻击与请求伪造 (Replay / Spoofing)** | 攻击者监听合法的置备请求，重放刷单消耗配额 | 易遭重放 | **严格时钟与验签**：服务端强制 `±60s` 时间戳容差，且签名载荷绑定了时间戳，重放立即被拒 |
 | **冒名占用与子域劫持 (Subdomain Takeover)** | 恶意用户伪造他人的 `node_id` 向云端申请证书 | 无法防范伪造身份 | **TOFU 首登强绑定**：D1 首次记录公钥哈希；未携带匹配设备特征的新公钥申请直接返回 403 阻断 |
-| **脚本恶意刷爆 CA 配额 (Denial of Wallet/Service)** | 攻击者轮换伪造 `node_id` 疯狂发起置备，消耗配额 | 容易导致 CA 额度耗尽 | **三层立体防刷体系**：Node 级、IP 级以及生产全局熔断闸门，拦截恶意高频置备 |
+| **脚本恶意刷爆 CA 配额 (Denial of Wallet/Service)** | 攻击者轮换伪造 `node_id` 疯狂发起置备，消耗配额 | 容易导致 CA 额度耗尽 | **四层立体防刷体系**：Node 级、IP 级、全局令牌桶与自适应断路器，拦截恶意高频置备 |
 
-### 2. 三层立体防刷体系（Multi-Tier Rate Limiting）
+### 2. 四层立体防刷体系（Multi-Tier Rate Limiting）
 
 置备接口 `POST /api/v1/cert/provision` 构建了四层立体流控与防刷体系：
 
@@ -463,6 +481,12 @@ routes = [
 2. **Layer 2（单 IP 级频控）**：防范局域网或内网通过脚本本地伪造海量 `node_id` 刷单。单 Client IP 24 小时内最多允许 10 次请求（单 SQL 语句原子预占），超限返回动态剩余冷却秒数的 `Retry-After`；
 3. **Layer 3（全局平滑削峰令牌桶）**：平滑突发并发流量，防止短时间内突发流量冲垮上游 CA。稳态填充速率 10 次/分钟，最大突发容量 5 次，超出即返回秒级 `Retry-After` 平滑退避；
 4. **Layer 4（自适应退避断路器）**：保护公共 CA 额度的自适应反应式保险丝。一旦检测到上游连续 3 次失败或 429 限制，断路器自动跳闸（阶梯退避 30s~1920s），阻断击穿风险，并通过原子 CAS 单探针机制在冷却后进行灰度自愈。
+
+> ⚠️ **第 39 轮后置复核（R39-14 / R39-15）**：上图四层的**分层与阈值均与实现一致**（L1 3/24h、L2 10/24h、L3 10/min 突发 5、L4 `failure_count >= 3`），但其中两条路径存在缺陷：
+> - **Layer 1 / Layer 2 的「单 SQL 语句原子预占」在窗口创建或重置的瞬间会误拒并发请求**（`reserveD1RateLimit` 把「建行」放在条件分支里）：空行 + 3 并发（`max=3`）实测仅放行 1 笔、2 笔被拒并报 `retry_after=86400`。**IP 级尤甚** —— 不同 `node_id` 的 SingleFlight key 不同、不会被折叠，同一 NAT 下多设备并发首装可致 24 小时误锁。属整改引入的回归（修复前 `9647a116` 在该场景为正确值 3）。修复后本层的「跨 isolate 兜底」才成立。
+> - **Layer 4 的「原子 CAS 单探针」本身成立（20 并发确只 1 探针），但半开态无出口保障**：探针获准后若走 10 条提前 return 路径之一或 Worker 被硬终止，则无人写回结果 ⇒ 永久停留 `HALF_OPEN` ⇒ 全网置备永久 429，且 `resetCircuitBreaker` 无调用点、无运维出口。
+>
+> 完整处方与出口条件：`docs/bugs/2026-09-13-google-ca-wildcard-acme-race-condition-and-tls-state-machine-defect.md` §17.4 E10 / E11、§17.5。
 
 ---
 
@@ -490,6 +514,11 @@ routes = [
 | **云端网关** | TOFU 设备公钥绑定与受控轮换 | `cloudflare/eqt-drm-api/src/routes/cert.ts:920-968` | ✅ 真实生效，绑定 D1 `node_public_keys` |
 | **云端网关** | 多层立体流控体系 (L1 Node 3 / L2 IP 10 / L3 令牌桶 / L4 断路器) | `cloudflare/eqt-drm-api/src/routes/cert.ts:886-965` | ✅ 真实生效，超限返回 429 与动态 Retry-After |
 
+> ⚠️ **本表（§六）经第 39 轮后置复核，三处状态需下调**：
+> 1. **「多层立体流控体系 … ✅ 真实生效」→ ⚠️ 部分生效**：四层均已落地且 429/`Retry-After` 确实下发，但 L1/L2 在窗口创建/重置瞬间会误拒并发（R39-14 🔴）、L4 半开态无出口保障（R39-15 🔴）—— 详见文首「更正声明」。
+> 2. **行内锚点 `cert.ts:886-965` 已漂移**：四层判定的实际区间为 **`:886-967`**（L1 `:898`、L2 `:922`、L3 `:938`、L4 `:956`）。本表其余行的锚点（如 TOFU 行 `cert.ts:920-968`）亦系整改前旧号，**本轮未逐条回读**，使用时请以 `rg -n` 现场核定为准（R39-17）。
+> 3. **「测试状态」列应注明**：本轮新增的并发可证伪用例位于 `test:utils:offline`（70/70，rate-limit T12/T13）与 `test:circuit:offline`（12，CAS 单探针 T11、令牌桶突发 T12）；**它们覆盖的是「既有行」起点，尚未覆盖「空行/过期窗口」起点** —— 这正是 R39-14 逃逸的原因。
+
 ---
 
 ## 七、Google Public CA (GTS) 真实配额机理与限制墙应对
@@ -512,38 +541,63 @@ routes = [
      ② **L2 IP 级频控**（10 次 / 24h，单 SQL 原子预占，动态剩余秒数 `Retry-After`）；
      ③ **L3 全局流量平滑令牌桶**（10 req/min，突发容量 5，单 SQL 原子扣减，返回秒级 `Retry-After`）；
      ④ **L4 自适应退避断路器**（连续 3 次失败跳闸，阶梯退避 30s~1920s，HALF_OPEN 原子 CAS 单探针放行）；
+   - ⚠️ **第 39 轮后置复核（R39-14/R39-15）**：①② 的「单 SQL 原子预占」在**窗口创建/重置瞬间**会误拒并发（IP 级尤甚，可致 24h 误锁）；④ 的「单探针放行」**成立，但半开态无出口保障**，探针不写回即永久停摆（`resetCircuitBreaker` 无调用点）。详见文首「更正声明」与 §17.4 E10/E11。
    - **第一性原理与设计透明性**：删除全局 40/7d 静态硬编码消除了“无辜用户在未触碰 Google 限制前即被集体锁死 7 天”的严重可用性缺陷。自适应断路器属于反应式熔断保护，在上游 CA 首次返回 429 或连续异常时快速跳闸阻断雪崩，并通过渐进式探针自愈。
 
 ### 7.2 多用户并发触发限制与熔断的系统表现实况
 
+> ⚠️ **R39-16（🟠 · 第 39 轮后置复核）—— 本节的三段载荷与实现不符，已按下表逐字更正。**
+> 原文是**照设计意图重写**而非**从代码抄写**：其中的 `logCircuitBreakerTrip()` 与 `reason_key: "node_rate_limited"` **全仓零命中**（`rg -S` 于非 md 文件），三处 `error` 文案与代码逐字不一致，且**遗漏了 IP 级 429 这一整类**。
+>
+> | 原文（错误） | 实现事实（`cloudflare/eqt-drm-api/src/routes/cert.ts`） |
+> |---|---|
+> | `"error": "Upstream CA traffic burst limit reached. Please retry shortly."` | `'Certificate authority request rate smoothed. Please retry shortly.'`（`:941`） |
+> | `"error": "Upstream CA service is temporarily degraded. Circuit breaker OPEN."` | `'Certificate authority is temporarily undergoing rate-limit cooldown. Please retry later.'`（`:959`） |
+> | `"error": "Cert provision rate limit exceeded for node. Please retry later."` | `'Certificate issuance rate limit exceeded (maximum 3 requests per 24 hours)'`（`:900`） |
+> | `"reason_key": "node_rate_limited"` | `'rate_limited'`（`:901`；IP 级为 `'ip_rate_limited'` `:925`） |
+> | `logCircuitBreakerTrip()` | **不存在**。断路器跳闸目前仅由 `console.warn` 表达；落库走 `logSystemError` |
+> | `"retry_after": 60`（写死） | 实为 `cbCheck.retryAfter`（**动态**，见 §3.1 改判块） |
+> | `"retry_after": 72412` | 实为 `nodeRetryAfter` / `ipRetryAfter`（**动态**剩余窗口秒数） |
+>
+> **教训**：这类「看起来更专业」的重写文案比旧文案更危险 —— 它让下一轮读者以为已核对过。**示例载荷必须从代码抄写，或明确标注「示意，非逐字」。**
+
 当多用户高频请求或上游 CA 服务降级触发网关流控与熔断时，系统的端到端流转表现如下：
 
-1. **云端网关拦截（Worker）**：
-   - 若短时间内突发脉冲请求耗尽令牌桶，`cert.ts:936` 返回 HTTP 429：
+1. **云端网关拦截（Worker，四层依次判定）**：
+   - **L1 节点级**（`cert.ts:898-903`，动态 `retry_after`）：
      ```json
      {
-       "error": "Upstream CA traffic burst limit reached. Please retry shortly.",
+       "error": "Certificate issuance rate limit exceeded (maximum 3 requests per 24 hours)",
+       "reason_key": "rate_limited",
+       "retry_after": 72412
+     }
+     ```
+   - **L2 IP 级**（`cert.ts:922-927`，动态 `retry_after`；**原文遗漏此项**）：
+     ```json
+     {
+       "error": "Too many certificate requests from this IP address (maximum 10 per 24 hours)",
+       "reason_key": "ip_rate_limited",
+       "retry_after": 72412
+     }
+     ```
+   - **L3 令牌桶**（`cert.ts:938-944`，秒级动态 `retry_after`）：
+     ```json
+     {
+       "error": "Certificate authority request rate smoothed. Please retry shortly.",
        "reason_key": "ca_traffic_smoothing",
        "retry_after": 6
      }
      ```
-   - 若上游 CA 连续失败触发断路器跳闸，`cert.ts:953` 返回 HTTP 429：
+   - **L4 断路器**（`cert.ts:956-967`，动态 `retry_after`）：
      ```json
      {
-       "error": "Upstream CA service is temporarily degraded. Circuit breaker OPEN.",
+       "error": "Certificate authority is temporarily undergoing rate-limit cooldown. Please retry later.",
        "reason_key": "ca_circuit_open",
        "retry_after": 60
      }
      ```
-   - 若单节点或单 IP 超过 24h 配额，返回动态剩余秒数的 HTTP 429：
-     ```json
-     {
-       "error": "Cert provision rate limit exceeded for node. Please retry later.",
-       "reason_key": "node_rate_limited",
-       "retry_after": 72412
-     }
-     ```
-   - 调用 `logRateLimitHit()` 或 `logCircuitBreakerTrip()` 异步记录 D1 `system_error_logs` 表。
+   - 上述四类 429 均通过 `logRateLimitHit()` / `logSystemError()` 异步记录 D1 `system_error_logs` 表（**不存在 `logCircuitBreakerTrip()`**）。
+   - ⚠️ **L4 的 `retry_after=60` 是「冷却剩余秒数」，但 HALF_OPEN 分支返回的是写死的 `15`**，且半开态无出口保障 —— 见上方更正声明第 2 条与 §3.1 改判块（R39-15）。
 2. **管理后台可观测性（Admin）**：
    - 管理员调用 `GET /api/v1/admin/error-logs?category=RATE_LIMIT_CERT_PROVISION` 可检索所有被阻断的请求明细与客户端 IP；
    - `GET /api/v1/admin/metrics` 聚合展示流控命中与熔断跳闸次数。
