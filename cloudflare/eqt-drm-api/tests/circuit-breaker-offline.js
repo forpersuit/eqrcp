@@ -1,9 +1,11 @@
 /**
  * Offline Unit Tests for Circuit Breaker and Token Bucket Rate Limiter
+ * Backed by real in-memory SQLite (node:sqlite) to rigorously test atomicity and concurrency.
  */
 
 const path = require('path');
 const fs = require('fs');
+const { DatabaseSync } = require('node:sqlite');
 
 const compiledCbPath = path.join(__dirname, 'compiled', 'circuit-breaker.js');
 const compiledTbPath = path.join(__dirname, 'compiled', 'token-bucket.js');
@@ -36,124 +38,53 @@ function assert(condition, label) {
   }
 }
 
-function makeMockDb() {
-  const circuitBreakers = new Map();
-  const tokenBuckets = new Map();
+class SqliteD1Mock {
+  constructor() {
+    this.db = new DatabaseSync(':memory:');
+    this.db.exec('PRAGMA foreign_keys = OFF');
+  }
 
-  return {
-    _circuitBreakers: circuitBreakers,
-    _tokenBuckets: tokenBuckets,
-    prepare(sql) {
-      return {
-        _binds: [],
-        bind(...args) {
-          this._binds = args;
-          return this;
-        },
-        async first() {
-          if (sql.includes('FROM circuit_breakers')) {
-            const name = this._binds[0];
-            return circuitBreakers.get(name) || null;
-          }
-          if (sql.includes('FROM token_buckets')) {
-            const key = this._binds[0];
-            return tokenBuckets.get(key) || null;
-          }
-          return null;
-        },
-        async run() {
-          if (sql.includes('INSERT INTO circuit_breakers') || sql.includes('INSERT OR REPLACE INTO circuit_breakers')) {
-            const name = this._binds[0];
-            const state = this._binds[1];
-            const failureCount = this._binds[2];
-            let successCount = 0;
-            let lastFailureTime = null;
-            let cooldownUntil = null;
-            let lastRetryAfter = 0;
-            let updatedAt = new Date().toISOString();
-
-            if (this._binds.length === 8) {
-              lastFailureTime = this._binds[4];
-              cooldownUntil = this._binds[5];
-              lastRetryAfter = this._binds[6];
-              updatedAt = this._binds[7];
-            } else if (this._binds.length === 7) {
-              successCount = this._binds[3];
-              cooldownUntil = this._binds[4];
-              lastRetryAfter = this._binds[5];
-              updatedAt = this._binds[6];
-            } else if (this._binds.length === 4) {
-              updatedAt = this._binds[3];
-            }
-
-            circuitBreakers.set(name, {
-              name,
-              state,
-              failure_count: failureCount,
-              success_count: successCount,
-              last_failure_time: lastFailureTime,
-              cooldown_until: cooldownUntil,
-              last_retry_after: lastRetryAfter,
-              updated_at: updatedAt
-            });
-            return { meta: { changes: 1 } };
-          }
-          if (sql.includes('UPDATE circuit_breakers')) {
-            if (sql.includes("SET state = 'HALF_OPEN'")) {
-              const updatedAt = this._binds[0];
-              const name = this._binds[1];
-              const row = circuitBreakers.get(name);
-              if (row) {
-                row.state = 'HALF_OPEN';
-                row.updated_at = updatedAt;
-              }
-            } else if (sql.includes("SET state = 'CLOSED'") || sql.includes("SET state = ?")) {
-              const state = this._binds.length === 4 ? this._binds[0] : 'CLOSED';
-              const failureCount = this._binds.length === 4 ? this._binds[1] : 0;
-              const updatedAt = this._binds.length === 4 ? this._binds[2] : this._binds[0];
-              const name = this._binds.length === 4 ? this._binds[3] : this._binds[1];
-              const row = circuitBreakers.get(name);
-              if (row) {
-                row.state = state;
-                row.failure_count = failureCount;
-                row.success_count = (row.success_count || 0) + 1;
-                row.cooldown_until = null;
-                row.last_retry_after = 0;
-                row.updated_at = updatedAt;
-              }
-            }
-
-            return { meta: { changes: 1 } };
-          }
-          if (sql.includes('INSERT OR REPLACE INTO token_buckets')) {
-            const key = this._binds[0];
-            const tokens = this._binds[1];
-            const lastRefill = this._binds[2];
-            const capacity = this._binds[3];
-            const refillRate = this._binds[4];
-            tokenBuckets.set(key, { key, tokens, last_refill: lastRefill, capacity, refill_rate: refillRate });
-            return { meta: { changes: 1 } };
-          }
-          if (sql.includes('UPDATE token_buckets')) {
-            const tokens = this._binds[0];
-            const lastRefill = this._binds[1];
-            const capacity = this._binds[2];
-            const refillRate = this._binds[3];
-            const key = this._binds[4];
-            tokenBuckets.set(key, { key, tokens, last_refill: lastRefill, capacity, refill_rate: refillRate });
-            return { meta: { changes: 1 } };
-          }
-          return { meta: { changes: 0 } };
+  _mk(sql, binds) {
+    return {
+      all: async () => {
+        try {
+          const stmt = this.db.prepare(sql);
+          return { results: stmt.all(...(binds || [])) };
+        } catch (e) {
+          return { results: [] };
         }
-      };
-    }
-  };
+      },
+      first: async () => {
+        try {
+          const stmt = this.db.prepare(sql);
+          const row = stmt.get(...(binds || []));
+          return row || null;
+        } catch (e) {
+          return null;
+        }
+      },
+      run: async () => {
+        try {
+          const stmt = this.db.prepare(sql);
+          const res = stmt.run(...(binds || []));
+          return { success: true, meta: { changes: res.changes, last_row_id: res.lastInsertRowid } };
+        } catch (e) {
+          return { success: false, error: e.message, meta: { changes: 0 } };
+        }
+      },
+      bind: (...args) => this._mk(sql, args)
+    };
+  }
+
+  prepare(sql) {
+    return this._mk(sql, []);
+  }
 }
 
 async function runTests() {
-  console.log('Running Circuit Breaker & Token Bucket Offline Tests...\n');
+  console.log('Running Circuit Breaker & Token Bucket Offline Tests (SQLite-backed)...\n');
 
-  const db = makeMockDb();
+  const db = new SqliteD1Mock();
   const env = { DB: db };
 
   // --- Test 1: Initial State is CLOSED ---
@@ -172,7 +103,7 @@ async function runTests() {
   // --- Test 4: Transition to HALF_OPEN after cooldown elapsed ---
   // Simulate time passing: set cooldown_until 1 second in the past
   const pastIso = new Date(Date.now() - 1000).toISOString();
-  db._circuitBreakers.get('test_cb').cooldown_until = pastIso;
+  db.db.prepare("UPDATE circuit_breakers SET cooldown_until = ? WHERE name = 'test_cb'").run(pastIso);
 
   const probeCheck = await canExecuteCircuit(env, 'test_cb');
   assert(probeCheck.allowed === true && probeCheck.state === 'HALF_OPEN', 'T4: Cooldown expiration transitions circuit to HALF_OPEN and allows probe request');
@@ -184,7 +115,7 @@ async function runTests() {
 
   // --- Test 6: Probe failure in HALF_OPEN trips back to OPEN with backoff ---
   // Force back to HALF_OPEN
-  db._circuitBreakers.get('test_cb').state = 'HALF_OPEN';
+  db.db.prepare("UPDATE circuit_breakers SET state = 'HALF_OPEN' WHERE name = 'test_cb'").run();
   await recordCircuitFailure(env, 'test_cb', undefined, false);
   const reOpenStatus = await getCircuitBreakerStatus(env, 'test_cb');
   assert(reOpenStatus.state === 'OPEN' && reOpenStatus.cooldown_until != null, 'T6: Failure during HALF_OPEN probe immediately trips back to OPEN with backoff');
@@ -197,7 +128,7 @@ async function runTests() {
   // --- Test 8: Token Bucket initial consumption ---
   const tbKey = 'tb_test_key';
   const tb1 = await consumeToken(env, tbKey, 3, 1); // capacity 3, 1 token/sec
-  assert(tb1.allowed === true && tb1.currentTokens === 2, 'T8: Token bucket initial consumption succeeds with capacity-1 tokens remaining');
+  assert(tb1.allowed === true && Math.round(tb1.currentTokens) === 2, 'T8: Token bucket initial consumption succeeds with capacity-1 tokens remaining');
 
   // --- Test 9: Rapid depletion of Token Bucket ---
   const tb2 = await consumeToken(env, tbKey, 3, 1);
@@ -207,10 +138,41 @@ async function runTests() {
 
   // --- Test 10: Token Bucket refill after time elapsed ---
   // Simulate 3 seconds elapsed
-  const tbEntry = db._tokenBuckets.get(tbKey);
-  tbEntry.last_refill = new Date(Date.now() - 3000).toISOString();
+  const past3sIso = new Date(Date.now() - 3000).toISOString();
+  db.db.prepare("UPDATE token_buckets SET last_refill = ? WHERE key = ?").run(past3sIso, tbKey);
   const tbRefilled = await consumeToken(env, tbKey, 3, 1);
   assert(tbRefilled.allowed === true, 'T10: Token bucket refills tokens after elapsed time and allows subsequent requests');
+
+  // --- Test 11: HALF_OPEN Single Probe Gate Concurrency (R39-5 / E5) ---
+  // Setup circuit in OPEN with expired cooldown
+  const cbConcKey = 'cb_concurrent_test';
+  await recordCircuitFailure(env, cbConcKey, 60, true);
+  db.db.prepare("UPDATE circuit_breakers SET cooldown_until = ? WHERE name = ?").run(pastIso, cbConcKey);
+
+  // Fire 20 concurrent probe requests
+  const probeResults = await Promise.all(
+    Array.from({ length: 20 }, () => canExecuteCircuit(env, cbConcKey))
+  );
+  const allowedProbes = probeResults.filter(r => r.allowed && r.state === 'HALF_OPEN');
+  const blockedProbes = probeResults.filter(r => !r.allowed && r.state === 'HALF_OPEN');
+  assert(
+    allowedProbes.length === 1 && blockedProbes.length === 19,
+    `T11: Concurrency gate allows exactly 1 probe (got ${allowedProbes.length}) and blocks 19 during HALF_OPEN`
+  );
+
+  // --- Test 12: Token Bucket Burst Concurrency (R39-2 / E2) ---
+  // Setup bucket with capacity 5, refill rate 10/60
+  const tbConcKey = 'tb_concurrent_test';
+  // Fire 10 concurrent requests at fresh bucket of capacity 5
+  const tbResults = await Promise.all(
+    Array.from({ length: 10 }, () => consumeToken(env, tbConcKey, 5, 10 / 60))
+  );
+  const allowedTb = tbResults.filter(r => r.allowed);
+  const blockedTb = tbResults.filter(r => !r.allowed && r.retryAfter > 0);
+  assert(
+    allowedTb.length === 5 && blockedTb.length === 5,
+    `T12: Token bucket burst concurrency allows exactly capacity=5 (got ${allowedTb.length}) and rejects 5 with retryAfter`
+  );
 
   console.log(`\nResults: ${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);

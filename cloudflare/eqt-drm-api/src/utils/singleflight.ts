@@ -57,6 +57,8 @@ export class SingleFlightGroup<T = any, C = any> {
       resolvePromise = resolve;
       rejectPromise = reject;
     });
+    // Prevent unhandled rejection warning in runtime when there are no followers awaiting the promise (R39-8)
+    promise.catch(() => {});
 
     this.flights.set(key, { promise, context });
 

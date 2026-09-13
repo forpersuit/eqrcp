@@ -47,13 +47,15 @@ function makeMockDb(opts = {}) {
   const rateLimits = new Map();
   const blacklists = opts.blacklists || [];
   const nodeKeys = new Map();
+  const circuitBreakers = new Map();
+  const tokenBuckets = new Map();
 
   return {
     _provisions: provisions,
     _rateLimits: rateLimits,
     _nodeKeys: nodeKeys,
-    _circuitBreakers: new Map(),
-    _tokenBuckets: new Map(),
+    _circuitBreakers: circuitBreakers,
+    _tokenBuckets: tokenBuckets,
     prepare(sql) {
       const stmt = {
         _sql: sql,
@@ -68,6 +70,46 @@ function makeMockDb(opts = {}) {
             const hit = blacklists.find(b => b.device_id === devId && b.active !== 0);
             return hit || null;
           }
+          if (sql.includes('UPDATE rate_limits') && sql.includes('RETURNING')) {
+            const key = this._binds[0];
+            const maxAttempts = this._binds[1];
+            const nowIso = this._binds[2];
+            const windowMs = this._binds[3];
+            const existing = rateLimits.get(key);
+            if (existing && existing.count < maxAttempts) {
+              const elapsed = Date.now() - new Date(existing.window_start).getTime();
+              if (elapsed <= windowMs) {
+                existing.count += 1;
+                return { count: existing.count, window_start: existing.window_start };
+              }
+            }
+            return null;
+          }
+          if (sql.includes('INSERT INTO rate_limits') && sql.includes('RETURNING')) {
+            const key = this._binds[0];
+            const nowIso = this._binds[1];
+            const windowMs = this._binds[4];
+            const existing = rateLimits.get(key);
+            if (!existing) {
+              rateLimits.set(key, { count: 1, window_start: nowIso });
+              return { count: 1, window_start: nowIso };
+            }
+            const elapsed = Date.now() - new Date(existing.window_start).getTime();
+            if (elapsed > windowMs) {
+              rateLimits.set(key, { count: 1, window_start: nowIso });
+              return { count: 1, window_start: nowIso };
+            }
+            return null;
+          }
+          if (sql.includes('UPDATE token_buckets') && sql.includes('RETURNING')) {
+            const key = this._binds[2];
+            const tb = tokenBuckets.get(key);
+            if (tb && tb.tokens >= 1.0) {
+              tb.tokens -= 1.0;
+              return { tokens: tb.tokens };
+            }
+            return null;
+          }
           if (sql.includes('FROM rate_limits')) {
             const key = this._binds[0];
             const val = rateLimits.get(key);
@@ -79,11 +121,11 @@ function makeMockDb(opts = {}) {
           }
           if (sql.includes('FROM circuit_breakers')) {
             const name = this._binds[0];
-            return stmt._db ? stmt._db._circuitBreakers.get(name) || null : null;
+            return circuitBreakers.get(name) || null;
           }
           if (sql.includes('FROM token_buckets')) {
             const key = this._binds[0];
-            return stmt._db ? stmt._db._tokenBuckets.get(key) || null : null;
+            return tokenBuckets.get(key) || null;
           }
           return null;
         },
@@ -164,9 +206,12 @@ function makeMockDb(opts = {}) {
           }
           if (sql.includes('UPDATE rate_limits SET count = MAX(0, count - 1)')) {
             const key = this._binds[0];
+            const windowStart = this._binds[1];
             const existing = rateLimits.get(key);
             if (existing) {
-              existing.count = Math.max(0, existing.count - 1);
+              if (!windowStart || existing.window_start === windowStart) {
+                existing.count = Math.max(0, existing.count - 1);
+              }
             }
             return { meta: { changes: 1 } };
           }
@@ -194,58 +239,60 @@ function makeMockDb(opts = {}) {
               updatedAt = this._binds[3];
             }
 
-            if (stmt._db) {
-              stmt._db._circuitBreakers.set(name, {
-                name,
-                state,
-                failure_count: failureCount,
-                success_count: successCount,
-                last_failure_time: lastFailureTime,
-                cooldown_until: cooldownUntil,
-                last_retry_after: lastRetryAfter,
-                updated_at: updatedAt
-              });
-            }
+            circuitBreakers.set(name, {
+              name,
+              state,
+              failure_count: failureCount,
+              success_count: successCount,
+              last_failure_time: lastFailureTime,
+              cooldown_until: cooldownUntil,
+              last_retry_after: lastRetryAfter,
+              updated_at: updatedAt
+            });
             return { meta: { changes: 1 } };
           }
           if (sql.includes('UPDATE circuit_breakers')) {
-            if (stmt._db) {
-              if (sql.includes("SET state = 'HALF_OPEN'") || sql.includes("SET state = ?")) {
-                if (sql.includes("failure_count = ?")) {
-                  const state = this._binds[0];
-                  const failureCount = this._binds[1];
-                  const updatedAt = this._binds[2];
-                  const name = this._binds[3];
-                  const row = stmt._db._circuitBreakers.get(name);
-                  if (row) {
-                    row.state = state;
-                    row.failure_count = failureCount;
-                    row.success_count = (row.success_count || 0) + 1;
-                    row.cooldown_until = null;
-                    row.last_retry_after = 0;
-                    row.updated_at = updatedAt;
-                  }
-                } else {
-                  const updatedAt = this._binds[0];
-                  const name = this._binds[1];
-                  const row = stmt._db._circuitBreakers.get(name);
-                  if (row) {
-                    row.state = 'HALF_OPEN';
-                    row.updated_at = updatedAt;
-                  }
+            if (sql.includes("SET state = 'HALF_OPEN'")) {
+              const updatedAt = this._binds[0];
+              const name = this._binds[1];
+              const checkTime = this._binds[2];
+              const row = circuitBreakers.get(name);
+              if (row && row.state === 'OPEN') {
+                const cdTime = row.cooldown_until ? new Date(row.cooldown_until).getTime() : 0;
+                const nowTime = checkTime ? new Date(checkTime).getTime() : Date.now();
+                if (!row.cooldown_until || nowTime >= cdTime) {
+                  row.state = 'HALF_OPEN';
+                  row.updated_at = updatedAt;
+                  return { meta: { changes: 1 } };
                 }
               }
+              return { meta: { changes: 0 } };
+            }
+            if (sql.includes("SET state = ?") || sql.includes("SET state = 'CLOSED'")) {
+              const state = this._binds[0];
+              const failureCount = this._binds[1];
+              const updatedAt = this._binds[2];
+              const name = this._binds[3];
+              const row = circuitBreakers.get(name);
+              if (row) {
+                row.state = state;
+                row.failure_count = failureCount;
+                row.success_count = (row.success_count || 0) + 1;
+                row.cooldown_until = null;
+                row.last_retry_after = 0;
+                row.updated_at = updatedAt;
+              }
+              return { meta: { changes: 1 } };
             }
             return { meta: { changes: 1 } };
           }
-          if (sql.includes('INSERT OR REPLACE INTO token_buckets')) {
+          if (sql.includes('INSERT OR IGNORE INTO token_buckets') || sql.includes('INSERT OR REPLACE INTO token_buckets')) {
             const key = this._binds[0];
-            const tokens = this._binds[1];
+            const capacity = this._binds[1];
             const lastRefill = this._binds[2];
-            const capacity = this._binds[3];
             const refillRate = this._binds[4];
-            if (stmt._db) {
-              stmt._db._tokenBuckets.set(key, { key, tokens, last_refill: lastRefill, capacity, refill_rate: refillRate });
+            if (!tokenBuckets.has(key)) {
+              tokenBuckets.set(key, { key, tokens: capacity, last_refill: lastRefill, capacity, refill_rate: refillRate });
             }
             return { meta: { changes: 1 } };
           }

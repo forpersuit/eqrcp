@@ -11,6 +11,7 @@
  */
 const path = require('path');
 const fs = require('fs');
+const { DatabaseSync } = require('node:sqlite');
 
 const errorLoggerPath = path.join(__dirname, 'compiled', 'error-logger.js');
 const rateLimitPath = path.join(__dirname, 'compiled', 'rate-limit.js');
@@ -48,61 +49,84 @@ function assertEqual(actual, expected, msg) {
   }
 }
 
-// --- Mock D1 ---
+// --- Mock D1 backed by SQLite ---
 class MockD1 {
   constructor() {
     this.rows = [];
     this.lastSQL = '';
     this.lastBinds = [];
-    this.rateLimits = new Map();
+    this.db = new DatabaseSync(':memory:');
+    this.db.exec('PRAGMA foreign_keys = OFF');
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS rate_limits (
+        key TEXT PRIMARY KEY,
+        count INTEGER NOT NULL DEFAULT 1,
+        window_start TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS system_error_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        level TEXT NOT NULL,
+        category TEXT NOT NULL,
+        message TEXT NOT NULL,
+        metadata TEXT,
+        trace_id TEXT,
+        created_at TEXT
+      );
+    `);
+  }
+
+  get rateLimits() {
+    const self = this;
+    return {
+      get(key) {
+        const row = self.db.prepare('SELECT count, window_start FROM rate_limits WHERE key = ?').get(key);
+        return row || null;
+      },
+      set(key, val) {
+        self.db.prepare('INSERT OR REPLACE INTO rate_limits (key, count, window_start) VALUES (?, ?, ?)').run(key, val.count, val.window_start);
+      }
+    };
+  }
+
+  _mk(sql, binds) {
+    const self = this;
+    return {
+      all: async () => {
+        self.rows.push({ sql, binds });
+        try {
+          const stmt = self.db.prepare(sql);
+          return { results: stmt.all(...binds) };
+        } catch (e) {
+          return { results: [] };
+        }
+      },
+      first: async () => {
+        self.rows.push({ sql, binds });
+        try {
+          const stmt = self.db.prepare(sql);
+          const row = stmt.get(...binds);
+          return row || null;
+        } catch (e) {
+          return null;
+        }
+      },
+      run: async () => {
+        self.rows.push({ sql, binds });
+        try {
+          const stmt = self.db.prepare(sql);
+          const res = stmt.run(...binds);
+          return { success: true, meta: { changes: res.changes } };
+        } catch (e) {
+          return { success: false, error: e.message, meta: { changes: 0 } };
+        }
+      },
+      bind: (...args) => self._mk(sql, args)
+    };
   }
 
   prepare(sql) {
     this.lastSQL = sql;
-    const self = this;
-    const handleRun = async (binds) => {
-      self.rows.push({ sql, binds });
-      if (sql.includes('INSERT OR REPLACE INTO rate_limits')) {
-        const [key, nowIso] = binds;
-        self.rateLimits.set(key, { count: 1, window_start: nowIso });
-      } else if (sql.includes('UPDATE rate_limits SET count = count + 1')) {
-        const [key] = binds;
-        const existing = self.rateLimits.get(key);
-        if (existing) {
-          existing.count += 1;
-        }
-      } else if (sql.includes('UPDATE rate_limits SET count = MAX(0, count - 1)')) {
-        const [key] = binds;
-        const existing = self.rateLimits.get(key);
-        if (existing) {
-          existing.count = Math.max(0, existing.count - 1);
-        }
-      }
-      return { meta: { changes: 1 } };
-    };
-
-    const handleFirst = async (binds) => {
-      if (sql.includes('FROM rate_limits WHERE key = ?')) {
-        const [key] = binds;
-        const val = self.rateLimits.get(key);
-        return val ? { ...val } : null;
-      }
-      return null;
-    };
-
-    return {
-      run: () => handleRun([]),
-      first: () => handleFirst([]),
-      all: async () => ({ results: [] }),
-      bind: (...binds) => {
-        self.lastBinds = binds;
-        return {
-          run: () => handleRun(binds),
-          first: () => handleFirst(binds),
-          all: async () => ({ results: [] }),
-        };
-      },
-    };
+    return this._mk(sql, []);
   }
 }
 
@@ -365,6 +389,63 @@ console.log('\n=== logSystemError ===');
     await r3.release(); // Should be a no-op because r3 was already released
     const stateAfterDoubleRelease = db.rateLimits.get(key);
     assertEqual(stateAfterDoubleRelease.count, 3, 'count does not double-decrement on duplicate release call');
+  }
+
+  // Test 12: Atomic Reservation Concurrency Under Exhaustion (R39-1 / E1)
+  {
+    const db = new MockD1();
+    const env = makeEnv(db);
+    const key = 'test_conc:node_exhaustion';
+    const windowMs = 60 * 1000;
+    const maxAttempts = 3;
+
+    // Pre-seed count = 2 (1 slot remaining)
+    const nowIso = new Date().toISOString();
+    db.rateLimits.set(key, { count: 2, window_start: nowIso });
+
+    // 10 concurrent requests race for the single remaining slot
+    const results = await Promise.all(
+      Array.from({ length: 10 }, () => reserveD1RateLimit(env, key, maxAttempts, windowMs))
+    );
+
+    const allowed = results.filter(r => r.allowed);
+    const rejected = results.filter(r => !r.allowed && r.retryAfter > 0);
+
+    assert(
+      allowed.length === 1 && rejected.length === 9,
+      `T12: Concurrency test allows exactly 1 slot (got ${allowed.length}) and rejects 9 with retryAfter`
+    );
+    const finalCount = db.rateLimits.get(key).count;
+    assertEqual(finalCount, 3, 'T12: Final DB count is exactly maxAttempts=3 (no over-increment inflation)');
+  }
+
+  // Test 13: Window-Guarded Rollback Protection (R39-3 / E3)
+  {
+    const db = new MockD1();
+    const env = makeEnv(db);
+    const key = 'test_guard:window_isolation';
+    const windowMs = 60 * 1000;
+    const maxAttempts = 3;
+
+    // Window 1: Reserve a slot
+    const rOld = await reserveD1RateLimit(env, key, maxAttempts, windowMs);
+    assert(rOld.allowed === true, 'rOld reserved in Window 1');
+    const oldWindowStart = rOld.windowStart;
+
+    // Simulate time advancing to Window 2: New window created with count = 1
+    const newWindowStart = new Date(Date.now() + 120000).toISOString();
+    db.rateLimits.set(key, { count: 1, window_start: newWindowStart });
+
+    // Late release of rOld from Window 1 arrives
+    await rOld.release();
+
+    // Verify: Window 2's count must NOT be decremented to 0
+    const stateAfterLateRelease = db.rateLimits.get(key);
+    assertEqual(
+      stateAfterLateRelease.count,
+      1,
+      'T13: Late release from expired window does NOT erode new window count (window_start guard works)'
+    );
   }
 
   // ============================================================

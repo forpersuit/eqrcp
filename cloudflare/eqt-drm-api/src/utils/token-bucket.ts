@@ -53,7 +53,29 @@ export async function consumeToken(
   const now = Date.now();
   const nowIso = new Date(now).toISOString();
 
-  const row = await env.DB.prepare(
+  // 1. Ensure bucket row exists (initial tokens = capacity)
+  await env.DB.prepare(`
+    INSERT OR IGNORE INTO token_buckets (key, tokens, last_refill, capacity, refill_rate)
+    VALUES (?, ?, ?, ?, ?)
+  `).bind(key, capacity, nowIso, capacity, refillRatePerSec).run();
+
+  // 2. Atomically calculate refreshed tokens and decrement by 1.0 (R39-2)
+  const updateRes = await env.DB.prepare(`
+    UPDATE token_buckets
+    SET
+      tokens = MIN(capacity, tokens + MAX(0.0, (julianday(?) - julianday(last_refill)) * 86400.0) * refill_rate) - 1.0,
+      last_refill = ?
+    WHERE key = ?
+      AND MIN(capacity, tokens + MAX(0.0, (julianday(?) - julianday(last_refill)) * 86400.0) * refill_rate) >= 1.0
+    RETURNING tokens;
+  `).bind(nowIso, nowIso, key, nowIso).first<{ tokens: number }>();
+
+  if (updateRes) {
+    return { allowed: true, retryAfter: 0, currentTokens: updateRes.tokens };
+  }
+
+  // 3. Bucket has less than 1.0 token -> compute dynamic retryAfter
+  const cur = await env.DB.prepare(
     'SELECT tokens, last_refill, capacity, refill_rate FROM token_buckets WHERE key = ?'
   ).bind(key).first<{
     tokens: number;
@@ -62,39 +84,11 @@ export async function consumeToken(
     refill_rate: number;
   }>();
 
-  if (!row) {
-    // Initial bucket creation: start with capacity - 1 (1 token consumed)
-    const initialTokens = Math.max(0, capacity - 1);
-    await env.DB.prepare(`
-      INSERT OR REPLACE INTO token_buckets (key, tokens, last_refill, capacity, refill_rate)
-      VALUES (?, ?, ?, ?, ?)
-    `).bind(key, initialTokens, nowIso, capacity, refillRatePerSec).run();
-    return { allowed: true, retryAfter: 0, currentTokens: initialTokens };
-  }
+  const curTokens = cur?.tokens ?? 0;
+  const curRefillRate = cur?.refill_rate || refillRatePerSec || (10 / 60);
+  const needed = Math.max(0, 1.0 - curTokens);
+  const retryAfter = Math.max(1, Math.ceil(needed / curRefillRate));
 
-  const elapsedSec = Math.max(0, (now - new Date(row.last_refill).getTime()) / 1000);
-  const currentCapacity = capacity || row.capacity;
-  const currentRefillRate = refillRatePerSec || row.refill_rate;
-
-  const refreshedTokens = Math.min(currentCapacity, row.tokens + elapsedSec * currentRefillRate);
-
-  if (refreshedTokens >= 1.0) {
-    const remainingTokens = refreshedTokens - 1.0;
-    await env.DB.prepare(`
-      UPDATE token_buckets
-      SET tokens = ?, last_refill = ?, capacity = ?, refill_rate = ?
-      WHERE key = ?
-    `).bind(remainingTokens, nowIso, currentCapacity, currentRefillRate, key).run();
-    return { allowed: true, retryAfter: 0, currentTokens: remainingTokens };
-  } else {
-    const needed = 1.0 - refreshedTokens;
-    const retryAfter = Math.max(1, Math.ceil(needed / currentRefillRate));
-    // Save updated refreshedTokens without consuming
-    await env.DB.prepare(`
-      UPDATE token_buckets
-      SET tokens = ?, last_refill = ?, capacity = ?, refill_rate = ?
-      WHERE key = ?
-    `).bind(refreshedTokens, nowIso, currentCapacity, currentRefillRate, key).run();
-    return { allowed: false, retryAfter, currentTokens: refreshedTokens };
-  }
+  return { allowed: false, retryAfter, currentTokens: curTokens };
 }
+

@@ -61,6 +61,23 @@ export async function canExecuteCircuit(
   name: string
 ): Promise<CircuitCheckResult> {
   await ensureCircuitBreakersTable(env);
+  const now = Date.now();
+  const nowIso = new Date(now).toISOString();
+
+  // 1. Atomic CAS transition: OPEN -> HALF_OPEN (Single Probe Gate, R39-5)
+  // Only the single caller that transitions state from OPEN to HALF_OPEN gets the probe privilege
+  const casRes = await env.DB.prepare(`
+    UPDATE circuit_breakers
+    SET state = 'HALF_OPEN', updated_at = ?
+    WHERE name = ? AND state = 'OPEN' AND (cooldown_until IS NULL OR cooldown_until <= ?)
+  `).bind(nowIso, name, nowIso).run();
+
+  if (casRes.meta.changes === 1) {
+    console.log(`[CIRCUIT-BREAKER] Circuit '${name}' cooldown elapsed. Single probe granted (transitioned to HALF_OPEN).`);
+    return { allowed: true, state: 'HALF_OPEN', retryAfter: 0 };
+  }
+
+  // 2. Inspect current circuit state
   const row = await env.DB.prepare(
     'SELECT name, state, failure_count, success_count, cooldown_until, last_retry_after FROM circuit_breakers WHERE name = ?'
   ).bind(name).first<CircuitBreakerRecord>();
@@ -69,29 +86,15 @@ export async function canExecuteCircuit(
     return { allowed: true, state: 'CLOSED', retryAfter: 0 };
   }
 
-  const now = Date.now();
-  const cooldownTime = row.cooldown_until ? new Date(row.cooldown_until).getTime() : 0;
-
-  if (row.state === 'OPEN') {
-    if (now < cooldownTime) {
-      const remainingSec = Math.max(1, Math.ceil((cooldownTime - now) / 1000));
-      return { allowed: false, state: 'OPEN', retryAfter: remainingSec };
-    }
-
-    // Cooldown elapsed: Transition to HALF_OPEN to allow probe request
-    const nowIso = new Date(now).toISOString();
-    await env.DB.prepare(
-      "UPDATE circuit_breakers SET state = 'HALF_OPEN', updated_at = ? WHERE name = ?"
-    ).bind(nowIso, name).run();
-    return { allowed: true, state: 'HALF_OPEN', retryAfter: 0 };
-  }
-
   if (row.state === 'HALF_OPEN') {
-    // Probe request is allowed through
-    return { allowed: true, state: 'HALF_OPEN', retryAfter: 0 };
+    // Another probe request is already in-flight; block concurrent callers until probe finishes (R39-5)
+    return { allowed: false, state: 'HALF_OPEN', retryAfter: 15 };
   }
 
-  return { allowed: true, state: 'CLOSED', retryAfter: 0 };
+  // Still in OPEN state and cooldown not expired
+  const cooldownTime = row.cooldown_until ? new Date(row.cooldown_until).getTime() : 0;
+  const remainingSec = Math.max(1, Math.ceil((cooldownTime - now) / 1000));
+  return { allowed: false, state: 'OPEN', retryAfter: remainingSec };
 }
 
 /**

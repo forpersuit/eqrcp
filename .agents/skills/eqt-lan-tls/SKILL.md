@@ -970,12 +970,12 @@ WantedBy=multi-user.target
 > **对象**：闭环 `docs/plan/lan-tls-google-ca-limit-closure-and-failover-plan.md` 阶段二规划。
 > **成果**：
 > - **【142】⚠️ 两阶段防损记账模型 (2PC Hold & Release · `src/utils/rate-limit.ts`)**：
->   - 废除无条件扣额，引入 `reserveD1RateLimit(env, key, maxAttempts, windowMs)` 与 `releaseD1RateLimit(env, key)`。
->   - 凡因 CSR 解析失败 (400)、上游 429 跳闸、网络超时或 DNS 写入异常中断的置备流程，在 `finally` 中通过 `release()` 自动回退计数 (`MAX(0, count - 1)`)；
->   - 只有成功发证且落盘审计后才将 `provisionCommitted` 设为 `true`（确认扣减），彻底杜绝“网络偶发抖动重试将合法用户 24h 配额耗光”的缺陷。
+>   - 废除无条件扣额，引入单语句原子化 `reserveD1RateLimit(env, key, maxAttempts, windowMs)` 与带 `window_start` 守卫的 `releaseD1RateLimit(env, key, windowStart)`。
+>   - 凡因 CSR 解析失败 (400)、上游 429 跳闸、网络超时或 DNS 写入异常中断的置备流程，在 `finally` 中通过 `release()` 条件回退计数 (`WHERE count > 0 AND window_start = ?`)；
+>   - 只有成功发证且落盘审计后才确认扣减；在 `finally` 可达的前提下，有效防护“网络偶发抖动重试消耗合法用户配额”（极少数 Worker 运行环境硬终止由 24h 自然窗口重置兜底）。
 > - **【143】⚠️ SingleFlight 并发请求合并与去重 (`src/utils/singleflight.ts` & `src/routes/cert.ts`)**：
 >   - 基于 Go 语言标准 `singleflight.Group` 思想实现边缘网关内存层去重；
->   - 同一 NodeID 的并发置备请求严格合并至同一个在途 Promise，外部 CA `newOrder` 网络调用与 DNS 写入严格仅执行 1 次，所有等待者毫秒级共享独立 Response；
+>   - **效力范围**：在同一 Worker isolate 内存生命周期内，同一 NodeID 的并发置备请求合并至同一个在途 Promise，外部 CA `newOrder` 网络调用与 DNS 写入在同 isolate 仅执行 1 次，所有等待者毫秒级共享独立 Response；跨 isolate 并发由 D1 单 SQL 语句行级写锁原子预占拦截兜底；
 >   - 具备冲突防御机制：并发请求若携带不同 CSR（恶意并发竞争同一 NodeID），立即以 409 `concurrent_csr_conflict` 安全阻断，杜绝 DNS TXT 记录污染与 CA 脏订单。
 
 

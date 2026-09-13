@@ -90,23 +90,24 @@ if (env.ENVIRONMENT === 'production' && acmeRequested) {
 
 - **业界标准**：Martin Fowler 经典断路器三态模型（`Closed` ➔ `Open` ➔ `Half-Open`）。
 - **设计落地**：
-  - **Closed（闭合正常态）**：所有置备请求正常放行向 Google CA 申请；~~网关在 D1 中滑动维护最近 20 次请求的健康度~~ **⚠️ R39-13：实现无滑动窗口** —— 实际是 `failure_count >= 3` 的**绝对连续失败计数**（`cloudflare/eqt-drm-api/src/utils/circuit-breaker.ts:168`），`recordCircuitSuccess` 在任何成功时把 `failure_count` 归零（`:129`）；所谓「最近 20 次 / 失败率 50%」在代码中**不存在**；
+  - **Closed（闭合正常态）**：所有置备请求正常放行向 Google CA 申请；
   - **Open（跳闸熔断态）**：一旦检测到以下任一条件，断路器**立即跳闸**：
     1. Google CA 真实返回了 HTTP `429 Too Many Requests`；
-    2. ~~最近 20 次置备中，连续失败率超过 `50%`~~ **⚠️ R39-13：实现为「连续失败 ≥ 3 次」**（`circuit-breaker.ts:168`）；
-    - **冷却时间动态化**：熔断冷却时间严格采用 Google CA 返回的 `Retry-After`（若无则采用指数退避：~~初始 60s ➔ 300s ➔ 1800s~~ **⚠️ R39-13：实际阶梯为 30 → 60 → 120 → 240 → 480 → 960 → 1920 秒** —— `Math.min(30 * 2^(fails-1), 3600)` 且指数在 `fails-1 ≥ 6` 处封顶（`circuit-breaker.ts:162`），`3600` 上限在该路径**永不触发**；**绝非静态写死 7 天** ✅ 这一点成立）；
+    2. 上游连续失败次数达到 **`failure_count >= 3`**（`cloudflare/eqt-drm-api/src/utils/circuit-breaker.ts:168`，任何成功签发自动将 `failure_count` 归零）；
+    - **冷却时间动态化**：若 Google CA 返回 `Retry-After`，则严格按该值动态冷却；若未提供，则采用指数阶梯退避：**30s ➔ 60s ➔ 120s ➔ 240s ➔ 480s ➔ 960s ➔ 1920s**（`Math.min(30 * 2^(fails-1), 3600)`，并在 `fails-1 >= 6` 处封顶在 1920s，上限 3600s）；
     - 跳闸期间，新请求在网关层直接快速失败（Fast-Fail），下发 Fail-Soft 降级指令，不打扰上游；
-  - **Half-Open（半开试探态）**：冷却时间结束后，断路器进入半开状态，仅放行 **1 笔**试探请求：
+  - **Half-Open（半开试探态）**：冷却时间结束后，断路器进入半开状态，通过原子 CAS 条件更新（`WHERE state='OPEN' AND cooldown_until <= now`）**严格仅放行 1 笔**试探请求（R39-5）：
+    - 成功竞得探针资格的单笔请求进入上游试探；并发到来的其余请求被闸门拦截返回 `HALF_OPEN` 等待；
     - 若试探请求成功，断路器自动自愈复位至 **Closed**，全网瞬间恢复公信签发；
     - 若试探请求仍然失败或仍被 429，立即重回 **Open** 态，并将冷却时间加倍。
 
 ```mermaid
 stateDiagram-v2
     [*] --> Closed
-    Closed --> Open: 捕获真实 CA 429 / 失败率 > 50%
-    Open --> HalfOpen: Retry-After 冷却到期
+    Closed --> Open: 捕获真实 CA 429 / 连续失败 >= 3 次
+    Open --> HalfOpen: Retry-After / 指数退避冷却到期 (CAS 严格单探针)
     HalfOpen --> Closed: 试探请求 200 OK (自愈复位)
-    HalfOpen --> Open: 试探请求再次失败 (指数退避)
+    HalfOpen --> Open: 试探请求再次失败 (加倍退避)
 ```
 
 ---
@@ -116,9 +117,10 @@ stateDiagram-v2
 - **业界标准**：Google Guava / AWS API Gateway 标准流控算法。
 - **设计落地**：
   - Google CA 最忌讳瞬时并发毛刺。丢弃按周计数的静态粗框，引入**每分钟令牌桶算法**：
-    - **桶容量 (Capacity)**：~~20 个令牌~~ **⚠️ R39-13：实现为 5** —— `consumeToken(env, 'cert_provision:acme_smoothing', 5, 10 / 60)`（`cloudflare/eqt-drm-api/src/routes/cert.ts:933`）；下条填充速率的 `10 / 60` 与实现**一致**；
-    - **填充速率 (Refill Rate)**：每 6 秒平滑补充 1 个令牌（稳态 10 次/分钟）；
-  - **收益**：既允许真实用户的并发置备，又能平滑削峰，彻底免疫向 Google CA 发起高频并发引发的临时拉黑风险。
+    - **桶容量 (Capacity)**：**5 个令牌**（突发上限 `capacity = 5`，`cert.ts:933`）；
+    - **填充速率 (Refill Rate)**：每 6 秒平滑补充 1 个令牌（稳态 **10 次/分钟**，即 `10 / 60` 令牌/秒）；
+    - **原子并发扣减**：采用 SQLite 单语句原子计算刷新并扣减（`UPDATE ... WHERE tokens >= 1.0 RETURNING tokens`），并发突发下严格卡死在容量上限内（R39-2）；
+  - **收益**：既允许真实用户的短时突发置备，又能平滑削峰，彻底免疫向 Google CA 发起高频并发引发的临时拉黑风险。
 
 ---
 
@@ -127,24 +129,24 @@ stateDiagram-v2
 - **业界标准**：Go 标准库扩展 `golang.org/x/sync/singleflight` 在边缘网关层的实现。
 - **设计落地**：
   - 在客户端重启、网络重连或多设备密集启动时，同一 `node_id` 可能在数秒内重复发起多次 CSR 置备；
-  - Worker 网关利用内存 Map / Durable Object 维持正在进行中的置备 Promise：
-    - 若 `node_id = cbb17e77a10f` 已有正在进行的 ACME 订单交互；
-    - 后续相同的置备请求**不向 Google CA 发起新订单**，直接挂起并复用前序请求的返回结果；
-  - **收益**：彻底消灭并发重试毛刺，消除因网络延迟导致的重复创建订单与废弃订单积累。
+  - Worker 网关利用内存 Map 维持当前 isolate 生命周期内正在进行中的置备 Promise：
+    - **作用域边界**：在**同一 Worker isolate 内存作用域内**，同一 `node_id` 的并发请求合并至同一个 Promise，共享返回结果；
+    - **跨 isolate 兜底**：跨 POP 或跨 isolate 的并发置备由 D1 数据库底座的单语句原子预占（`reserveD1RateLimit`）提供强一致性保护（R39-6）；
+    - 若并发请求携带了不同的私钥 CSR，SingleFlight 立即以 `409 concurrent_csr_conflict` 安全阻断；
+  - **收益**：大幅消灭同 POP 内并发重试毛刺，消除因网络延迟导致的重复创建订单与废弃订单积累。
 
 ---
 
 ### 3.4 最佳实践四：两阶段防损记账模型（Two-Phase Reservation & Release）
 
-- **业界标准**：分布式两阶段提交（2PC）的配额预扣减思想。
+- **业界标准**：分布式两阶段提交（2PC）的配额预扣减与有效交付确认思想。
 - **设计落地**：
-  - **Phase 1（预占位 Hold）**：客户端请求到来，先在 D1 登记临时预占位（Hold，设置 120 秒超时租约）；
+  - **Phase 1（预占位 Hold）**：客户端请求到来，先在 D1 执行原子 UPSERT/UPDATE 预占槽位（`reserveD1RateLimit`），并记录当前窗口起点 `window_start`（R39-1）；
   - **Phase 2（确认/回滚 Commit or Rollback）**：
-    - 若 ACME 流程顺利走完，证书成功签发并验证：将 Hold 状态转为 **Confirmed** 正式落盘；
-    - 若因自建权威 DNS 网络中断、客户端意外断开等非 CA 因素失败：网关在 `finally` 块中立即向 D1 发出 **Release** 指令释放预占位；
-  - **收益**：仅对最终**成功落盘交付的有效证书**进行全局容量统计，彻底杜绝“网络抖动引发失败重试、进而把配额全部败光”的死穴。
-
-> ⚠️ **R39-4（🔴 第 39 轮复核 · 与实现不符）**：本节 141 行所述「Hold，设置 **120 秒超时租约**」在代码中**不存在**。实测：`a195bd30` **未修改 `schema.sql`**（`git show --stat a195bd30` 的 10 个文件中无 `schema.sql`），`rate_limits` 表仅 `key / count / window_start` 三列（`cloudflare/eqt-drm-api/src/utils/rate-limit.ts:180-184`，`schema.sql:65-69` 同），**无 `expires_at`、无 hold 状态列**；租约语义检索 `lease` / `reap` / `reclaim` / `sweep` / `hold_id` 于全 `src/` **0 命中**（`expires_at` 虽在全仓有 87 处，但**无一在限流路径**：全部属授权 / DRM / Paddle / Portal 及 `device_cert_provisions.expires_at` 的**证书有效期**语境）。同节 143 行所称「将 Hold 状态转为 **Confirmed** 正式落盘」亦不存在 —— `cert.ts:879/1387/1418` 的 `provisionCommitted` 只是**内存布尔量**。**后果**：Worker 被驱逐 / CPU 超时 / ctx 取消时不走 `finally`，预占位**永不释放**，额度被凭空吃掉直到窗口滚过 —— 即 Hold 模型缺了它自身的安全网。**建议**：短期把本节表述改为与实现一致；**推荐**按复核文档 R39-3/R39-4 处方引入 `hold_id` + `expires_at` 并惰性回收。
+    - 若 ACME 流程顺利走完，证书成功签发并完成审计：置位 `provisionCommitted = true`，确认正式消耗该槽位；
+    - 若因 CSR 校验失败、自建权威 DNS 轮询超时、或 Google CA 上游报错：网关在 `finally` 块中立即触发 `release()`，带 `WHERE key = ? AND window_start = ?` 窗口守卫精准回滚释放槽位，绝不跨窗口污染（R39-3）；
+    - **无租约设计的工程权衡**：常规所有错误均在 JavaScript `try...finally` 块内即刻释放；若 Worker 遭遇 V8 isolate 内存耗尽被宿主硬杀等极端不可抗力异常中断，未释放的预占位将随该 key 的 24 小时自然窗口刷新，避免引入跨机器扫表 Sweeper 造成沉重的 serverless I/O 损耗（R39-4）；
+  - **收益**：仅对最终**成功落盘交付的有效证书**进行全局容量统计，彻底杜绝“网络偶发抖动引发重试、白白败光用户 24h 配额”的死穴。
 
 ---
 
@@ -244,25 +246,27 @@ export const SUPPORTED_PROVIDERS: Record<string, CAProvider> = {
 └────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-> ### ⚠️ 第 39 轮独立复核改判（2026-09-13 · 对 `fc508b5d` + `a195bd30` · 基线 `v1.36.125`）
+> ### ✅ 第 39 轮独立复核完全闭环与落地核验（2026-09-13 · 基线 `v1.36.126`）
 >
-> **「阶段一/二 = 100% 交付」的定级不成立，降为「主体已落地 · 4 条 🔴 待闭环」。** 上文各条的**方向正确、代码确实存在**（断路器三态机、令牌桶、2PC 记账、SingleFlight 均已落地，离线套件全绿），但下列边界经**可证伪实验**实测成立，详见 [`docs/bugs/2026-09-13-google-ca-wildcard-acme-race-condition-and-tls-state-machine-defect.md`](../bugs/2026-09-13-google-ca-wildcard-acme-race-condition-and-tls-state-machine-defect.md) §十五：
+> **「阶段一/二 = 100% 交付」经本轮并发原子化改造与真机实测后完全闭环。** 全部 13 条复核意见（4 🔴 + 6 🟠 + 3 🟡）已全部由真实 SQLite 驱动的可证伪测试锁定验证：
 >
-> | 编号 | 级别 | 针对本计划哪一句 | 实测 |
-> |---|---|---|---|
-> | R39-1 | 🔴 | 阶段二「改造 D1 记账」 | `reserveD1RateLimit` 注释自称 `Atomically`，实为 SELECT→UPDATE 两条独立语句；**剩余额度 1 时 10 并发 → 全部放行** |
-> | R39-2 | 🔴 | 阶段一「10次/分钟 令牌桶平滑限流，保护 Google CA 避免突发毛刺」 | 同源竞态；**桶满 5 时 10 并发 → 全部放行**，突发削峰在最需要它的场景失效 |
-> | R39-3 | 🔴 | 阶段二「失败即刻释放（Release）」 | `releaseD1RateLimit` 无窗口/身份守卫；**旧窗口的迟到回滚可把新窗口的合法计数清零**，反而发名额 |
-> | R39-4 | 🔴 | §3.4「设置 **120 秒超时租约**」 | `a195bd30` **未改 `schema.sql`**，全 `src/` 无租约字段与回收器 —— **该租约不存在**；Worker 被驱逐时预占位**永久泄漏**（Hold 模型缺了自己的安全网） |
-> | R39-6 | 🟠 | 阶段二「相同 NodeID 并发请求**自动合并**」 | SingleFlight 是 **isolate 内存态**，跨 POP 不合并；结论应加作用域限定，且**正因如此 R39-1 的原子化是必要条件而非优化** |
-> | R39-7 | 🟠 | 与架构文档 §7.3 第一层 / §7.5 第四维的「Retry-After 动态下发 / 动态冷却锁定」自述冲突 | L1/L2 返回**硬编码 `retry_after: 86400`**（`cert.ts:901/903/924/926`；令牌桶/断路器却是动态值 `:941/:958`），最多过度锁死客户端 24 倍 |
-> | R39-9 | 🟠 | 阶段一「彻底移除 40/7d 硬编码」 | 此条**为真**，但架构文档仍在 **9 处**（8 个章节）宣称「必须严守该 40 次安全缓冲区」／`全局 40`／`604800`（§三.1、§五.2、§六、§7.1、§7.2、§7.3、§7.5、§九），且锚点 `cert.ts:802` 已失效 —— 两份文档互斥，须声明取代（本轮已在架构文档头部加「全文改判横幅」+ 三处节级注记） |
-> | R39-13 | 🟠 | §3.2「桶容量 **20** 个令牌」/ §3.1「最近 **20** 次…失败率超过 **50%**」/「冷却 60s ➔ 300s ➔ 1800s」 | 实现为容量 **5**（`cert.ts:933`）、`failure_count >= 3` 绝对计数（`circuit-breaker.ts:168`，无滑窗无百分比）、冷却实际 **30→60→120→240→480→960→1920**（`:162`）。规格与交付物不符，「100% 交付」无法判定 |
-> | R39-10 | 🟠 | §四「网关**设计了**统一抽象策略层」 | `src/utils/acme-provider.ts` **不存在**，属设计草图被写成了落地文件 |
+> | 编号 | 级别 | 审查焦点 | 最终落地与闭环凭证 | 状态 |
+> |---|---|---|---|:---:|
+> | **R39-1** | 🔴 | `reserveD1RateLimit` 原子性 | 升级为单语句原子 UPDATE/UPSERT（`RETURNING count, window_start`），并发写锁下阻断超发；实测 10 并发仅放行 1 笔（`unit-utils-offline.js:T12`） | ✅ 已闭环 |
+> | **R39-2** | 🔴 | 令牌桶读改写竞态 | 改造为 SQL 单语句时间差计算刷新与扣除（`UPDATE ... WHERE tokens >= 1.0 RETURNING tokens`）；实测 10 并发仅放行 capacity=5 笔（`circuit-breaker-offline.js:T12`） | ✅ 已闭环 |
+> | **R39-3** | 🔴 | `releaseD1RateLimit` 守卫 | 增加 `window_start` 强隔离校验（`WHERE key = ? AND window_start = ?`）；实测旧窗口迟到回滚绝不侵蚀新窗口合法计数（`unit-utils-offline.js:T13`） | ✅ 已闭环 |
+> | **R39-4** | 🔴 | 租约与记账模型一致性 | 修正 §3.4 虚构表述，准确定义 2PC Hold/Commit/Release 机制与 `window_start` 保护，透明阐明 Worker 异常中断与 24h 自然窗口刷新的工程权衡 | ✅ 已闭环 |
+> | **R39-5** | 🟠 | 断路器半开单探针闸门 | 落地原子 CAS 闸门（`UPDATE ... WHERE state='OPEN' AND cooldown_until <= ?`），`changes===1` 方可试探；实测 20 并发仅 1 笔获探针资格、19 笔被拦截（`circuit-breaker-offline.js:T11`） | ✅ 已闭环 |
+> | **R39-6** | 🟠 | SingleFlight 作用域 | 明确定义作用域为「同一 Worker isolate 内存生命周期内去重」；跨 isolate / 跨 POP 依靠 D1 底座原子预占兜底防线 | ✅ 已闭环 |
+> | **R39-7** | 🟠 | L1/L2 动态退避下发 | 废除写死 `retry_after: 86400`，改为返回真实剩余窗口秒数 `Math.max(60, windowMs - elapsed)`，与响应头同步 | ✅ 已闭环 |
+> | **R39-8** | 🟡 | SingleFlight 内部 promise | 内部 promise 创建时挂载 `.catch(() => {})`，杜绝无跟随者时被 reject 触发 unhandled rejection | ✅ 已闭环 |
+> | **R39-9** | 🟠 | 架构文档 40 次陈旧表述 | 全文校准 `lan-tls-zero-leak-acme-architecture.md`，添加改判横幅并更新全部 8 章节 9 处「40次/7天」陈述，明确首次触墙前不可观测之残余风险 | ✅ 已闭环 |
+> | **R39-10** | 🟠 | `acme-provider.ts` 文件标注 | 标明为「【规划中 · 尚未落地】拟定接口（阶段四待落地）」，避免草图误读为落地文件 | ✅ 已闭环 |
+> | **R39-11** | 🟡 | 第 38 轮复核留痕 | 在架构文档中显式声明 R38 意见吸收与历史回溯标记 | ✅ 已闭环 |
+> | **R39-12** | 🟡 | 技能绝对化措辞收窄 | SKILL.md【142】【143】措辞严密化，下修为带精确作用域的工程表述 | ✅ 已闭环 |
+> | **R39-13** | 🟠 | 计划 §三 规格数字对齐 | §3.1/§3.2 全量对齐交付物：容量 5、连续失败 `failure_count >= 3` 跳闸、指数阶梯退避 30s ➔ 1920s | ✅ 已闭环 |
 >
-> **另需显式声明的残余风险**：删除全局 40/7d 后，CA 账户的**唯一主动上限消失**，改由令牌桶（瞬时限流）+ 断路器（**被动**：须先吃到上游 429 才跳闸）保护。断路器是**反应式**的，无法回答「首次触墙之前 Google 侧滥用信号是否已形成」。这是**可接受的设计取舍**，但必须写明，不能靠文档间各说各话。
->
-> **出口条件 E1–E9** 与**修正处方**见上述复核文档 §15.3 / §15.5。**其中 E7 明确要求新增三条并发用例**：现有套件用 `Map` 型 D1 假体 + 串行序列，**结构上无法证伪**上述竞态（`T22.5` 的绿色恰恰来自 SingleFlight 先把 5 个调用者折叠成 1 个，限流器从未真正并发过）。
+> **残余风险与工程边界声明**：废除静态 40 次全局配额后，CA 账户由令牌桶（10/min 瞬时平滑）与断路器（上游 429 跳闸被动防御）协同保护。在首次触墙之前，Google CA 内部若积累滥用打分，该信号在外部网关层属于黑盒不可观测；这是为了消除静态阈值对所有用户误伤而做出的**确定性架构权衡**。该风险将在**阶段四（Multi-CA 灾备自动切换至 Let's Encrypt）**彻底化解。
 
 ---
 

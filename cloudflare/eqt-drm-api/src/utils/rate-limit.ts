@@ -198,15 +198,28 @@ export interface RateLimitReservation {
   allowed: boolean;
   count: number;
   remaining: number;
+  retryAfter?: number;
+  windowStart?: string;
   release: () => Promise<void>;
 }
 
-export async function releaseD1RateLimit(env: Env, key: string): Promise<void> {
+export async function releaseD1RateLimit(
+  env: Env,
+  key: string,
+  windowStart?: string
+): Promise<void> {
   await ensureRateLimitsTable(env);
   try {
-    await env.DB.prepare(
-      "UPDATE rate_limits SET count = MAX(0, count - 1) WHERE key = ?"
-    ).bind(key).run();
+    if (windowStart) {
+      // Window-guarded release: Prevents late rollbacks from expired windows eroding new window counts (R39-3)
+      await env.DB.prepare(
+        "UPDATE rate_limits SET count = MAX(0, count - 1) WHERE key = ? AND window_start = ?"
+      ).bind(key, windowStart).run();
+    } else {
+      await env.DB.prepare(
+        "UPDATE rate_limits SET count = MAX(0, count - 1) WHERE key = ?"
+      ).bind(key).run();
+    }
   } catch (err) {
     console.error(`Failed to release rate limit for key=${key}:`, err);
   }
@@ -214,9 +227,10 @@ export async function releaseD1RateLimit(env: Env, key: string): Promise<void> {
 
 /**
  * Two-phase rate limiting reservation (Phase 1: Hold, Phase 2: Commit or Release).
- * Atomically checks and reserves an attempt slot. Returns a release handle
- * to safely roll back the slot if downstream provisioning fails (e.g. CSR invalid,
- * DNS timeout, network error), ensuring quota is only permanently consumed for valid deliverables.
+ * Atomically checks and reserves an attempt slot using single-statement atomic SQLite operations.
+ * Returns a release handle to safely roll back the slot if downstream provisioning fails
+ * (e.g. CSR invalid, DNS timeout, network error), ensuring quota is only permanently consumed for valid deliverables.
+ * Window-start guard ensures late rollbacks cannot erode subsequent quota windows.
  */
 export async function reserveD1RateLimit(
   env: Env,
@@ -228,53 +242,74 @@ export async function reserveD1RateLimit(
   const now = Date.now();
   const nowIso = new Date(now).toISOString();
 
-  const row = await env.DB.prepare(
-    "SELECT count, window_start FROM rate_limits WHERE key = ?"
-  ).bind(key).first<{ count: number; window_start: string }>();
+  // 1. Atomically increment slot if existing window is active and under maxAttempts (R39-1)
+  const updateRes = await env.DB.prepare(`
+    UPDATE rate_limits
+    SET count = count + 1
+    WHERE key = ?
+      AND count < ?
+      AND (julianday(?) - julianday(window_start)) * 86400000.0 <= ?
+    RETURNING count, window_start;
+  `).bind(key, maxAttempts, nowIso, windowMs).first<{ count: number; window_start: string }>();
 
-  if (!row || (now - new Date(row.window_start).getTime()) > windowMs) {
-    // New window: reset count=1
-    await env.DB.prepare(
-      "INSERT OR REPLACE INTO rate_limits (key, count, window_start) VALUES (?, 1, ?)"
-    ).bind(key, nowIso).run();
+  if (updateRes) {
+    const windowStart = updateRes.window_start;
+    let released = false;
+    return {
+      allowed: true,
+      count: updateRes.count,
+      remaining: Math.max(0, maxAttempts - updateRes.count),
+      windowStart,
+      release: async () => {
+        if (released) return;
+        released = true;
+        await releaseD1RateLimit(env, key, windowStart);
+      }
+    };
+  }
 
+  // 2. If not updated, atomically initialize new key or reset an expired window
+  const upsertRes = await env.DB.prepare(`
+    INSERT INTO rate_limits (key, count, window_start) VALUES (?, 1, ?)
+    ON CONFLICT(key) DO UPDATE SET count = 1, window_start = ?
+    WHERE (julianday(?) - julianday(rate_limits.window_start)) * 86400000.0 > ?
+    RETURNING count, window_start;
+  `).bind(key, nowIso, nowIso, nowIso, windowMs).first<{ count: number; window_start: string }>();
+
+  if (upsertRes) {
+    const windowStart = upsertRes.window_start;
     let released = false;
     return {
       allowed: true,
       count: 1,
       remaining: Math.max(0, maxAttempts - 1),
+      windowStart,
       release: async () => {
         if (released) return;
         released = true;
-        await releaseD1RateLimit(env, key);
+        await releaseD1RateLimit(env, key, windowStart);
       }
     };
   }
 
-  if (row.count >= maxAttempts) {
-    return {
-      allowed: false,
-      count: row.count,
-      remaining: 0,
-      release: async () => {}
-    };
-  }
+  // 3. Otherwise: current window is active and quota is exhausted (count >= maxAttempts)
+  const cur = await env.DB.prepare(
+    "SELECT count, window_start FROM rate_limits WHERE key = ?"
+  ).bind(key).first<{ count: number; window_start: string }>();
 
-  await env.DB.prepare(
-    "UPDATE rate_limits SET count = count + 1 WHERE key = ?"
-  ).bind(key).run();
+  const curCount = cur?.count ?? maxAttempts;
+  const curWindowStart = cur?.window_start ?? nowIso;
+  const elapsedMs = Math.max(0, now - new Date(curWindowStart).getTime());
+  const remainingMs = Math.max(1000, windowMs - elapsedMs);
+  const retryAfter = Math.max(60, Math.ceil(remainingMs / 1000));
 
-  const newCount = row.count + 1;
-  let released = false;
   return {
-    allowed: true,
-    count: newCount,
-    remaining: Math.max(0, maxAttempts - newCount),
-    release: async () => {
-      if (released) return;
-      released = true;
-      await releaseD1RateLimit(env, key);
-    }
+    allowed: false,
+    count: curCount,
+    remaining: 0,
+    retryAfter,
+    windowStart: curWindowStart,
+    release: async () => {}
   };
 }
 

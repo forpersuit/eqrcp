@@ -892,15 +892,16 @@ async function executeCertProvisioningFlow(params: CertProvisioningParams): Prom
         client_ip: clientIp,
         trace_id: traceId
       });
-      console.warn(`[LAN-TLS-PROVISION] [RATE-LIMIT] nodeID=${cleanNode} exceeded 24h limit`);
+      const nodeRetryAfter = nodeRateReservation.retryAfter || 86400;
+      console.warn(`[LAN-TLS-PROVISION] [RATE-LIMIT] nodeID=${cleanNode} exceeded 24h limit (retryAfter=${nodeRetryAfter}s)`);
       return {
         status: 429,
         body: JSON.stringify({
           error: 'Certificate issuance rate limit exceeded (maximum 3 requests per 24 hours)',
           reason_key: 'rate_limited',
-          retry_after: 86400
+          retry_after: nodeRetryAfter
         }),
-        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '86400' }
+        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': String(nodeRetryAfter) }
       };
     }
 
@@ -915,15 +916,16 @@ async function executeCertProvisioningFlow(params: CertProvisioningParams): Prom
           client_ip: clientIp,
           trace_id: traceId
         });
-        console.warn(`[LAN-TLS-PROVISION] [RATE-LIMIT] IP ${clientIp} exceeded 24h limit`);
+        const ipRetryAfter = ipRateReservation.retryAfter || 86400;
+        console.warn(`[LAN-TLS-PROVISION] [RATE-LIMIT] IP ${clientIp} exceeded 24h limit (retryAfter=${ipRetryAfter}s)`);
         return {
           status: 429,
           body: JSON.stringify({
             error: 'Too many certificate requests from this IP address (maximum 10 per 24 hours)',
             reason_key: 'ip_rate_limited',
-            retry_after: 86400
+            retry_after: ipRetryAfter
           }),
-          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '86400' }
+          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': String(ipRetryAfter) }
         };
       }
     }
