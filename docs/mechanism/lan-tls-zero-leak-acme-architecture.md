@@ -5,8 +5,8 @@
 > **现役基线版本**：`v1.36.123+`  
 > **最后修订日期**：2026-09-13  
 > **关联技术组件**：
-> - 客户端核心：[`pkg/cert/provisioner.go`](../../pkg/cert/provisioner.go), [`pkg/cert/cert.go`](../../pkg/cert/cert.go), [`pkg/server/hardware.go`](../../pkg/server/hardware.go)
-> - 桌面端与 GUI：[`desktop/gui/app.go`](../../desktop/gui/app.go), [`desktop/gui/frontend/src/components/tls_status.js`](../../desktop/gui/frontend/src/components/tls_status.js), [`desktop/gui/frontend/src/main.js`](../../desktop/gui/frontend/src/main.js)
+> - 客户端核心：[`pkg/cert/provisioner.go`](../../pkg/cert/provisioner.go), [`pkg/cert/cert.go`](../../pkg/cert/cert.go), [`pkg/server/hardware.go`](../../pkg/server/hardware.go), [`pkg/config/config.go`](../../pkg/config/config.go)
+> - 桌面端与 GUI：[`desktop/gui/app.go`](../../desktop/gui/app.go), [`desktop/gui/main.go`](../../desktop/gui/main.go), [`desktop/gui/frontend/src/components/tls_status.js`](../../desktop/gui/frontend/src/components/tls_status.js), [`desktop/gui/frontend/src/i18n.js`](../../desktop/gui/frontend/src/i18n.js)
 > - 权威 DNS 服务：[`cmd/eqt-dns/main.go`](../../cmd/eqt-dns/main.go)（权威节点 `ns1.eqt.net.im`, `ns2.eqt.net.im`）
 > - 云端置备网关：[`cloudflare/eqt-drm-api/src/routes/cert.ts`](../../cloudflare/eqt-drm-api/src/routes/cert.ts), [`cloudflare/eqt-drm-api/src/utils/acme.ts`](../../cloudflare/eqt-drm-api/src/utils/acme.ts)
 > - 现役技术报告：[`docs/mechanism/lan-tls-security-protocol-technical-report.md`](lan-tls-security-protocol-technical-report.md)
@@ -18,6 +18,10 @@
 2. [二、系统总体架构与网络拓扑](#二系统总体架构与网络拓扑)
 3. [三、核心协议时序与交互流程](#三核心协议时序与交互流程)
 4. [四、核心技术组件与工程实现细节](#四核心技术组件与工程实现细节)
+   - [4.1 客户端与桌面端调度引擎](#41-客户端与桌面端调度引擎pkgcert--desktopgui)
+   - [4.2 双机自建权威 DNS 节点](#42-双机自建权威-dns-节点cmdeqt-dns)
+   - [4.3 云端 ACME 置备代理网关](#43-云端-acme-置备代理网关cloudflare-worker)
+   - [4.4 客户端运行环境隔离与网络协议合规](#44-客户端运行环境隔离与网络协议合规)
 5. [五、安全威胁模型与纵深防御体系](#五安全威胁模型与纵深防御体系)
 6. [六、当前系统落地实况与代码映射表](#六当前系统落地实况与代码映射表)
 7. [七、当前系统已知缺陷、瓶颈与风险评估](#七当前系统已知缺陷瓶颈与风险评估)
@@ -234,30 +238,31 @@ sequenceDiagram
 
 ## 四、核心技术组件与工程实现细节
 
-### 1. 客户端与桌面端调度引擎（`pkg/cert` & `desktop/gui`）
+### 4.1 客户端与桌面端调度引擎（`pkg/cert` & `desktop/gui`）
 
-#### 1.1 私钥生成与存储安全
+#### 4.1.1 私钥生成与存储安全
 - **算法基准**：严格采用 NIST P-256（`secp256r1`）椭圆曲线算法，兼具高安全强度与移动端极速 TLS 握手特性。
-- **存储隔离**：私钥保存于专用目录（Windows: `%APPDATA%\eqt\certs\<node-id>\privkey.pem`；Linux/macOS: `~/.config/eqt/certs/<node-id>/privkey.pem`）。落盘采用 `0600` 权限，在 Windows 下利用 NTFS DACL 严格收紧仅当前用户只读。
+- **存储隔离**：私钥保存于专属设备目录（Windows: `%APPDATA%\eqt\certs\<node-id>\privkey.pem`；Linux/macOS: `~/.config/eqt/certs/<node-id>/privkey.pem`）。
+- **权限基线**：以 `0600` 权限原子落盘；在 Windows 下利用 NTFS DACL 严格收紧，仅当前登录用户具有只读权限。
 
-#### 1.2 设备硬件指纹与 Node ID 派生
-- **派生源**：由主板 UUID、CPU 序列号、硬盘序列号通过级联哈希生成：
+#### 4.1.2 设备硬件指纹与 Node ID 派生
+- **确定性派生源**：由主板 UUID、CPU 序列号、硬盘序列号通过级联哈希生成：
   $$\text{NodeID} = \text{SHA256}(\text{uuidHash} : \text{cpuHash} : \text{diskHash} [: \text{salt}])[:12]$$
-- **自愈式 Salt 轮换**：若用户重装系统或清理本地缓存导致重新生成了私钥，向云端申请时会触发 `403 node_key_mismatch`。客户端调度引擎捕获该状态后，自动在本地配置中注入随机盐（Salt），派生全新的 12 位 Node ID 并自动发起重试，实现端侧静默自愈。
+- **自愈式 Salt 轮换**：若用户重装系统或清理本地缓存导致生成了新私钥，向云端申请时会触发 `403 node_key_mismatch`。客户端调度引擎捕获该状态后，自动在本地注入随机盐（Salt），派生全新的 12 位 Node ID 并发起重试，实现端侧静默自愈。
 
-#### 1.3 客户端 CSR 组装与 POPO 持有性验签
-- **CSR 内容**：
+#### 4.1.3 客户端 CSR 组装与 POPO 持有性验签
+- **CSR 内容规范**：
   - `CommonName`: `${node_id}.direct.eqt.net.im`
   - `SubjectAlternativeName` (SAN): 严格同时包含单域名与通配符子域：
     - `DNS: ${node_id}.direct.eqt.net.im`
     - `DNS: *.${node_id}.direct.eqt.net.im`
 - **签名防重放机制**：
-  - 客户端获取当前标准 Unix 时间戳（秒），使用本地私钥对 `${node_id}:${timestamp}` 进行签名；
-  - 导出 IEEE P1363 标准（64 字节，r 32B + s 32B 大端序）二进制，Base64 编码后随请求头 `X-EQT-Device-Signature` 与 `X-EQT-Timestamp` 提交；
-  - 置备网关提取 CSR 中的 SPKI 公钥，直接调用 Web Crypto `subtle.verify` 验签，从根本上杜绝请求篡改与中间人重放。
+  - 客户端使用本地私钥对 `${node_id}:${timestamp}` 进行签名，导出 IEEE P1363 标准（64 字节，r 32B + s 32B 大端序）二进制；
+  - Base64 编码后随请求头 `X-EQT-Device-Signature` 与 `X-EQT-Timestamp` 提交；
+  - 置备网关提取 CSR 中的 SPKI 公钥，直接调用 Web Crypto `subtle.verify` 原生验签，证明私钥持有性（Proof-of-Possession），杜绝中间人篡改。
 
-#### 1.4 系统受信任根证书锚定校验（Fail-Closed 校验）
-- 为杜绝任何自签假证书或中间人伪造证书给用户带来虚假安全绿锁，客户端在 `SaveDeviceCertificate` 与 `GetDeviceCertificate` 时，强制执行系统信任锚校验：
+#### 4.1.4 系统受信任根证书锚定校验（Fail-Closed 校验）
+- 为杜绝任何自签假证书或中间人伪造证书给用户带来虚假安全绿锁，客户端在落盘与装载时，强制执行系统信任锚校验：
   ```go
   opts := x509.VerifyOptions{
       Roots:         nil, // 强制加载宿主操作系统全局公信根证书库 (如 ISRG Root / GTS Root)
@@ -268,39 +273,66 @@ sequenceDiagram
   ```
 - 若校验失败，明确返回 `ErrUntrustedCertificate`，严禁装载至内存，并保持底层普通 HTTP 降级传输。
 
-#### 1.5 桌面端 UI 五态机与故障降级哲学
+#### 4.1.5 跨平台存储目录规范与存量升级平滑迁移
+- **数据根规范**：统一收拢至系统标准用户配置目录（Windows 为 `%APPDATA%\eqt`，Linux/macOS 为 `~/.config/eqt`）。
+- **防私钥孤儿化机制（`MigrateLegacyDeviceCredentials`）**：
+  - 早期版本曾使用 `%USERPROFILE%\.config\eqt\certs`（Linux 习惯），Windows 升级后会导致老私钥对新路径不可见；
+  - 若 `LoadOrGenerateDeviceKey` 误以为首次安装而静默生成新密钥，会导致撞上服务端 TOFU 强绑定而锁死为 403；
+  - 系统在 `pkg/cert/provisioner.go` 中实现 `MigrateLegacyDeviceCredentials`：
+    1. 自动探针检测旧目录是否存在；
+    2. 创建目标目录并严格收敛权限为 `0700`；
+    3. 迁移末尾对目标 `privkey.pem` 执行结果驱动的强校验（`os.Stat` 且 `Size() > 0`）；
+    4. 配合 `legacyKeyExists` 判定：若旧私钥存在但迁移失败，明确报错并拒签新私钥，彻底消灭伪首次安装隐患。
+
+#### 4.1.6 客户端置备 45 秒超时模型与 Dev 模式手动调试触发
+- **置备耗时现实基准**：ACME DNS-01 握手包含订单创建、双机 TXT 发布、权威传播自检、CA 递归查询验证与证书签发，真实网络耗时通常为 **9~15 秒**。
+- **长超时客户端解耦**：普通业务客户端默认设有 5 秒短超时，会导致置备在网关等待 CA 时被本地提前截断。系统在 `desktop/gui/app.go` 中采用专属长超时客户端：
+  ```go
+  provisionClient := &http.Client{Timeout: 45 * time.Second}
+  ```
+- **开发者模式支持（Dev Provisioning）**：
+  - Go 端导出 `DevProvisionDeviceTLSCert()` 方法；
+  - Settings 开发者选项中提供「🔄 申请 / 刷新设备证书」按钮，附带实时 Loading、Toast 反馈与即时重绘，无需重启软件即可热更新证书。
+
+#### 4.1.7 桌面端 UI 五态机、14 个多语言词条与任务安全徽标
 桌面端通过统一状态机管理 LAN-TLS 的界面反馈与生命周期：
 
 | 状态标识 | 界面图标呈现 | 含义与流转逻辑 |
 | :--- | :--- | :--- |
 | `disabled` | ⚪ 灰色锁定图标 | 用户在设置中关闭了 TLS，或未开启局域网加密 |
-| `preparing`| 🔵 蓝色旋转加载动画 | 启动后后台正在静默向网关申请置备证书（低优异步协程） |
+| `preparing`| 🔵 蓝色旋转加载动画 | 启动后后台正在静默向网关申请置备证书（预计 10~15 秒） |
 | `ready`    | 🟢 绿色公信安全锁 🔒 | 官方公信证书已验证并成功装载，HTTPS/WSS 完全就绪 |
 | `mismatch` | 🟠 橙色警告盾牌 | 检测到公钥不匹配，端侧正在自愈轮换或提示需重置绑定 |
 | `failed`   | 🔴 红色错误叹号 | 置备遭遇硬错误（如限流冷却），**强制切断开关（Fail-Closed）**并提示冷却时间 |
 
 - **职责正交原则**：
-  - **TLS 特性域（Fail-Closed）**：一旦发生证书缺失、验证失败或限流，必须立即切断 TLS 开启状态，禁止在界面上呈现虚假的“加密中”标识；
-  - **文件传输域（Fail-Soft）**：无论 TLS 置备成功与否，文件传输服务本身绝对不崩溃，自动以标准局域网明文 HTTP 协议保障传输通道 100% 可用。
+  - **TLS 特性域（Fail-Closed）**：置备失败或限流时，必须切断 TLS 开关（落盘 `enableTLS: false`），严禁在界面呈现虚假的“加密中”标识；
+  - **文件传输域（Fail-Soft）**：无论 TLS 状态如何，文件传输服务本身绝不崩溃，自动以普通明文 HTTP 协议保障传输 100% 可用。
+- **任务卡片安全徽标（`.tls-security-badge`）**：在任务卡片、二维码弹窗与传输详情中，动态标识 `🔒 HTTPS` / `⚠️ HTTP (降级明文)` / `🔓 HTTP`。
+- **全语言字典对齐**：在 `desktop/gui/frontend/src/i18n.js` 中完整收录 14 个 `tls_` 国际化词条（覆盖中/英/日/韩/西/德/法 7 种语言），包含状态提示、限流冷却气泡及无障碍 `role="img"` 属性。
+
+#### 4.1.8 离线与无网环境解耦（Base64 二维码直出）
+- 桌面端 GUI 二维码由 Go 后端调度内核在任务创建时内存级离线生成 Base64 Data URL（`data:image/png;base64,...`）直出到前端；
+- 规避了 WebView2 向本地发起回环网络请求，彻底免疫路由器 DNS 重绑定防护（DNS Rebinding Protection）和脱网断网场景下的破图风险。
 
 ---
 
-### 2. 双机自建权威 DNS 节点（`cmd/eqt-dns`）
+### 4.2 双机自建权威 DNS 节点（`cmd/eqt-dns`）
 
-#### 2.1 RFC 1035 架构规范与部署拓扑
+#### 4.2.1 RFC 1035 架构规范与部署拓扑
 - **权威节点 1 (`ns1-dns.eqt.net.im`)**：`128.241.227.181` (Ubuntu Linux)
 - **权威节点 2 (`ns2-dns.eqt.net.im`)**：`103.232.92.220` (Ubuntu Linux)
-- **委派配置红线**：上级 Cloudflare DNS 面板中的 `ns1` 与 `ns2` 记录**必须保持灰云（DNS-Only）**。严禁开启 Cloudflare Proxy（橙云），否则破坏 RFC 1035 委派链。
-- **端口安全隔离**：DNS 标准查询暴露于 UDP/TCP `53` 端口；HTTP 管理端点锁定在内网回环 `127.0.0.1:5380`，由前端 Caddy 反代提供带 TLS 的受限访问入口，并强制执行 Bearer Token 鉴权。
+- **委派配置红线**：Cloudflare DNS 面板中的 `ns1` 与 `ns2` 记录**必须保持灰云（DNS-Only）**。严禁开启 Cloudflare Proxy（橙云），否则破坏 RFC 1035 委派链。
+- **端口安全隔离**：DNS 标准查询暴露于 UDP/TCP `53` 端口；HTTP 管理端点锁定在内网回环 `127.0.0.1:5380`，由前端 Caddy 反代提供受限入口，并强制执行 Bearer Token 鉴权。
 
-#### 2.2 算法无状态 A 记录解析引擎
-- **无数据库/零磁盘 I/O**：解析核心 `parseIP(domain)` 采用纯内存字符串与正则运算：
+#### 4.2.2 算法无状态 A 记录解析引擎
+- **无数据库/零磁盘 I/O**：解析核心 `parseIP(domain)` 采用纯内存运算：
   - 输入：`192-168-1-100.cbb17e77a10f.direct.eqt.net.im`
   - 提取：`192`, `168`, `1`, `100`，校验每个数值在 `0~255` 范围内
   - 输出：`192.168.1.100`
 - **TTL 设定**：A 记录返回 TTL 统一设定为 **300 秒**。兼顾局域网 IP 短期缓存与设备切换 Wi-Fi 后的快速重定向。
 
-#### 2.3 内存级多值 TXT 挑战管理器
+#### 4.2.3 内存级多值 TXT 挑战管理器
 - **同名多值支持**：针对主域名与通配符域名同时质询的场景，`AcmeStore` 内部采用 `map[string]map[string]time.Time` 结构：
   - 键 1：`_acme-challenge.cbb17e77a10f.direct.eqt.net.im.`
   - 键 2：具体的挑战值 `val_1` 与 `val_2`，映射到各自的过期时间。
@@ -308,10 +340,10 @@ sequenceDiagram
 
 ---
 
-### 3. 云端 ACME 置备代理网关（Cloudflare Worker）
+### 4.3 云端 ACME 置备代理网关（Cloudflare Worker）
 
-#### 3.1 基础设施与配置事实清单
-云端网关部署于 Cloudflare Worker（`cloudflare/eqt-drm-api`），其真实配置基线如下：
+#### 4.3.1 基础设施与配置事实清单
+云端网关部署于 Cloudflare Worker（`cloudflare/eqt-drm-api`），其现役配置基线如下：
 
 ```toml
 # wrangler.toml 现役核心配置
@@ -327,17 +359,56 @@ routes = [
 ]
 ```
 
-#### 3.2 解决双域名 DNS-01 验证的时序竞态（Race Condition）
-在早期版本中，针对主域名与通配符子域，网关曾因“循环一次写一次挑战”而发生覆盖或时序竞态。现役网关已重构为四阶段严格时序：
-1. **阶段 1（挑战收集）**：遍历订单中所有的 Authorizations，分别计算出主域名与通配符对应的 TXT 质询值，组装挑战集合；
+#### 4.3.2 Google Public CA (GTS) RFC 8555 §7.3.4 EAB 密码学协议栈
+- **External Account Binding (EAB) 原生实现**：
+  - Google Public CA 要求在创建新账户（`newAccount`）时绑定 GCP 凭据；
+  - 网关在 `acme.ts` 中根据 RFC 8555 §7.3.4 实现 JWS EAB 封装：
+    - `protected`: `{"alg":"HS256","kid":"<ACME_EAB_KID>","url":"<directoryUrl>/newAccount"}`
+    - `payload`: 待注册账户公钥的 JWK 格式
+    - 签名算法：采用 `HMAC-SHA256`，使用从 GCP 控制台申请并经 Base64URL 解码的 `macKey` 进行签名。
+- **账户密钥持久化（`ACME_ACCOUNT_KEY`）**：
+  - 离线生成专属 ECDSA P-256 JWK 并注入 Worker 机密环境变量，杜绝每次置备重复创建账户消耗 GTS 频控。
+
+#### 4.3.3 解决双域名 DNS-01 验证的时序竞态（Race Condition）
+针对主域名与通配符子域，网关采用四阶段严格时序：
+1. **阶段 1（挑战收集）**：遍历 Authorizations，计算主域名与通配符对应的 TXT 质询值，组装挑战集合；
 2. **阶段 2（批量发布）**：在触发任何 CA 验证之前，将双值 TXT 记录并发推送到所有配置的权威节点（`ns1` 与 `ns2`）；
 3. **阶段 3（传播自检）**：网关主动对各权威节点的 HTTP 状态发起轮询探针（`confirmDnsPropagation`），确认双机权威均已成功返回所有预期 TXT 值后，才进入下一阶段；
 4. **阶段 4（触发验证）**：并发通知 CA 校验端点开始验证。
 
-#### 3.3 权威双机强一致写入与局部失败即刻回滚
+#### 4.3.4 权威双机强一致写入与局部失败即刻回滚
 为规避 CA 多视角随机递归检查失败，网关严格要求双权威节点同时写入成功：
 - 若节点 1 写入成功但节点 2 网络超时，网关立即向节点 1 下发 DELETE 请求回滚清除，实现“部分失败、瞬间归零”；
 - 请求处理的 `finally` 块中前置注册清理闭包，无论成功、失败或超时中断，均确保清除 DNS 内存中的 TXT 残留。
+
+---
+
+### 4.4 客户端运行环境隔离与网络协议合规
+
+#### 4.4.1 WebKit / iOS Safari HTTPS 附件下载协议规范
+在 HTTPS 协议下进行文件下载（`Content-Disposition: attachment`）时，iOS / iPadOS Safari 的底层下载沙箱（`NSURLSessionDownloadTask`）对响应头极为挑剔：
+1. **缓存头冲突规避**：若服务端返回了 `Cache-Control: no-cache` 或 `no-store` 以及 `Pragma: no-cache`，WebKit 会认为该数据不可落盘暂存，直接中断连接并抛出系统级错误 **“无法下载此文件 / 无法下载，请重试”**。服务端必须严格配置：
+   ```http
+   Cache-Control: private, no-transform
+   ```
+   并彻底移除 `Pragma` 和 `Expires` 响应头；
+2. **显式 MIME 类型支持**：严禁对附件返回空白类型或完全依赖自动嗅探；对压缩包强制声明 `Content-Type: application/zip`；
+3. **Range 探测防误判**：Safari 在下载前通常会预发 `Range: bytes=0-1` 探测请求，服务端必须正常响应 206 Partial Content，分块交付完毕切勿标记为“传输中断”。
+
+#### 4.4.2 Windows WebView2 系统代理穿透与 CSP 规范
+- **系统代理穿透**：Windows 系统开启系统代理（如 Clash/V2Ray `127.0.0.1:10808`）时，WebView2 内核会无差别拦截外部顶级域名（包括 `.im`），导致访问 `*.direct.eqt.net.im` 本地回环时挂起或被代理拒绝。桌面端在启动前通过环境变量 `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` 注入：
+  ```text
+  --proxy-bypass-list=<local>;127.0.0.1;localhost;*.lan.eqt.im;*.direct.eqt.net.im;10.*;192.168.*;172.16.*;…;172.31.*
+  ```
+  强制本地回环流量绕过代理；
+- **CSP 策略规范**：Wails `AssetServer.Middleware` 的 `Content-Security-Policy` 中 `connect-src` 必须显式包含 `https://*.direct.eqt.net.im:* ws: wss:`，防止内嵌通信通道被浏览器策略拦截。
+
+#### 4.4.3 移动端代理工具分流与 Fake-IP 绕过准则
+- **现象与成因**：移动端开启代理应用（如 Clash、Surge、Shadowrocket）时，因 `.im` 为曼岛域名，绝大多数第三方分流规则集（如 ACL4SSR、Loyalsoldier）默认将其划分为境外域名，分配 Fake-IP（`198.18.x.x`）并走境外节点，导致无法路由回局域网私有 IP（`192.168.x.x`）；
+- **配置指引**：在代理工具中将 `*.direct.eqt.net.im` 加入直连白名单：
+  - 规则分流：`DOMAIN-SUFFIX,direct.eqt.net.im,DIRECT`
+  - Fake-IP 过滤：在 `dns.fake-ip-filter` 中加入 `'*.direct.eqt.net.im'`
+  - 客户端开关：开启“绕过局域网 (Bypass LAN / 局域网直连)”。
 
 ---
 
@@ -373,7 +444,7 @@ routes = [
 
 ## 六、当前系统落地实况与代码映射表
 
-为确保文档描述与代码事实 100% 严密自洽，下表对架构核心能力的落地代码位置与实测状态进行客观锚定：
+下表客观对应系统各核心能力在当前仓库中的实际代码位置与运行状态：
 
 | 模块组件 | 关键能力声明 | 源码物理锚点 | 运行机制与测试状态 |
 | :--- | :--- | :--- | :--- |
@@ -381,9 +452,13 @@ routes = [
 | **客户端 CSR** | CSR 组装（CN/SAN 严格包含单域名与通配符） | `pkg/cert/provisioner.go:269` (`GenerateDeviceCSR`) | ✅ 真实生效，格式符合 RFC 2986 |
 | **客户端验签** | IEEE P1363 验签载荷自签名 | `pkg/cert/provisioner.go:307` (`SignProvisionPayload`) | ✅ 真实生效，自动签名 64 字节 |
 | **客户端信任锚** | 系统公信根证书链严格校验（拒绝自签假证书） | `pkg/cert/provisioner.go:398` (`VerifyCertificateTrust`) | ✅ 真实生效，`x509.Verify` 锚定系统根 |
+| **凭据平滑迁移** | 跨平台目录根统一与防私钥孤儿化迁移 | `pkg/cert/provisioner.go:107` (`MigrateLegacyDeviceCredentials`) | ✅ 真实生效，结果驱动且防止误死锁 |
+| **置备超时管理** | 独立 45 秒专有置备 HTTP 客户端 | `desktop/gui/app.go` (`provisionClient`) | ✅ 真实生效，杜绝 5s 过早截断假死 |
 | **客户端回环** | IPv4 算法无状态域名格式化 | `pkg/cert/provisioner.go:48` (`FormatDirectDomainWithNode`) | ✅ 真实生效，双模式无状态映射 |
 | **桌面端状态机** | 前端五态机与安全锁 SVG 联动展示 | `desktop/gui/frontend/src/components/tls_status.js:52` | ✅ 真实生效，`disabled/ready/mismatch...` |
 | **桌面端降级** | TLS 失败切断开关 (Fail-Closed) 与传输软降级 | `desktop/gui/app.go:2326`, `desktop/gui/agent.go` | ✅ 真实生效，普通 HTTP 传输不中断 |
+| **代理与 CSP** | WebView2 代理穿透参数与 CSP 白名单注入 | `desktop/gui/main.go:285`, `desktop/gui/main.go:420` | ✅ 真实生效，绕过系统代理拦截 |
+| **下载头规范** | WebKit 兼容私有缓存头与显式 MIME 映射 | `server/router.go` (`Cache-Control: private, no-transform`) | ✅ 真实生效，消除 Safari 下载中断 |
 | **权威 DNS** | 算法无状态 IPv4 回环 A 记录解析引擎 (TTL 300s) | `cmd/eqt-dns/main.go:137` (`parseIP`), `:213` | ✅ 真实生效，双机 53 端口稳定运行 |
 | **权威 DNS** | 内存级同名多值 TXT 管理器 (TTL 60s) | `cmd/eqt-dns/main.go:45` (`AcmeStore`), `:230` | ✅ 真实生效，支持双质询同时发布 |
 | **云端网关** | RFC 8555 GTS ACME EAB 官方签发引擎 | `cloudflare/eqt-drm-api/src/routes/cert.ts:1074` | ✅ 真实生效，对接 Google Public CA |
