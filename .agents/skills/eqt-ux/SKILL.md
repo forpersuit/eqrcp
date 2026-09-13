@@ -60,9 +60,10 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
   - **语义化压缩包命名与 RFC 5987 编码 (Semantic Naming & Standard Disposition)**：
     - 打包名称必须清晰反映所包含文件的关系：单文件为 `<name>.zip`，多文件格式为 `<首文件名>_等N个文件.zip`（英文环境为 `<first>_and_N_more.zip`），截断基名以防超出文件名限制。
     - 服务端必须严格使用 RFC 5987 / RFC 6266 标准响应头：`Content-Disposition: attachment; filename="<ascii>"; filename*=UTF-8''<percent-encoded>`，确保移动端系统下载弹窗、Safari、Chrome 均可无乱码完整呈现中文文件名。
-  - **应用内打包关系弹窗与系统弹窗协同 (In-App Manifest Modal & System Download)**：
-    - 移动端多选后调出轻量居中模态框，直观呈现生成的压缩包名称、总大小、以及所包含文件的清单关系、单个大小与就绪状态。
-    - 用户点击“立即下载”时才标记并流式直出；用户点击“取消”或关闭弹窗时，直接调用批量取消清理状态，气泡全部平滑恢复为默认状态。
+  - **直达系统下载与免冗余确认 (Direct System Download & Zero Modal Interference)**：
+    - 移动端多选后点击底栏“批量下载”即为明确的用户下载指令，直接发起流式组包单文件下载，严禁在中间横插易导致误触取消的应用内二次确认弹窗。
+    - 严禁在 `<a>.click()` 后重复调用 `window.location.href = zipURL`，彻底杜绝多重导航导致移动端浏览器网络栈自我 Abort 并触发假取消。
+    - 所选文件与压缩包的关系由语义化包名清晰呈现在系统级下载弹窗（如 Safari/Chrome 的原生下载确认窗）中。
   - **下载取消判定与气泡默认状态恢复 (Cancellation Self-Healing & Default Reset)**：
     - **客户端取消精确识别**：当对端移动设备在系统弹窗中点击“取消”或关闭网页时，底层的 TCP Socket 将被强行关闭（Windows WSAECONNRESET / Linux EPIPE / context.Canceled）。服务端必须通过 `isClientCanceled` 判定此类对端主动取消，并执行 `CancelJob` 级联取消该批次全部文件，严禁作为 IO 故障触发 `FailJob` 导致气泡报红或卡死在 0%。
     - **单向消费气泡干净恢复**：接收方取消下载属于单向消费行为，取消后气泡严禁打上“· 已取消”或“· 传输失败 ⚠️”标记，直接恢复为默认状态（仅显示文件大小）；只有发送方在上传时取消才展示“· 已取消”。

@@ -67,12 +67,7 @@
   let showLangPanel = false;
   let showShareModal = false;
   let showLeaveConfirm = false;
-  let showBatchModal = false;
   let showUrl = false;
-  let batchFiles: any[] = [];
-  let batchZipFilename = '';
-  let batchTotalSize = 0;
-  let batchState: 'ready' | 'downloading' = 'ready';
   let composerText = '';
   let licenseTier = 'FREE';
   let isPaid = false;
@@ -1415,35 +1410,11 @@
       return;
     }
 
-    // Mobile & Web browser: 打开打包下载模态框，直观展示打包文件名与包含的文件关系及就绪状态
+    // Mobile & Web browser: 直接流式打包下载，系统下载弹窗呈现打包文件名与包含文件的关系
     const totalBytes = files.reduce((acc: number, f: any) => acc + (f.size || 0), 0);
-    batchTotalSize = totalBytes;
-    batchFiles = files;
-    batchZipFilename = generateBatchZipName(files, currentLang);
-    batchState = 'ready';
-    showBatchModal = true;
-  }
+    const batchZipFilename = generateBatchZipName(files, currentLang);
 
-  function handleCancelBatchModal() {
-    showBatchModal = false;
-    if (batchFiles.length > 0 && client) {
-      const peer = client['clientPeer'] || 'desktop';
-      const ids = batchFiles.map(f => f.id);
-      applyBatchDownloadCancelled(ids, peer, {
-        updateTransfer: (u) => chatActions.updateTransfer(u),
-        cancelTransfer: (tid) => { if (client) client.cancelTransfer(tid); },
-        addSystemNotice: (notice) => chatActions.addSystemMessage(notice)
-      }, currentLang);
-    }
-    batchFiles = [];
-  }
-
-  function handleStartBatchDownload() {
-    if (!client || batchFiles.length === 0) return;
-    const peer = client['clientPeer'] || 'desktop';
-    batchState = 'downloading';
-
-    const batchItems = batchFiles.map(msg => {
+    const batchItems = files.map(msg => {
       const messageId = msg.id;
       const filename = msg.fileName || 'attachment';
       const transferId = resolveDownloadTransferId(messageId, peer);
@@ -1462,8 +1433,7 @@
       return { messageId, name: filename };
     });
 
-    const totalBytes = batchFiles.reduce((acc: number, f: any) => acc + (f.size || 0), 0);
-    const countStr = String(batchFiles.length);
+    const countStr = String(files.length);
     const sizeStr = formatBytes(totalBytes);
     const tip = getTranslation('batchFilesSelected', currentLang)
       .replace('{count}', countStr)
@@ -1483,14 +1453,6 @@
         link.parentNode.removeChild(link);
       }
     }, 2000);
-    if (!isEmbedded && typeof navigator !== 'undefined' && (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent))) {
-      window.location.href = zipURL;
-    }
-
-    setTimeout(() => {
-      showBatchModal = false;
-      batchFiles = [];
-    }, 1200);
   }
 
   function handleCancelDownload(e: CustomEvent<string>) {
@@ -1594,7 +1556,6 @@
     showLicensePanel = false;
     showLangPanel = false;
     showLeaveConfirm = false;
-    showBatchModal = false;
   }
 
   function handleDragEnter(e: DragEvent) {
@@ -1952,92 +1913,6 @@
       </aside>
     </div>
 
-    <!-- 批量打包下载模态框 -->
-    <div class="session-backdrop" class:mobile-layout={isMobileLayout} class:open={showBatchModal} on:click|self={handleCancelBatchModal}>
-      <aside class="side" style="max-width: 360px; padding: 16px;">
-        <div class="side-section-head">
-          <h1 style="font-size: 16px; font-weight: bold; display: flex; align-items: center; gap: 8px;">
-            <svg style="width: 18px; height: 18px; color: var(--accent, #156f5a);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-              <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
-              <line x1="12" y1="22.08" x2="12" y2="12"/>
-            </svg>
-            {currentLang === 'en' ? 'Package & Download' : '打包下载文件'}
-          </h1>
-          <button class="icon-button" type="button" on:click={handleCancelBatchModal} title="Close">
-            <svg viewBox="0 0 24 24" aria-hidden="true" stroke="currentColor" stroke-width="2" fill="none"><path d="M18 6 6 18M6 6l12 12"/></svg>
-          </button>
-        </div>
-
-        <!-- 压缩包信息卡片 -->
-        <div style="background: var(--bg-card, #f8fafc); border: 1px solid var(--line, #e2e8f0); border-radius: 8px; padding: 10px 12px; margin: 12px 0 10px 0;">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <div style="width: 32px; height: 32px; border-radius: 6px; background: rgba(21, 111, 90, 0.1); display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 10px; font-weight: bold; color: var(--accent, #156f5a);">
-              ZIP
-            </div>
-            <div style="flex: 1; min-width: 0;">
-              <div style="font-size: 13px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title={batchZipFilename}>
-                {batchZipFilename}
-              </div>
-              <div style="font-size: 11px; color: var(--muted, #64748b); margin-top: 2px;">
-                {currentLang === 'en' ? `Total ${batchFiles.length} files` : `共 ${batchFiles.length} 个文件`} · {formatBytes(batchTotalSize)}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 包含的文件清单列表 -->
-        <div style="font-size: 12px; font-weight: 500; color: var(--muted, #64748b); margin-bottom: 6px;">
-          {currentLang === 'en' ? 'Included Files:' : '包含的文件关系与清单：'}
-        </div>
-        <div style="max-height: 180px; overflow-y: auto; border: 1px solid var(--line, #e2e8f0); border-radius: 6px; padding: 4px 8px; margin-bottom: 14px; background: var(--bg-card, #ffffff);">
-          {#each batchFiles as f, idx}
-            <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: {idx === batchFiles.length - 1 ? 'none' : '1px solid var(--line-light, #f1f5f9)'}; font-size: 12px;">
-              <div style="flex: 1; min-width: 0; padding-right: 8px;">
-                <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text);" title={f.fileName || 'file'}>
-                  {idx + 1}. {f.fileName || 'file'}
-                </div>
-                <div style="font-size: 10px; color: var(--muted, #64748b);">
-                  {formatBytes(f.size || 0)}
-                </div>
-              </div>
-              <span style="font-size: 11px; color: var(--accent, #156f5a); background: rgba(21, 111, 90, 0.08); padding: 2px 6px; border-radius: 4px; flex-shrink: 0;">
-                {batchState === 'downloading' 
-                  ? (currentLang === 'en' ? 'Packaging' : '打包中') 
-                  : (currentLang === 'en' ? 'Ready' : '已就绪')}
-              </span>
-            </div>
-          {/each}
-        </div>
-
-        <div style="display: flex; gap: 10px; justify-content: flex-end;">
-          <button class="side-btn" style="background: transparent; border: 1px solid var(--line); color: var(--muted);" on:click={handleCancelBatchModal}>
-            {currentLang === 'en' ? 'Cancel' : '取消'}
-          </button>
-          <button 
-            class="side-btn" 
-            style="background: var(--accent, #156f5a); border-color: var(--accent, #156f5a); color: white; display: flex; align-items: center; gap: 6px;" 
-            on:click={handleStartBatchDownload}
-            disabled={batchState === 'downloading'}
-          >
-            {#if batchState === 'downloading'}
-              <svg class="spin" style="width: 14px; height: 14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-opacity="0.25"/>
-                <path d="M12 2a10 10 0 0 1 10 10"/>
-              </svg>
-              <span>{currentLang === 'en' ? 'Packaging...' : '正在打包...'}</span>
-            {:else}
-              <svg style="width: 14px; height: 14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                <polyline points="7 10 12 15 17 10"/>
-                <line x1="12" y1="15" x2="12" y2="3"/>
-              </svg>
-              <span>{currentLang === 'en' ? 'Download' : '立即下载'}</span>
-            {/if}
-          </button>
-        </div>
-      </aside>
-    </div>
   </main>
   <ViewportDebugOverlay />
 </div>
