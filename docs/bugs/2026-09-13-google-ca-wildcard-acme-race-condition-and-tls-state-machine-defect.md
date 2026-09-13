@@ -886,6 +886,8 @@ async function confirmDnsPropagation(
 
 ## 十、 开发方响应与全面落地（第 34 轮复核彻底闭环 · 基线 `v1.36.117`）
 
+> **⚠️ 第 35 轮审查更正**：本章 5 项落地**方向全部正确**，但标题中「**彻底闭环**」与 §10.1「**根治**」、§10.2.2「**全面清零**」、§10.5 表格 **E1″** 的「✅ 已消除且可证伪」四处措辞**大于其所持证据**——R34-1 的顺序不变量（先落盘后广播）在**代码中已修复**，但**新回归测试只锁住「调用内是否落盘」，不锁「落盘是否先于广播」**（判别性探针 B 实测仍绿），原因是 `app_test.go` 从不设置 `app.ctx`，`a.ctx == nil` 使事件分支整体被跳过；R34-2 的闸门同样仅覆盖**全局域**，**导入解析域**（具名导入指向不存在导出）实测未被拦截。详见 **§十一 · 11.2 R35-1 / R35-2 / R35-3** 与 **11.3 E1‴–E3‴**。**代码修复本身无需回退**，本节结论降级为「**已修复，锁强度待补齐**」。
+
 针对审查员在第 34 轮独立复核（§九）中提出的实锤缺陷（R34-1、R34-2）及边界优化建议（R34-3、R34-4、R34-5），开发团队本着第一性原理与严谨工程标准，实施了彻底的根因修复与反向验证：
 
 ### 10.1 根治 R34-1 错配路径 Fail-Open（先落盘、后通知 + 前端显式保底）
@@ -976,6 +978,108 @@ async function confirmDnsPropagation(
 | **E3″** | E4′ 前提降级与参数显式化 | ✅ 已同步 | §8.1.3 措辞修正为保守预算；`cert.ts:1152` 显式传递 `maxAttempts=8` |
 | **E4″** | 文档名实与注释归位 | ✅ 已归位 | `cert-provision-offline.js:879` 补形状锁注释；§八改称「响应与落地成果」；E2′ 标注部分闭环与本节承接 |
 | **版本** | 递增小版本号 | ✅ 已升级 | `pkg/version/version.go`: `v1.36.117`，`wails.json`: `1.36.117` |
+
+---
+
+## 十一、 审查意见（第 35 轮独立复核 · 对 `3fd6d30a` 的落地审查 · 基线 `v1.36.117`）
+
+审查对象：`3fd6d30a`「Address round 34 review: fix fail-open on mismatch, establish frontend lint gate, and bump to v1.36.117」（13 文件，+1224/−29）。
+复核口径：本次复核的四个目标文件（`desktop/gui/app.go`、`desktop/gui/frontend/src/main.js`、`desktop/gui/frontend/eslint.config.js`、`desktop/gui/app_test.go`）在 `3fd6d30a` 之后**未被后续提交触碰**（`git diff --stat 3fd6d30a..HEAD` 仅含 `wails.json`/`version.go`/`pkg/chat/v2/**`/`.agents/skills/eqt-ux/SKILL.md`），故行号口径即当前树。
+
+**总裁决**：第 34 轮提出的 5 项意见**全部落地且方向正确**，`4` 项已实证闭环；但其中 `2` 项存在**同一类残留**——修复本身是真的，**锁的强度不足以覆盖它自己声明的机制**，且两处文档措辞大于其所持证据。无新增 fail-open，无功能退化。
+
+### 11.1 开发方声明逐条核验（10 条）
+
+| # | 声明 | 核验方式 | 裁决 |
+| :-- | :--- | :--- | :--: |
+| 1 | 提炼 `persistDisableTLS()` 并在错配分支、通用失败分支**均先落盘后通知** | 读 `app.go:2267`、`app.go:2286`、helper `app.go:2329`；探针 A/B | ✅ **代码顺序为真**（落盘行 `2267` 确在 `if a.ctx != nil`（`2268`）之前） |
+| 2 | 反向探针「注释掉 `app.go:2267` 即精准转红」，附输出 `app_test.go:447: R34-1 regression: …` | 独立重跑（探针 A） | ✅ **逐字复现**（`PROBE_A_EXIT=1`，报错文本、失败用例名、耗时量级均一致） |
+| 3 | 「彻底保证前端监听器收到事件调用 `ReadSettings()` 时读回的权威值必然是 `false`」 | **判别性探针 B** | ❌ **未锁定**（见 11.2 R35-1） |
+| 4 | 前端 `autoDisableTLSOnFailure` 在 `ReadSettings()` 返回后**无条件**强制 `enableTLS = false` | 读 `main.js:5217-5221` | ✅ 为真（`5221` 位于 `try/catch` **之外**，兜底不依赖异常路径） |
+| 5 | 新增 `eslint.config.js`（flat config，`no-undef: "error"`，browser+es2022，`runtime: readonly`） | 读文件全文 | ✅ 为真 |
+| 6 | `package.json` 接入 `"build": "npm run lint && vite build"` | 读 `package.json` | ✅ 为真（`eslint ^10.10.0` 实测在位） |
+| 7 | `npm run lint` 在干净树上 **0 error, 0 warning** | 独立重跑 | ✅ 为真（退出码 0） |
+| 8 | 构建闸门实测阻断：注入未定义符号 → 退出码 `1` | **直接跑 `npm run build`**（而非仅 `lint`） | ✅ **为真且更强**：`BUILD_PROBE_EXIT=1`，且日志中 **`vite` 从未被执行**（唯一一次 `vite` 字样来自 `&&` 命令回显），即产物绝无可能在 lint 失败时生成 |
+| 9 | 「构建前置强制拦截」是否真在**提交路径**上 | 读 `.git/hooks/pre-commit` + `scripts/deploy-windows-results.sh` | ✅ **为真**：hook（`set -euo pipefail`）无条件调用部署脚本，脚本第 `134` 行 `(cd desktop/gui/frontend && npm run build)` 位于 `run_checks=1`（脚本第 `19` 行默认值，hook 未传跳过开关）区块内，脚本自身亦 `set -euo pipefail` ⇒ lint 红则脚本中止、hook 失败、提交被拒 |
+| 10 | `GetAppInfo()`→`AppInfo()` 四处、补 `showChatDragOverlay`/`CancelChatDownload` 导入、导出并使用 `resetQRPrepareFailed()`；`cert.ts:1152` 显式 `maxAttempts=8`；`cert-provision-offline.js:879` 补形状锁注释 | 逐个 rg/读 | ✅ 全部为真；且 `GetAppInfo` 在整个前端**已无处存在**，证明闸门上线即刻抓出一类**第二例**现役缺陷 |
+
+### 11.2 本轮实锤与残留
+
+#### R35-1 【顺序不变量无锁】新回归测试锁的是「调用内某处落盘」，不是「落盘先于广播」
+
+**判别性探针 B（决定性证据）**：保留 `persistDisableTLS()` 在错配分支内、**仅将其移到 `EventsEmit` 之后**（即「调用内确实落盘，只是顺序倒置」）：
+
+```
+$ go test . -run TestDevProvisionDeviceTLSCert_NodeKeyMismatchAutoDisablesTLS
+ok  	eqt-desktop	0.198s          # PROBE_B_EXIT=0 —— 测试仍然全绿
+```
+
+对比探针 A（删除落盘 → 红），结论明确：该测试具备**存在性锁**（有没有落盘），**不具备顺序锁**（是否先于广播）。而 R34-1 的机制本体恰恰是 ToCToU 顺序，`app.go:2265-2266` 与 helper 注释 `app.go:2326-2328` 却以「**必须**在向前端发送失败事件**之前**完成同步落盘」「**杜绝** fail-open」的强制语气声明该不变量。
+
+**结构性原因（为何测不到，而非只是没写）**：`NewApp()`（`app.go:189-194`）**不设置 `a.ctx`**，只有 `startup(ctx)`（`app.go:196-198`）才设置；而 `app_test.go` 中 `.ctx` 赋值出现次数为 **0**（`rg -n "\.ctx\s*=" desktop/gui/app_test.go` 无输出）。故在单测中 `a.ctx == nil`，`app.go:2268` 的 `if a.ctx != nil { LogWarning; EventsEmit }` 整块**被跳过**——该测试在原理上就无法观测事件时序。
+
+**严重度：已缓解，非现役 fail-open。** 前端已独立闭环：`main.js:5221` 的无条件重置（声明 4，已核实）使 `ReadSettings()` 读回值对 `enableTLS` 不再具备翻转能力；且两个事件处理器（`main.js:6893`、`main.js:6909`）均以**本地镜像**为条件再调 `autoDisableTLSOnFailure`，镜像最终必为 `false`。故即使 Go 侧顺序倒置，当前亦不产生「文案说已关、界面显示已开」。但**声明的强制性不变量无任何测试守护**，一旦有人把落盘下移，回归不可见。
+
+**处方（三选一，不可均不做）**：
+- **(A) 让顺序可观测（推荐）**：将失败侧效提炼为 `func (a *App) failProvision(nodeID string, isMismatch bool, err error)`，内部「先落盘、后广播」，并在 broadcast 前调用一个可注入的钩子（`a.beforeProvisionFailEvent func()`，生产为 nil）。测试注入钩子，在钩子内读盘并断言 `EnableTLS == false`——这直接锁住「广播时磁盘已是 false」。
+- **(B) 让测试进入事件分支**：测试内 `app.ctx = context.Background()`（注意 `wailsruntime.EventsEmit` 在无 Wails 运行时下会降级为日志，故需同时断言事件确实被触发，否则等于没测）。
+- **(C) 不加固则**收缩声明：把 `app.go:2265-2266`、`2326-2328` 的「必须/杜绝」改为「防御性冗余（前端 `main.js:5221` 已独立兜底），本次未加锁」，并在 §10.1 第 3 点同步降级。**不接受**注释声明强制不变量而实现无锁。
+
+#### R35-2 【类别未装闸门 · 本轮为潜在】`no-undef` 不校验具名导入，同「运行时未定义 / 构建期绿灯」一类仍有一层存活
+
+**探针 2（漏洞证明）**：在 `main.js` 中把既有导入改为 `import { R35ProbeMissingExport, renderTLSSettingIcon, getDevTLSStatusText, renderTaskSecurityBadge, renderTopbarTLSIndicator } from './components/tls_status.js';` 并追加活代码 `void R35ProbeMissingExport;`（该名字**并非** `tls_status.js` 的导出）：
+
+```
+$ npm run lint        # 无任何 error 输出
+PROBE2_EXIT=0
+```
+
+与探针 1（未定义**全局** → `7516:6 error 'R35ProbeUndefinedGlobal' is not defined no-undef` → `REAL_EXIT=1`）对照可知：闸门覆盖**全局域**，不覆盖**导入解析域**。ESLint 核心规则 `no-undef` 只回答「这个名字在当前作用域是否绑定」，不回答「该绑定是否解析到真实导出」；`vite build` 对具名导入亦不做导出校验（打包期仅告警或静默 `undefined`）。
+
+**严重度：潜在，非现役。** 已对 `desktop/gui/frontend/src/**/*.js` 全部 **11** 个文件做具名/默认导入全量解析比对（脚本逐一提取目标模块的 `export function|const|let|class|{}`、`export default`）：**零条 `[NOT EXPORTED]`**。剩余 6 条告警全部是 `import x from './assets/images/*.png'`（Vite 资源导入，非可解析模块）。即：当前不存在活的失效具名导入，R35-2 属**类别未闭合**而非**缺陷已发生**。
+
+**处方**：接入 `eslint-plugin-import` 的 flat config，开启 `"import/no-unresolved": "error"` 与 `"import/named": "error"`（并把 `.png` 资产导入纳入 `import/ignore` 或用 resolver 配置），使闸门从「全局域」提升到「导入解析域」；同时把 11.2 所用的导入审计脚本落到 `scripts/`（如 `scripts/audit-frontend-imports.mjs`）并由部署脚本调用，使该检查**可重复**而非一次性人工核对。
+
+#### R35-3 【文档勘误】§十 两处措辞大于其所持证据
+
+1. §十 标题「第 34 轮复核**彻底闭环**」与 §10.1 标题「**根治** R34-1」：R34-1 的机制（ToCToU 顺序）在代码中已修复，但其**锁**只覆盖写入存在性（R35-1），故应为「修复」而非「根治/彻底闭环」，或先落地 R35-1 处方 (A)。
+2. §10.2.2「全仓潜在未定义符号**全面清零**」：清零范围实为「`no-undef` **可观测域内**的未定义全局符号」；导入解析域未覆盖（R35-2）。建议改写为「清零 `no-undef` 可观测域内的未定义全局符号（清单为该规则实际产出）；导入解析域另见 R35-2」。
+3. §10.5 表格 **E1″** 记「✅ 已消除且可证伪」：可证伪性成立但**仅覆盖「是否落盘」**，不覆盖「落盘顺序」；应标注「⚠️ 部分闭环（顺序不变量未锁，见 R35-1）」。
+4. §10.2.3 探针描述称「在 `main.js:5203` 注入」，而其引文报错行为 `5203:10`、本次实测同一手法报错行为 `7516:6`——差异源于注入点不同（行首 vs 行尾追加），非错误，但建议统一为「文件末尾追加」以免读者按行号复算时对不上。
+
+### 11.3 出口条件 E1‴–E3‴（第 35 轮）
+
+| 出口 | 目标 | 判据（必须可证伪） |
+| :--- | :--- | :--- |
+| **E1‴** | R35-1 顺序不变量**要么加锁、要么收缩声明** | 二选一：(A/B) 落地后，**判别性探针 B**（把落盘移到广播之后）必须**转红**；或 (C) `app.go:2265-2266`/`2326-2328` 与 §10.1 第 3 点措辞已降级为「防御性冗余，未加锁」。**不允许**维持「必须…之前」而无锁 |
+| **E2‴** | R35-2 导入解析域建闸门或明确出界 | 落地 `import/named` + `import/no-unresolved` 后，本报告探针 2（引用不存在导出）必须使 `npm run lint` 退出码 ≠ 0；或将审计脚本落入 `scripts/` 并由部署脚本调用。若判定出界，须在 §10.2 显式声明覆盖边界 |
+| **E3‴** | R35-3 文档名实归位 | §十/§10.1 标题降级；§10.2.2 改为限定域表述；§10.5 **E1″** 改标 ⚠️ 部分闭环并指向 R35-1 |
+
+### 11.4 本轮基线与探针汇总
+
+| 项目 | 命令 | 结果 |
+| :--- | :--- | :--- |
+| 根模块全量测试 | `go test ./...` | ✅ `ROOT_EXIT=0` |
+| 桌面模块全量测试 | `cd desktop/gui && go test .` | ✅ `GUI_EXIT=0`（`ok eqt-desktop 8.873s`） |
+| 证书置备离线套件 | `npm run test:cert:offline` | ✅ `74 passed, 0 failed`（`CERT_EXIT=0`） |
+| ACME 离线套件 | `npm run test:acme:offline` | ✅ `24 passed, 0 failed`（`ACME_EXIT=0`） |
+| 前端静态闸门（干净树） | `npm run lint` | ✅ 退出码 0 |
+| 探针 1：未定义**全局** | 末尾追加 `void R35ProbeUndefinedGlobal();` → `npm run lint` | ✅ 被拦：`7516:6 error 'No-undef'`，`REAL_EXIT=1` |
+| 探针 2：**具名导入**指向不存在导出 | `import { R35ProbeMissingExport, … }` → `npm run lint` | ❌ **未被拦**：`PROBE2_EXIT=0` |
+| 构建闸门端到端 | 注入探针 → `npm run build` | ✅ `BUILD_PROBE_EXIT=1`，日志中 **vite 从未执行** |
+| 探针 A：删落盘（存在性锁） | 注释 `app.go:2267` → `go test .` | ✅ 转红，报错逐字复现开发方引文 |
+| 探针 B：**倒序**（顺序锁） | 落盘移至广播之后 → `go test .` | ❌ **仍绿**（`PROBE_B_EXIT=0`） |
+| 具名/默认导入全量审计 | 自建脚本解析 `src/**/*.js`（11 文件） | ✅ 零条 `[NOT EXPORTED]`；6 条为 `.png` 资源导入误报 |
+| 现场还原 | `git status --porcelain` | ✅ 空（两次探针改造均已还原） |
+
+### 11.5 方法论沉淀（第 35 轮）
+
+1. **判别性探针（discriminating probe）——反向探针的第二步。** 反向探针只证明「机制**在不在**」；判别性探针证明「**够不够**」：把被测机制**保留存在、只按缺陷方式重排或削弱**（本轮：落盘仍在调用内，仅移至广播之后），若测试仍绿，则它锁的是**存在性**而非**该机制赖以生效的顺序**。凡修复的不变量含「先…后…」，判别性探针是必需项，不可只做反向探针。
+2. **测试环境遮蔽不变量：`if a.ctx != nil` 型守卫会让整段生产逻辑在单测中消失。** 凡是「事件必须在副作用之后」「通知必须在落盘之后」这类时序不变量，若测试构造的对象未进入事件分支，则**原理上测不到**，不是「还没写」。造测试夹具时应先回答：这条不变量所在的分支，测试**是否真的执行了**？用 `rg -n "\.ctx\s*=" <测试文件>` 这类查询把「夹具是否进入该分支」变成可 grep 的事实。
+3. **闸门的覆盖域必须写明。** 接入一条静态规则（`no-undef`）只能宣称它**可观测域内**的闭合；「前端零静态防线彻底闭环」这类全域断言，须逐域（全局域 / 导入解析域 / 类型域 / 运行时域）举证，未举证者一律降级为「部分闭环」。本轮 `no-undef` 在导入解析域留洞（探针 2）即为实例。
+4. **「构建期绿灯 / 运行时未定义」是一类，不是一个点。** 该类的实例可分布在**全局引用**与**导入绑定**两级；修掉被观测到的实例（`GetAppInfo`）不等于关掉该类。判据是**生成机制**是否改变，而非被点名的实例是否消失。
+5. **文档修复标题的措辞应与锁的强度对齐。** 「根治」「彻底闭环」「全面清零」属**强度词**，每使用一个须能指到一条**会因该机制失效而变红**的探针；指不到就降级为「修复」「部分闭环」「限定域内清零」。
+6. **本轮正向确认（值得沉淀的正确做法）**：开发方把闸门接入 **`npm run build` 而非仅 `lint` 脚本**，并保留闸门在**提交路径**（pre-commit → 部署脚本 → 前端构建）上，使「探针注入 → 退出码 1 → 产物不生成」构成**端到端可复现**的阻断链。本轮实测 `BUILD_PROBE_EXIT=1` 且 **vite 从未执行**，该链成立。这是第 34 轮 R34-2 的高质量落地，建议后续所有静态闸门沿用此模式（**闸门挂在构建入口、且构建入口挂在提交路径上**）。
 
 
 
