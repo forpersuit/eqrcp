@@ -15,6 +15,7 @@ import { initDragDrop, sendDebugMessageToChat } from './dragdrop.js';
 import { renderShareOverlay, closeShareOverlay, prepareMergedQRCode, downloadSharePosterImage } from './components/share.js';
 import { renderLogViewerOverlay, openLogViewer, closeLogViewer, refreshLogTail, setLogFilter, setLogSearch, toggleAutoRefresh, copyAllLogs, exportDiagnostics, logViewerState } from './components/log_viewer.js';
 import { renderChatTransfersTray } from './components/chat_tray.js';
+import { renderTLSSettingIcon, getDevTLSStatusText, renderTaskSecurityBadge } from './components/tls_status.js';
 
 import {ClipboardGetText, ClipboardSetText, EventsOn, LogInfo, LogError} from '../wailsjs/runtime/runtime';
 import {
@@ -848,7 +849,10 @@ function updateQRDOMAndButtonUI(task, wrapperId) {
         const newQrHtml = isQRExpanded && qrImage ? `
             <div class="qr-hero">
                 <img src="${escapeAttr(qrImage)}" alt="Transfer QR code" />
-                <button class="ghost open-qr" data-open-url="${escapeAttr(task.pageUrl)}">${t('open_in_browser')}</button>
+                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 6px;">
+                    <button class="ghost open-qr" data-open-url="${escapeAttr(task.pageUrl)}">${t('open_in_browser')}</button>
+                    ${renderTaskSecurityBadge(task.pageUrl, state, t, escapeAttr)}
+                </div>
             </div>
         ` : (isQRExpanded ? `<div class="empty-state transfer-empty" style="margin-top: 12px;">${t('waiting_qr')}</div>` : '');
 
@@ -955,7 +959,10 @@ function renderShareTransfer(task) {
                 ${isQRExpanded && qrImage ? `
                     <div class="qr-hero">
                         <img src="${escapeAttr(qrImage)}" alt="Transfer QR code" />
-                        <button class="ghost open-qr" data-open-url="${escapeAttr(task.pageUrl)}">${t('open_in_browser')}</button>
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 6px;">
+                            <button class="ghost open-qr" data-open-url="${escapeAttr(task.pageUrl)}">${t('open_in_browser')}</button>
+                            ${renderTaskSecurityBadge(task.pageUrl, state, t, escapeAttr)}
+                        </div>
                     </div>
                 ` : (isQRExpanded ? `<div class="empty-state transfer-empty" style="margin-top: 12px;">${t('waiting_qr')}</div>` : '')}
             </div>
@@ -1276,7 +1283,10 @@ function renderReceiveTransfer(task) {
                 ${isQRExpanded && qrImage ? `
                     <div class="qr-hero">
                         <img src="${escapeAttr(qrImage)}" alt="Transfer QR code" />
-                        <button class="ghost open-qr" data-open-url="${escapeAttr(task.pageUrl)}">${t('open_in_browser')}</button>
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 6px;">
+                            <button class="ghost open-qr" data-open-url="${escapeAttr(task.pageUrl)}">${t('open_in_browser')}</button>
+                            ${renderTaskSecurityBadge(task.pageUrl, state, t, escapeAttr)}
+                        </div>
                     </div>
                 ` : (isQRExpanded ? `<div class="empty-state transfer-empty" style="margin-top: 12px;">${t('waiting_qr')}</div>` : '')}
             </div>
@@ -2402,13 +2412,7 @@ function renderSettingsPanel() {
                         <div class="setting-copy">
                             <strong>
                                 ${t('enable_tls')}
-                                ${!Boolean(state.settings?.enableTLS) ?
-                                    `<span class="tls-status-icon disabled" role="img" aria-label="${escapeAttr(t('tls_disabled_tooltip'))}" title="${escapeAttr(t('tls_disabled_tooltip'))}" style="margin-left: 6px; font-size: 12px; vertical-align: baseline; display: inline-block; opacity: 0.65;">🔓</span>` :
-                                    state.appInfo?.hasValidTLSCert ?
-                                    `<span class="tls-status-icon ready" role="img" aria-label="${escapeAttr(t('tls_cert_ready'))}" title="${escapeAttr(t('tls_cert_ready'))}" style="margin-left: 6px; font-size: 12px; vertical-align: baseline; display: inline-block;">🔒</span>` :
-                                    state.tlsKeyMismatch ?
-                                    `<span class="tls-status-icon mismatch" role="img" aria-label="${escapeAttr(state.tlsKeyMismatchMsg || t('tls_key_mismatch_msg'))}" title="${escapeAttr(state.tlsKeyMismatchMsg || t('tls_key_mismatch_msg'))}" style="margin-left: 6px; font-size: 12px; vertical-align: baseline; display: inline-block; cursor: help;">⚠️</span>` :
-                                    `<span class="tls-status-icon preparing" role="img" aria-label="${escapeAttr(t('tls_cert_preparing'))}" title="${escapeAttr(t('tls_cert_preparing'))}" style="margin-left: 6px; font-size: 12px; vertical-align: baseline; display: inline-block;">⏳</span>`}
+                                ${renderTLSSettingIcon(state, t, escapeAttr)}
                             </strong>
                             <span>${t('enable_tls_desc')}</span>
                         </div>
@@ -2534,7 +2538,7 @@ function renderSettingsPanel() {
                             <span>🔒</span> ${t('dev_lan_tls_title') || 'LAN-TLS Encryption Debug'}
                         </div>
                         <div style="font-size: 10.5px; color: var(--text-secondary); margin-bottom: 8px; line-height: 1.35;">
-                            ${escapeHTML((t('dev_lan_tls_status') || 'Status: ') + (state.appInfo?.hasValidTLSCert ? '✅ ' + (t('tls_cert_ready') || 'Ready') : (state.tlsKeyMismatch ? '⚠️ ' + (t('tls_key_mismatch_msg') || 'Key Mismatch') : '⏳ ' + (t('tls_cert_preparing') || 'Preparing...'))))} | Node: <code style="font-family: var(--font-mono);">${escapeHTML(state.appInfo?.nodeID || 'unknown')}</code>
+                            ${escapeHTML((t('dev_lan_tls_status') || 'Status: ') + getDevTLSStatusText(state, t))} | Node: <code style="font-family: var(--font-mono);">${escapeHTML(state.appInfo?.nodeID || 'unknown')}</code>
                         </div>
                         <button type="button" class="ghost" id="dev-provision-tls" ${state.devProvisioningTLS ? 'disabled' : ''} style="padding: 7px 6px; font-size: 11px; color: var(--accent); border-color: var(--accent); border-radius: 6px; font-weight: 700; width: 100%;">
                             ${state.devProvisioningTLS ? '⏳ ' + (t('dev_tls_provisioning') || 'Requesting Certificate from Gateway (10-15s)...') : '🔄 ' + (t('dev_request_tls_cert') || 'Request / Refresh TLS Certificate')}
@@ -3155,7 +3159,7 @@ function renderCurrent(task) {
                 <dt>${t('target')}</dt><dd>${escapeHTML(task.transferTarget || task.transferCurrent || shortName(task.paths?.[0] || ''))}</dd>
                 <dt>${t('archive')}</dt><dd>${escapeHTML(task.transferArchiveName || t('none'))}</dd>
                 <dt>${t('bytes')}</dt><dd>${formatBytes(task.bytesDone)}${task.bytesTotal ? ` / ${formatBytes(task.bytesTotal)}` : ''}</dd>
-                <dt>${t('qr_page')}</dt><dd>${task.pageUrl ? escapeHTML(task.pageUrl) : t('waiting')}</dd>
+                <dt>${t('qr_page')}</dt><dd>${task.pageUrl ? `${escapeHTML(task.pageUrl)} <span style="margin-left: 6px;">${renderTaskSecurityBadge(task.pageUrl, state, t, escapeAttr)}</span>` : t('waiting')}</dd>
             </dl>
             ${renderSavedFiles(task.savedFiles)}
             ${task.error ? `<div class="notice error compact">${escapeHTML(task.error)}</div>` : ''}
@@ -4050,15 +4054,23 @@ function bindEvents() {
                     } catch (_) {}
                     state.devProvisioningTLS = false;
                     state.devProvisionTLSError = !success;
-                    state.devProvisionTLSResult = success
-                        ? (t('dev_tls_success') || '✅ 证书申请成功，已通过系统全局根信任校验并已落盘！')
-                        : (t('dev_tls_failed') || '⚠️ 证书置备未完成（局域网普通 HTTP 降级保障中），请查看日志。');
+                    if (success) {
+                        state.tlsProvisionFailed = false;
+                        state.tlsProvisionError = '';
+                        state.devProvisionTLSResult = t('dev_tls_success') || '✅ 证书申请成功，已通过系统全局根信任校验并已落盘！';
+                    } else {
+                        state.tlsProvisionFailed = true;
+                        state.tlsProvisionError = state.appInfo?.tlsError || 'Fail-soft active';
+                        state.devProvisionTLSResult = (t('dev_tls_failed') || '⚠️ 证书置备未完成（局域网普通 HTTP 降级保障中）') + (state.appInfo?.tlsError ? `: ${state.appInfo.tlsError}` : '');
+                    }
                     showToast(state.devProvisionTLSResult);
                     render();
                     openPanel('settings');
                 }).catch((err) => {
                     state.devProvisioningTLS = false;
                     state.devProvisionTLSError = true;
+                    state.tlsProvisionFailed = true;
+                    state.tlsProvisionError = err?.message || String(err) || 'Error';
                     state.devProvisionTLSResult = '❌ ' + (err?.message || err || '申请证书异常');
                     showToast(state.devProvisionTLSResult);
                     render();
@@ -4302,23 +4314,44 @@ function bindEvents() {
 
                     if (isEnabled) {
                         if (!state.appInfo?.hasValidTLSCert) {
+                            state.tlsProvisioning = true;
+                            state.tlsProvisionFailed = false;
+                            state.tlsProvisionError = '';
+                            render();
+                            openPanel('settings');
                             showToast(t('tls_enabling_auto_provision') || 'ℹ️ 已开启 TLS 加密，正在后台申请设备证书（预计 10~15 秒）...');
                             DevProvisionDeviceTLSCert().then(async (success) => {
+                                state.tlsProvisioning = false;
                                 try {
                                     state.appInfo = await GetAppInfo();
                                 } catch (_) {}
+                                if (success) {
+                                    state.tlsProvisionFailed = false;
+                                    state.tlsProvisionError = '';
+                                    showToast(t('tls_cert_ready') || '✅ 官方公信 TLS 证书就绪！');
+                                } else {
+                                    state.tlsProvisionFailed = true;
+                                    state.tlsProvisionError = state.appInfo?.tlsError || 'Provisioning deferred (plain HTTP fallback active)';
+                                    showToast(t('tls_cert_failed_tooltip') || '⚠️ 证书置备遇到异常（已自动降级为标准明文传输保障传输）');
+                                }
                                 render();
                                 openPanel('settings');
-                                if (success) {
-                                    showToast(t('tls_cert_ready') || '✅ 官方公信 TLS 证书就绪！');
-                                }
                             }).catch((err) => {
                                 console.warn('[LAN-TLS] Auto provision on switch toggle failed:', err);
+                                state.tlsProvisioning = false;
+                                state.tlsProvisionFailed = true;
+                                state.tlsProvisionError = err?.message || String(err) || 'Error';
+                                showToast(t('tls_cert_failed_tooltip') || '⚠️ 证书置备遇到异常（已自动降级为标准明文传输保障传输）');
+                                render();
+                                openPanel('settings');
                             });
                         } else {
                             showToast(t('tls_cert_ready') || '✅ 官方公信 TLS 证书已就绪！');
                         }
                     } else {
+                        state.tlsProvisioning = false;
+                        state.tlsProvisionFailed = false;
+                        state.tlsProvisionError = '';
                         showToast(t('tls_disabled_tooltip') || 'ℹ️ 局域网 TLS 加密已关闭');
                     }
                     return;
@@ -6796,6 +6829,9 @@ EventsOn('eqt:tls-cert-ready', async () => {
         state.appInfo = await GetAppInfo();
         state.tlsKeyMismatch = false;
         state.tlsKeyMismatchMsg = '';
+        state.tlsProvisioning = false;
+        state.tlsProvisionFailed = false;
+        state.tlsProvisionError = '';
     } catch (_) {}
     render();
 });
@@ -6813,7 +6849,16 @@ EventsOn('eqt:tls-node-key-mismatch', (payload) => {
         : ((payload && payload.message) || '本地证书私钥与云端设备登记不一致，请重置密钥绑定');
     state.tlsKeyMismatch = true;
     state.tlsKeyMismatchMsg = msgText;
+    state.tlsProvisioning = false;
     showToast('⚠️ ' + msgText);
+    render();
+});
+
+EventsOn('eqt:tls-cert-failed', (payload) => {
+    console.warn('[LAN-TLS] Certificate provisioning failed (fail-soft active):', payload);
+    state.tlsProvisioning = false;
+    state.tlsProvisionFailed = true;
+    state.tlsProvisionError = (payload && payload.error) || 'Certificate provisioning deferred';
     render();
 });
 

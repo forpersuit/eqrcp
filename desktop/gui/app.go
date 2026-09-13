@@ -55,6 +55,8 @@ type App struct {
 	agent         *desktopAgent
 	downloadsMu   sync.Mutex
 	downloads     map[string]context.CancelFunc
+	tlsMu         sync.RWMutex
+	lastTLSError  string
 }
 
 type AgentTask struct {
@@ -171,6 +173,7 @@ type AppInfo struct {
 	IsTest             bool   `json:"isTest"`
 	HasValidTLSCert    bool   `json:"hasValidTLSCert"`
 	TLSNodeID          string `json:"tlsNodeId,omitempty"`
+	TLSError           string `json:"tlsError,omitempty"`
 }
 
 type DesktopIntegrationStatus struct {
@@ -1254,6 +1257,12 @@ func (a *App) AppInfo() AppInfo {
 	}
 	nodeID := server.GetDeviceNodeID()
 	hasValidCert := cert.HasValidCertificateForNode("", "", nodeID)
+	var tlsErr string
+	if !hasValidCert {
+		a.tlsMu.RLock()
+		tlsErr = a.lastTLSError
+		a.tlsMu.RUnlock()
+	}
 	info := AppInfo{
 		Product:         "EQT",
 		Name:            "Easy QR Transfer",
@@ -1266,6 +1275,7 @@ func (a *App) AppInfo() AppInfo {
 		IsTest:          server.IsTestBuild(),
 		HasValidTLSCert: hasValidCert,
 		TLSNodeID:       nodeID,
+		TLSError:        tlsErr,
 	}
 	if cli, err := findEqtCLI(); err == nil {
 		info.CLIPath = cli
@@ -2144,6 +2154,9 @@ func (a *App) provisionDeviceTLSCertInternal(force bool, allowSelfHeal bool) (bo
 			if expiry, err := cert.GetCertificateExpiry(devCert); err == nil && time.Until(expiry) > 15*24*time.Hour {
 				msg := fmt.Sprintf("[LAN-TLS] Local dedicated certificate is active for nodeID=%s (status=ready, expiresAt=%s, %d days remaining)",
 					nodeID, expiry.Format("2006-01-02 15:04"), int(time.Until(expiry).Hours()/24))
+				a.tlsMu.Lock()
+				a.lastTLSError = ""
+				a.tlsMu.Unlock()
 				if a.logger != nil {
 					a.logger.Info(msg)
 				}
@@ -2214,6 +2227,9 @@ func (a *App) provisionDeviceTLSCertInternal(force bool, allowSelfHeal bool) (bo
 			}
 
 			warnMsg := fmt.Sprintf("[LAN-TLS-PROVISION] [CRITICAL] Node key mismatch for nodeID=%s: 本地证书私钥与云端设备登记不一致，请重置密钥绑定。当前进程静默置备已终止（若未重绑重启后仍会尝试）。", nodeID)
+			a.tlsMu.Lock()
+			a.lastTLSError = "node_key_mismatch: " + err.Error()
+			a.tlsMu.Unlock()
 			if a.logger != nil {
 				a.logger.Warning(warnMsg)
 			}
@@ -2229,15 +2245,27 @@ func (a *App) provisionDeviceTLSCertInternal(force bool, allowSelfHeal bool) (bo
 		}
 
 		// Log detailed error and fail-soft without disturbing the user
+		a.tlsMu.Lock()
+		a.lastTLSError = err.Error()
+		a.tlsMu.Unlock()
 		msg := fmt.Sprintf("[LAN-TLS-PROVISION] [FAIL-SOFT] Provisioning deferred: %v (plain HTTP fallback active)", err)
 		if a.logger != nil {
 			a.logger.Info(msg)
 		}
 		if a.ctx != nil {
 			wailsruntime.LogInfo(a.ctx, msg)
+			wailsruntime.EventsEmit(a.ctx, "eqt:tls-cert-failed", map[string]any{
+				"node_id":  nodeID,
+				"error":    err.Error(),
+				"fallback": "plain_http",
+			})
 		}
 		return false, err
 	}
+
+	a.tlsMu.Lock()
+	a.lastTLSError = ""
+	a.tlsMu.Unlock()
 
 	successMsg := fmt.Sprintf("[LAN-TLS-PROVISION] [SUCCESS] Dedicated certificate ready for nodeID=%s (status=ready, expiresAt=%s)",
 		res.NodeID, res.ExpiresAt.Format("2006-01-02 15:04"))
@@ -2250,3 +2278,11 @@ func (a *App) provisionDeviceTLSCertInternal(force bool, allowSelfHeal bool) (bo
 	}
 	return true, nil
 }
+
+// GetLastTLSError returns the error message from the most recent TLS provisioning failure, if any.
+func (a *App) GetLastTLSError() string {
+	a.tlsMu.RLock()
+	defer a.tlsMu.RUnlock()
+	return a.lastTLSError
+}
+

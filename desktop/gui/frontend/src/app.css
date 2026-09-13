@@ -3750,4 +3750,37 @@ dd {
     transition: width 0.2s ease;
 }
 
+/* LAN-TLS Status Badges & Security Indicators */
+.tls-security-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+    padding: 3px 6px;
+    border-radius: 4px;
+    vertical-align: middle;
+    letter-spacing: 0.02em;
+    user-select: none;
+}
+.tls-security-badge.secure {
+    background-color: rgba(16, 185, 129, 0.12);
+    color: #059669;
+    border: 1px solid rgba(16, 185, 129, 0.28);
+}
+.tls-security-badge.fallback {
+    background-color: rgba(245, 158, 11, 0.12);
+    color: #d97706;
+    border: 1px solid rgba(245, 158, 11, 0.32);
+}
+.tls-security-badge.plain {
+    background-color: rgba(100, 116, 139, 0.08);
+    color: var(--text-muted, #64748b);
+    border: 1px solid rgba(100, 116, 139, 0.18);
+}
+.tls-status-icon.failed {
+    color: #ef4444;
+}
+
 

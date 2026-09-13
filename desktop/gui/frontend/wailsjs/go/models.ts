@@ -175,6 +175,7 @@ export namespace main {
 	    isTest: boolean;
 	    hasValidTLSCert: boolean;
 	    tlsNodeId?: string;
+	    tlsError?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppInfo(source);
@@ -195,6 +196,7 @@ export namespace main {
 	        this.isTest = source["isTest"];
 	        this.hasValidTLSCert = source["hasValidTLSCert"];
 	        this.tlsNodeId = source["tlsNodeId"];
+	        this.tlsError = source["tlsError"];
 	    }
 	}
 	export class ChatAttachmentSaveResult {

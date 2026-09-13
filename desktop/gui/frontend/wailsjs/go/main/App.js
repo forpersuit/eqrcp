@@ -86,6 +86,10 @@ export function GetFileInfos(arg1) {
   return window['go']['main']['App']['GetFileInfos'](arg1);
 }
 
+export function GetLastTLSError() {
+  return window['go']['main']['App']['GetLastTLSError']();
+}
+
 export function GetLogFiles() {
   return window['go']['main']['App']['GetLogFiles']();
 }

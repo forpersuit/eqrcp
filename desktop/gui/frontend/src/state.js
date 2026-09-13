@@ -59,4 +59,7 @@ export const state = {
     crashAcknowledged: false,
     tlsKeyMismatch: false,
     tlsKeyMismatchMsg: '',
+    tlsProvisioning: false,
+    tlsProvisionFailed: false,
+    tlsProvisionError: '',
 };

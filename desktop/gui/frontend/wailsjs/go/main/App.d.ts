@@ -45,6 +45,8 @@ export function GetCrashReportDetail():Promise<main.CrashReportDetail>;
 
 export function GetFileInfos(arg1:Array<string>):Promise<Array<main.GUIFileInfo>>;
 
+export function GetLastTLSError():Promise<string>;
+
 export function GetLogFiles():Promise<Array<main.LogFileInfo>>;
 
 export function GetLogTail(arg1:number):Promise<Array<string>>;

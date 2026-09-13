@@ -2547,19 +2547,67 @@ $ EQT_CONFIG_DIR=/tmp/retired-probe go test ./pkg/config -run TestDefaultConfigF
 
 ##### 二、工程落地与状态自洽规范
 1. **状态图标呈现第一性准则**：
-   - **开关处于 Off（关闭）**：展示 `🔓`（`tls-status-icon disabled`，半透明灰色），tooltip 显示「TLS 未开启，局域网以明文 HTTP 传输」（7 国语言适配）。
+   - **开关处于 Off（关闭）**：展示 `🔓`（`tls-status-icon disabled`，半透明灰色），tooltip 显示「TLS 未开启，局域网以明文 HTTP 传输」（全语言适配）。
    - **开关处于 On（开启）**：
-     - 若本地具备有效证书且私钥匹配：展示 `🔒`（绿锁），tooltip 显示「TLS 局域网加密已就绪」；
-     - 若本地私钥失配：展示 `⚠️`，tooltip 显示警告指引；
-     - 若本地尚未获得证书：展示 `⏳`（等待），tooltip 显示「正在申请/置备 TLS 证书...」。
+     - 若本地具备有效证书且私钥匹配：展示 `🔒`（绿锁），tooltip 显示「官方公信 TLS 已就绪」；
+     - 若本地私钥失配：展示 `⚠️`，tooltip 显示私钥失配警告与重绑指引；
+     - 若发生异常（网关 500、超时或网络中断等 Fail-Soft 降级）：展示 `⚠️`（异常/降级图标），tooltip 显示「证书置备遇到异常（已自动降级为明文传输保障可用），点击查看详情或重试」，并显示后端真实报错；
+     - 若正在后台与云端通信签发中：展示 `⏳`（等待），tooltip 显示「局域网 TLS 正在后台准备中（预计 10~15 秒）...」。
 2. **开关事件绑定与自动置备（Zero-Touch Auto-Provision）**：
    - 监听 `#settings-enable-tls` 的 `change` 事件：
      - 切换时立即更新 `state.settings.enableTLS` 并触发 `render()` 重绘 Settings 视图，确保图标与开关状态实时自洽；
      - 当拨为 **开启** 且当前本地无有效证书（`!hasValidTLSCert`）时，立即自动调用 `DevProvisionDeviceTLSCert()` 在后台静默申请，并弹出即时状态提示；
      - 证书签发成功后通过事件与 Promise 回调无缝更新 `hasValidTLSCert = true` 并重绘，图标无缝跃变为 `🔒`，无需重启客户端；
+     - 若申请失败，通过 `eqt:tls-cert-failed` 事件和返回结果同步将状态标记为 `tlsProvisionFailed = true`，状态图标由 `⏳` 切换为 `⚠️`，并给出 Fail-Soft 明文降级保障提示；
      - 当拨为 **关闭** 时，立即重绘为 `🔓` 并给出应用内提示。
 3. **多语言全量覆盖**：
-   - 在 `desktop/gui/frontend/src/i18n.js` 中补齐 7 种语言（zh/en/ja/ko/es/de/fr）的 `tls_disabled_tooltip` 与 `tls_enabling_auto_provision` 词条。
+   - 在 `desktop/gui/frontend/src/i18n.js` 中补齐全语言（zh/en/ja/ko/es/de/fr）的 `tls_disabled_tooltip`、`tls_enabling_auto_provision`、`tls_cert_failed_tooltip`、`tls_cert_failed_status`、`tls_active_https`、`tls_fallback_http`、`tls_fallback_label` 与 `tls_standard_http` 词条。
+
+---
+
+### 十二、LAN-TLS 异常态运行流转、Fail-Soft 降级与图标精准联动（基线 v1.36.110）
+
+#### 1. 物理全生命周期时序与网关 HTTP 500 根因复盘
+当用户删除默认配置目录（Windows `%APPDATA%\eqt`）并启动新编译的 EQT 时，系统的物理运行流转如下：
+1. **身份与密钥派生阶段**：
+   - 检测到本地不存在 `identity.json` 与私钥文件，本地自动派生 12 位十六进制 `nodeID`（如 `9be192a9efff`）；
+   - 在本地安全生成全新 ECDSA P-256 私钥（落盘于 `certs/<nodeID>/privkey.pem`），私钥永不出机；
+   - 构造自签名 CSR，包含专属单机域名与通配泛域名。
+2. **DRM 异步注册与授权恢复**：
+   - 后台比对硬件指纹（主板 UUID、CPU 序列号、磁盘序列号），在线完成匿名设备登记，并自动恢复已绑定的云端 PLUS 许可证。
+3. **证书静默置备与用户主动触发的并发时序**：
+   - 客户端后台协程执行 `silentProvisionDeviceTLSCert`（`force=false`）；
+   - 用户在 UI 开启 TLS 开关或手动点击申请，触发 `DevProvisionDeviceTLSCert`（`force=true`）；
+   - 客户端向网关 `https://lic.eqt.net.im/api/v1/cert/provision` 发起 HTTPS POST 置备请求。
+4. **网关 HTTP 500 的根因**：
+   - 网关（Cloudflare Worker `cert.ts`）在处理请求时，若配置了 ACME 生产签发，需与外部 ACME 目录服务通信并在 Cloudflare DNS 添加 `_acme-challenge` TXT 记录；
+   - 当外部 ACME 验证暂时延迟、DNS API 遇到限流、或者子请求超出 Worker 配额时，Worker 进入第 1106 行统一错误处理：
+     `catch (err: any) { ... return new Response(JSON.stringify({ error: 'An unexpected error occurred while issuing the certificate', reason_key: 'internal_error' }), { status: 500 }); }`
+   - 网关向客户端返回 HTTP 500 `internal_error`。
+5. **客户端 Fail-Soft（软失败优雅降级）机制**：
+   - 客户端收到 HTTP 500 后，遵循第一性原理：**绝对不阻断本地文件传输，自动降级为明文 HTTP 协议运行（`plain HTTP fallback active`）**；
+   - 本地服务启动时检测到无有效证书，自动将 `cfg.Secure` 改为 `false`，生成明文 `http://` 链接与二维码，确保跨设备传输立即可用。
+
+#### 2. 原前端与图标展示漏洞分析
+- **漏洞表现**：在旧版代码中，虽然日志中清晰打印了 `[FAIL-SOFT] Provisioning deferred: HTTP 500 ...`，但界面却存在“状态断裂”：
+  1. 后端进入 Fail-Soft 时，未向前端发送任何失败事件；
+  2. 前端状态机只有 `hasValidTLSCert` 和 `tlsKeyMismatch` 两个判断分支，遇到 500 错误时自动兜底进入 `⏳`（沙漏）；
+  3. 用户误以为后台还在置备中，不知道置备早已失败并已降级为 HTTP；
+  4. 开发者面板中同样永远显示 `⏳ Preparing...`；
+  5. 任务卡片与二维码详情处，用户无法直观辨识当前传输是受 TLS 加密保护还是降级明文。
+
+#### 3. v1.36.110 架构治理与工程落地
+1. **模块化剥离**：新建独立组件 `desktop/gui/frontend/src/components/tls_status.js`，实现状态计算与 DOM 渲染纯函数分离。
+2. **五状态状态机严格定型**：
+   - `disabled` (🔓)：TLS 开关关闭，标准明文 HTTP 传输；
+   - `preparing` (⏳)：开关已开启，正在后台向网关申请证书中（预计 10~15 秒）；
+   - `ready` (🔒)：官方公信 TLS 证书就绪，全程端到端加密；
+   - `mismatch` (⚠️)：本地私钥与云端绑定不符，提示重绑；
+   - `failed` (⚠️)：置备异常（如 HTTP 500 或网络超时），已自动激活 Fail-Soft 降级明文，Tooltip 与开发者面板实时呈现具体错误原因，支持一键重试。
+3. **全链路状态打通**：
+   - 后端 `App` 结构体跟踪 `lastTLSError`，在 `AppInfo` 中公开 `tlsError`；
+   - 在 Fail-Soft 触发点广播 `eqt:tls-cert-failed` Wails 事件；
+   - 任务卡片、二维码弹窗与详情处引入 `.tls-security-badge`，动态标识 `🔒 HTTPS` / `⚠️ HTTP (降级明文)` / `🔓 HTTP`。
 
 
 

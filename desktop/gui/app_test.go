@@ -300,4 +300,53 @@ func TestDevProvisionDeviceTLSCert_ToleratesServerLatencyAboveFiveSeconds(t *tes
 	}
 }
 
+func TestDevProvisionDeviceTLSCert_Gateway500ErrorSetsLastTLSError(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("EQT_CONFIG_DIR", filepath.Join(tempHome, "eqt_conf"))
+
+	// Mock Gateway returning 500 internal_error (reproducing user scenario)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error":      "An unexpected error occurred while issuing the certificate",
+			"reason_key": "internal_error",
+		})
+	}))
+	defer server.Close()
+
+	t.Setenv("EQT_PROVISION_ENDPOINT", server.URL)
+
+	app := NewApp()
+	app.logger = NewFileLogger(filepath.Join(tempHome, "desktop.log"), true)
+	defer app.logger.Close()
+
+	success, err := app.DevProvisionDeviceTLSCert()
+	if success {
+		t.Fatalf("expected success=false when gateway returns 500, got true")
+	}
+	if err == nil {
+		t.Fatalf("expected non-nil error when gateway returns 500, got nil")
+	}
+	if !strings.Contains(err.Error(), "HTTP 500") {
+		t.Errorf("expected error to mention HTTP 500, got: %v", err)
+	}
+
+	// Verify app.GetLastTLSError captures the failure
+	lastErr := app.GetLastTLSError()
+	if !strings.Contains(lastErr, "HTTP 500") {
+		t.Errorf("expected GetLastTLSError to contain HTTP 500, got: %s", lastErr)
+	}
+
+	// Verify AppInfo() surfaces the error when certificate is not valid
+	info := app.AppInfo()
+	if info.HasValidTLSCert {
+		t.Errorf("expected HasValidTLSCert=false")
+	}
+	if !strings.Contains(info.TLSError, "HTTP 500") {
+		t.Errorf("expected AppInfo.TLSError to contain HTTP 500, got: %s", info.TLSError)
+	}
+}
+
 
