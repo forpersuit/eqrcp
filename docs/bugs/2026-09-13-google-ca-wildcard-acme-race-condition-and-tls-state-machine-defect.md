@@ -661,6 +661,8 @@ async function confirmDnsPropagation(
 
 ## 八、 开发方响应与落地成果（第 33 轮复核完全闭环）
 
+> **⚠️ 第 34 轮审查更正（2026-09-13，见 §九）**：本节标题的「**完全闭环**」与验收表 **E2′ = ✅ 已修复** 两项名实不符。E2′ 的字面缺陷（`GetSettings` 死代码 + 静默吞错）确已修复，但其根因诉求（`main.js` 无任何静态防线）**未动**，§九 R34-2 已用探针实测证明该类缺陷仍在；且本次修复**新引入**一条 fail-open（§九 R34-1）。E2′ 应记为「**⚠️ 部分闭环**」。
+
 开发团队对审查员在 Commit `2f9de1d8`（§7）中提出的第 33 轮独立复核意见及 E1′~E4′ 出口条件进行了逐项技术核验与工程落地：
 
 ### 1. 实锤缺陷与测试隐患彻底消除
@@ -722,5 +724,162 @@ async function confirmDnsPropagation(
 | **E4′** | 收敛 Worker 子请求预算 | ✅ 已收敛 | `src/routes/cert.ts:570-585`（10s / 1s / max 8 轮 = 16 subrequests ≤ 50） |
 | **TTL** | 撤回与事实归位 | ✅ 已同步 | 正应答 wire TTL=60s / 负缓存上限=300s |
 | **版本** | 递增小版本号 | ✅ 已升级 | `pkg/version/version.go`: `v1.36.116`，`wails.json`: `1.36.116` |
+
+---
+
+## 九、 审查意见（第 34 轮独立复核 · 对 `4682fb04` 的落地审查 · 基线 `v1.36.116`）
+
+对象：Commit `4682fb04`（`Fix ReadSettings call and guard against vacuous Infinity invariant lock`，7 文件）。本轮复核方法与前 33 轮一致：**每一条开发方声明都必须由审查方在实物行上独立复现**；凡「修复」类声明，一律跑**反向探针**（把被修的东西改回去，看是否变红）。
+
+### 9.1 独立复核为真（9 项）
+
+| # | 开发方声明 | 实物位置 | 复核结论 |
+| :-- | :--- | :--- | :--- |
+| 1 | `GetSettings()` 改为 `ReadSettings()` | `main.js:5216` | ✅ 真（`ReadSettings` 于 `main.js:32` 导入，全仓唯一合法名） |
+| 2 | catch 分支补齐告警日志 | `main.js:5218` | ✅ 真（`console.warn('[LAN-TLS] Failed to read latest settings after auto-disable:', e)`） |
+| 3 | 新增 T19.4b 三阶段非空断言 | `tests/cert-provision-offline.js:879-880` | ✅ 真（断言置于 T19.5/T19.6 之前） |
+| 4 | **「反向验证：删除确认环节立即变红阻断」** | — | ✅ **实测为真**——探针 A 见 §9.2.1 |
+| 5 | 离线用例 74 项全通过 | — | ✅ 真（`Results: 74 passed, 0 failed`） |
+| 6 | `maxAttempts=8` ⇒ 最坏 16 子请求 ≤ 50 | `cert.ts:575-577`、`:1151` | ✅ 算术真（8 × 2 端点 = 16） |
+| 7 | TTL 事实归位（正应答 60s / 负缓存上限 300s） | `cmd/eqt-dns/main.go:224`、`:275` | ✅ 真（与 §7.5 口径一致，已落到应答代码行） |
+| 8 | 版本号递增 | `pkg/version/version.go`、`wails.json` | ✅ 真（`v1.36.116` / `1.36.116`） |
+| 9 | 因果归因：`f2292436` 承重「顺序」，`7637ef21` 承重「观测」 | §8.2.1 | ✅ 真（与 R33-3 结论一致） |
+
+**说明**：第 4 项是本项目连续 34 轮中**极少见的、由开发方自述且经独立复现为真**的「反向验证」声明。§9.3 对这一现象有专门方法论沉淀。
+
+### 9.2 实锤缺陷
+
+#### R34-1（高 · **本轮修复新引入**）· `ReadSettings()` 覆写把「自动关断」翻回「开启」——错配路径 fail-open
+
+- **位置**：`desktop/gui/frontend/src/main.js:5201-5228`（前端）× `desktop/gui/app.go:2267-2276` vs `:2281-2288`（后端）。
+- **机理（逐跳可查）**：
+  1. 后端 `provisionDeviceTLSCertInternal` 命中 `errors.Is(err, cert.ErrNodeKeyMismatch)` 时，在 `app.go:2267` 发出 `eqt:tls-node-key-mismatch` 事件，随后于 `:2276` `return false, err` —— **完全绕过** `:2281-2288` 那段「读改写 `curSettings.EnableTLS = false` + `writeSettings`」。即**该路径下磁盘从未被写成 `false`**。
+  2. 前端 `EventsOn('eqt:tls-node-key-mismatch')`（`main.js:6878`）→ `await autoDisableTLSOnFailure(msgText, false)`（`main.js:6893`）。
+  3. `autoDisableTLSOnFailure` 先置本地 `state.settings.enableTLS = false`（`:5203`）、并把 DOM 开关 uncheck（`:5208-5211`）；**随后**执行 `state.settings = await ReadSettings();`（`:5216`）——读回的磁盘值仍是 `true`，于是 `state.settings.enableTLS` 被**翻回 `true`**。
+  4. `render()`（`:5224`）按 `main.js:2421` 的 `renderSwitch('settings-enable-tls', Boolean(state.settings?.enableTLS))` **重新勾选该开关**；
+  5. 而 `showToast`（`:5222`）同时向用户宣称「**已自动关闭局域网 TLS**」。
+- **净效果**：**文案说已关、界面显示已开**。用户在「自以为已关闭加密」的状态下继续使用明文传输 —— 这正是 `app.go:2281-2282` 注释所声称要消除的「虚假安全感」，被本轮修复重新制造出来。
+- **性质：这是修复引入的回归（Rule 13）**。旧代码 `GetSettings()` 必然抛 `ReferenceError` → 走 `catch` → 强制 `state.settings.enableTLS = false`，**意外地**维持了不变量（fail-closed）。本轮修复让主路径成功，**把这个「意外的闭」拆掉了，却没有显式接管该不变量**。
+- **注释与代码不一致（旁证）**：`main.js:5213` 断言「后端在 `provisionDeviceTLSCertInternal` 失败时**已原子落盘** `settings.EnableTLS = false`」——该前置条件对两条 emit 路径中的**错配路径为假**。
+- **测试未覆盖**：`desktop/gui/app_test.go` 全文仅 3 处 `EnableTLS`（`:370/:372/:381`），且全部属于「`EnableTLS=false` 时不发网络请求」这一用例；**没有任何测试断言自动关断路径的落盘不变量**，更无错配路径的用例。
+- **修法（推荐 ①，根因）**：
+  ① 后端把 `:2281-2288` 的 read-modify-write 抽成一个小函数（如 `a.persistDisableTLS()`），在**两条**失败 `return` 之前都调用；并把 `:2267` 的事件 emit **移到落盘之后**，使「先落盘、后通知」这一顺序前提对两条路径都成立。
+  ② 前端保底：在 `:5216` 之后补 `state.settings.enableTLS = false;`，使本地镜像不再依赖后端是否落盘（即把旧代码「意外」维持的不变量显式化）。
+  ③ 补一条 Go 测试：构造 `ErrNodeKeyMismatch` 失败路径，断言 `settings.EnableTLS === false` 已落盘。**反向探针**：回退该落盘后，这条测试必须转红。
+
+#### R34-2（高）· E2′ 只修了症状，类仍在 —— `main.js` 至今零静态防线
+
+- **位置**：`desktop/gui/frontend/package.json`（`scripts` 仅 `dev`/`build`/`preview`；`devDependencies` 仅 `vite`；目录下**无** `.eslintrc*`、**无** `tsconfig.json`/`jsconfig.json`）。
+- **实测（探针 C，见 §9.2.3）**：向 `main.js` 注入一行**活代码** `void R34ProbeUndefinedBinding();` → `npm run build` **退出码 0、全绿**，且该标识符**原样进入产物** `dist/assets/index.*.js`。即 R33-1 的**根因类完全存活**：`main.js` 中任何一处调用不存在的绑定，编译 / 测试 / 构建 / pre-commit 全绿，只在**运行到那一行**时才炸。
+- **对照**：`cloudflare/eqt-drm-api` 侧**有**闸门 —— `pretest:cert:offline` 会先跑 `tsc --noEmit`（本轮探针期间亲历其拦截，见 §9.2.2）。前端侧没有任何等价物，而 `ReadSettings` 在 `main.js` 有 **7 个调用点**（`:32` 导入；`:3984`/`:3994`/`:3999`/`:5216`/`:5723`/`:6409`/`:6861`），全靠手维护的导入列表维系。
+- **含义**：E2′ 是「改一个函数名」，**不是**「给这一类缺陷装闸门」。R33-1 的病是后者。
+- **修法**：为 `desktop/gui/frontend` 建立最小静态防线并接入构建（pre-commit 已在跑 `vite build`，追加一步即可）。例如
+  ```sh
+  npx eslint --no-eslintrc --env browser,es2022 \
+    --parser-options=ecmaVersion:2022,sourceType:module \
+    --rule '{"no-undef":"error"}' src/main.js
+  ```
+  或落一份 `.eslintrc.json` + `"lint": "eslint src"`（脚本名与 Worker 侧 `typecheck` 对齐）。**判据**：R33-1 的原始形态（`GetSettings()`）必须被该步骤判红。
+
+#### R34-3（中）· E4′ 落地的前提是断言而非实证；且「缩窗」与守卫自身理由相悖
+
+- **前提未证**：`wrangler.toml` 内**没有任何可据以判定计划档位的证据**（本轮已 `rg` 确认无 `limits` / `subrequests` / `plan`）。文档 §8.1.3 却把「**Cloudflare Free 计划 50 次**」写成事实。若实际为 Paid（10,000），本次 `20000→10000` 的收敛就是**净损失**。
+  - **判据**：给出可复现的档位取证（`wrangler whoami` / Dashboard 计费页），**或**把措辞降级为「按 Free 计划上限做保守预算（档位未证）」。
+- **缩窗方向与理由相反**：`confirmDnsPropagation` 抛错会经 `cert.ts:1148` 所在 `try` 的 `finally`（`:1182` `ctx.waitUntil(...cleanup...)`）**删除刚写入的 TXT 记录并使整次置备失败**。把等待窗口从 20s 收到 `maxAttempts=8 × intervalMs=1000 ≈ 7~8s`（且 `timeoutMs=10000` 实际**不构成约束**），等价于把「等 20s 可能成功」改成「8s 就放弃 → 删记录 → 失败」——而它的既定理由恰恰是「防范未来从库异步复制延迟」。
+  - 今天无碍，**只因为该确认在两端点是同义反复**（POST 200 ⇒ 同一进程内存 store 立即可读，`cmd/eqt-dns/main.go:221`），即守卫**从不真正等待**；一旦同义反复被打破（即它要防的那种未来），更短的窗口只会**更早误杀**。
+  - 文档「既能保证权威双机秒级确认，又杜绝…」把**预算理由写成了能力理由**。建议改为：*此举是为满足预算上限，不是增强守卫；守卫对真实竞态无效（见 R33-3），其对负缓存的残余覆盖为零。*
+- **附（低）**：`maxAttempts=8` 是**调用点不可见**的默认参数（`cert.ts:1151` 只传 `10000, 1000`），未来维护者据调用点会以为 10s 是约束；文档「10s / 1s / max 8 轮」中的「10s」不成立。建议把 `maxAttempts` 显式写在调用点，或删掉 `timeoutMs` 只留 attempts（**单一约束来源**）。
+
+#### R34-4（低）· E1′ 判定为**已闭环**，但需为「锁的保证范围」留一句限定
+
+- **实测（探针 B，见 §9.2.4）**：把确认函数改成「发一次装饰性 GET + 删除逐值校验」后，**T19.4b / T19.5 / T19.6 全 ✓**（且数字变为**真实有限**的 `2<3`、`4<5`），转红的是 **T19b.2 / T19b.3 / T19b.4**。
+- **结论**：T19.4b 把锁从「空集恒真」提升到「**阶段存在且顺序成立**」，足以堵死 R33-2 所报的那一类，**故 E1′ 判为已闭环**。但它在语义上**仍是形状锁** —— 只要确认函数发过一次 GET 就满足，它不验证该 GET 校验了任何值。**效力由 T19b.2/.3/.4 承担**，而这三个反向控制本轮实测**确实会红**，因此整套测试的效力是站得住的。
+- **建议（非阻断）**：在 `tests/cert-provision-offline.js:879-880` 上方补一行注释，声明 T19.4b/T19.5/T19.6 锁的是「**线上观察到 GET 介于 set 与 trigger 之间**」，语义效力由 T19b 承担 —— 避免下一位读者把形状锁误读成效力锁（这正是「声称超出实现」这一陷阱的微缩版）。
+
+#### R34-5（低）· §八「完全闭环」与 E2′ 的 ✅ 名实不符
+
+- §八标题称「第 33 轮复核**完全**闭环」，验收表 E2′ 记「✅ 已修复」。
+- 就 E2′ **字面**而言确实改了（`ReadSettings()` + warn 均到位，已核验）；但其**根因诉求**（`main.js` 静态防线）未动，R34-2 已实测证明类仍存活；且 R34-1 表明这次修改还**引入**了一条 fail-open。
+- **处置**：已在 §八标题下加入 ⚠️ 更正指针；建议把 E2′ 状态改为「**⚠️ 部分闭环**：字面缺陷已修，根因防线未建（见 §九 R34-2）」，并把标题的「完全闭环」改为「响应与落地成果」，以免与 §九 结论冲突。
+
+### 9.2.1 探针 A（复现开发方「删除确认即变红」声明）—— ✅ 声明为真
+
+- **改法**：把 `cert.ts:1151` 的 `await confirmDnsPropagation(endpoints, dnsToken, recName, expectedVals, 10000, 1000);` 换成 `await new Promise(r => setTimeout(r, 10));`（即绕过正向确认、退回盲等）。
+- **命令**：`cd cloudflare/eqt-drm-api && npm run test:cert:offline`
+- **实测输出**：
+  ```
+  ✓ T19.4: DNS challenge recordName correctly constructed with device node
+  ✗ FAIL: T19.4b: callTracer captured all three phases (guards against vacuous Infinity comparison)
+  ✓ T19.5: Invariant locked: max(setDns01Challenge)=2 < min(confirmDnsPropagation)=Infinity
+  ✓ T19.6: Invariant locked: max(confirmDnsPropagation)=-Infinity < min(triggerChallenge)=3
+  Results: 73 passed, 1 failed
+  ```
+- **读法**：T19.4b **转红** ⇒ 开发方声明成立。注意 T19.5/T19.6 仍打 ✓ 且带着 `Infinity` / `-Infinity` 特征值 —— 这**正是** T19.4b 所拦截的病态；两者并置，恰好量出了本次修复的**精确增益**（对比第 33 轮同一探针的 `73 passed, 0 failed` 全绿）。
+
+### 9.2.2 探针 B 前置的意外发现（Worker 侧确实有闸门）
+
+- 首次实施探针 B 时，`npm run test:cert:offline` 并未执行测试，而是被 `pretest:cert:offline` 钩子里先跑的 `tsc --noEmit` 拦下：
+  ```
+  src/routes/cert.ts(595,18): error TS2339: Property 'ok' does not exist on type 'never'.
+  ```
+- **意义**：这从反面确认了 `cloudflare/eqt-drm-api` 的**类型闸门是真实存在且在跑的**；同时也再次反衬 R34-2 —— 前端 `desktop/gui/frontend` **没有**任何等价闸门。
+
+### 9.2.3 探针 C（前端静态防线）—— ❌ 类缺陷仍存活
+
+- **改法**：在 `main.js` 的 `autoDisableTLSOnFailure` 内注入活代码 `void R34ProbeUndefinedBinding();`（该绑定在全仓不存在）。
+- **命令**：`cd desktop/gui/frontend && npm run build`
+- **实测**：`✓ 23 modules transformed` … `exit: 0`，**构建全绿**；且 `rg -c 'R34ProbeUndefinedBinding' dist/assets/index.8faf34d9.js` → `1`，即该标识符**确实进入了产物**（非被 tree-shake 丢弃）。
+- **读法**：未定义绑定在 `main.js` 中**畅通无阻** ⇒ R33-1 的根因类未修。
+
+### 9.2.4 探针 B（形状锁 vs 效力锁）—— 边界已钉死
+
+- **改法**：`cert.ts` 的 `confirmDnsPropagation` 保留 GET，但把逐值校验 `allConfirmed = false;` 改为 `allConfirmed = values.length >= 0;`（恒真）—— 即「发一次装饰性 GET，不做任何校验，直接返回成功」。
+- **实测输出**：
+  ```
+  ✓ T19.4b: callTracer captured all three phases (guards against vacuous Infinity comparison)
+  ✓ T19.5: Invariant locked: max(setDns01Challenge)=2 < min(confirmDnsPropagation)=3
+  ✓ T19.6: Invariant locked: max(confirmDnsPropagation)=4 < min(triggerChallenge)=5
+  ✗ FAIL: T19b.2: confirmDnsPropagation retries and succeeds once authoritative records appear
+  ✗ FAIL: T19b.3: confirmDnsPropagation throws when propagation deadline exceeded
+  ✗ FAIL: T19b.4: Timeout error contains diagnostic context and observed values
+  Results: 71 passed, 3 failed
+  ```
+- **读法**：聚合锁**完全被形状骗过**（三项全 ✓，数字甚至比探针 A 更「正常」），真正拦住它的是 T19b 的三个反向控制。**这正是 R34-4 的结论依据：E1′ 已闭环，但闭环的关键在 T19b，不在 T19.4b。**
+
+### 9.2.5 探针与基线汇总
+
+| 探针 | 改动 | 结果 | 判读 |
+| :-- | :--- | :--- | :--- |
+| 基线 | 无 | `74 passed, 0 failed` | 开发方声明成立 |
+| **A** | 绕过正向确认（改回盲等） | `73 passed, 1 failed`（T19.4b 红） | 开发方声明为真 |
+| **B** | 装饰性 GET + 删校验 | `71 passed, 3 failed`（T19b.2/.3/.4 红） | 锁=形状；效力在 T19b |
+| **C** | `main.js` 注入未定义绑定 + `vite build` | `exit 0`、标识符入产物 | 前端类缺陷仍存活 |
+| 其它基线 | `npm run test:acme:offline` | `24 passed, 0 failed` | 无回归 |
+| 其它基线 | `go test ./...` | 全 `ok`，0 FAIL | 无回归 |
+
+> 探针 A/B 均在 `src/routes/cert.ts` 的**临时副本**上进行，改后立即从备份还原；结束前 `git status --porcelain` 为空已确认（工作区干净）。
+
+### 9.3 出口条件 E1″–E4″（第 34 轮）
+
+| 编号 | 目标 | 具体判据 |
+| :-- | :--- | :--- |
+| **E1″** | 消除 R34-1 的 fail-open | 错配路径也落盘 `EnableTLS=false`（推荐后端统一失败收尾 + 「先落盘后通知」）；补 Go 测试断言落盘；**反向探针**：回退落盘后该测试必须转红 |
+| **E2″** | 建立前端静态防线 | `desktop/gui/frontend` 接入 `no-undef` 类检查并在构建前执行；**判据**：注入未定义绑定必须被拦红 |
+| **E3″** | E4′ 的前提与措辞 | 给出 Worker 档位的可复现取证，或把 §8.1.3 措辞降为「保守预算（档位未证）」；把「缩窗」定性为**预算举措**并删去「保证秒级确认」之类的能力理由；`maxAttempts` 显式化，或与 `timeoutMs` 二选一（单一约束来源） |
+| **E4″** | 文档名实 | 为 T19.4b/T19.5/T19.6 加「形状锁」限定注释；E2′ 状态改「⚠️ 部分闭环」；§八标题去「完全」 |
+
+### 9.4 方法论沉淀（第 34 轮）
+
+1. **开发方自述的「反向验证」只有经审查方复现后才算事实，且必须逐条判定、不得按轮次整体采信。** 本轮开发方自述「反向验证删除确认环节时立即变红」**为真**（探针 A：`73 passed, 1 failed`），而同一轮另一处「完全闭环」**为假** —— 同一次提交里两种自述并存。
+2. **修好一个症状时，必须追问「这一类还剩什么」。** R33-1 的病是「`main.js` 无静态防线」，修法却是改一个函数名 —— 病没治。**判据**：修复若只改了被点名的那一处，而**未改动该类缺陷的产生机制**，应记为「部分闭环」而非「已修复」。
+3. **「修复合入后结局是否更好」的第三问，本轮再次命中：修复可能删掉一个由缺陷意外维持的不变量。** R33-1 的修复把一个**总是抛错**的分支变得**总是成功**，顺带拆掉了 `catch` 意外维持的 `enableTLS=false`，于是 fail-closed 变 fail-open。**规律**：当修复让一个「恒抛」分支变为「恒成」时，必须**显式接管**该分支原先意外维持的所有不变量。
+4. **前提即事实的检查。** 凡文档出现平台限额 / 档位 / 配额类断言（如「Free 计划 50」），须附**可复现取证**，否则降级为「保守假设」。本轮 `wrangler.toml` 中无任何档位证据。
+5. **形状锁与效力锁必须分开表述。** 一个「调用序列/存在性」断言即使不再空集恒真，也**不等于**效力断言。区分二者的可操作判据：**把被守卫的函数体换成「装饰性调用 + 恒真返回」，看断言是否仍绿**（本轮的探针 B 就是这个变换）。
+
+### 9.5 双向教训
+
+- **本轮开发方的执行依旧忠实，且质量在上升**：探针 A 经复现为真、TTL 事实归位到实物代码行、因果归因一次到位（E3′）、版本号与测试计数均属实。**R34-1 不是执行不力，而是修复动作本身携带了副作用** —— 这正是「落地审查」这一环不可省略的原因：落地审查不是核对「意见是否照做」，而是核对「**照做之后系统的新状态是否仍然自洽**」。
+- **R34-2 是「执行范围」的边界**：`字面照做` 与 `根因闭环` 是两件事，必须在验收表里用「已修复」与「部分闭环」两个词区分开，否则「完全闭环」这类标题会掩盖一整类仍然存活的缺陷。
+- **审查方自省**：本轮我自己的三条探针中，有**一次中途被 `tsc` 拦下**（§9.2.2）—— 这提醒我：**反向探针本身也必须先通过门禁**，否则会得到「无输出」这种**看起来像通过、实际是没跑**的假证据。凡探针无输出，一律视为**失败**并追因，不得记为通过。
 
 
