@@ -17,6 +17,7 @@
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const { DatabaseSync } = require('node:sqlite');
 
 const compiledPath = path.join(__dirname, 'compiled', 'cert.js');
 
@@ -25,7 +26,7 @@ if (!fs.existsSync(compiledPath)) {
   process.exit(1);
 }
 
-const { handleCertRoutes, parseCSR, parseCertificateExpiry, setDns01Challenge, generateCompliantSerialNumber, issueCertificateFromCSR, confirmDnsPropagation, certProvisionSingleFlight } = require(compiledPath);
+const { handleCertRoutes, parseCSR, parseCertificateExpiry, setDns01Challenge, generateCompliantSerialNumber, issueCertificateFromCSR, confirmDnsPropagation, certProvisionSingleFlight, ensureCertProvisionsTable } = require(compiledPath);
 
 let passed = 0;
 let failed = 0;
@@ -49,6 +50,7 @@ function makeMockDb(opts = {}) {
   const nodeKeys = new Map();
   const circuitBreakers = new Map();
   const tokenBuckets = new Map();
+  const errorLogs = [];
 
   return {
     _provisions: provisions,
@@ -56,6 +58,7 @@ function makeMockDb(opts = {}) {
     _nodeKeys: nodeKeys,
     _circuitBreakers: circuitBreakers,
     _tokenBuckets: tokenBuckets,
+    _errorLogs: errorLogs,
     prepare(sql) {
       const stmt = {
         _sql: sql,
@@ -134,6 +137,17 @@ function makeMockDb(opts = {}) {
               client_ip: this._binds[5],
               trace_id: this._binds[6],
               duration_ms: this._binds[7] ?? null
+            });
+            return { meta: { changes: 1 } };
+          }
+          if (sql.includes('INSERT INTO system_error_logs')) {
+            errorLogs.push({
+              level: this._binds[0],
+              category: this._binds[1],
+              error_message: this._binds[2],
+              context_json: this._binds[3],
+              created_at: this._binds[4],
+              trace_id: this._binds[5] || null
             });
             return { meta: { changes: 1 } };
           }
@@ -1407,6 +1421,20 @@ async function runTests() {
       const cbStateAfter429 = db._circuitBreakers.get('gts_ca');
       assert(cbStateAfter429 && cbStateAfter429.state === 'OPEN' && cbStateAfter429.last_retry_after === 90, 'T21.3c2: Circuit breaker tripped to OPEN in database');
 
+      await ctx.drain();
+      const log429 = db._errorLogs.find(l => {
+        try {
+          const c = l.context_json ? JSON.parse(l.context_json) : {};
+          return c.reason_key === 'ca_rate_limited';
+        } catch {
+          return false;
+        }
+      });
+      assert(
+        log429 != null && log429.category === 'CERT_PROVISION_ERROR' && log429.level === 'WARN',
+        'T21.3c3: Upstream CA 429 strictly logs system error with reason_key ca_rate_limited to D1'
+      );
+
       // T21.3d: Fast rejection while circuit is OPEN
       // Next request during cooldown is rejected immediately with 429 ca_circuit_open WITHOUT hitting upstream
       const callCountBefore = acmeCallCount;
@@ -1509,6 +1537,15 @@ async function runTests() {
       const cbAfterProbeSuccess = db._circuitBreakers.get('gts_ca');
       assert(cbAfterProbeSuccess && cbAfterProbeSuccess.state === 'CLOSED' && cbAfterProbeSuccess.failure_count === 0, 'T21.3e2: Circuit breaker successfully self-healed back to CLOSED');
 
+      await ctx.drain();
+      const probeRecord = db._provisions[db._provisions.length - 1];
+      assert(
+        probeRecord &&
+        typeof probeRecord.duration_ms === 'number' &&
+        probeRecord.duration_ms >= 0,
+        'T21.3e3: Successful probe issuance accurately records duration_ms in device_cert_provisions'
+      );
+
       // T21.3f: E15 (R40-1) Verification: Client CSR failure during HALF_OPEN probe does NOT trip circuit breaker to OPEN
       const cbProbeForBadCsr = db._circuitBreakers.get('gts_ca');
       if (cbProbeForBadCsr) {
@@ -1550,6 +1587,66 @@ async function runTests() {
         freshAfterBadCsr.last_failure_time = null;
         freshAfterBadCsr.cooldown_until = null;
       }
+
+      // T21.3g: Upstream ACME CA 5xx Server Error (502 / 500)
+      // Must return HTTP 502 with reason_key 'ca_5xx_error', strictly write system_error_logs, and record failure in circuit breaker
+      db._rateLimits.delete('cert_provision:bb0000000001');
+      globalThis.fetch = async (input, init) => {
+        const url = typeof input === 'string' ? input : (input instanceof Request ? input.url : String(input));
+        if (url === 'https://acme.test/directory') {
+          return new Response(JSON.stringify({
+            newNonce: 'https://acme.test/nonce-502',
+            newAccount: 'https://acme.test/new-acct-502',
+            newOrder: 'https://acme.test/new-order-502'
+          }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+        if (url === 'https://acme.test/nonce-502') {
+          return new Response(null, { status: 200, headers: { 'Replay-Nonce': 'nonce-502-1' } });
+        }
+        if (url === 'https://acme.test/new-acct-502') {
+          return new Response(JSON.stringify({ status: 'valid' }), {
+            status: 200,
+            headers: { 'Location': 'https://acme.test/acct/502', 'Replay-Nonce': 'nonce-502-2', 'Content-Type': 'application/json' }
+          });
+        }
+        if (url === 'https://acme.test/new-order-502') {
+          return new Response(JSON.stringify({
+            type: 'urn:ietf:params:acme:error:serverInternal',
+            detail: 'GTS CA Gateway Internal Error 502'
+          }), {
+            status: 502,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+        return new Response('not found', { status: 404 });
+      };
+
+      const req502 = createGlobalReq();
+      const resp502 = await handleCertRoutes(req502, prodEnv, ctx, new URL(req502.url), {});
+      const data502 = await resp502.json();
+
+      assert(resp502.status === 502, 'T21.3g1: Upstream 5xx returns HTTP 502 Bad Gateway');
+      assert(data502.reason_key === 'ca_5xx_error', 'T21.3g2: Response payload has reason_key ca_5xx_error');
+
+      await ctx.drain();
+      const log5xx = db._errorLogs.find(l => {
+        try {
+          const c = l.context_json ? JSON.parse(l.context_json) : {};
+          return c.reason_key === 'ca_5xx_error' && c.status_code === 502;
+        } catch {
+          return false;
+        }
+      });
+      assert(
+        log5xx != null && log5xx.category === 'CERT_PROVISION_ERROR' && log5xx.level === 'ERROR',
+        'T21.3g3: Upstream 5xx strictly writes system_error_logs with ca_5xx_error and status 502'
+      );
+
+      const cbAfter5xx = db._circuitBreakers.get('gts_ca');
+      assert(
+        cbAfter5xx && cbAfter5xx.failure_count >= 1 && cbAfter5xx.cooldown_until != null,
+        'T21.3g4: Circuit breaker recorded failure and initiated cooldown for upstream 5xx'
+      );
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -1752,6 +1849,74 @@ async function runTests() {
     });
     const respExceed = await handleCertRoutes(reqExceed, { DB: db }, ctx, new URL(reqExceed.url), {});
     assert(respExceed.status === 429, 'T23.3: 4th attempt correctly blocked with 429 rate_limited');
+  }
+
+  // ── Test 24: ensureCertProvisionsTable Hot-Migration Regression Protection ──
+  {
+    console.log('\n--- Test 24: ensureCertProvisionsTable Hot-Migration Regression ---');
+    // Simulate a legacy pre-existing table that lacks duration_ms column
+    const memDb = new DatabaseSync(':memory:');
+    memDb.exec(`
+      CREATE TABLE device_cert_provisions (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        node_id        TEXT NOT NULL,
+        device_id      TEXT DEFAULT NULL,
+        common_name    TEXT NOT NULL,
+        expires_at     TEXT NOT NULL,
+        provisioned_at TEXT NOT NULL,
+        client_ip      TEXT DEFAULT NULL,
+        trace_id       TEXT DEFAULT NULL
+      );
+    `);
+
+    // Verify duration_ms does not exist prior to migration
+    const preCols = memDb.prepare("PRAGMA table_info(device_cert_provisions)").all();
+    assert(!preCols.some(c => c.name === 'duration_ms'), 'T24.1: Legacy table starts without duration_ms column');
+
+    // Adapt memDb to minimal D1 interface
+    const migrationEnv = {
+      DB: {
+        prepare(sql) {
+          return {
+            _binds: [],
+            bind(...args) {
+              this._binds = args;
+              return this;
+            },
+            async run() {
+              const stmt = memDb.prepare(sql);
+              stmt.run(...this._binds);
+              return { success: true };
+            }
+          };
+        }
+      }
+    };
+
+    // Trigger migration
+    await ensureCertProvisionsTable(migrationEnv);
+
+    // Verify duration_ms column has been added
+    const postCols = memDb.prepare("PRAGMA table_info(device_cert_provisions)").all();
+    const hasDuration = postCols.some(c => c.name === 'duration_ms');
+    assert(hasDuration, 'T24.2: ensureCertProvisionsTable successfully adds duration_ms via ALTER TABLE');
+
+    // Verify writes with duration_ms succeed
+    memDb.prepare(`
+      INSERT INTO device_cert_provisions (node_id, common_name, expires_at, provisioned_at, duration_ms)
+      VALUES ('migrated_node', 'migrated.test', '2026-12-31', '2026-09-14', 123)
+    `).run();
+    const row = memDb.prepare("SELECT duration_ms FROM device_cert_provisions WHERE node_id='migrated_node'").get();
+    assert(row && row.duration_ms === 123, 'T24.3: Successfully persists and reads duration_ms in migrated table');
+
+    // Verify idempotency on second invocation
+    let secondRunOk = true;
+    try {
+      await ensureCertProvisionsTable(migrationEnv);
+    } catch {
+      secondRunOk = false;
+    }
+    assert(secondRunOk, 'T24.4: ensureCertProvisionsTable is strictly idempotent on subsequent invocations');
   }
 
   console.log(`\nResults: ${passed} passed, ${failed} failed`);

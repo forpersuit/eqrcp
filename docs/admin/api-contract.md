@@ -437,7 +437,7 @@ GET /api/v1/admin/health?probe=1&fresh=0
 GET /api/v1/admin/audit-logs?limit=50&offset=0&action=&q=
 ```
 
-高危写操作（GENERATE / REVOKE / UNBIND / CLEAR_LOGS）自动写入 `admin_audit_logs`。  
+高危写操作（GENERATE / REVOKE / UNBIND / CLEAR_LOGS / RESET_CIRCUIT_BREAKER / RESET_NODE_RATE_LIMIT / RESET_IP_RATE_LIMIT）自动写入 `admin_audit_logs`。  
 成功 200：`{ success, logs[], total, limit, offset }`。  
 管理台前端 Tab「操作审计轨迹」只读消费本接口。
 
@@ -449,6 +449,9 @@ GET /api/v1/admin/audit-logs?limit=50&offset=0&action=&q=
 | `REVOKE` | `LICENSE` | license_code | `previous_status`, `new_status=revoked`, `tier`, `max_devices`, `expires_at`, `buyer_email`, `paddle_*`, `active_devices_count`, `activations_snapshot[]`（解绑前指纹快照）, `activations_deleted=false` |
 | `UNBIND` | `ACTIVATION` 或 `LICENSE` | activation_id 或 license_code | `mode=single\|clear_all`, `license_code`, `activation_id`, `unbound_count`, `activation_ids[]`, `device_snapshot` / `devices_snapshot[]`（含 device_id 与各 hash、activated_at）, **`counts_toward_user_quota=false`** |
 | `CLEAR_LOGS` | `SYSTEM` | null | `cleared_error_log_count`, note（只清 `system_error_logs`，保留操作审计） |
+| `RESET_CIRCUIT_BREAKER` | `TLS_CIRCUIT` | circuit_name (`gts_ca`) | `previous_state`, `previous_failure_count`, `previous_cooldown_until`, `previous_last_retry_after`, `new_state=CLOSED`, `new_failure_count=0` |
+| `RESET_NODE_RATE_LIMIT` | `TLS_RATE_LIMIT` | `cert_provision:<node_id>` | `target_node_id`, `existed` (boolean), `previous_snapshot: { count, window_start }` |
+| `RESET_IP_RATE_LIMIT` | `TLS_RATE_LIMIT` | `cert_provision:ip:<ip>` | `target_ip`, `existed` (boolean), `previous_snapshot: { count, window_start }` |
 
 Admin 解绑 **不写** `unbind_records`，故不占用用户 365 天 4 次配额。
 
@@ -542,6 +545,120 @@ Content-Type: application/json
   "is_paid": true,
   "quota_exceeded": false,
   "server_time": "2026-08-24T01:05:00.000Z"
+}
+```
+
+---
+
+### 2.11 LAN-TLS 态势感知与断路器遥测 (LAN-TLS Circuit & Rate Limit Telemetry)
+
+提供 ACME GTS CA 断路器实时状态、令牌桶平滑水位、近 24 小时签发耗时与精确到跳闸归因的大盘遥测数据。
+
+#### 2.11.1 查询断路器与限流态势
+```http
+GET /api/v1/admin/tls/circuit-status
+```
+- **鉴权**：强制校验 Cloudflare Access JWT / `X-Admin-Secret`（Fail-Closed，未鉴权 401 且 0 审计写入）。
+- **指标与对账公式（SSOT）**：
+  - `total_attempts = provisions_success + ca_rate_limited + ca_5xx_error + other_cert_errors`
+  - `success_rate`：当 `total_attempts > 0` 时为 `provisions_success / total_attempts`（精确到千分位）；当无数据时回退为 `null`（严禁伪造 100%）。
+- **响应（200 OK）：**
+```json
+{
+  "ok": true,
+  "circuit_breaker": {
+    "name": "gts_ca",
+    "state": "CLOSED",
+    "failure_count": 0,
+    "success_count": 42,
+    "last_failure_time": null,
+    "cooldown_until": null,
+    "last_retry_after": 0,
+    "updated_at": "2026-09-14T01:30:00.000Z"
+  },
+  "token_bucket": {
+    "key": "cert_provision:acme_smoothing",
+    "tokens": 5.0,
+    "capacity": 5.0,
+    "refill_rate": 0.1667,
+    "last_refill": "2026-09-14T01:30:00.000Z"
+  },
+  "metrics_24h": {
+    "total_attempts": 44,
+    "provisions_success": 42,
+    "avg_duration_ms": 112.5,
+    "success_rate": 0.955,
+    "trip_reasons": {
+      "ca_rate_limited": 1,
+      "ca_5xx_error": 1,
+      "other_cert_errors": 0
+    },
+    "rate_limit_hits": 5
+  }
+}
+```
+
+---
+
+### 2.12 LAN-TLS 安全可逆运维重置 (Break-Glass Safe Reversible Reset)
+
+支持在突发拥塞或运维恢复时，针对 CA 断路器进行手动复位，或针对指定单节点/单 IP 执行精准限流解封。
+
+#### 2.12.1 执行运维重置
+```http
+POST /api/v1/admin/tls/reset-rate-limit
+Content-Type: application/json
+```
+
+**请求 Body（断路器复位）：**
+```json
+{
+  "target": "circuit_breaker",
+  "key": "gts_ca"
+}
+```
+
+**请求 Body（单节点限流重置）：**
+```json
+{
+  "target": "node_rate_limit",
+  "key": "cc0000000001"
+}
+```
+
+**请求 Body（单 IP 限流重置）：**
+```json
+{
+  "target": "ip_rate_limit",
+  "key": "198.51.100.42"
+}
+```
+
+- **参数约束**：
+  - `target`：必填，枚举为 `circuit_breaker` | `node_rate_limit` | `ip_rate_limit`。
+  - `key`：重置 node 或 ip 时必填（对应 node_id 或 client_ip）；断路器缺省为 `gts_ca`。
+- **幂等性与隔离保证**：
+  - 通过 `DELETE FROM rate_limits WHERE key = ?` 实现单键物理删除，绝不触碰或放大其他节点/IP 计数（R39-3 隔离保证）。
+  - 若指定 Key 并不存在，返回 200 且明确标明 `existed: false`，文案为 `was not active (already clear)`。
+  - 每次重置在 `admin_audit_logs` 写入 1 条完整审计行，记录前置快照（`previous_state` 或 `previous_snapshot: { count, window_start }`）。
+- **响应（200 OK - 成功清除已有限流）：**
+```json
+{
+  "ok": true,
+  "message": "Node rate limit 'cert_provision:cc0000000001' reset successfully",
+  "target": "node_rate_limit",
+  "key": "cert_provision:cc0000000001",
+  "existed": true
+}
+```
+- **响应（200 OK - 目标未处于限流状态）：**
+```json
+{
+  "ok": true,
+  "message": "Node rate limit 'cert_provision:cc0000000001' was not active (already clear)",
+  "target": "node_rate_limit",
+  "key": "cert_provision:cc0000000001",
+  "existed": false
 }
 ```
 

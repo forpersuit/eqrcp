@@ -1949,19 +1949,21 @@ export async function handleAdminRoutes(
     }
 
     const totalAttempts = totalSuccess + trip429 + trip5xx + otherCertErrors;
-    const successRate = totalAttempts > 0 ? Math.round((totalSuccess / totalAttempts) * 1000) / 1000 : 1.0;
+    const successRate = totalAttempts > 0 ? Math.round((totalSuccess / totalAttempts) * 1000) / 1000 : null;
 
     return new Response(JSON.stringify({
       ok: true,
       circuit_breaker: cbStatus,
       token_bucket: tbStatus,
       metrics_24h: {
+        total_attempts: totalAttempts,
         provisions_success: totalSuccess,
         avg_duration_ms: avgDuration,
         success_rate: successRate,
         trip_reasons: {
           ca_rate_limited: trip429,
-          ca_5xx_error: trip5xx
+          ca_5xx_error: trip5xx,
+          other_cert_errors: otherCertErrors
         },
         rate_limit_hits: rateLimitHits
       }
@@ -2044,9 +2046,13 @@ export async function handleAdminRoutes(
         clientIp
       );
 
+      const msg = res.existed
+        ? `Node rate limit '${limitKey}' reset successfully`
+        : `Node rate limit '${limitKey}' was not active (already clear)`;
+
       return new Response(JSON.stringify({
         ok: true,
-        message: `Node rate limit '${limitKey}' reset successfully`,
+        message: msg,
         target: "node_rate_limit",
         key: limitKey,
         existed: res.existed
@@ -2079,9 +2085,13 @@ export async function handleAdminRoutes(
         clientIp
       );
 
+      const msg = res.existed
+        ? `IP rate limit '${limitKey}' reset successfully`
+        : `IP rate limit '${limitKey}' was not active (already clear)`;
+
       return new Response(JSON.stringify({
         ok: true,
-        message: `IP rate limit '${limitKey}' reset successfully`,
+        message: msg,
         target: "ip_rate_limit",
         key: limitKey,
         existed: res.existed

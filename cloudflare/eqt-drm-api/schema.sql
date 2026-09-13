@@ -107,12 +107,12 @@ CREATE TABLE IF NOT EXISTS system_error_logs (
 
 CREATE INDEX IF NOT EXISTS idx_system_error_logs_created ON system_error_logs(created_at);
 
--- Admin operation audit log for tracking high-privilege actions (generate, revoke, unbind, clear_logs)
+-- Admin operation audit log for tracking high-privilege actions (generate, revoke, unbind, clear_logs, reset circuit/rate-limit)
 CREATE TABLE IF NOT EXISTS admin_audit_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    action TEXT NOT NULL,                      -- 'GENERATE', 'REVOKE', 'UNBIND', 'CLEAR_LOGS'
-    target_type TEXT,                          -- 'LICENSE', 'ACTIVATION', 'SYSTEM'
-    target_id TEXT,                            -- license_code or activation_id
+    action TEXT NOT NULL,                      -- 'GENERATE', 'REVOKE', 'UNBIND', 'CLEAR_LOGS', 'RESET_CIRCUIT_BREAKER', 'RESET_NODE_RATE_LIMIT', 'RESET_IP_RATE_LIMIT'
+    target_type TEXT,                          -- 'LICENSE', 'ACTIVATION', 'SYSTEM', 'TLS_CIRCUIT', 'TLS_RATE_LIMIT'
+    target_id TEXT,                            -- license_code, activation_id, circuit name ('gts_ca'), or rate limit key
     details_json TEXT,
     operator_ip TEXT,
     created_at TEXT NOT NULL

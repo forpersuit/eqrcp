@@ -192,8 +192,26 @@ async function runTests() {
     assert(m && m.avg_duration_ms === 100, `T2.3b: 24h average issuance duration accurately calculated (expected 100ms, got ${m.avg_duration_ms}ms)`);
     assert(m && m.trip_reasons.ca_rate_limited === 1, `T2.3c: Trip attribution tracks exactly 1 ca_rate_limited`);
     assert(m && m.trip_reasons.ca_5xx_error === 1, `T2.3d: Trip attribution tracks exactly 1 ca_5xx_error (distinguished from internal_error)`);
-    assert(m && m.success_rate === 0.5, `T2.3e: Accurate success rate calculation 2/(2+2) = 0.5 (got ${m.success_rate})`);
+    assert(m && m.trip_reasons.other_cert_errors === 0, `T2.3d2: Trip attribution tracks exactly 0 other_cert_errors`);
+    assert(m && m.total_attempts === 4, `T2.3e1: Total attempts matches sum of provisions and all trip reasons (expected 4, got ${m.total_attempts})`);
+    assert(
+      m.total_attempts === m.provisions_success + m.trip_reasons.ca_rate_limited + m.trip_reasons.ca_5xx_error + m.trip_reasons.other_cert_errors,
+      'T2.3e2: Strict reconciliation: total_attempts equals provisions_success + all trip reasons'
+    );
+    assert(m && m.success_rate === 0.5, `T2.3e3: Accurate success rate calculation 2/4 = 0.5 (got ${m.success_rate})`);
     assert(m && m.rate_limit_hits === 1, `T2.3f: Rate limit hits tracked accurately (1)`);
+
+    // T2.4: Empty database baseline returns null success_rate instead of false 100% (R44-9)
+    const emptyD1 = new SqliteD1Mock();
+    const reqEmpty = new Request('http://api.test/api/v1/admin/tls/circuit-status', {
+      method: 'GET',
+      headers: validAuthHeader
+    });
+    const respEmpty = await handleAdminRoutes(reqEmpty, { ...env, DB: emptyD1 }, ctx, new URL(reqEmpty.url), corsHeaders);
+    const dataEmpty = await respEmpty.json();
+    assert(dataEmpty.metrics_24h.total_attempts === 0, 'T2.4a: Zero attempts when no records exist');
+    assert(dataEmpty.metrics_24h.success_rate === null, 'T2.4b: success_rate falls back to null when total_attempts is 0 (prevents false 100% green)');
+    assert(dataEmpty.metrics_24h.avg_duration_ms === null, 'T2.4c: avg_duration_ms falls back to null when no provisions exist');
   }
 
   // ── Group 3: Reversible Break-Glass Circuit Breaker Reset & Audit ──
@@ -306,6 +324,26 @@ async function runTests() {
 
     const rowIpAfter = d1.db.prepare("SELECT * FROM rate_limits WHERE key = 'cert_provision:ip:203.0.113.50'").get();
     assert(rowIpAfter === undefined, 'T4.5: IP rate limit physically cleared from D1');
+
+    // T4.6: Reset non-existent key returns existed:false and clear message (R44-7)
+    const reqResetNonExistent = new Request('http://api.test/api/v1/admin/tls/reset-rate-limit', {
+      method: 'POST',
+      headers: { ...validAuthHeader, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target: 'node_rate_limit', key: 'node_never_seen' })
+    });
+    const respResetNonExistent = await handleAdminRoutes(reqResetNonExistent, env, ctx, new URL(reqResetNonExistent.url), corsHeaders);
+    assert(respResetNonExistent && respResetNonExistent.status === 200, 'T4.6a: Reset non-existent key returns 200 OK');
+    const dataNonExistent = await respResetNonExistent.json();
+    assert(dataNonExistent.existed === false, 'T4.6b: Non-existent key reports existed: false');
+    assert(
+      dataNonExistent.message && dataNonExistent.message.includes('was not active (already clear)'),
+      'T4.6c: Message accurately describes key was not active instead of misleading successfully reset'
+    );
+    const auditNonExistent = d1.db.prepare("SELECT details_json FROM admin_audit_logs WHERE target_id = 'cert_provision:node_never_seen'").get();
+    assert(
+      auditNonExistent && JSON.parse(auditNonExistent.details_json).existed === false,
+      'T4.6d: Audit log records existed: false snapshot for non-existent key reset'
+    );
   }
 
   // ── Group 5: Parameter Validation & Guardrails ──

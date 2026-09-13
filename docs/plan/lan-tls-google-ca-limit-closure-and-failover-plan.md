@@ -289,7 +289,7 @@ stateDiagram-v2
      - **鉴权与防呆**：强制执行 `requireAdminAuth`，未鉴权请求返回 401 且 0 审计写入；
      - **断路器复位**：支持 `target: 'circuit_breaker'`，将 `gts_ca` 断路器物理复位至 `CLOSED`（`failure_count=0`、`cooldown_until=NULL`、`last_retry_after=0`）；
      - **单 Key 精准限流清除（约束 ② / R39-3 严格隔离）**：支持 `target: 'node_rate_limit'` 与 `target: 'ip_rate_limit'`，通过 `resetD1RateLimit` 执行物理行删除（`DELETE FROM rate_limits WHERE key = ?`），不触碰 `window_start` 保护，亦不影响任何其他节点或 IP 计数；
-     - **审计日志强约束入库**：每次重置在 `admin_audit_logs` 写入 1 条完整审计记录，明细包含重置前状态快照（`previous_state`、`previous_failure_count`、`previous_count` 等）、操作员 IP 与时间戳。
+     - **审计日志强约束入库**：每次重置在 `admin_audit_logs` 写入 1 条完整审计记录，明细包含重置前状态快照（`previous_state`、`previous_failure_count`、`previous_snapshot: { count, window_start }` 等）、操作员 IP 与时间戳。
 
 2. **数据库与底层管线升级**：
    - `schema.sql` 与 `device_cert_provisions` 表增加 `duration_ms INTEGER DEFAULT NULL` 列；
@@ -308,13 +308,13 @@ stateDiagram-v2
      - `Group 5`：参数校验防呆。
 
 4. **全量离线质量门禁（门禁数字独立加总）**：
-   - `npm run test:offline` 包含 21 个套件（1 个 `typecheck` + 20 个离线测试套件），**0 failed**；
+   - `npm run test:offline` 包含 22 个步骤（1 个 `typecheck` + 21 个离线测试套件），**0 failed**；
    - 独立加总结果：
      - `Results: N passed, 0 failed` 型（11 个套件）：42 + 27 + 64 + 21 + 17 + 102 + 24 + 15 + 21 + 26 + 131 = **490** passed；
      - `=== Results: N/N passed, 0 failed ===` 型（4 个套件）：23 + 78 + 33 + 35 = **169** passed；
      - 格式化断言合计：490 + 169 = **659** passed；
      - 文本自报套件（6 个套件）：`test:env-guard` (9 项)、`subscription`、`portal`、`portal:toggle`、`zero-payment`、`telemetry` 全部退出码 0；
-   - `check-tls-offline.sh`：Worker 全量离线测试 + Go 端 `pkg/cert` 测试全部通过；
+   - `.agents/skills/eqt-lan-tls/scripts/check-tls-offline.sh`：Worker 全量离线测试 + Go 端 `pkg/cert` 测试全部通过；
    - `go test ./...` 100% 通过；
    - `scripts/deploy-windows-results.sh` 编译打包交付产物完成。
 
@@ -563,3 +563,59 @@ export const SUPPORTED_PROVIDERS: Record<string, CAProvider> = {
 - **R44-1 的危险性高于 R42-3**：R42-3 的断言**无**判别力，易被反向探针识破；R44-1 的断言**有**判别力（V3/V4/V5 已证），只是**指向的轴错了** —— 读者看到「26 passed」会以为写入侧一并验证了。
 - **阶段三可上线，但须补 2 项**：① 为 `ca_rate_limited` / `ca_5xx_error` **写入侧**补一条「删实现即翻红」的断言（建议在 `cert-provision-offline.js` 增 `T21.3g`：mock 上游 502 → 断言 `system_error_logs` 落行的 `context_json.reason_key === 'ca_5xx_error'` 且响应为 502）；② R44-3 / R44-4 / R44-5 的文档更正。
 - **下一阶段准入新增约束**：凡 plan 声明「某写入路径已闭环」，必须同时给出**该路径的反向探针记录**（红线【163】）；断言观测量不得用「手工造出信号 → 验证读取方」替代。
+
+#### 3.6.6 第 44 轮缺陷消除与闭环验收报告（全 10 项消除 · 2026-09-14 · 基线 `v1.36.133` / `1.13.6`）
+
+> **红线遵循声明**：本小节为阶段三审查缺陷闭环实施报告，以独立小节 append-only 追加（红线【155】），完整保留上方各轮原文与审查更正。
+
+针对第 44 轮审查提出的 10 项缺陷（2🔴 + 3🟠 + 5🟡），已全量实施手术式修复，建立真正的写入端与热迁移因果链防线，并通过反向探针实测证实真实判别力：
+
+**一、反向探针实测更新（红线【157】/【163】闭环证明）**
+
+| 变体 | 注入缺陷 | 审查初测结果 | 修复后实测结果（本轮） | 判定 |
+|---|---|---|---|:---:|
+| **V1** | 删除 `cert.ts` 5xx 分支的 `logSystemError` + `return 502`（17 行） | ⚠️ `npm run test:offline` 659 项全绿（零覆盖） | 💥 `test:cert:offline` **4 failed**（`T21.3g1` 响应状态码、`T21.3g2` reason_key、`T21.3g3` 日志落盘、`T21.3g4` 断路器故障记录全部翻红） | ✅ **已翻红（真实判别力）** |
+| **V2** | 删除 429 分支的 `logSystemError` | ⚠️ `test:cert:offline` 102/102 全绿（零覆盖） | 💥 `test:cert:offline` **1 failed**（`T21.3c3` 物理日志落盘断言翻红） | ✅ **已翻红（真实判别力）** |
+| **V3** | `resetD1RateLimit`：`DELETE … WHERE key=?` → `UPDATE … SET count=0` | ✅ `T4.2`、`T4.5` 翻红 | ✅ 保持翻红（继承阶段三判别力） | ✅ **保持翻红** |
+| **V4** | `DELETE FROM rate_limits` 删去 `WHERE`（破坏隔离） | ✅ `T4.3a`、`T4.3b` 翻红 | ✅ 保持翻红（继承阶段三判别力） | ✅ **保持翻红** |
+| **V5** | `resetCircuitBreaker` 不再置 `cooldown_until` | ✅ `T3.2` 翻红 | ✅ 保持翻红（继承阶段三判别力） | ✅ **保持翻红** |
+
+**二、10 项缺陷逐项消除清单（2🔴 + 3🟠 + 5🟡）**
+
+1. **R44-1 🔴（5xx 跳闸精准归因写入侧因果链防线）**：
+   - 在 `tests/cert-provision-offline.js` 中新增 `T21.3g1-g4`；
+   - 真实模拟 upstream ACME CA 返回 502，发起完整 `handleCertRoutes` 请求；
+   - 严格断言：返回 502、`reason_key === 'ca_5xx_error'`、`system_error_logs` 物理表由 `cert.ts` 真实写入该条归因日志、且断路器进入 cooldown。V1 变体注入实测 4 项全红。
+2. **R44-2 🔴（429 写入侧日志因果链防线）**：
+   - 在 `tests/cert-provision-offline.js` 的 `makeMockDb` 中补齐 `system_error_logs` 物理表存储；
+   - 在 `T21.3c` 增加 `T21.3c3`，`await ctx.drain()` 后严格查验 D1 表中由 `cert.ts` 写入的 `ca_rate_limited` 审计行。V2 变体注入实测精准翻红。
+3. **R44-3 🟠（套件数量机器真值自洽）**：
+   - 更新文档口径：`npm run test:offline` 包含 **22 个步骤（1 个 `typecheck` + 21 个离线测试套件）**，严格与 `package.json` 机器解析真值吻合。
+4. **R44-4 🟠（审计快照字段 SSOT 自洽）**：
+   - 修正 plan 文档中的快照描述，全仓统一为源码实际实现的字段 `previous_snapshot: { count, window_start }`，杜绝臆造不存在的 `previous_count`。
+5. **R44-5 🟠（Admin 契约文档与 schema 登记）**：
+   - `cloudflare/eqt-drm-api/schema.sql`：更新第 113–115 行注释，登记 `RESET_CIRCUIT_BREAKER`、`RESET_NODE_RATE_LIMIT`、`RESET_IP_RATE_LIMIT` 与 `TLS_CIRCUIT`、`TLS_RATE_LIMIT`；
+   - `docs/admin/api-contract.md`：在 §2.8 操作审计中补齐 TLS 运维重置动作与快照说明；完整登记 **§2.11 LAN-TLS 态势感知与断路器遥测 (`GET /api/v1/admin/tls/circuit-status`)** 与 **§2.12 LAN-TLS 安全可逆运维重置 (`POST /api/v1/admin/tls/reset-rate-limit`)**。
+6. **R44-6 🟡（`duration_ms` 热迁移回归保护）**：
+   - 在 `tests/cert-provision-offline.js` 中新增 `Test 24: ensureCertProvisionsTable Hot-Migration Regression`；
+   - 基于原生 SQLite 物理模拟未包含 `duration_ms` 的旧版本表结构，调用 `ensureCertProvisionsTable`，验证 `ALTER TABLE` 成功将列补齐、支持写入读出、且二次调用幂等无异常。
+7. **R44-7 🟡（重置不存在 key 语义明确与测试覆盖）**：
+   - `admin.ts`：当重置 key 不存在时（`existed: false`），消息精确返回 `'... was not active (already clear)'`；
+   - `admin-tls-dashboard-offline.js`：增加 `T4.6a-d` 覆盖未处于限流状态的 key 重置逻辑与审计快照。
+8. **R44-8 🟡（mock 字段 duration_ms 消费断言）**：
+   - 在 `tests/cert-provision-offline.js` 的 `T21.3e3` 中，显式从 `db._provisions` 中读取并断言 `duration_ms` 字段为非负数字。
+9. **R44-9 🟡（大盘分母立体对账与无数据 null 回退）**：
+   - `admin.ts`：输出 `metrics_24h.total_attempts`，并在 `trip_reasons` 中完整输出 `other_cert_errors`，实现分母对账等式闭环：`total_attempts === provisions_success + ca_rate_limited + ca_5xx_error + other_cert_errors`；
+   - 当无任何请求（`total_attempts === 0`）时，`success_rate` 与 `avg_duration_ms` 准确回退为 `null`，严禁伪造 100% 全绿；
+   - `admin-tls-dashboard-offline.js`：增加 `T2.3d2`、`T2.3e1-3`、`T2.4a-c` 严格验证对账公式与空库回退。
+10. **R44-10 🟡（门禁脚本真实路径声明）**：
+    - 明确标注全套离线门禁脚本的真实路径为 `.agents/skills/eqt-lan-tls/scripts/check-tls-offline.sh`（非根目录 `scripts/`）。
+
+**三、全量离线质量门禁（逐套件独立加总最新真值）**
+
+- `npm run test:offline` 包含 22 个步骤（1 个 `typecheck` + 21 个离线测试套件），**0 failed**；
+- 独立加总结果：
+  - `Results: N passed, 0 failed` 型（11 个套件）：42 + 27 + 64 + 21 + 17 + 112 + 24 + 15 + 21 + 36 + 131 = **510** passed；
+  - `=== Results: N/N passed, 0 failed ===` 型（4 个套件）：23 + 78 + 33 + 35 = **169** passed；
+  - 格式化断言合计：510 + 169 = **679** passed（净增 20 项断言，无跳步，无假绿）；
+  - 文本自报套件（6 个套件）：`test:env-guard` (9 项)、`subscription`、`portal`、`portal:toggle`、`zero-payment`、`telemetry` 全部退出码 0。
