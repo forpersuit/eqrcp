@@ -3,7 +3,7 @@
 > **文档标识**：`docs/plan/lan-tls-google-ca-limit-closure-and-failover-plan.md`  
 > **文档性质**：GTS 配额管理体系彻底重构、工程最佳实践引入与多 CA 平滑灾备演进规划  
 > **面向对象**：核心后端开发团队、Cloudflare Worker 维护者、DevOps 架构师、SRE 可靠性工程师  
-> **当前基线**：`v1.36.126`  
+> **当前基线**：`v1.36.127`  
 > **关联技术组件**：
 > - 核心架构：[`docs/mechanism/lan-tls-zero-leak-acme-architecture.md`](../mechanism/lan-tls-zero-leak-acme-architecture.md)
 > - EAB 实操手册：[`docs/deploy/google-cloud-publicca-eab-runbook.md`](../deploy/google-cloud-publicca-eab-runbook.md)
@@ -93,8 +93,8 @@ if (env.ENVIRONMENT === 'production' && acmeRequested) {
   - **Closed（闭合正常态）**：所有置备请求正常放行向 Google CA 申请；
   - **Open（跳闸熔断态）**：一旦检测到以下任一条件，断路器**立即跳闸**：
     1. Google CA 真实返回了 HTTP `429 Too Many Requests`；
-    2. 上游连续失败次数达到 **`failure_count >= 3`**（`cloudflare/eqt-drm-api/src/utils/circuit-breaker.ts:171`，任何成功签发自动将 `failure_count` 归零）；
-    - **冷却时间动态化**：若 Google CA 返回 `Retry-After`，则严格按该值动态冷却；若未提供，则采用指数阶梯退避：**30s ➔ 60s ➔ 120s ➔ 240s ➔ 480s ➔ 960s ➔ 1920s**（`Math.min(30 * 2^(fails-1), 3600)`，`circuit-breaker.ts:165`，并在 `fails-1 >= 6` 处封顶在 1920s，上限 3600s）；
+    2. 上游连续失败次数达到 **`failure_count >= 3`**（`circuit-breaker.ts` 的 `recordCircuitFailure` 逻辑，任何成功签发自动将 `failure_count` 归零）；
+    - **冷却时间动态化**：若 Google CA 返回 `Retry-After`，则严格按该值动态冷却；若未提供，则采用指数阶梯退避：**30s ➔ 60s ➔ 120s ➔ 240s ➔ 480s ➔ 960s ➔ 1920s**（`Math.min(30 * 2^(fails-1), 3600)`，并在 `fails-1 >= 6` 处封顶在 1920s，上限 3600s）；
     - 跳闸期间，新请求在网关层直接快速失败（Fast-Fail），下发 Fail-Soft 降级指令，不打扰上游；
   - **Half-Open（半开试探态）**：冷却时间结束后，断路器进入半开状态，通过原子 CAS 条件更新（`WHERE state='OPEN' AND cooldown_until <= now`）**严格仅放行 1 笔**试探请求（R39-5 `circuit-breaker.ts:69-76`）：
     - 成功竞得探针资格的单笔请求进入上游试探；并发到来的其余请求被闸门拦截返回 `HALF_OPEN` 等待；
@@ -104,6 +104,12 @@ if (env.ENVIRONMENT === 'production' && acmeRequested) {
 > ⚠️ **R39-15（🔴 · 第 39 轮后置复核改判）**：以上「严格仅放行 1 笔」的闸门**成立**，但**半开态没有出口保障**，会把断路器钉死成永久停摆。`HALF_OPEN` 的**唯一出口**是 `recordCircuitSuccess` / `recordCircuitFailure`（`cert.ts:1336/1341/1353`）；而探针获准点（`cert.ts:952`）之后、写回点之前存在 **10 条提前 return 路径**（`:974`/`:989`/`:1004` 400 `invalid_csr`、`:1049`/`:1060` 401 `invalid_signature`、`:1110` 403 `node_key_mismatch`、`:1157`/`:1168`/`:1179` 500 `acme_misconfigured`、`:1412` **外层 catch** 500 `internal_error`），加上 Worker isolate 被宿主硬终止，任何一条发生 ⇒ **没有任何一方写回结果** ⇒ `state` 永久停留 `HALF_OPEN`；此时 CAS 不再触发（它只认 `state='OPEN'`），`cooldown_until` 即使早已过期也不再被读取，而 `resetCircuitBreaker`（`circuit-breaker.ts:200`）**全仓无调用点** ⇒ **全网证书置备永久 429（`ca_circuit_open`），且无运维出口**。
 > **实测（真实 `node:sqlite` 探针）**：冷却过期后第 1 次调用 `allowed=true, state=HALF_OPEN`；此后**冷却已过期 5 秒**，连续 5 次调用全部 `allowed=false (retryAfter=15)`，DB 终态仍为 `HALF_OPEN`。
 > **处方（E11）**：① 给半开态加**探针租约**——第二次 CAS 增加 `OR (state='HALF_OPEN' AND updated_at <= now - probeLeaseSec)` 分支（`updated_at` 字段已存在，**无需改 schema**），`HALF_OPEN` 分支回传真实剩余秒数而非写死 `15`；② 在 `cert.ts` **外层 `finally`** 统一兜底：若本请求曾获准探针而未写回任何结果，则补记 `recordCircuitFailure`；③ 把 `resetCircuitBreaker` 接入 Admin 复位接口，保留人工出口。**完整处方与出口条件见 `docs/bugs/2026-09-13-google-ca-wildcard-acme-race-condition-and-tls-state-machine-defect.md` §17.4 E11。**
+>
+> ✅ **落地终验（基线 `v1.36.127` · E11 彻底闭环）**：
+> 1. `circuit-breaker.ts` 的 CAS 闸门落地 90 秒租约守卫：
+>    `UPDATE circuit_breakers SET state = 'HALF_OPEN', updated_at = ? WHERE name = ? AND ((state = 'OPEN' AND (cooldown_until IS NULL OR cooldown_until <= ?)) OR (state = 'HALF_OPEN' AND updated_at <= ?))`；并在处于试探在途时动态计算返回 `ceil((updated_at + 90s - now)/1000)` 剩余租约秒数；
+> 2. `cert.ts` 外层 `finally` 挂载 `cbProbeGranted` 兜底写回：若曾获准探针且未写回任何结果，统一补调用 `recordCircuitFailure(env, 'gts_ca', 30, false)`；
+> 3. 真实 SQLite 探针用例 `circuit-breaker-offline.js` **T13**（动态 retryAfter 拦截）与 **T14**（租约期满死锁自愈）**100% 通过（15/15 passed）**。
 
 ```mermaid
 stateDiagram-v2
@@ -167,6 +173,11 @@ stateDiagram-v2
 > **即：两侧从未同时成立 —— 修复把「超发 4 倍」翻转成了「窗口创建瞬间全部误拒」。** 修复前的失败（count=12）恰证明探针有判别力，故这些误拒是**整改引入的新行为**。
 > **可达性不是理论**：`cert_provision:<ip>`（IP 级键）的两个调用者来自**不同 `node_id`**，SingleFlight 的 key 不同因此**不会被折叠**；局域网内多设备同时首装、或窗口刚滚过时的并发重试都是真实入口。后果是按 `retry_after=86400` 把 TLS 特性**锁死 24 小时**，而用户只发起了 1 次请求。**这也使本节 §3.3 的「跨 isolate 由 D1 底座原子预占兜底」在修好 R39-14 之前**暂时不成立**。
 > **处方（E10）**：把「建行/重置窗口」与「占位」合并为**单条语句**（行不存在 ⇒ INSERT 得 1；窗口过期 ⇒ 重置为 1；未过期未满 ⇒ `count+1`；未过期已满 ⇒ `WHERE` 假、无行返回 ⇒ 只有这一分支才是真·配额耗尽），**或**最小改动：先用无条件 `INSERT OR IGNORE`（`count=0`）+ 一条过期重置 `UPDATE` 保证行存在，**再重跑**第 1 步的 `UPDATE ... RETURNING`，仅在重跑仍无返回时才判定耗尽。**「先无条件建行」正是 §3.2 令牌桶不出此 bug 的原因。** 完整 SQL 与验收判据见 `docs/bugs/2026-09-13-google-ca-wildcard-acme-race-condition-and-tls-state-machine-defect.md` §17.4 E10。
+>
+> ✅ **落地终验（基线 `v1.36.127` · E10 彻底闭环）**：
+> 1. `rate-limit.ts` 中的 `reserveD1RateLimit` 彻底废除条件分支，重构为**单语句原子 CAS UPSERT**（`INSERT INTO rate_limits (key, count, window_start) VALUES (?, 1, ?) ON CONFLICT(key) DO UPDATE SET count = CASE WHEN ... THEN 1 ELSE count + 1 END, window_start = CASE ... WHERE ... RETURNING count, window_start`），四条路径由 SQLite 原生行级写锁原子裁决；
+> 2. 真实 SQLite 探针用例 `unit-utils-offline.js` **T12.1**（空行 3 并发）、**T12.2**（空行 10 并发）、**T12.3**（过期窗口 3 并发）、**T12.4**（满额 5 并发全拒）与既有 **T12**（既有行余 1 槽位 10 并发）**100% 全部为绿（78/78 passed）**；
+> 3. 「空行/过期窗口不得误拒」与「既有行不得超发」在单语句 CAS UPSERT 架构下**首次同时成立**，假超额误拒被彻底消灭，§3.3 的「跨 isolate 兜底」完全成立。
 
 ---
 
@@ -234,7 +245,7 @@ export const SUPPORTED_PROVIDERS: Record<string, CAProvider> = {
 
 ## 五、实施里程碑与落地路线图
 
-> ⚠️ **下图阶段一 / 阶段二两处「【已完成 · 100% 交付】」标记已按第 39 轮后置复核改判为 ⚠️ 部分闭环**（阶段一 → R39-15；阶段二 → R39-14）。保持原始图示不改，改判理由见本图之后的「第 39 轮后置复核改判」块。
+> ⚠️ **审查演进说明**：下图阶段一 / 阶段二两处「【已完成 · 100% 交付】」标记曾于第 39 轮后置复核改判为 ⚠️ 部分闭环（阶段一 → R39-15；阶段二 → R39-14）；**现已在基线 `v1.36.127` 中全面落实 E10–E14 整改，真实 SQLite 并发测试全绿（15/15, 78/78），阶段一与阶段二正式达成 100% 实质闭环**。下文完整保留第 39 轮审查员的后置复核改判记录与最终 E10–E14 终验全量通过凭证。
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
