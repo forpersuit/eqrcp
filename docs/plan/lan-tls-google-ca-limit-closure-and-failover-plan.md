@@ -272,6 +272,52 @@ stateDiagram-v2
    - 租约兜底防死锁：即便 HALF_OPEN 遇到 4xx 未写回成功，180s 租约到期后自动放行下一次探针，绝不死锁；完整调用堆栈通过 `logSystemError` 落盘追溯。
 5. **阶段三准入约束承诺**：阶段三验收用例严禁沿用对象引用夹具，每次操作后强制重新查询数据库记录，确保写操作真实生效可证伪。
 
+#### 3.6.4 阶段三 Admin 态势大盘与可逆 Break-Glass 重置落地报告（基线 `v1.36.132` / `1.13.6`）
+
+> **红线遵循声明**：本段为阶段三实施交付报告，以独立小节 append-only 追加（红线【155】），完整保留上方各轮原文与审查更正。
+
+阶段三「Admin 态势感知仪表盘与安全可逆运维重置（Break-Glass Reset）」已全量落地并完成机器可证伪验证：
+
+1. **交付端点与功能规范**：
+   - **`GET /api/v1/admin/tls/circuit-status`（态势感知仪表盘）**：
+     - **鉴权与防呆**：强制执行 `requireAdminAuth`（Fail-Closed），未鉴权或伪造凭据请求一律返回 401，且不写入任何审计日志；
+     - **断路器状态**：实时查询 `gts_ca` 断路器物理行（`state`、`failure_count`、`success_count`、`cooldown_until`、`last_retry_after`、`updated_at`）；
+     - **令牌桶水位**：查询 `cert_provision:acme_smoothing` 当前可用令牌数、容量与填充速率；
+     - **24h 态势与耗时度量**：基于 `device_cert_provisions` 统计近 24 小时成功签发数与平均耗时（`avg_duration_ms`）；
+     - **跳闸精准归因（约束 ① 闭环）**：从 `system_error_logs` 抽取错误分类，精准区分 `ca_rate_limited`（上游 429 频控）与 `ca_5xx_error`（上游 5xx 服务端故障），并给出成功率（`provisions / (provisions + cert_errors)`）与立体限流拦截计数。
+   - **`POST /api/v1/admin/tls/reset-rate-limit`（安全可逆运维重置）**：
+     - **鉴权与防呆**：强制执行 `requireAdminAuth`，未鉴权请求返回 401 且 0 审计写入；
+     - **断路器复位**：支持 `target: 'circuit_breaker'`，将 `gts_ca` 断路器物理复位至 `CLOSED`（`failure_count=0`、`cooldown_until=NULL`、`last_retry_after=0`）；
+     - **单 Key 精准限流清除（约束 ② / R39-3 严格隔离）**：支持 `target: 'node_rate_limit'` 与 `target: 'ip_rate_limit'`，通过 `resetD1RateLimit` 执行物理行删除（`DELETE FROM rate_limits WHERE key = ?`），不触碰 `window_start` 保护，亦不影响任何其他节点或 IP 计数；
+     - **审计日志强约束入库**：每次重置在 `admin_audit_logs` 写入 1 条完整审计记录，明细包含重置前状态快照（`previous_state`、`previous_failure_count`、`previous_count` 等）、操作员 IP 与时间戳。
+
+2. **数据库与底层管线升级**：
+   - `schema.sql` 与 `device_cert_provisions` 表增加 `duration_ms INTEGER DEFAULT NULL` 列；
+   - `cert.ts` 在 `ensureCertProvisionsTable` 中提供幂等 `ALTER TABLE` 运行时热迁移，并在完成置备时精准记录 `durationMs = Date.now() - startTime`；
+   - `cert.ts` 捕获 upstream GTS 5xx 故障，明确以 `reason_key: 'ca_5xx_error'` 记录系统审计并返回 HTTP 502，触发断路器 `recordCircuitFailure(env, 'gts_ca', 30, false)`，与网关自身 `internal_error` 严格物理隔离；
+   - `rate-limit.ts` 导出原生 `resetD1RateLimit(env, key)` 重置原语。
+
+3. **测试套件与可证伪验证（杜绝对象引用夹具，红线【157】）**：
+   - 新增测试套件 `cloudflare/eqt-drm-api/tests/admin-tls-dashboard-offline.js`；
+   - 基于原生 SQLite（`node:sqlite` 的 `DatabaseSync(':memory:')`）构建物理表，每次操作后直接使用 SQL 重新查询数据库物理行，杜绝 Map 引用别名导致的假绿；
+   - **5 大用例组，26 项断言全部通过（`Results: 26 passed, 0 failed`）**：
+     - `Group 1`：未鉴权 GET 与 POST 的 401 拦截，验证其产生恰好 0 条审计日志；
+     - `Group 2`：大盘数据渲染、平均耗时（100ms）、成功率（0.5）与跳闸归因（`ca_rate_limited=1`, `ca_5xx_error=1`）；
+     - `Group 3`：断路器复位后重新从 SQLite 取行验证 `CLOSED` 与零故障状态，并验证 `admin_audit_logs` 中包含前置快照；
+     - `Group 4`：重置 Node A 时，重新查询 SQLite 验证 Node A 物理删除，同时断言 Node B（count=3）与 IP（count=10）计数分毫不动，完成 R39-3 反向严格隔离证明；
+     - `Group 5`：参数校验防呆。
+
+4. **全量离线质量门禁（门禁数字独立加总）**：
+   - `npm run test:offline` 包含 21 个套件（1 个 `typecheck` + 20 个离线测试套件），**0 failed**；
+   - 独立加总结果：
+     - `Results: N passed, 0 failed` 型（11 个套件）：42 + 27 + 64 + 21 + 17 + 102 + 24 + 15 + 21 + 26 + 131 = **490** passed；
+     - `=== Results: N/N passed, 0 failed ===` 型（4 个套件）：23 + 78 + 33 + 35 = **169** passed；
+     - 格式化断言合计：490 + 169 = **659** passed；
+     - 文本自报套件（6 个套件）：`test:env-guard` (9 项)、`subscription`、`portal`、`portal:toggle`、`zero-payment`、`telemetry` 全部退出码 0；
+   - `check-tls-offline.sh`：Worker 全量离线测试 + Go 端 `pkg/cert` 测试全部通过；
+   - `go test ./...` 100% 通过；
+   - `scripts/deploy-windows-results.sh` 编译打包交付产物完成。
+
 ---
 
 ## 四、面向未来向 Let's Encrypt / ZeroSSL 扩展的统一抽象层

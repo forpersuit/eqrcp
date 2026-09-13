@@ -10,7 +10,9 @@ import {
   listManualBlacklist,
   type ManualBlacklistKind
 } from '../utils/blacklist';
-import { rateLimitStatus } from '../utils/rate-limit';
+import { rateLimitStatus, resetD1RateLimit } from '../utils/rate-limit';
+import { getCircuitBreakerStatus, resetCircuitBreaker } from '../utils/circuit-breaker';
+import { ensureCertProvisionsTable } from './cert';
 import { normalizeLicenseSource } from '../utils/license-source';
 import { isTestEnvironment } from '../utils/env-guard';
 
@@ -1864,6 +1866,235 @@ export async function handleAdminRoutes(
       duration_days: durDays
     }), {
       status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
+  // ── LAN-TLS Admin Dashboard: Circuit Breaker & Rate Limiter Telemetry ──
+  if (url.pathname === "/api/v1/admin/tls/circuit-status" && request.method === "GET") {
+    const denied = await requireAdminAuth(request, env, corsHeaders);
+    if (denied) return denied;
+
+    await ensureCertProvisionsTable(env);
+    await ensureAuditLogTable(env);
+
+    // 1. Circuit Breaker status
+    const cbRecord = await getCircuitBreakerStatus(env, 'gts_ca');
+    const cbStatus = cbRecord || {
+      name: 'gts_ca',
+      state: 'CLOSED',
+      failure_count: 0,
+      success_count: 0,
+      last_failure_time: null,
+      cooldown_until: null,
+      last_retry_after: 0,
+      updated_at: new Date().toISOString()
+    };
+
+    // 2. Token Bucket status
+    const tbRecord = await env.DB.prepare(
+      'SELECT key, tokens, capacity, refill_rate, last_refill FROM token_buckets WHERE key = ?'
+    ).bind('cert_provision:acme_smoothing').first<{
+      key: string;
+      tokens: number;
+      capacity: number;
+      refill_rate: number;
+      last_refill: string;
+    }>();
+    const tbStatus = tbRecord || {
+      key: 'cert_provision:acme_smoothing',
+      tokens: 5.0,
+      capacity: 5.0,
+      refill_rate: 10 / 60,
+      last_refill: new Date().toISOString()
+    };
+
+    // 3. 24h Metrics: Provisions success & average duration
+    const since24h = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    const provStats = await env.DB.prepare(
+      'SELECT COUNT(*) as total_provisions, AVG(duration_ms) as avg_duration_ms FROM device_cert_provisions WHERE provisioned_at >= ?'
+    ).bind(since24h).first<{ total_provisions: number; avg_duration_ms: number | null }>();
+
+    const totalSuccess = Number(provStats?.total_provisions || 0);
+    const avgDuration = provStats?.avg_duration_ms != null ? Math.round(Number(provStats.avg_duration_ms) * 10) / 10 : null;
+
+    // 4. 24h Trip reasons & failures from system_error_logs
+    const errorLogs = await env.DB.prepare(
+      "SELECT category, context_json FROM system_error_logs WHERE created_at >= ? AND (category = 'CERT_PROVISION_ERROR' OR category LIKE 'RATE_LIMIT_%')"
+    ).bind(since24h).all<{ category: string; context_json: string | null }>();
+
+    let trip429 = 0;
+    let trip5xx = 0;
+    let otherCertErrors = 0;
+    let rateLimitHits = 0;
+
+    for (const log of (errorLogs?.results || [])) {
+      if (log.category === 'CERT_PROVISION_ERROR') {
+        let ctx: any = {};
+        try {
+          ctx = log.context_json ? JSON.parse(log.context_json) : {};
+        } catch {
+          ctx = {};
+        }
+        if (ctx.reason_key === 'ca_rate_limited') {
+          trip429++;
+        } else if (ctx.reason_key === 'ca_5xx_error') {
+          trip5xx++;
+        } else {
+          otherCertErrors++;
+        }
+      } else if (log.category.startsWith('RATE_LIMIT_')) {
+        rateLimitHits++;
+      }
+    }
+
+    const totalAttempts = totalSuccess + trip429 + trip5xx + otherCertErrors;
+    const successRate = totalAttempts > 0 ? Math.round((totalSuccess / totalAttempts) * 1000) / 1000 : 1.0;
+
+    return new Response(JSON.stringify({
+      ok: true,
+      circuit_breaker: cbStatus,
+      token_bucket: tbStatus,
+      metrics_24h: {
+        provisions_success: totalSuccess,
+        avg_duration_ms: avgDuration,
+        success_rate: successRate,
+        trip_reasons: {
+          ca_rate_limited: trip429,
+          ca_5xx_error: trip5xx
+        },
+        rate_limit_hits: rateLimitHits
+      }
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
+  // ── LAN-TLS Admin Break-Glass: Safe Reversible Reset & Audit ──
+  if (url.pathname === "/api/v1/admin/tls/reset-rate-limit" && request.method === "POST") {
+    const denied = await requireAdminAuth(request, env, corsHeaders);
+    if (denied) return denied;
+
+    let body: any = {};
+    try {
+      body = await request.json();
+    } catch {
+      return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const target = (body?.target || "").trim();
+    const rawKey = (body?.key || "").trim();
+
+    if (target === "circuit_breaker") {
+      const cbName = rawKey || "gts_ca";
+      const prev = await getCircuitBreakerStatus(env, cbName);
+      await resetCircuitBreaker(env, cbName);
+
+      await logAdminAudit(
+        env,
+        "RESET_CIRCUIT_BREAKER",
+        "TLS_CIRCUIT",
+        cbName,
+        {
+          previous_state: prev?.state ?? "CLOSED",
+          previous_failure_count: prev?.failure_count ?? 0,
+          previous_cooldown_until: prev?.cooldown_until ?? null,
+          previous_last_retry_after: prev?.last_retry_after ?? 0,
+          new_state: "CLOSED",
+          new_failure_count: 0
+        },
+        clientIp
+      );
+
+      return new Response(JSON.stringify({
+        ok: true,
+        message: `Circuit breaker '${cbName}' manually reset to CLOSED with full credential clear`,
+        target: "circuit_breaker",
+        name: cbName
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    if (target === "node_rate_limit") {
+      if (!rawKey) {
+        return new Response(JSON.stringify({ error: "key (node_id) is required for node_rate_limit" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+      const limitKey = `cert_provision:${rawKey}`;
+      const res = await resetD1RateLimit(env, limitKey);
+
+      await logAdminAudit(
+        env,
+        "RESET_NODE_RATE_LIMIT",
+        "TLS_RATE_LIMIT",
+        limitKey,
+        {
+          target_node_id: rawKey,
+          existed: res.existed,
+          previous_snapshot: res.snapshot
+        },
+        clientIp
+      );
+
+      return new Response(JSON.stringify({
+        ok: true,
+        message: `Node rate limit '${limitKey}' reset successfully`,
+        target: "node_rate_limit",
+        key: limitKey,
+        existed: res.existed
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    if (target === "ip_rate_limit") {
+      if (!rawKey) {
+        return new Response(JSON.stringify({ error: "key (ip) is required for ip_rate_limit" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+      const limitKey = `cert_provision:ip:${rawKey}`;
+      const res = await resetD1RateLimit(env, limitKey);
+
+      await logAdminAudit(
+        env,
+        "RESET_IP_RATE_LIMIT",
+        "TLS_RATE_LIMIT",
+        limitKey,
+        {
+          target_ip: rawKey,
+          existed: res.existed,
+          previous_snapshot: res.snapshot
+        },
+        clientIp
+      );
+
+      return new Response(JSON.stringify({
+        ok: true,
+        message: `IP rate limit '${limitKey}' reset successfully`,
+        target: "ip_rate_limit",
+        key: limitKey,
+        existed: res.existed
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    return new Response(JSON.stringify({
+      error: "Invalid target. Must be 'circuit_breaker', 'node_rate_limit', or 'ip_rate_limit'"
+    }), {
+      status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
   }

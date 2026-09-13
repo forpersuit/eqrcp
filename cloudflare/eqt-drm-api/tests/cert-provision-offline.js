@@ -132,7 +132,8 @@ function makeMockDb(opts = {}) {
               expires_at: this._binds[3],
               provisioned_at: this._binds[4],
               client_ip: this._binds[5],
-              trace_id: this._binds[6]
+              trace_id: this._binds[6],
+              duration_ms: this._binds[7] ?? null
             });
             return { meta: { changes: 1 } };
           }

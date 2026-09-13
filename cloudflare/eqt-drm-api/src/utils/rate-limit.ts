@@ -393,3 +393,36 @@ export function rateLimitStatus(): {
   };
 }
 
+/**
+ * Admin Break-Glass Reset Primitive for D1 rate_limits.
+ *
+ * Distinct from releaseD1RateLimit:
+ * - releaseD1RateLimit is client-level reservation rollback (count - 1 guarded by window_start).
+ * - resetD1RateLimit is an administrative, cross-subject, unconditional clear of the target rate limit.
+ * - Deletes the row completely so next request starts fresh with count=1.
+ * - Does not touch or mutate any other keys.
+ *
+ * @param env Cloudflare worker environment
+ * @param key Rate limit key to reset (e.g. `cert_provision:${nodeID}` or `cert_provision:ip:${ip}`)
+ * @returns Object with whether the row existed before and the deleted record snapshot
+ */
+export async function resetD1RateLimit(
+  env: Env,
+  key: string
+): Promise<{ existed: boolean; snapshot: { count: number; window_start: string } | null }> {
+  await ensureRateLimitsTable(env);
+  const row = await env.DB.prepare(
+    'SELECT count, window_start FROM rate_limits WHERE key = ?'
+  ).bind(key).first<{ count: number; window_start: string }>();
+
+  if (!row) {
+    return { existed: false, snapshot: null };
+  }
+
+  const res = await env.DB.prepare('DELETE FROM rate_limits WHERE key = ?').bind(key).run();
+  return {
+    existed: (res?.meta?.changes ?? 0) > 0,
+    snapshot: { count: row.count, window_start: row.window_start }
+  };
+}
+

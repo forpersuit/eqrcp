@@ -264,7 +264,8 @@ CREATE TABLE IF NOT EXISTS device_cert_provisions (
     expires_at     TEXT NOT NULL,
     provisioned_at TEXT NOT NULL,
     client_ip      TEXT DEFAULT NULL,
-    trace_id       TEXT DEFAULT NULL
+    trace_id       TEXT DEFAULT NULL,
+    duration_ms    INTEGER DEFAULT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_cert_provisions_node ON device_cert_provisions(node_id, provisioned_at);

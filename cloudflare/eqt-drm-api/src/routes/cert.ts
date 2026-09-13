@@ -35,9 +35,13 @@ export async function ensureCertProvisionsTable(env: Env): Promise<void> {
         expires_at     TEXT NOT NULL,
         provisioned_at TEXT NOT NULL,
         client_ip      TEXT DEFAULT NULL,
-        trace_id       TEXT DEFAULT NULL
+        trace_id       TEXT DEFAULT NULL,
+        duration_ms    INTEGER DEFAULT NULL
       )
     `).run();
+    try {
+      await env.DB.prepare(`ALTER TABLE device_cert_provisions ADD COLUMN duration_ms INTEGER DEFAULT NULL`).run();
+    } catch (_) {}
     await env.DB.prepare(
       `CREATE INDEX IF NOT EXISTS idx_cert_provisions_node ON device_cert_provisions(node_id, provisioned_at)`
     ).run();
@@ -1340,6 +1344,14 @@ async function executeCertProvisioningFlow(params: CertProvisioningParams): Prom
             const retrySec = acmeErr.retryAfter || 60;
             await recordCircuitFailure(env, 'gts_ca', retrySec, true);
             console.error(`[LAN-TLS-PROVISION] [CIRCUIT-BREAKER] Tripped to OPEN due to upstream 429 (retryAfter=${retrySec}s): ${acmeErr.message}`);
+            ctx.waitUntil(logSystemError(
+              env,
+              'CERT_PROVISION_ERROR',
+              'WARN',
+              acmeErr,
+              { node_id: cleanNode, device_id: deviceIdHeader, ip: clientIp, reason_key: 'ca_rate_limited', retry_after: retrySec },
+              traceId
+            ));
             return {
               status: 429,
               body: JSON.stringify({
@@ -1351,6 +1363,24 @@ async function executeCertProvisioningFlow(params: CertProvisioningParams): Prom
             };
           } else if (acmeErr.status >= 500) {
             await recordCircuitFailure(env, 'gts_ca', 30, false);
+            console.error(`[LAN-TLS-PROVISION] [CIRCUIT-BREAKER] Recorded failure due to upstream 5xx (${acmeErr.status}): ${acmeErr.message}`);
+            ctx.waitUntil(logSystemError(
+              env,
+              'CERT_PROVISION_ERROR',
+              'ERROR',
+              acmeErr,
+              { node_id: cleanNode, device_id: deviceIdHeader, ip: clientIp, reason_key: 'ca_5xx_error', status_code: acmeErr.status },
+              traceId
+            ));
+            return {
+              status: 502,
+              body: JSON.stringify({
+                error: 'Upstream Certificate Authority returned server error. Failure recorded in circuit breaker.',
+                reason_key: 'ca_5xx_error',
+                status_code: acmeErr.status
+              }),
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            };
           }
           // R42-6: Upstream ACME 4xx errors (e.g. 400 badNonce, 401/403 unauthorized)
           // intentionally do NOT trip the circuit breaker or increment failure_count.
@@ -1371,13 +1401,15 @@ async function executeCertProvisioningFlow(params: CertProvisioningParams): Prom
       expiresAt = issued.expiresAt;
     }
 
+    const durationMs = Date.now() - startTime;
+
     // 8. Record audit log into D1 asynchronously
     ctx.waitUntil((async () => {
       try {
         await ensureCertProvisionsTable(env);
         await env.DB.prepare(`
-          INSERT INTO device_cert_provisions (node_id, device_id, common_name, expires_at, provisioned_at, client_ip, trace_id)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO device_cert_provisions (node_id, device_id, common_name, expires_at, provisioned_at, client_ip, trace_id, duration_ms)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `).bind(
           cleanNode,
           deviceIdHeader || null,
@@ -1385,14 +1417,15 @@ async function executeCertProvisioningFlow(params: CertProvisioningParams): Prom
           expiresAt,
           new Date().toISOString(),
           clientIp || null,
-          traceId
+          traceId,
+          durationMs
         ).run();
       } catch (logErr) {
         console.error(`[LAN-TLS-PROVISION] Failed to record provision in D1:`, logErr);
       }
     })());
 
-    console.log(`[LAN-TLS-PROVISION] [SUCCESS] Certificate issued successfully for nodeID=${cleanNode} in ${Date.now() - startTime}ms (expiresAt=${expiresAt})`);
+    console.log(`[LAN-TLS-PROVISION] [SUCCESS] Certificate issued successfully for nodeID=${cleanNode} in ${durationMs}ms (expiresAt=${expiresAt})`);
 
     provisionCommitted = true;
 
