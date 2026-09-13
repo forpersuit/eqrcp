@@ -2262,6 +2262,9 @@ func (a *App) provisionDeviceTLSCertInternal(force bool, allowSelfHeal bool) (bo
 			if a.logger != nil {
 				a.logger.Warning(warnMsg)
 			}
+			// 第一性原理：错配路径亦必须在发出事件前先行落盘 EnableTLS=false，
+			// 消除 ToCToU 竞态，杜绝前端 ReadSettings() 读回磁盘残留 true 的 fail-open 风险。
+			a.persistDisableTLS()
 			if a.ctx != nil {
 				wailsruntime.LogWarning(a.ctx, warnMsg)
 				wailsruntime.EventsEmit(a.ctx, "eqt:tls-node-key-mismatch", map[string]any{
@@ -2278,14 +2281,9 @@ func (a *App) provisionDeviceTLSCertInternal(force bool, allowSelfHeal bool) (bo
 		a.lastTLSError = err.Error()
 		a.tlsMu.Unlock()
 
-		// 第一性原理：证书置备失败后，后端自动重置并持久化 settings.EnableTLS = false，
-		// 防止配置状态漂移（避免用户处于“以为开启了加密实则明文传输”的虚假安全感，确保前后端与磁盘配置强一致性）
-		if a.agent != nil {
-			if curSettings, sErr := a.agent.readSettings(); sErr == nil && curSettings.EnableTLS {
-				curSettings.EnableTLS = false
-				_, _ = a.agent.writeSettings(curSettings)
-			}
-		}
+		// 第一性原理：证书置备失败后，后端先同步落盘 settings.EnableTLS = false，再对外广播事件，
+		// 确保前后端与磁盘配置强一致性。
+		a.persistDisableTLS()
 
 		msg := fmt.Sprintf("[LAN-TLS-PROVISION] [AUTO-DISABLED] Provisioning deferred: %v (EnableTLS automatically reset to false; plain HTTP fallback active)", err)
 		if a.logger != nil {
@@ -2324,3 +2322,16 @@ func (a *App) GetLastTLSError() string {
 	defer a.tlsMu.RUnlock()
 	return a.lastTLSError
 }
+
+// persistDisableTLS 第一性原理：当证书置备失败或检测到密钥不一致时，后端自动重置并持久化 settings.EnableTLS = false，
+// 必须在向前端发送失败事件（如 eqt:tls-node-key-mismatch / eqt:tls-cert-failed）之前完成同步落盘，
+// 防止前端并发通过 ReadSettings() 将未更新的 EnableTLS=true 重新读回内存造成 fail-open 状态漂移。
+func (a *App) persistDisableTLS() {
+	if a.agent != nil {
+		if curSettings, sErr := a.agent.readSettings(); sErr == nil && curSettings.EnableTLS {
+			curSettings.EnableTLS = false
+			_, _ = a.agent.writeSettings(curSettings)
+		}
+	}
+}
+

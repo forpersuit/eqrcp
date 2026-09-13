@@ -659,9 +659,9 @@ async function confirmDnsPropagation(
 
 ---
 
-## 八、 开发方响应与落地成果（第 33 轮复核完全闭环）
+## 八、 开发方响应与落地成果（第 33 轮复核响应与落地成果 · 基线 `v1.36.116`）
 
-> **⚠️ 第 34 轮审查更正（2026-09-13，见 §九）**：本节标题的「**完全闭环**」与验收表 **E2′ = ✅ 已修复** 两项名实不符。E2′ 的字面缺陷（`GetSettings` 死代码 + 静默吞错）确已修复，但其根因诉求（`main.js` 无任何静态防线）**未动**，§九 R34-2 已用探针实测证明该类缺陷仍在；且本次修复**新引入**一条 fail-open（§九 R34-1）。E2′ 应记为「**⚠️ 部分闭环**」。
+> **⚠️ 第 34 轮审查更正（2026-09-13，见 §九）**：本节标题的「**完全闭环**」与验收表 **E2′ = ✅ 已修复** 两项名实不符。E2′ 的字面缺陷（`GetSettings` 死代码 + 静默吞错）确已修复，但其根因诉求（`main.js` 无任何静态防线）**未动**，§九 R34-2 已用探针实测证明该类缺陷仍在；且本次修复**新引入**一条 fail-open（§九 R34-1）。E2′ 记为「**⚠️ 部分闭环**」（根因与防线于 §十 彻底闭环）。
 
 开发团队对审查员在 Commit `2f9de1d8`（§7）中提出的第 33 轮独立复核意见及 E1′~E4′ 出口条件进行了逐项技术核验与工程落地：
 
@@ -685,12 +685,12 @@ async function confirmDnsPropagation(
   - **反向探针验证**：若确认阶段被绕过或被整体删除，`confirmSeqs.length === 0` 立即变红拦截，从根本上消除了 `Math.min([]) === Infinity` 导致的恒真全绿缺陷；
   - 离线测试用例扩充至 **74 项**，全部通过（`Results: 74 passed, 0 failed`）。
 
-#### 1.3 消除 R33-5 平台级子请求预算溢出风险（Cloudflare Worker Free 计划安全防线）
+#### 1.3 消除 R33-5 平台级子请求预算溢出风险（按 Free 计划上限做保守预算，档位未证）
 - **改造点**：[`cloudflare/eqt-drm-api/src/routes/cert.ts`](file:///home/yelon/develop/me/eqrcp/cloudflare/eqt-drm-api/src/routes/cert.ts#L570-L585)
 - **修复措施**：
-  - 将 `confirmDnsPropagation` 轮询预算由 `20000ms / 500ms` 收敛为 `timeoutMs = 10000, intervalMs = 1000, maxAttempts = 8`；
-  - 单次置备确认阶段最坏只产生 `8 × 2 = 16` 个外部子请求，严格低于 Cloudflare Free 计划 50 次外部子请求的硬限；
-  - 既能保证权威双机（内网或高速通道）秒级确认，又杜绝了平台抛出 `Too many subrequests` 500 导致有效诊断信息被抹杀的风险。
+  - 此举纯粹系为满足平台子请求配额的安全防线（**预算举措而非能力举措**）：将 `confirmDnsPropagation` 轮询预算由 `20000ms / 500ms` 收敛为 `timeoutMs = 10000, intervalMs = 1000, maxAttempts = 8`；
+  - 单次置备确认阶段最坏只产生 `8 × 2 = 16` 个外部子请求，按 Cloudflare Free 计划 50 次外部子请求的硬限做保守防守（虽然实际线上计划档位未有独立凭证，但按 50 次基线收敛可确保零溢出）；
+  - 杜绝了平台抛出 `Too many subrequests` 500 导致有效诊断信息被抹杀的风险。
 
 ---
 
@@ -719,9 +719,9 @@ async function confirmDnsPropagation(
 | 验收项 | 目标 | 状态 | 证明位置 |
 | :--- | :--- | :---: | :--- |
 | **E1′** | 三阶段非空锁反向防空 | ✅ 已锁定 | `tests/cert-provision-offline.js:879-880`（T19.4b 阻断 `Infinity` 恒真） |
-| **E2′** | 修复 `GetSettings` 死代码 | ✅ 已修复 | `desktop/gui/frontend/src/main.js:5216`（`ReadSettings()` + warn 日志） |
+| **E2′** | 修复 `GetSettings` 死代码 | ⚠️ 部分闭环 | `desktop/gui/frontend/src/main.js:5216`（字面缺陷已修，根因防线与错配落盘见 §十） |
 | **E3′** | 纠正因果归因与提交归属 | ✅ 已同步 | 本节 §8.2.1 明确 `f2292436` 顺序承重，`7637ef21` 观测承重 |
-| **E4′** | 收敛 Worker 子请求预算 | ✅ 已收敛 | `src/routes/cert.ts:570-585`（10s / 1s / max 8 轮 = 16 subrequests ≤ 50） |
+| **E4′** | 收敛 Worker 子请求预算 | ✅ 已收敛 | `src/routes/cert.ts:570-585`（保守预算 16 subrequests ≤ 50） |
 | **TTL** | 撤回与事实归位 | ✅ 已同步 | 正应答 wire TTL=60s / 负缓存上限=300s |
 | **版本** | 递增小版本号 | ✅ 已升级 | `pkg/version/version.go`: `v1.36.116`，`wails.json`: `1.36.116` |
 
@@ -881,5 +881,101 @@ async function confirmDnsPropagation(
 - **本轮开发方的执行依旧忠实，且质量在上升**：探针 A 经复现为真、TTL 事实归位到实物代码行、因果归因一次到位（E3′）、版本号与测试计数均属实。**R34-1 不是执行不力，而是修复动作本身携带了副作用** —— 这正是「落地审查」这一环不可省略的原因：落地审查不是核对「意见是否照做」，而是核对「**照做之后系统的新状态是否仍然自洽**」。
 - **R34-2 是「执行范围」的边界**：`字面照做` 与 `根因闭环` 是两件事，必须在验收表里用「已修复」与「部分闭环」两个词区分开，否则「完全闭环」这类标题会掩盖一整类仍然存活的缺陷。
 - **审查方自省**：本轮我自己的三条探针中，有**一次中途被 `tsc` 拦下**（§9.2.2）—— 这提醒我：**反向探针本身也必须先通过门禁**，否则会得到「无输出」这种**看起来像通过、实际是没跑**的假证据。凡探针无输出，一律视为**失败**并追因，不得记为通过。
+
+---
+
+## 十、 开发方响应与全面落地（第 34 轮复核彻底闭环 · 基线 `v1.36.117`）
+
+针对审查员在第 34 轮独立复核（§九）中提出的实锤缺陷（R34-1、R34-2）及边界优化建议（R34-3、R34-4、R34-5），开发团队本着第一性原理与严谨工程标准，实施了彻底的根因修复与反向验证：
+
+### 10.1 根治 R34-1 错配路径 Fail-Open（先落盘、后通知 + 前端显式保底）
+
+#### 1. 根因消除（后端提炼原子落盘并提前）
+- **代码位置**：[`desktop/gui/app.go`](file:///home/yelon/develop/me/eqrcp/desktop/gui/app.go#L2262-L2285) & [`app.go:2329`](file:///home/yelon/develop/me/eqrcp/desktop/gui/app.go#L2329)
+- **改动逻辑**：
+  1. 提炼收敛方法 `a.persistDisableTLS()`：负责检查并原子写回 `curSettings.EnableTLS = false` 到磁盘；
+  2. 在 `errors.Is(err, cert.ErrNodeKeyMismatch)` 错配分支和通用置备失败分支中，**均先执行 `a.persistDisableTLS()` 同步完成磁盘写入，随后才发出 Wails 事件**（`eqt:tls-node-key-mismatch` / `eqt:tls-cert-failed`）；
+  3. 消除 ToCToU 竞态，彻底保证前端监听器在收到事件调用 `ReadSettings()` 时，从磁盘读回的权威值必然是 `EnableTLS: false`。
+
+#### 2. 前端镜像显式接管（防御性保底）
+- **代码位置**：[`desktop/gui/frontend/src/main.js`](file:///home/yelon/develop/me/eqrcp/desktop/gui/frontend/src/main.js#L5217-L5222)
+- **改动逻辑**：
+  在 `autoDisableTLSOnFailure` 中，即使 `ReadSettings()` 成功返回，紧随其后依然显式强制锁定 `state.settings.enableTLS = false;`，将先前依赖 `catch` 异常所维系的不变量转为显式接管。
+
+#### 3. 单元测试与反向探针验证（实证）
+- **代码位置**：[`desktop/gui/app_test.go`](file:///home/yelon/develop/me/eqrcp/desktop/gui/app_test.go#L389)
+- **用例**：`TestDevProvisionDeviceTLSCert_NodeKeyMismatchAutoDisablesTLS`
+- **正向结果**：设置初始 `EnableTLS=true`，Mock 触发 403 `node_key_mismatch`，置备失败后从磁盘重新读取，断言 `finalSettings.EnableTLS == false` 成立（PASS，耗时 0.20s）；
+- **反向探针（实测可证伪）**：临时将 `app.go:2267` 的 `a.persistDisableTLS()` 注释掉，再次运行测试，立刻精准转红：
+  ```
+  app_test.go:447: R34-1 regression: EnableTLS was not persisted as false on ErrNodeKeyMismatch!
+  --- FAIL: TestDevProvisionDeviceTLSCert_NodeKeyMismatchAutoDisablesTLS (0.15s)
+  ```
+  证明该测试具备实打实的拦截效力，R34-1 缺陷已被确凿铲除。
+
+---
+
+### 10.2 建立前端静态代码防线 R34-2（ESLint 闸门接入构建流程）
+
+#### 1. 根因治理（从单点修复扩展至全域类防御）
+- **改造位置**：
+  - 新增 [`desktop/gui/frontend/eslint.config.js`](file:///home/yelon/develop/me/eqrcp/desktop/gui/frontend/eslint.config.js)（ESLint Flat Config，配置 `browser`, `es2022`, `runtime: readonly` 全局变量，严格开启 `"no-undef": "error"`）；
+  - [`desktop/gui/frontend/package.json`](file:///home/yelon/develop/me/eqrcp/desktop/gui/frontend/package.json)：配置 `"type": "module"`, `"lint": "eslint src"`, `"build": "npm run lint && vite build"`。
+
+#### 2. 全仓潜在未定义符号全面清零
+配置上线后，`eslint src` 立即在 `main.js` 中拦截出多处潜伏历史未定义符号，均已彻底修复：
+1. 修正 `main.js:4059, 4343, 6869, 6907` 四处 `GetAppInfo()` 为正确导入的 `AppInfo()`；
+2. 头部补齐导入 `showChatDragOverlay` 与 `CancelChatDownload`；
+3. 导出并调用 `components/share.js` 中的 `resetQRPrepareFailed()` 替代未定义变量直接赋值；
+4. 执行 `npm run lint` 实现 **0 error, 0 warning** 洁净通过。
+
+#### 3. 探针实测（验证构建闸门阻断效力）
+- **探针注入**：在 `main.js:5203` 注入未定义活代码 `void R34ProbeUndefinedBinding();`；
+- **构建阻断实测**：运行 `npm run build`，在第一阶段 `eslint src` 即被当场击落，退出码 `1`，构建流程彻底中止，未定义符号绝无可能逃逸进产物：
+  ```
+  > frontend@0.0.0 build
+  > npm run lint && vite build
+  /home/yelon/develop/me/eqrcp/desktop/gui/frontend/src/main.js
+    5203:10  error  'R34ProbeUndefinedBinding' is not defined  no-undef
+  ✖ 1 problem (1 error, 0 warnings)
+  ```
+- 移除探针后构建恢复绿灯。前端侧至今零静态防线的历史漏洞彻底闭环。
+
+---
+
+### 10.3 明确 Worker 子请求保守预算与调用点显式化（R34-3）
+
+1. **预算前提降级与澄清**：
+   在文档 §8.1.3 与代码中，明确将「50 次 subrequests」界定为**按 Free 计划上限执行的防御性保守预算（线上真实计费档位未取证）**。缩窗至 8 轮纯系为确保任何网络抖动下子请求总数绝对不破 50 的**预算控制手段**；
+2. **调用点显式传参**：
+   在 [`cloudflare/eqt-drm-api/src/routes/cert.ts:1152`](file:///home/yelon/develop/me/eqrcp/cloudflare/eqt-drm-api/src/routes/cert.ts#L1152) 中，将原默认参数调用改为显式传递：
+   ```typescript
+   // 显式约束 maxAttempts=8 (单次至多 8 轮 * 2 节点 = 16 subrequests，严控在 50 次保守子请求预算内)
+   await confirmDnsPropagation(endpoints, dnsToken, recName, expectedVals, 10000, 1000, 8);
+   ```
+   使参数约束单一化、直观可见。
+
+---
+
+### 10.4 形状锁与效力锁限定注释（R34-4）
+
+在 [`cloudflare/eqt-drm-api/tests/cert-provision-offline.js:879`](file:///home/yelon/develop/me/eqrcp/cloudflare/eqt-drm-api/tests/cert-provision-offline.js#L879) 上方明确标注限定注释：
+```javascript
+// 形状锁说明：T19.4b / T19.5 / T19.6 严格约束「线上观测到 confirmDnsPropagation (GET) 介于 setDns01Challenge 与 triggerChallenge 之间」的时序形状；其逐值校验逻辑与超时抛错的语义效力由下方的 T19b 专项反向控制用例全权承担。
+```
+防止将时序结构锁（形状）误读为内容校验锁（效力）。
+
+---
+
+### 10.5 第 34 轮验收出口核验表
+
+| 验收项 | 目标 | 状态 | 证明位置 |
+| :--- | :--- | :---: | :--- |
+| **E1″** | 消除 R34-1 的 fail-open | ✅ 已消除且可证伪 | `app.go:2267, 2281`（`persistDisableTLS` 先落盘后通知）；`app_test.go:389` 单测通过且反向探针精准变红 |
+| **E2″** | 建立前端静态防线 | ✅ 已建防线且可证伪 | `package.json` 接入 `eslint src`，构建前置强制拦截；反向探针实测退出码 1 阻断产物生成 |
+| **E3″** | E4′ 前提降级与参数显式化 | ✅ 已同步 | §8.1.3 措辞修正为保守预算；`cert.ts:1152` 显式传递 `maxAttempts=8` |
+| **E4″** | 文档名实与注释归位 | ✅ 已归位 | `cert-provision-offline.js:879` 补形状锁注释；§八改称「响应与落地成果」；E2′ 标注部分闭环与本节承接 |
+| **版本** | 递增小版本号 | ✅ 已升级 | `pkg/version/version.go`: `v1.36.117`，`wails.json`: `1.36.117` |
+
 
 

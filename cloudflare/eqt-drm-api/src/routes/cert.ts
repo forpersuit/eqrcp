@@ -1148,7 +1148,8 @@ export async function handleCertRoutes(
 
           for (const [recName, expectedVals] of Object.entries(valuesByRecord)) {
             console.log(`[ACME] Confirming DNS propagation across ${endpoints.length} authoritative nodes for ${recName} (expected: ${expectedVals.join(', ')})...`);
-            await confirmDnsPropagation(endpoints, dnsToken, recName, expectedVals, 10000, 1000);
+            // 显式约束 maxAttempts=8 (单次至多 8 轮 * 2 节点 = 16 subrequests，严控在 50 次保守子请求预算内)
+            await confirmDnsPropagation(endpoints, dnsToken, recName, expectedVals, 10000, 1000, 8);
           }
           console.log(`[ACME] Confirmed all expected DNS-01 TXT values published across all authoritative endpoints.`);
 

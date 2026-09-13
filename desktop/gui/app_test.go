@@ -3,6 +3,7 @@ package main
 import (
 	"archive/zip"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -10,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"eqt/pkg/cert"
 )
 
 func TestParseDesktopIntegrationStatus(t *testing.T) {
@@ -384,5 +387,66 @@ func TestSilentProvisionDeviceTLSCert_SkipsWhenTLSDisabled(t *testing.T) {
 		t.Fatalf("silentProvisionDeviceTLSCert took %v, expected near-instant return (<1s) when TLS is disabled", elapsed)
 	}
 }
+
+func TestDevProvisionDeviceTLSCert_NodeKeyMismatchAutoDisablesTLS(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("EQT_CONFIG_DIR", filepath.Join(tempHome, "eqt_conf"))
+
+	// Mock Gateway returning 403 node_key_mismatch
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error":      "node public key does not match cloud registration",
+			"reason_key": "node_key_mismatch",
+		})
+	}))
+	defer server.Close()
+
+	t.Setenv("EQT_PROVISION_ENDPOINT", server.URL)
+
+	app := NewApp()
+	app.logger = NewFileLogger(filepath.Join(tempHome, "desktop.log"), true)
+	defer app.logger.Close()
+
+	app.agent = newDesktopAgent(nil)
+	settings, err := app.agent.readSettings()
+	if err != nil {
+		t.Fatalf("readSettings failed: %v", err)
+	}
+	settings.EnableTLS = true
+	if _, err := app.agent.writeSettings(settings); err != nil {
+		t.Fatalf("writeSettings failed: %v", err)
+	}
+
+	// 验证初始状态 EnableTLS 为 true
+	verifySettings, err := app.agent.readSettings()
+	if err != nil || !verifySettings.EnableTLS {
+		t.Fatalf("expected EnableTLS=true initially, got: %v", verifySettings.EnableTLS)
+	}
+
+	// 执行置备（内部自愈重试一次后仍 403，触发 ErrNodeKeyMismatch）
+	success, err := app.DevProvisionDeviceTLSCert()
+	if success {
+		t.Fatalf("expected success=false for node_key_mismatch, got true")
+	}
+	if err == nil {
+		t.Fatalf("expected non-nil error, got nil")
+	}
+	if !errors.Is(err, cert.ErrNodeKeyMismatch) {
+		t.Fatalf("expected error to wrap cert.ErrNodeKeyMismatch, got: %v", err)
+	}
+
+	// 第一性原理：断言磁盘设置上的 EnableTLS 已被同步原子重置为 false！
+	finalSettings, err := app.agent.readSettings()
+	if err != nil {
+		t.Fatalf("failed to read settings after provision failure: %v", err)
+	}
+	if finalSettings.EnableTLS {
+		t.Fatalf("R34-1 regression: EnableTLS was not persisted as false on ErrNodeKeyMismatch!")
+	}
+}
+
 
 

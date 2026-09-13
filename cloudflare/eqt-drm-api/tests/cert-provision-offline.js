@@ -876,6 +876,7 @@ async function runTests() {
     const maxConfirm = Math.max(...confirmSeqs);
     const minTrigger = Math.min(...triggerSeqs);
 
+    // 形状锁说明：T19.4b / T19.5 / T19.6 严格约束「线上观测到 confirmDnsPropagation (GET) 介于 setDns01Challenge 与 triggerChallenge 之间」的时序形状；其逐值校验逻辑与超时抛错的语义效力由下方的 T19b 专项反向控制用例全权承担。
     assert(setSeqs.length > 0 && confirmSeqs.length > 0 && triggerSeqs.length > 0,
       'T19.4b: callTracer captured all three phases (guards against vacuous Infinity comparison)');
     assert(maxSet < minConfirm, `T19.5: Invariant locked: max(setDns01Challenge)=${maxSet} < min(confirmDnsPropagation)=${minConfirm}`);

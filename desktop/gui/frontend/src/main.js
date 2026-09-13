@@ -11,8 +11,8 @@ import receiveIllustrationURL from './assets/images/receive.png';
 import chatIllustrationURL from './assets/images/chat.png';
 import morphdom from './vendor/morphdom.js';
 import { renderSide, toggleSearchInput, updateSearchQuery, searchQuery, showSearchInput, renderHistory, showSearchDropdown, toggleSearchDropdown, activeFocusTaskId, updateActiveFocus, getMatchResults, highlightText, showClearHistoryConfirm, toggleClearHistoryConfirm } from './components/history.js';
-import { initDragDrop, sendDebugMessageToChat } from './dragdrop.js';
-import { renderShareOverlay, closeShareOverlay, prepareMergedQRCode, downloadSharePosterImage } from './components/share.js';
+import { initDragDrop, sendDebugMessageToChat, showChatDragOverlay } from './dragdrop.js';
+import { renderShareOverlay, closeShareOverlay, prepareMergedQRCode, downloadSharePosterImage, resetQRPrepareFailed } from './components/share.js';
 import { renderLogViewerOverlay, openLogViewer, closeLogViewer, refreshLogTail, setLogFilter, setLogSearch, toggleAutoRefresh, copyAllLogs, exportDiagnostics, logViewerState } from './components/log_viewer.js';
 import { renderChatTransfersTray } from './components/chat_tray.js';
 import { renderTLSSettingIcon, getDevTLSStatusText, renderTaskSecurityBadge, renderTopbarTLSIndicator } from './components/tls_status.js';
@@ -21,6 +21,7 @@ import {ClipboardGetText, ClipboardSetText, EventsOn, LogInfo, LogError} from '.
 import {
     AgentStatus,
     AppInfo,
+    CancelChatDownload,
     Chat,
     ChatSaveDirectory,
     ClearHistory,
@@ -4055,7 +4056,7 @@ function bindEvents() {
                 openPanel('settings');
                 DevProvisionDeviceTLSCert().then(async (success) => {
                     try {
-                        state.appInfo = await GetAppInfo();
+                        state.appInfo = await AppInfo();
                     } catch (_) {}
                     state.devProvisioningTLS = false;
                     state.devProvisionTLSError = !success;
@@ -4339,7 +4340,7 @@ function bindEvents() {
                             DevProvisionDeviceTLSCert().then(async (success) => {
                                 state.tlsProvisioning = false;
                                 try {
-                                    state.appInfo = await GetAppInfo();
+                                    state.appInfo = await AppInfo();
                                 } catch (_) {}
                                 if (success && state.appInfo?.hasValidTLSCert) {
                                     state.tlsProvisionFailed = false;
@@ -5216,8 +5217,8 @@ async function autoDisableTLSOnFailure(errorMsg, openSettings = false) {
         state.settings = await ReadSettings();
     } catch (e) {
         console.warn('[LAN-TLS] Failed to read latest settings after auto-disable:', e);
-        state.settings.enableTLS = false;
     }
+    state.settings.enableTLS = false;
 
     showToast(t('tls_failed_auto_disabled') || '⚠️ 证书置备遇到异常，已自动关闭局域网 TLS 并保持标准明文传输。可稍后在开发者选项重试。');
     render();
@@ -6865,7 +6866,7 @@ EventsOn('eqt:dev-mode-changed', async (isDev) => {
 
 EventsOn('eqt:tls-cert-ready', async () => {
     try {
-        state.appInfo = await GetAppInfo();
+        state.appInfo = await AppInfo();
         state.tlsKeyMismatch = false;
         state.tlsKeyMismatchMsg = '';
         state.tlsProvisioning = false;
@@ -6903,7 +6904,7 @@ EventsOn('eqt:tls-cert-failed', async (payload) => {
     state.tlsProvisionFailed = true;
     state.tlsProvisionError = (payload && payload.error) || 'Certificate provisioning deferred';
     try {
-        state.appInfo = await GetAppInfo();
+        state.appInfo = await AppInfo();
     } catch (_) {}
     if (Boolean(state.settings?.enableTLS) && !state.appInfo?.hasValidTLSCert) {
         await autoDisableTLSOnFailure(state.tlsProvisionError, false);
@@ -7232,7 +7233,7 @@ checkPendingCrashReport();
 // 联网状态变化时重绘,确保免费额度/套餐 badge 随联网状态即时显隐。
 // 恢复联网时重置二维码失败标志, 允许面板自动重新生成二维码。
 window.addEventListener('online', () => {
-    qrPrepareFailed = false;
+    resetQRPrepareFailed();
     render();
 });
 window.addEventListener('offline', () => render());

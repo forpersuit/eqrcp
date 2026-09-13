@@ -11,6 +11,10 @@ let cachedMergedQRDataURL = '';
 let isPreparingQR = false;
 let qrPrepareFailed = false;
 
+export function resetQRPrepareFailed() {
+    qrPrepareFailed = false;
+}
+
 let cachedScatteredItems = null;
 
 function getScatteredItems() {

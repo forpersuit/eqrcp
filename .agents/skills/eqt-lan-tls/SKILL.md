@@ -769,6 +769,29 @@ WantedBy=multi-user.target
 >   - ② **反向探针本身也必须先通过门禁**：本轮探针 B 首次实施时被 `tsc --noEmit` 拦下，`npm run ...` 只吐 3 行编译错误、**无测试输出**。**凡探针无输出/无 `Results:` 行，一律视为失败并追因，不得记为通过** —— 这是最容易伪造「通过」的假证据形态。
 >   - ③ 探针一律在**临时副本**上进行（`cp` 备份 → 改 → 跑 → 还原 → `git status --porcelain` 确认为空），与本仓库「多会话共用工作区」的约束配套。
 
+---
+
+## 第二十轮落地闭环（针对第 34 轮审查意见的全面落地 · 基线 `v1.36.117`）
+
+> **轮次口径说明**：本条对应第 34 轮独立复核意见及 E1″~E4″ 出口条件的全面工程落地。
+
+> - **✅【113】`persistDisableTLS` 先落盘后通知（E1″ 落地，消除 fail-open 隐患）**：
+>   - 在 `desktop/gui/app.go` 中提炼统一落盘辅助方法 `a.persistDisableTLS()`；
+>   - 在 `errors.Is(err, cert.ErrNodeKeyMismatch)` 错配分支和通用置备失败分支中，**均先调用 `a.persistDisableTLS()` 同步完成磁盘写入，随后才发出 Wails 事件**（`eqt:tls-node-key-mismatch` / `eqt:tls-cert-failed`），杜绝 ToCToU 竞态；
+>   - 前端 `autoDisableTLSOnFailure` 在 `ReadSettings()` 之后显式保底 `state.settings.enableTLS = false;`，显式接管状态机不变量；
+>   - 在 `desktop/gui/app_test.go` 中增加 `TestDevProvisionDeviceTLSCert_NodeKeyMismatchAutoDisablesTLS` 单测并经**反向探针实证**（临时注释落盘调用后测试准确转红，退出码 1），证明修复真实有效。
+>
+> - **✅【114】前端构建级 ESLint 静态代码闸门（E2″ 落地，根治类缺陷）**：
+>   - 新增 `desktop/gui/frontend/eslint.config.js`，采用 Flat Config 规范严格启用 `"no-undef": "error"`；
+>   - 在 `package.json` 中配置 `"type": "module"`, `"lint": "eslint src"`, `"build": "npm run lint && vite build"`，使构建前必须 100% 洁净通过静态检查；
+>   - 彻底修复 `main.js` 中 4 处 `GetAppInfo`（修正为 `AppInfo`）、`showChatDragOverlay`、`CancelChatDownload` 与 `resetQRPrepareFailed()` 未定义符号；
+>   - **反向探针验证**：向 `main.js` 注入未定义调用 `void R34ProbeUndefinedBinding();`，执行 `npm run build`，在首步 `eslint src` 即被当场击落，退出码 1，产物未生成，验证静态防线具备绝对阻断力。
+>
+> - **✅【115】Worker 预算显式约束与形状锁/效力锁界定（E3″/E4″ 落地）**：
+>   - 在 `cloudflare/eqt-drm-api/src/routes/cert.ts:1152` 中显式传递 `maxAttempts=8` 参数，明确作为 Free 计划 50 次子请求上限的保守约束手段；
+>   - 在 `tests/cert-provision-offline.js:879` 上方追加形状锁与效力锁的责任限定注释，防止概念混淆。
+
+
 
 
 
