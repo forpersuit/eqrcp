@@ -5315,6 +5315,10 @@ async function stopCurrent() {
     await run(async () => {
         await StopCurrent();
         state.notice = t('task_stopped');
+        if (state.status) {
+            state.status.current = null;
+        }
+        render();
         await loadStatusData();
     });
 }
@@ -6454,11 +6458,17 @@ function clearMessages() {
 }
 
 function isTerminal(task) {
-    return ['completed', 'stopped', 'failed', 'replaced'].includes(task.transferState || task.state);
+    if (!task) return true;
+    const s = task.state;
+    const ts = task.transferState;
+    return ['completed', 'stopped', 'failed', 'replaced'].includes(s) || ['completed', 'stopped', 'failed', 'replaced'].includes(ts);
 }
 
 function isTaskClosed(task) {
-    return ['stopped', 'replaced'].includes(task.transferState || task.state);
+    if (!task) return true;
+    const s = task.state;
+    const ts = task.transferState;
+    return ['stopped', 'replaced'].includes(s) || ['stopped', 'replaced'].includes(ts);
 }
 
 function activeShareTask() {

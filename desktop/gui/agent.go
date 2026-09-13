@@ -823,6 +823,7 @@ func (agent *desktopAgent) replaceActiveLocked(state string) {
 	}
 	if agent.current != nil {
 		agent.current.State = state
+		agent.current.TransferState = state
 		finishedAt := time.Now()
 		agent.current.FinishedAt = &finishedAt
 	}
