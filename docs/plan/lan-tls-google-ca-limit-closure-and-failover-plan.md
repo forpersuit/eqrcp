@@ -511,3 +511,55 @@ export const SUPPORTED_PROVIDERS: Record<string, CAProvider> = {
 **另有三条 🟡**：`R43-5` 本文件 §3.6.2 的「首要更正」块在 §3.6.1 回滚后已成**错误陈述**（未追加状态更新，读者会误判 §3.6.1 仍是改写版 —— 修正方式即追加一行）；`R43-6` 180s 的「经验值」标签已加、代价已写，但**依据仍缺**（全仓无 DNS-01 传播耗时实测，应显式写明"未经实测的安全裕量"）；`R43-7` 工作区**遗留 `eqt-drm` 技能的同模式重构且未提交**（355 删 / 272 增，初步扫描 134/250 实质行未落新树），不属本提交但违反 DoD，须先澄清归属。
 
 **阶段三准入（第 43 轮口径）**：**按 §3.6.1 原文推进的结论依然成立**，但新增一条硬约束 —— 阶段三实现**不得引用 `SKILL.md` §2.2 / §2.4 的机制描述**，必须以 `rate-limit.ts` / `circuit-breaker.ts` 源码与 `schema.sql` 为**唯一规格源**；R43-1 / R43-2 建议开工前修正（均属文档层）。
+
+#### 3.6.5 第 44 轮审查更正（对 `400b8579` 的复核 · 2026-09-14 · 基线 `v1.36.132` / `1.13.6`）
+
+> **本小节为审查方（第三方）独立复核记录，append-only 追加**（红线【155】），完整保留上方 §3.6.1–§3.6.4 原文。
+
+**结论：阶段三主体交付的实现质量显著高于阶段一/二 —— 首次出现「新套件自带真实判别力」的交付（下 V3/V4/V5）。但「约束 ① 跳闸精准归因」的**写入侧零覆盖**，构成 R42-3 假验证家族的新变体（红线【163】）。**
+
+**一、经机器复核为真的声明（本轮正向）**
+
+| 声明 | 复核方式 | 结果 |
+|---|---|---|
+| 新增套件 26 项断言全绿 | `npm run test:admin:tls:offline` | ✅ 26 passed / 0 failed |
+| 断言数字 490 + 169 = 659 | 全量日志**逐套件独立加总** | ✅ 11 个 `Results:` 型逐项吻合（42/27/64/21/17/102/24/15/21/26/131）；4 个 `===` 型吻合（23/78/33/35） |
+| 未沿用对象引用夹具 | 夹具取值为 `node:sqlite` + `schema.sql` + 每次 SQL 重查 | ✅ 无 Map/对象别名，符合阶段三准入约束 |
+| `go test ./...` 100% 通过 | 全量 | ✅ 全 ok，退出码 0 |
+| `check-tls-offline.sh` 通过 | `.agents/skills/eqt-lan-tls/scripts/` | ✅ 退出码 0 |
+| DoD 交付产物已更新 | `ls /mnt/e/developer/results` | ✅ `eqt.exe` / zip 时间戳 `01:32`，与提交 `01:31` 吻合 |
+| 限流 key 构造与生产一致 | `rg 'cert_provision:'` | ✅ `cert_provision:${node}`（`cert.ts:890`）、`cert_provision:ip:${ip}`（`:914`）与 reset 侧逐字一致 |
+| 5xx 改 502 对客户端非破坏 | `pkg/cert/provisioner.go:815` | ✅ 502 与 500 同归 `ErrGatewayFailed`，客户端不解析 `ca_5xx_error` |
+| 热迁移幂等可用 | 审查方独立探针（旧表无 `duration_ms`） | ✅ 列补齐、二次调用不抛错 |
+
+**反向探针记录（命令 + 输出，红线【157】）**
+
+| 变体 | 注入缺陷 | 实测结果 |
+|---|---|---|
+| **V1** | 删除 `cert.ts` 5xx 分支的 `logSystemError` + `return 502`（17 行） | ⚠️ `npm run test:offline` **EXIT=0，659 项逐项不变** ⇒ **零覆盖** |
+| **V2** | 删除 429 分支的 `logSystemError` | ⚠️ `test:cert:offline` **102/102 全绿** ⇒ **零覆盖** |
+| **V3** | `resetD1RateLimit`：`DELETE … WHERE key=?` → `UPDATE … SET count=0` | ✅ `T4.2`、`T4.5` 翻红（24 passed / 2 failed） |
+| **V4** | `DELETE FROM rate_limits` 删去 `WHERE`（破坏隔离） | ✅ `T4.3a`、`T4.3b` 翻红（24 passed / 2 failed） |
+| **V5** | `resetCircuitBreaker` 不再置 `cooldown_until` | ✅ `T3.2` 翻红（25 passed / 1 failed） |
+
+**二、本轮缺陷清单**
+
+| 编号 | 级别 | 焦点 | 摘要 |
+|---|---|:---:|---|
+| **R44-1** | 🔴 | 声明有、回归保护无 | 「约束 ① 跳闸精准归因」的**写入侧**零覆盖：V1 删掉 5xx 的日志写入与 `return 502` 后 **659 项断言全绿**。`T2.3c`/`T2.3d` 的夹具是**测试自己 `INSERT` 的日志行**，与 `cert.ts` 的写入逻辑**无因果链** |
+| **R44-2** | 🔴 | 同上（429 侧） | V2 删掉 429 分支 `logSystemError` 后 `cert` 套件 102/102 全绿。`T21.3c` 覆盖的是**响应体** `reason_key`（既有代码），新增的**日志写入**无覆盖 |
+| **R44-3** | 🟠 | 违反【158】 | 声明「`test:offline` 包含 21 个套件（1 个 `typecheck` + 20 个离线测试套件）」；**真值 22 = 1 + 21**（`package.json` 机器解析）。新增 `test:admin:tls:offline` 未 +1，沿用上轮「20+1」旧值 |
+| **R44-4** | 🟠 | 违反【161】 | 声明审计明细含 `previous_count`；全仓 `rg previous_count` **仅命中本段自身**。实现为 `previous_snapshot: { count, window_start }`（`admin.ts:2042,2077`） |
+| **R44-5** | 🟠 | 违反 CLAUDE.md 明文 | 新路由 `GET /admin/tls/circuit-status`、`POST /admin/tls/reset-rate-limit` **未登记** `docs/admin/api-contract.md`（`rg 'admin/tls' docs/` 零命中，而该文件已系统登记 §2.1–§2.9 全部 admin 路由）；`admin_audit_logs` 的新 `action`/`target_type` 枚举与 `schema.sql:113-115` 注释亦未更新 |
+| **R44-6** | 🟡 | 迁移路径无回归保护 | `duration_ms` 热迁移**经审查方探针确认可用**，但交付套件恒走 `schema.sql` 全新建表路径 ⇒ `ALTER` 永远落 `duplicate column` 被 `catch(_){}` 吞掉。该 ALTER 若被误删，659 项断言仍全绿 |
+| **R44-7** | 🟡 | 语义误导 | `resetD1RateLimit` 对**不存在**的 key 返回 `200 ok:true` + `"… reset successfully"`；`existed:false` 分支无测试 |
+| **R44-8** | 🟡 | 零增益改动 | `tests/cert-provision-offline.js` 新增 `duration_ms: this._binds[7] ?? null`，但**无任何断言读取该字段** |
+| **R44-9** | 🟡 | 大盘口径不可对账 | `trip_reasons` 只输出 `ca_rate_limited`/`ca_5xx_error`，而分母含未输出的 `otherCertErrors`；`rate_limit_hits` 又不计入分母 ⇒ 前端无法独立核对。无数据时 `success_rate` 回退 **1.0**（显示 100%），误导为全绿 |
+| **R44-10** | 🟡 | 路径不可定位 | 声明写 `check-tls-offline.sh`，实际位于 `.agents/skills/eqt-lan-tls/scripts/`，非仓库 `scripts/` |
+
+**三、判定与准入**
+
+- **R44-1 / R44-2 是验证缺口，不是功能缺陷**：审查方探针与源码回读确认 `429`/`5xx` 分支逻辑本身正确（确写日志、确返 502 且与 `internal_error` 分离），`finally` 的 reservation 释放未被新增 `return` 绕过。缺的是**回归防线**：删掉实现无任何断言报警。
+- **R44-1 的危险性高于 R42-3**：R42-3 的断言**无**判别力，易被反向探针识破；R44-1 的断言**有**判别力（V3/V4/V5 已证），只是**指向的轴错了** —— 读者看到「26 passed」会以为写入侧一并验证了。
+- **阶段三可上线，但须补 2 项**：① 为 `ca_rate_limited` / `ca_5xx_error` **写入侧**补一条「删实现即翻红」的断言（建议在 `cert-provision-offline.js` 增 `T21.3g`：mock 上游 502 → 断言 `system_error_logs` 落行的 `context_json.reason_key === 'ca_5xx_error'` 且响应为 502）；② R44-3 / R44-4 / R44-5 的文档更正。
+- **下一阶段准入新增约束**：凡 plan 声明「某写入路径已闭环」，必须同时给出**该路径的反向探针记录**（红线【163】）；断言观测量不得用「手工造出信号 → 验证读取方」替代。
