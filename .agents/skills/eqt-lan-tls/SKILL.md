@@ -112,7 +112,7 @@ WantedBy=multi-user.target
    - 桌面端 GUI 二维码（涵盖 Share、Receive、Chat 及 Current 视图）统一由 Go 后端调度内核在任务创建时内存级离线生成 Base64 Data URL（`data:image/png;base64,...`）直出到 `TaskRecord.QRCode`。
    - 前端消费层优先直取 `task.qrCode`，规避了桌面端 WebView2 向 `https://<ip>.direct.eqt.net.im:<port>/qr/image` 发起网络 HTTP/HTTPS 回环请求，彻底免疫因路由器 DNS 重绑定防护 (DNS Rebinding Protection)、无外网离线环境或本地自发自收 TLS 握手竞争引起的破图风险。
 5. **WebView2 系统代理拦截防护与 CSP 规范 (Proxy Bypass & CSP Guidelines)**:
-   - **代理穿透**：Windows 系统开启系统代理（如本地 Clash/V2Ray `127.0.0.1:10808`）时，WebView2 内核会无差别拦截外部顶级域名（包括 `.im`），导致访问 `*.direct.eqt.net.im` 本地回环时挂起或被代理拒绝。必须在启动前通过环境变量 `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` 追加 `--proxy-bypass-list=*.direct.eqt.net.im;<-loopback>` 强制绕过代理。
+   - **代理穿透**：Windows 系统开启系统代理（如本地 Clash/V2Ray `127.0.0.1:10808`）时，WebView2 内核会无差别拦截外部顶级域名（包括 `.im`），导致访问 `*.direct.eqt.net.im` 本地回环时挂起或被代理拒绝。必须在启动前通过环境变量 `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` 追加 `--proxy-bypass-list=<local>;127.0.0.1;localhost;*.lan.eqt.im;*.direct.eqt.net.im;10.*;192.168.*;172.16.*;…;172.31.*`（`desktop/gui/main.go:285`，bypass 串 239 字符逐字；`172.16.*`…`172.31.*` 为**逐段枚举**，写成 `172.16-31.*` 无效），或追加 `--no-proxy-server`（`:275`，直连模式）强制绕过代理。⚠️ **第 37 轮复核勘误**：本行此前记录的 `--proxy-bypass-list=*.direct.eqt.net.im;<-loopback>` 与实现不符（`<-loopback>` 属于 `--proxy-server` 的 bypass 语义，且实测串以 `<local>` 开头），已按实现更正；另 `*.lan.eqt.im` 在代码中属**遗留字面量**（现役域名常量为 `direct.eqt.net.im`，`pkg/cert/cert.go:18`）。
    - **CSP 策略**：Wails `AssetServer.Middleware` 的 `Content-Security-Policy` 中 `connect-src` 必须显式包含 `https://*.direct.eqt.net.im:* ws: wss:`，防止内嵌 iframe 或外部网络通道被浏览器策略阻断。
 6. **Chat 启动状态同步机制 (Chat Ready Synchronization)**:
    - 桌面端 `pushTask(action="chat")` 必须通过专用就绪通道（`chatReadyCh`）等待底层 HTTP/HTTPS 服务监听并产生有效 `PageURL` 与 `QRCode`（超时 10s），避免异步瞬态返回空 URL 导致前端被重置为“Waiting for network URL...”或由于局部状态覆盖而陷入死循环。
@@ -873,3 +873,42 @@ WantedBy=multi-user.target
 > 3. **工具行为只能实测，且要测分界条件**；否定性断言附命令与退出码，见【120】。
 > 4. **夹具值 ≠ 实现常量**，见【121】；**泛词不足以定罪**，见【122】；**`nil` 不承载四态**，见【123】；**验收看消费侧**，见【124】。
 > 5. **本轮正向确认（值得沿用）**：① 第 35 轮处方 (A) 被**准确采纳**——`testHookBeforeFailBroadcast` 钩子置于「落盘之后、广播之前」，判别性探针（落盘后移）**精准转红**（`PROBE_B_R36_EXIT=1`，报错逐字为 `INVARIANT VIOLATION: EnableTls must be written to disk as false BEFORE broadcasting failure event! got true`），顺序不变量由此从「存在性锁」升级为**真正的顺序锁**；② 导入审计脚本 `scripts/audit-frontend-imports.mjs` 落 `scripts/` 并挂入 `deploy-windows-results.sh` 的 `run_checks=1` 区块（与桌面 Go 测试并列），使一次性人工核对变成**提交路径上的可重复闸门**（`[PASS] 101 named import symbols / 11 files / 0 dead`，注入不存在导出 ⇒ `PROBE_E2A_EXIT=1`）。
+
+---
+
+## 第二十三轮落地复核（第 37 轮审查 · 对 `35f12325` 的独立复核 · 基线 `v1.36.120`）
+
+> **对象**：`35f12325`「Streamline mobile batch download and add LAN-TLS technical report」——① 新增对外技术报告 `docs/mechanism/lan-tls-security-protocol-technical-report.md`（首版 213 行）；② 删除移动端批量下载的应用内模态与 `window.location.href` 兜底。
+> **结论**：报告的**结构层与协议层声明为真**（域名回环范式与线上解析、P-256 本地生钥、0600/0700/原子落盘、TOFU/D1、POPO ±60s、L1/L2/L3 限流、403 `node_key_mismatch`、双权威 NS 均经逐字核对）；但**引用层与量化层大面积超出实现**：含**虚构函数与虚构代码块**（`parseIPFromDomain`）、**并不存在的「自动切换 Let's Encrypt」灾备**、**零归档证据的「生产实测」性能表**、**与实现、并与该报告自身 §4.2 互斥的绝对性安全声明**（「强制 TLS 1.3 / 被动嗅探完全免疫」vs `MinVersion: tls.VersionTLS12` + 明文回退）。审查意见已就地写入报告（**19 处 ⚠️ 标记 + §八 全文**），其中虚构代码块做了**替换式更正**（换为真实 `parseIP`，`cmd/eqt-dns/main.go:137`）。
+
+> - **【125】⚠️ 文档 / 报告类交付的代码引用必须「机检」，禁止凭记忆书写（虚构引用禁令）**：
+>   - **第 37 轮实测**：报告 §3.2 给出 `func parseIPFromDomain(label string) net.IP` 的完整可编译代码块，并称「通过正则表达式 … 零分配解析」。全仓 `rg "parseIPFromDomain"` **零命中**（仅命中该报告自身）；真实实现是 `func parseIP(domain string) net.IP`（`main.go:137`），算法为「**遍历各级**标签 + `FindStringSubmatch` + `net.IPv4`」，正则亦不同（`(?:^|[^0-9])([0-9]{1,3})-…$`，`:132`）。此外报告还引用了不存在的路径 `cloudflare/eqt-worker/src/cert.ts`（真实为 `cloudflare/eqt-drm-api/src/routes/cert.ts`）、不存在的符号 `VerifyTrustChain`（真实 `VerifyCertificateTrust`）、不存在的文件名 `device_key.pem`（真实 `privkey.pem`）。
+>   - **判据（可执行的出口条件）**：把文档代码围栏与 `反引号` 内的每个标识符 / 路径**批量机检**——路径按**存在性**（`test -f`）核、符号与配置串按 `rg -n --fixed-strings --glob '!*.md' -- <token>` 核。本轮更正后重跑：**15/15 路径存在、33/33 符号命中**（含 `--no-proxy-server`/`--proxy-bypass-list`）、bypass 串与 `main.go:285` **239 字符逐字相等**。
+>   - **为什么这条比历轮更要紧**：文档里的代码块会被读者当作「已是这样实现的」直接引用，而读者不会去 `rg` 核对——**它比代码注释更容易说谎**。
+
+> - **【126】⚠️ 否定性安全声明必须实测，且实测前先做「方法校准」（正对照）**：
+>   - **第 37 轮实测**：报告称「主域名设置严格 CAA，仅授权 `pki.goog` 与 `letsencrypt.org`」。实测 `eqt.net.im` 与 `direct.eqt.net.im` 的 CAA（type 257）经递归（8.8.8.8 / 1.1.1.1 / 9.9.9.9）与**权威直查**（ns1-dns / ns2-dns）**均为 0 条**（rcode=0，NODATA）；对照 `google.com` 返回 `issue pki.goog` ——**该正对照证明「查得到 CAA」的方法有效**，从而「0 条」是真结论而非查询失败。仓库内亦无 CAA 配置、权威引擎无 CAA 分支。
+>   - **判据**：凡写「不存在 / 已配置 / 完全没有」的**否定性安全断言**，必须附命令 + 输出，并**先在一个已知为正的对照对象上验证方法**；同类需实测的还有「自动切换备用 CA」——本轮以「配置为单值 + 无 429 换 CA 分支 + `rg` 空」三重佐证其不存在。
+
+> - **【127】⚠️ 定量声明必须附可复现工件，否则一律标「理论推算 / 设计目标」——该口径不会自动传承**：
+>   - **第 37 轮实测**：报告 §六 以「基于跨平台生产运行**实测**统计数据」给出 6 行数字（密钥生成 1.2–2.8ms、签发 3.8–6.2s、握手 8–18ms、吞吐 92–114MB/s、100GB 内存 <45MB、90 天续签），而仓库内**无任何**支撑工件（无 `Benchmark`、无基准脚本、无结果文件、无日志；现存 `scripts/benchmark-speed` 测的是明文 HTTP 吞吐，不含 TLS 握手 / Wi-Fi / 内存）。
+>   - **关键反证**：本仓**既有**性能文档已自述同类数字为「**理论推算**」（`docs/bugs/2026-09-04-chat-tls-performance-and-efficiency-review.md:209`）⇒ 口径在本仓存在过，却在**新文档里倒退**。**纪律**：每份新文档都要重新过这道闸门，不能假设「本仓已确立的口径会自动被沿用」。
+
+> - **【128】⚠️ 绝对性安全措辞必须与「降级路径」互斥自查（同文档内部一致性，零代码成本）**：
+>   - **第 37 轮实测**：报告 §五 称被动嗅探「**完全免疫**，传输**强制** TLS 1.3」，而 ① 实现只设 `MinVersion: tls.VersionTLS12`（`pkg/server/server.go:2514-2516`，无 `MaxVersion`、无 `CipherSuites` 限定）；② 该报告 §4.2 自己写着「可平滑回退至传统 HTTP 模式」。**「完全免疫」与「明文回退」不可并存**。
+>   - **判据**：把同一文档里的「完全 / 强制 / 绝不 / 严禁」逐一与「降级 / 回退 / 失败 / 超时」路径对照，任何一处互斥即入缺陷清单。此类矛盾**不需要读一行代码**就能发现，是性价比最高的一致性检查。
+
+> - **【129】⚠️ 「能力存在」还要写清「触发时机」——启动一次性 ≠ 周期常驻**：
+>   - **第 37 轮实测**：报告 §六 称「90 天（提前 **30** 天静默续签）……本地后台 Agent 自动感知并静默置换，用户全生命周期零感知」。实测阈值是 **15 天**（`pkg/cert/provisioner.go:672`、`desktop/gui/app.go:2199`），且巡检只发生在**进程启动后一次性 goroutine**（`app.go:287-292` → `silentProvisionDeviceTLSCert` `:2146`），全仓**无** cert/tls 相关 `NewTicker`/`AfterFunc`。后果不只是文案：**长驻会话**在证书剩余 <15 天时不会续签，而是在任务启动处被判为「无有效证书」并**静默回落明文**（`agent.go:1077-1080`）——与「零感知」承诺方向相反。
+>   - **判据**：凡「自动 / 静默 / 后台」类能力，必须回答「**由什么触发、多久一次、进程重启后如何**」；把「启动时一次」写成「持续后台」是典型的夸大。
+
+> - **【130】⚠️ 同主题多文档必须声明「取代 / 互补」关系；「不可验证项」不得计入已落地**：
+>   - **第 37 轮实测**：新报告与已过三轮实现复核的 `docs/mechanism/lan-tls-zero-leak-acme-architecture.md` 在**四处事实**上冲突（私钥文件名 / 续签阈值 / A 记录 TTL / TLS 版本），且**未声明取代或并存关系**，读者无法判断以谁为准（Rule 7：冲突须选定并说明，不得并存）。旧文档在这四处**均已按实现校准过**。
+>   - **同源纪律**：EAB 的代码、类型、调用点齐备，但启用条件是 `env.ACME_EAB_KID && env.ACME_EAB_HMAC_KEY`（`cert.ts:1074-1077`），而 HMAC key **不在仓库配置中**（应为部署侧 secret）⇒ 本轮将其显式标注为「**不可验证项，待运维确认**」，**不计入「已落地」**（与第 36 轮【124】「验收看消费侧」同源）。
+
+> - **【131】⚠️ 审查方自身的工具使用也要自检——评审脚本的「假阴性」会伪装成结论**：
+>   - **第 37 轮自纠三例**：① `rg -rn "PATTERN"` 中 **`-r` 是 replace（替换）而非 recursive**，输出会把命中片段替换成 `n`，造成「命中内容看似不同」的误判（本轮我本人在上一轮已犯过同一错误，必须内化：检索用 `rg -n`，需要分隔 `--flag` 形态的检索词时加 `--`）；② 评审脚本里写 `sub in lines`（在**行列表**里找元素）而非 `sub in lines[i]`（在**该行**里找子串），导致「符号存在性」检查恒假（`EXPECT 1 GOT 0`）；③ 用**内容检索**去核**路径是否存在**（路径串本就不在文件内容里），必须改用存在性判断。
+>   - **纪律**：任何「检查器」在大批量断言前，先用**已知为正**的样本跑一次自检（正对照），确认它能命中；否则检查器全绿/全红都在说谎。
+
+> **方法论沉淀（第 37 轮）**：① 文档类交付的**固定出口**是「引用机检」——路径看存在性、符号看内容，见【125】；② 否定性安全断言先做**方法校准**，见【126】；③ 定量声明没有工件就只能是「理论推算」，且口径不自动传承，见【127】；④ 「完全 / 强制」与「回退 / 降级」必须互斥自查，见【128】；⑤ 「自动」类能力必须交代**触发时机**，见【129】；⑥ 同主题多文档必须声明取代关系、**不可验证项**必须显式标注，见【130】；⑦ **审查方自己的工具与脚本也要做正对照自检**，见【131】。
+> **正向确认（值得沿用）**：报告 §1.2「工业界传统方案的破产分析」表与 §二 mermaid 拓扑、§五 威胁模型表，是本仓**可复用的对外材料骨架**——本轮全部问题都在**事实层**，不在**结构层**；报告把「协议层声明」写成事实的做法（域名回环、TOFU、POPO、三层限流、双 NS）经逐字核对**全部为真**，说明「按实现写文档」的路子是通的，只是必须过机检闸门。
