@@ -1,6 +1,6 @@
 ---
 name: eqt-lan-tls
-description: Architectural guidelines, disaster recovery, authoritative DNS operation, and ACME DNS-01 wildcard TLS provisioning for EQT LAN-TLS Loopback. Use when Codex needs to: (1) Configure, debug, or deploy authoritative DNS nodes (ns1/ns2) and systemd services, (2) Manage ACME wildcard certificates (*.direct.eqt.net.im) and GTS/Let's Encrypt multi-account failover, (3) Maintain Cloudflare Worker DRM/provisioning APIs (D1 rate limits, SingleFlight, 3-state circuit breaker, 2PC leasing), (4) Audit TLS crypto signatures, hardware fingerprint binding, or CSR verification, or (5) Run offline automated test suites and verify quality gates.
+description: Architectural guidelines, disaster recovery, authoritative DNS operation, and ACME DNS-01 wildcard TLS provisioning for EQT LAN-TLS Loopback. Use when you need to: (1) Configure, debug, or deploy authoritative DNS nodes (ns1/ns2) and systemd services, (2) Manage ACME wildcard certificates (*.direct.eqt.net.im) and GTS/Let's Encrypt multi-account failover, (3) Maintain Cloudflare Worker DRM/provisioning APIs (D1 rate limits, SingleFlight, 3-state circuit breaker), (4) Audit TLS crypto signatures, hardware fingerprint binding, or CSR verification, or (5) Run offline automated test suites and verify quality gates.
 ---
 
 # EQT LAN-TLS 回环架构与安全运维主控指南 (LAN-TLS Master Guide)
@@ -24,37 +24,24 @@ description: Architectural guidelines, disaster recovery, authoritative DNS oper
 - **机制**: Worker 内存态 `SingleFlight<T>`，对同一 `node_id` 或 CA 置备请求合并飞行任务。
 - **不变式**: 仅作用于同一 isolate 实例内；跨 POP/跨 isolate 由底层 D1 保证强一致。
 
-### 2.2 Layer 2: D1 2PC CAS 两阶段记账模型 (2-Phase Commitment & Leasing)
-- **阶段一 (Reserve Lease)**: `UPDATE rate_limits SET count = count + 1, lease_expires_at = ? WHERE key = ? AND count < limit` 原子 CAS 抢占租约（超时默认 180s）。
-- **阶段二 (Commit / Release)**:
-  - 成功时 Commit（消除租约，写实计数）；
-  - 失败时 Release（带 `WHERE lease_expires_at = ?` 严格守卫回滚，严禁无守卫清零干扰新窗口）。
-- **可逆自愈 (Sweep)**: 超时未释放的孤儿租约自动被后续请求 CAS 冲正回收。
+### 2.2 Layer 2: D1 固定窗口计数限流 (Single-Statement Upsert)
+- **机制**: 单条 `INSERT INTO rate_limits … ON CONFLICT(key) DO UPDATE … RETURNING` 同时完成「窗口过期→重置为 1」与「窗口有效→count+1」；`WHERE (窗口已过期 OR count < maxAttempts)` 即 CAS 守卫，额度耗尽时语句返回 0 行。
+- **不变式**: 记账只落在**单条语句**内，杜绝 SELECT→UPDATE 两步竞态（红线【144】）。**无租约列、无预租约、无孤儿回收器**。
+- **规格来源**: `cloudflare/eqt-drm-api/src/utils/rate-limit.ts` 与 `schema.sql` 的 `rate_limits(key, count, window_start)`。
 
 ### 2.3 Layer 3: 内存令牌桶限流 (Token Bucket Rate Limiter)
 - **参数**: 容量 5，填充速率受控。
 - **不变式**: 桶满时并发请求由单次 CAS 扣减，严禁反向突发放大。
 
 ### 2.4 Layer 4: 三态断路器 (3-State Circuit Breaker)
-- **状态转移**: `CLOSED` (正常) -> `OPEN` (熔断冷却 300s) -> `HALF_OPEN` (半开单探针) -> `CLOSED`。
-- **单探针闸门 (Single Probe Gate)**: `OPEN -> HALF_OPEN` 状态变更仅允许由 CAS 抢占单枚 180s 租约的请求作为探针；其余并发一律快速失败（503）。
+- **状态转移**: `CLOSED` -> `OPEN`（冷却取上游 429 的 `Retry-After`（实测约 90s）；上游 5xx 连续 3 次则按 `30 × 2^(fails-1)` 退避，上限 1h；已有退避记录时按上次值 ×2，上限 1h）-> `HALF_OPEN` -> `CLOSED`。
+- **单探针闸门 (Single Probe Gate)**: `OPEN -> HALF_OPEN` 状态变更仅允许由 CAS 抢占单枚 180s 探针租约的请求作为探针；其余并发一律快速失败，返回 **HTTP 429 + `reason_key='ca_circuit_open'`**。
 - **仅计服务侧故障**: 严格仅统计 CA 端 5xx、超时及真实 429 速率限制；客户端 4xx/400 业务错误严禁计入 failure_count 污染熔断状态。
+- **规格来源**: `cloudflare/eqt-drm-api/src/utils/circuit-breaker.ts` 与 `src/routes/cert.ts`。
 
 ### 2.5 Layer 5: 双机权威 DNS 高可用与 ACME 容灾 (DNS & ACME High Availability)
 - **双节点委派**: `ns1.eqt.net.im` (Ubuntu 53) 与 `ns2.eqt.net.im` (Ubuntu 53)，RFC 1035 双 NS 冗余，HTTP 管理端口强锁 `127.0.0.1:5380`。
 - **ACME 账户三地冷备**: 生产豁免账户私钥严格同步至 ns1、ns2 与离线运维机（权限 0400）。
-
-> ### ⚠️ 第 43 轮审查方更正（对上方 §2.2 / §2.4 的机制描述 · 2026-09-14 · 基线 `v1.36.129`）
->
-> **上方 §2.2 与 §2.4 有三处机制描述与实现不符，不得作为规格源使用（详见 `review-history.md` 第三十一轮 / bugs 文档 §二十三 R43-1）。追加式更正，原文保留不改（红线【155】）。**
->
-> 1. **§2.2 的 `lease_expires_at` 租约模型不存在**：「`UPDATE rate_limits SET count = count + 1, lease_expires_at = ? WHERE …`」「超时默认 180s 租约」「孤儿租约 Sweep 冲正回收」三者**均为虚构** —— `rg -n 'lease_expires_at' cloudflare/eqt-drm-api/schema.sql cloudflare/eqt-drm-api/src/` **零命中**。真实现：`schema.sql:65-69` 的 `rate_limits` 只有 `key / count / window_start`；`src/utils/rate-limit.ts:250-257` 为单语句 `INSERT INTO rate_limits … ON CONFLICT(key) DO UPDATE SET count = CASE … END`，**无租约列、无 180s 记账租约、无 Sweep 回收器**。（180s 是**断路器探针租约**，在 `src/utils/circuit-breaker.ts:68-71`，与限流记账无关 —— 勿跨节挪借。）
-> 2. **§2.4 的「熔断冷却 300s」无出处**：`rg -n '300' src/utils/circuit-breaker.ts` **零命中**；真实退避为 **90s**（上游 429 的 `Retry-After`）/ **30s**（上游 5xx 连续失败）。
-> 3. **§2.4 的「快速失败（503）」状态码错误**：熔断开路拒绝为 **429** + `reason_key='ca_circuit_open'`（`src/routes/cert.ts:959`，`tests/cert-provision-offline.js` `T21.3d` 断言）；`rg -n 'status: 503' src/routes/cert.ts` **零命中**。
->
-> **阶段三实现须以 `rate-limit.ts` / `circuit-breaker.ts` 源码与 `schema.sql` 为唯一规格源，不得引用 §2.2 / §2.4 的机制描述。**
->
-> 另：§3.2 第 3 步原引「红线【48】」为**悬空引用**（本库编号域为 ①~㊿ 与【51】~【159】，不存在【48】），审查方已就地修正为 **㊽**（`references/red-lines-ledger.md:153`）。
 
 ---
 
@@ -67,13 +54,14 @@ description: Architectural guidelines, disaster recovery, authoritative DNS oper
 bash .agents/skills/eqt-lan-tls/scripts/check-tls-offline.sh
 ```
 - **通过标准**:
-  1. Cloudflare Worker 离线测试：20 个测试套件 + 1 个 typecheck 门禁全部通过（633 passed assertions，0 failed）；
+  1. Cloudflare Worker 离线测试：全部测试套件 + 1 个 typecheck 门禁通过，**0 failed**；
   2. Go 端 `pkg/cert` 单元测试：`go test -count=1 ./pkg/cert/...` 100% 通过。
+- **断言与套件总数以脚本实测输出为准，不在本文件复述** —— 跨文件复述计数必然漂移（红线【162】被引数、被引文件均须回读）。
 
 ### 3.2 审查与防退化核查四步法 (The 4-Step Verification Method)
 1. **反向探针自证判别力 (红线【157】)**: 凡声称修复缺陷的测试断言，必须先还原缺陷验证测试能否翻红，杜绝夹具伪装的“假通过”。
 2. **写语句与真实表结构反查 (红线【68】【157】)**: 凡涉及 D1 数据库操作，必须逐列与 `schema.sql` 对齐，反查真实的 `UPDATE/INSERT` 写语句而非仅看读语句。
-3. **孤儿产物枚举 (红线㊽ ／ 原引【48】)**: 任何删除、收紧或变更身份的改动，必须枚举并处理磁盘存量证书、既有绑定与孤儿行的迁移或兼容。
+3. **孤儿产物枚举 (红线㊽)**: 任何删除、收紧或变更身份的改动，必须枚举并处理磁盘存量证书、既有绑定与孤儿行的迁移或兼容。
 4. **恒真校验识别 (红线【72】)**: 严禁将来自请求体自身公钥的自签名当作身份防线；身份必须依赖服务端 D1 持久化的绑定锚点。
 
 ---
@@ -91,9 +79,9 @@ bash .agents/skills/eqt-lan-tls/scripts/check-tls-offline.sh
 
 * **权威 DNS 双机部署、ACME 容灾与系统集成**: 参阅 [authoritative-dns-ha.md](references/authoritative-dns-ha.md)
   * *包含 ns1/ns2 节点 IP、Systemd 守护配置、Let's Encrypt 账户三地容灾、WebView2/移动端代理穿透。*
-* **159 条审查红线与工程方法论总账本**: 参阅 [red-lines-ledger.md](references/red-lines-ledger.md)
-  * *完整收录 ①~㊿ 及 【51】~【159】全部审查红线、触发场景、反例与不可逆操作判据。（第 43 轮后为【51】~【162】）*
+* **审查红线与工程方法论总账本**: 参阅 [red-lines-ledger.md](references/red-lines-ledger.md)
+  * *完整收录全部审查红线、触发场景、反例与不可逆操作判据（编号域与条数以该文件头部为准）。*
 * **历史审查、落地复核与实测闭环全景**: 参阅 [review-history.md](references/review-history.md)
-  * *完整记录第 1 轮至第 30 轮（对应外部第 42 轮）独立复核留痕、代码 diff 评审与锚点回读。*
+  * *完整记录逐轮独立复核留痕、代码 diff 评审与锚点回读（覆盖轮次以该文件头部为准）。*
 * **WebKit / Safari HTTPS 下载与媒体安全规范**: 参阅 [webkit-safari-attachment.md](references/webkit-safari-attachment.md)
   * *包含 WebKit 沙箱下载限制、MIME 嗅探防范、CSP Sandbox 隔离与被动加载零 Job 解耦。*

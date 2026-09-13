@@ -1,6 +1,6 @@
 ---
 name: eqt-ux
-description: Guidelines for EQT user interface, DOM rendering optimization, notification styles, mobile responsive layouts, and Chrome DevTools MCP E2E simulation testing.
+description: Guidelines for EQT user interface, DOM rendering optimization, notification styles, mobile responsive layouts, and Chrome DevTools MCP E2E simulation testing. Use when you need to: (1) modify browser templates (`chat.tmpl.html`, `upload.tmpl.html`) or the desktop GUI frontend (`main.js`, `app.css`), (2) change how warnings/errors/size limits are surfaced to the user, (3) verify mobile responsive layout or run the Chrome DevTools MCP E2E simulation.
 ---
 
 # EQT UI & Notification Guidelines

@@ -1,6 +1,6 @@
 ---
 name: eqt-dev
-description: Guides EQT developer mode configurations, log system structures, logging paths (Windows & Linux), and dev tracing techniques. Use when Codex needs to: (1) Check or debug local logs, (2) Inspect or troubleshoot auto-update, signature verification, and Cloudflare Pages deployments, (3) Integrate and run e2e-multi-device-simulation tests, or (4) Maintain Cloudflare Workers feedback APIs.
+description: Guides EQT developer mode configurations, log system structures, logging paths (Windows & Linux), and dev tracing techniques. Use when you need to: (1) Check or debug local logs, (2) Inspect or troubleshoot auto-update, signature verification, and Cloudflare Pages deployments, (3) Integrate and run e2e-multi-device-simulation tests, or (4) Maintain Cloudflare Workers feedback APIs.
 ---
 
 # EQT 开发者模式与主控导航指南 (EQT DevMode & Navigation Guidelines)

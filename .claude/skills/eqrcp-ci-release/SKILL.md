@@ -1,5 +1,5 @@
 ---
-name: eqt-ci-release
+name: eqrcp-ci-release
 description: Hard-won gotchas for eqt CI/Release pipeline — load when working on .github/workflows/*.yml, .goreleaser.yml, wails.json, desktop/gui/build/*, scripts/build-artifacts.sh, or diagnosing failing GitHub Actions runs in this repo.
 ---
 

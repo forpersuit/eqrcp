@@ -1,6 +1,6 @@
 ---
 name: eqt-drm
-description: Guides EQT licensing architecture, offline cryptographic activation verification, client hardware fingerprint matching, and Cloudflare Serverless D1 database deployment. Use when Codex needs to: (1) Maintain client-side hardware fingerprint matching (3-of-2 model) and offline .lic validation, (2) Configure or debug Cloudflare D1/Worker DRM APIs and Ed25519 signature verification, (3) Manage Paddle billing webhooks, subscription auto-renew, and upgrades, (4) Handle license portal self-service refunds and unbind quotas, or (5) Run DRM offline automated test suites and verify quality gates.
+description: Guides EQT licensing architecture, offline cryptographic activation verification, client hardware fingerprint matching, and Cloudflare Serverless D1 database deployment. Use when you need to: (1) Maintain client-side hardware fingerprint matching (3-of-2 model) and offline .lic validation, (2) Configure or debug Cloudflare D1/Worker DRM APIs and Ed25519 signature verification, (3) Manage Paddle billing webhooks, subscription auto-renew, and upgrades, (4) Handle license portal self-service refunds and unbind quotas, or (5) Run DRM offline automated test suites and verify quality gates.
 ---
 
 # EQT 授权与反破解开发指南 (EQT Licensing DRM Master Guide)

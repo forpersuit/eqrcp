@@ -36,6 +36,14 @@ scripts/deploy-windows-results.sh
 GOOS=windows GOARCH=amd64 go build -o eqt.exe ./cmd/eqt
 ```
 
+Git hooks installation:
+
+```sh
+scripts/install-hooks.sh
+```
+
+Run `scripts/install-hooks.sh` whenever git hooks are updated or after cloning. The pre-commit hook automatically runs acceptance checks and stages synchronized files (e.g. `wails.json`).
+
 Manual Windows acceptance deployment:
 
 ```sh
@@ -184,6 +192,14 @@ If a structural or design conflict is detected, stop immediately and raise it fo
   - For new areas, define a new skill in the custom skills directory (e.g., `.agents/skills/<skill-name>/SKILL.md`).
   - For existing topics, update the corresponding skill file with progressive disclosure to keep instructions compact.
   - **Filter**: Only record reusable setup, debugging, and integration guidelines. Do NOT record temporary features or business-specific logic.
+- **Skill Authoring Standard (技能沉淀行为准则)** — 上面说的是「放哪里」，这里说的是「写成什么样才算对」。完整条文、证据分级与自证命令见 [`docs/skill-authoring-standard.md`](docs/skill-authoring-standard.md)。
+  1. **按需分层** — `SKILL.md` 只放「每次执行都需要的最小操作指令 + 非显而易见的坑」（< 500 行）；细节入 `references/`，引用**只可一层深**且每条须写明**何时加载**，> 100 行者顶部加 TOC；确定性操作入 `scripts/`，执行而非写入上下文；路径一律正斜杠。
+  2. **稳定层禁入时效内容** — `SKILL.md` 不得出现日期、轮次、基线版本、「本轮更正」横幅，**也不得复述他文件的计数与编号域**（复述必然漂移）。**判据**：**本文件自身**的清单（如账本头自称条数，与内容同 commit 更新）可留；凡指向**另一个**文件的数字，一律改写为「以该文件为准」。审查留痕入 `docs/`；稳定层只写**当下正确**的机制。
+  3. **单一事实源（house rule，非官方规范）** — 实现细节不得在技能内复述（复述即漂移）。写「规格来源：`path:line`」，不写机制的再实现。
+  4. **`description` 是唯一触发面** — 须同时说明「做什么」与「何时用」，**关键用例放最前**（超 1536 字符从后往前截断）；用第三人称；**不得出现具体客户端名称**（技能跨客户端共享，写死 harness 名会污染另一侧的触发面）；不得含未经 `rg` 验证的机制声明，尤其不得写入不存在的对象名。
+  5. **自洽义务** — 计数、编号域、交叉引用、索引行须与目标文件**实际内容**一致；改一个计数就要改所有复述它的地方，**禁止用括注打补丁**。
+  6. **改后回读** — 技能改动完成后，回读被改文件**以及被它索引的文件**，重验 1~5；并跑 frontmatter 校验（`name` 与目录同名、`description` ≤ 1024 字符）。
+- **落点与发现路径** — 权威内容放 `.agents/skills/<name>/`（跨客户端共享），同时必须在 `.claude/skills/<name>` 建**目录级软链**指向 `../../.agents/skills/<name>`；**禁止在 `.claude/skills/` 内复制内容**。Claude Code 只发现 `.claude/skills/`、`<subdir>/.claude/skills/`、`~/.claude/skills/`、`/etc/claude-code/.claude/skills/`、`<plugin>/skills/` —— **`.agents/skills/` 不在发现路径内**，只放那里＝永不自动触发。检出侧须 `core.symlinks=true`；已存在的技能目录内改动当前会话即生效，无需重启。
 - **Reporting**: In your final delivery, explicitly declare which skills were updated or explain why no changes were required.
 
 ## Rule 15 — Definition of Done & Delivery Standards (定义完成与交付标准)
