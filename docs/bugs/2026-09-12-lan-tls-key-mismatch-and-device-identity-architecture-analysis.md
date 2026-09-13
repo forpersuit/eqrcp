@@ -32,6 +32,8 @@
 22. [第八轮独立复核意见（针对 `4ee67b0e` 落地 diff · 2026-09-13 · 基线 v1.36.106）——对"终局闭环"的安全边界复核](#22-第八轮独立复核意见针对-4ee67b0e-落地-diff--2026-09-13--基线-v136106对终局闭环的安全边界复核)
 23. [开发方对第八轮复核的终局闭环落地：坚守 Fail-Closed，客户端自愈换绑，彻底闭合攻击面（基线 v1.36.107）](#23-开发方对第八轮复核的终局闭环落地坚守-fail-closed客户端自愈换绑彻底闭合攻击面基线-v136107)
 24. [第九轮独立复核意见（针对 `b161d543` 落地 diff · 2026-09-13 · 基线 v1.36.107）——对"自愈门控"与"验收数字"的复核](#24-第九轮独立复核意见针对-b161d543-落地-diff--2026-09-13--基线-v136107对自愈门控与验收数字的复核)
+25. [开发方对第九轮复核的裁决与精准落地：自愈门控解耦、测试求真与全场景终局自洽（基线 v1.36.108）](#25-开发方对第九轮复核的裁决与精准落地自愈门控解耦测试求真与全场景终局自洽基线-v136108)
+26. [第十轮独立复核意见（针对 `8247c364` 落地 diff · 2026-09-13 · 基线 v1.36.108）——首次对客户端自愈链做端到端运行时探针](#26-第十轮独立复核意见针对-8247c364-落地-diff--2026-09-13--基线-v136108首次对客户端自愈链做端到端运行时探针)
 
 ---
 
@@ -2589,5 +2591,154 @@ $ rg -c 'PROBE29' pkg/ cloudflare/       -> 0（仅本文档引用）
 | **版本号对齐升级** | `pkg/version/version.go`, `desktop/gui/wails.json` | 均已按规则小版本递增至 `v1.36.108` / `1.36.108` | ✅ PASS |
 
 至此，第九轮复核提出的所有合理项已 100% 精准落地闭环；不合理项已通过第一性原理完成证伪与红线归档。系统在安全性、可用性与自愈完备性上达成最终收敛。
+
+---
+
+## 26. 第十轮独立复核意见（针对 `8247c364` 落地 diff · 2026-09-13 · 基线 v1.36.108）——首次对客户端自愈链做端到端运行时探针
+
+### 26.0 审查对象与取证方式
+
+**审查对象**：`8247c364`（7 文件，+117/−18；版本升至 `v1.36.108`），落地第九轮 R18/R19/R20/R21 与两条残余登记。
+
+**本轮方法升级**：第九轮 §24.6 曾如实声明"R18 的**客户端半边未跑运行时探针**"（当时无端点覆盖手段）。**本轮发现 `EQT_PROVISION_ENDPOINT` 环境变量覆盖存在**（`pkg/cert/provisioner.go:654`），故首次以**桩网关 + 真实 HTTP 往返**执行了客户端自愈链，并配反向探针。**审查方自己的"不可测"结论同样需要复核——它也可能只是当时没找到入口。**
+
+| 编号 | 类型 | 构造 |
+| :--- | :--- | :--- |
+| **P30-E2E** | 端到端探针（新增） | 桩网关对每次请求返回 `403 reason_key=node_key_mismatch`；`EQT_CONFIG_DIR` 指向临时目录并预置 32 位 `device_id.dat`（使本地权威 ID **非空**）；统计请求次数与各次 `node_id` |
+| **R30-1** | 反向探针 | 把门控恢复为第九轮前的 `allowSelfHeal && GetAuthorityDeviceID() == ""`，重跑 P30-E2E |
+| **R30-2** | 反向探针 | 禁用 `hardware.go` 冷却早退，重跑 `TestHardwareThrottleCooldown` |
+
+### 26.1 ✅ 实测为真（R18 首次被**运行时证据**确证；R19/R20/R21 全部闭环）
+
+| 验证项 | 命令 / 探针 | 实测 | 结论 |
+| :--- | :--- | :--- | :--- |
+| **R18 自愈门控确已解耦** | `sed -n '2191,2194p' desktop/gui/app.go` | `if allowSelfHeal {`——`&& server.GetAuthorityDeviceID() == ""` 已删除 | ✅ |
+| **客户端自愈链真实可跑（首次）** | **P30-E2E** | `request[0] node_id=4bd2649bfcd4` → `request[1] node_id=91e32745ad1c`，`total_requests=2`，`post-state node_id=91e32745ad1c` | ✅ **轮换 + 重试真发生且新身份已持久化** |
+| **该行为确由本次 diff 造成** | **R30-1**（恢复旧门控） | `total_requests=1`、`request[0] node_id=4bd2649bfcd4`、`post-state node_id=4bd2649bfcd4`、**FAIL** | ✅ **旧门控下死锁被精确复现**，R18 的修复具备判别力 |
+| 冷启动路径正常 | P30-E2E 日志 | 两代 node 各自 `Generated new ECDSA P-256 private key` | ✅ 换身份后按新目录重签本地密钥 |
+| R20 用例判别力**未被修没** | **R30-2** | 禁用冷却 ⇒ `hardware_test.go:114: expected cooldown throttled return of empty hashes, got "9c7db44c…", "", "ea6ef02e…"` → **FAIL** | ✅ 断言改为空三元组后**仍可判别**（因该用例已关闭指纹 override，禁用冷却会落到真实 WMI） |
+| R20 无跨用例污染 | `hardware.go:592-605` | `InvalidateFingerprintCache()` 已将 `lastFingerprintProbeTime` 归零，冷却早退在后续用例中不会误命中 | ✅ |
+| R19 数字对齐 | `npm run test:offline` | 8 个聚合套件 `42/27/64/21/17/67/24/131`，**合计 393**，0 failed | ✅ 与 §25.1.1 第 3 项完全一致 |
+| | `npm run test:cert:offline` | `Results: 67 passed, 0 failed` | ✅ |
+| R21 文档同步 | `docs/mechanism/…:1181` | 已改为"初始派生自不可变硬件特征（**在未轮换且保留配置时**恒定）"，并标注方案 B 被取代 | ✅ |
+| 残余登记 1/2 已落文档 | §25.1.1 第 5/6 项 | 旧链接失效边界、复制按钮全值通道的定位均已写明 | ✅ |
+| 构建与测试 | `go build ./...` / `go test -count=1 ./cmd/... ./pkg/...` | OK / **16 包 ok，0 FAIL** | ✅ |
+| | `npm run typecheck` | `tsc --noEmit` 0 error | ✅ |
+| 版本号 | `version.go` / `wails.json` | `v1.36.108` / `1.36.108` | ✅ |
+
+**本轮最重要的正面证据**：第九轮只能以"调用点穷举 + 服务端半边实测"论证 R18，本轮**用真实 HTTP 往返把客户端半边跑出来了**，且反向探针精确复现了修复前的死锁（1 次请求、身份不变）。**这是本线程首次对客户端自愈链给出可复现的运行时证据。**
+
+### 26.2 🟠 R22：§25.1.1 第 6 项把"限频配额"再次列为承重墙——**第 6 次复发**，且本轮起该论据被自身机制证伪
+
+- **原文**（§25.1.1 第 6 项）：「`device_id` …换绑防线的真正承重墙在于**原主凭据强一致比对 ∧ 云端单节点 24h/3 次限频配额**。」
+- **证伪一（性质）**：**限频是节流，不是授权**——第八轮【58】已固化该判据（攻击成功所需请求数 ≤ 阈值即证明"墙"不在限频上）。§25.1.2 又自述"孤儿行清理严禁与客户端自愈同步发生，否则第三方一次请求即可注销受害者节点"——**这恰恰说明单次请求的威力不由配额决定**。
+- **证伪二（本轮新证，更硬）**：该桶的键**就是本次 diff 会主动改变的 `node_id`**：
+  ```
+  cloudflare/eqt-drm-api/src/routes/cert.ts:694
+  const rateLimitKey = `cert_provision:${cleanNode}`;
+  ```
+  而 `8247c364` 之后，客户端在**任何** `ErrNodeKeyMismatch` 上都会无条件轮换（`app.go:2193`，本轮 P30-E2E 实测 node_id 从 `4bd2649bfcd4` 变为 `91e32745ad1c`）。⇒ **每轮一次身份变更即换来一个全新的 `cert_provision:<新node>` 桶**，3/24h 对自愈路径**在结构上不存在**。以一条被自身机制绕过的限频作为"承重墙"，比单纯的性质误判更弱。
+- **同族计数**：承重墙/授权依据跨节挪借——⑪ → ⑭ →【51】→【58】→§24.6 残余登记 2 → **本轮 R22**，第 6 次。
+- **修法**：改写为不借用强度的事实陈述——"`device_id` **不构成秘密**（`title` 可见、复制按钮全值导出，§23.1.4 已确证）；换绑防线 = 服务端行强绑定 ∧ 请求方持有被绑定私钥；限频**仅**降低暴力重试速率，**不**构成授权，且其 per-node 桶键随客户端轮换而重置"。删除"承重墙"三字即不失真。
+
+### 26.3 🟡 R23：机制文档新写的 SQL 引用了**不存在的列** `updated_at`
+
+- 真表结构（`cloudflare/eqt-drm-api/schema.sql:274-280`）：
+  ```sql
+  CREATE TABLE IF NOT EXISTS node_public_keys (
+      node_id           TEXT PRIMARY KEY,
+      public_key_sha256 TEXT NOT NULL,
+      device_id         TEXT DEFAULT NULL,
+      first_bound_at    TEXT NOT NULL,
+      last_seen_at      TEXT NOT NULL
+  );
+  ```
+  **无 `updated_at`**（全仓 `updated_at` 仅存在于 `drm.ts`/`auth.ts` 的其他表）。
+- **本次新增的两处引用**：
+  1. `docs/mechanism/lan-tls-zero-leak-acme-architecture.md`（本轮 diff 新增的"方案 A"）：``UPDATE node_public_keys SET public_key_sha256 = ?, updated_at = ... WHERE node_id = ?``；
+  2. §25.1.2 第 2 项（终态清理判据）："基于安全时间窗口（如 `updated_at < 180天` 且无任何活跃置备）"。
+- **真代码**（`cert.ts:883-887`）用的是 `last_seen_at`：
+  ```sql
+  UPDATE node_public_keys SET public_key_sha256 = ?, last_seen_at = ? WHERE node_id = ?
+  ```
+- **同族**：第 25 轮已就同一张表指出"INSERT 列名 `public_key`/`created_at` 亦不存在（实为 `public_key_sha256`/`first_bound_at`）"——**同一张表、同一类错、第二次**。规格的 SQL 是可执行物，列名错即实施即错。
+
+### 26.4 🟡 R24：§25.1.1 第 2 项对测试行为的描述超出测试实际
+
+- **原文**：「重构 `TestHardwareThrottleCooldown` …**同时结合 `InvalidateFingerprintCache()` 验证时间戳重置后可正常发起重探**」。
+- **实际**（`hardware_test.go:120-121`）：
+  ```go
+  // Cleanup
+  InvalidateFingerprintCache()
+  ```
+  该调用被标注为 `Cleanup`，其后**无任何断言**——它不验证"时间戳重置后可正常发起重探"，只清理状态。R30-2 证明该用例的判别力来自"空三元组"断言本身，与这次 `InvalidateFingerprintCache()` 无关。
+- **性质**：与第十六/十七轮同族的"断言误述"，本轮出现在**对测试自身能力的描述**上。修法：把该句改为"并在用例结束时以 `InvalidateFingerprintCache()` 清理（不构成断言）"，或补一条真实的重探断言。
+
+### 26.5 🟡 R25：自愈轮换是**不可逆的单向门**，且在"重试是否可行"未知之前就已跨过
+
+- **事实**：`app.go:2193-2203` 的顺序是 `RotateDeviceNodeIdentity()` →（无条件）`return a.provisionDeviceTLSCertInternal(true, false)`。而 `RotateDeviceNodeIdentity`（`hardware.go:530-546`）直接 `writeCachedNodeSalt(newSalt)` **覆写**旧盐，**全仓无回滚路径、旧盐未留存**。
+- **问题**：重试可能因**与身份无关**的原因失败——`RateLimited`（`cert.ts:716` 的 `cert_provision:ip:<ip>` 10/24h、`:739` 的 `cert_provision:global_acme` 40/周）、网络错误、5xx。此时：
+  - 用户**什么也没得到**（仍无证书、仍 HTTP 降级）；
+  - 却已**永久失去**旧 `node_id`（其已分发的直连链接/二维码全部作废，且旧盐不可恢复）；
+  - 且日志只在 `:2198` 说"rotated … and retrying"，重试失败后落到 `:2222` 的通用 `[FAIL-SOFT] Provisioning deferred`，**没有任何一处汇总"身份已变更但未取得证书"这一后果**。
+- **可达性（如实标注）**：需"首次 403 之后，重试被上述无关原因挡下"。首次尝试已消耗 1 次 per-IP 额度；重试用新 node_id，故 **per-node 桶不拦**，但 **per-IP 10/24h 与全局 40/周仍拦**。故在共享出口 IP、或用户反复点击开发者选项 `DevProvisionDeviceTLSCert` 的场景下可达。**不是高发路径，但是唯一一条"付出不可逆代价且收益为零"的路径。**
+- **修法（最小）**：轮换前读取并在内存中保留旧盐；若重试返回的错误**仍不是** `ErrNodeKeyMismatch`（即轮换没有解决问题），把旧盐写回并恢复 `cachedNodeID`。另建议在重试失败分支补一条明确日志/事件，说明身份已轮换。
+
+### 26.6 自我更正与残余
+
+- **自我更正（连续第四轮）**：我原假设"R20 重写后，`TestHardwareThrottleCooldown` 末尾的 `InvalidateFingerprintCache()` 若不重置时间戳，会把 `lastFingerprintProbeTime` 泄漏给后续用例、使它们静默走冷却早退"。`hardware.go:599` 实测 `lastFingerprintProbeTime = time.Time{}` **确已归零**，该假设**当场撤回，不作为发现上报**。
+- **残余登记（1 条，延续第九轮）**：§24.6 登记的"崩溃/双击"类边界不在本轮范围；本轮新增的唯一残余是 §26.5 的可达性说明——建议在文档中把"自愈对用户完全透明"限定为"**自愈成功后**透明；自愈未成功时用户的节点身份可能已变更"。
+
+### 26.7 取证记录（原文）
+
+```
+$ P30-E2E（桩网关 403 node_key_mismatch；EQT_CONFIG_DIR=临时目录；device_id.dat 预置非空）
+PROBE30 pre-state node_id=4bd2649bfcd4 authority_device_id="0123456789abcdef0123456789abcdef"
+[LAN-TLS-KEY] Generated new ECDSA P-256 private key for node 4bd2649bfcd4
+[LAN-TLS-KEY] Generated new ECDSA P-256 private key for node 91e32745ad1c
+PROBE30 ok=false err=node public key does not match cloud registration: PROBE30 stub
+PROBE30 request[0] node_id=4bd2649bfcd4
+PROBE30 request[1] node_id=91e32745ad1c
+PROBE30 total_requests=2
+PROBE30 post-state node_id=91e32745ad1c
+--- PASS: TestPROBE30SelfHealGate (0.04s)
+
+$ R30-1（把门控恢复为 allowSelfHeal && GetAuthorityDeviceID() == ""）
+PROBE30 total_requests=1
+PROBE30 request[0] node_id=4bd2649bfcd4
+PROBE30 post-state node_id=4bd2649bfcd4
+--- FAIL: TestPROBE30SelfHealGate (0.04s)
+    zz_probe30_test.go:72: PROBE30 expected 2 provision requests (rotate + retry), got 1: [4bd2649bfcd4]
+
+$ R30-2（hardware.go 冷却早退 -> if false &&）
+--- FAIL: TestHardwareThrottleCooldown (0.01s)
+    hardware_test.go:114: expected cooldown throttled return of empty hashes,
+      got "9c7db44c770a2b16481bf19b5e95092461ebd71ff95e090f7bcb555f4b51608d", "", "ea6ef02e25891c111e17b6e801c15487d97088e31d35332edfa4bdfe41e2aa69"
+
+$ 基线复跑
+go test -count=1 ./cmd/... ./pkg/...   -> 16 包 ok / 0 FAIL
+npm run test:cert:offline              -> Results: 67 passed, 0 failed
+npm run test:offline | rg '^Results:'  -> 42/27/64/21/17/67/24/131（8 个聚合套件，合计 393，0 failed，exit 0）
+npm run typecheck                      -> tsc --noEmit 0 error
+pkg/version/version.go                 -> v1.36.108 ; wails.json -> 1.36.108
+
+$ 探针清理
+git status --porcelain                 -> 空
+rg -c 'PROBE30' desktop/gui/ pkg/      -> 0（zz_probe30_test.go 已删除，hardware.go/app.go 已还原）
+```
+
+### 26.8 收敛评估与出口
+
+**净变化判定**：`8247c364` 是**第九轮意见的忠实落地**——R18 的一行删改经**端到端反向探针**确证有效（旧门控下死锁精确复现）；R19 数字口径已对齐实测（393/67）；R20 用例改为生产可达状态**且判别力未被修没**；R21 前提限定语已补。**三处 🟡 中两处（R23/R24）是"文档对代码/对测试的描述失真"，一处（R25）是新的设计判断问题但可达性窄。**🟠 R22 属论据复用，非功能缺陷。
+
+| 出口 | 内容 | 评价 |
+| :--- | :--- | :--- |
+| **出口 1（推荐）** | R23 把两处 `updated_at` 改为 `last_seen_at`（或删除该 SQL 片段）；R22 删去"承重墙"三字并补"`device_id` 不构成秘密 + 限频不构成授权 + 桶键随轮换重置"；R24 把该句改为"清理（不构成断言）"；R25 在重试返回非 mismatch 错误时回滚旧盐并补一条后果日志 | 全部为文案/一行级改动，无爆炸半径 |
+| 出口 2 | 仅做 R23（列名错会直接误导实施），其余记入已知风险 | 可接受，但 R22 的论据若被后续章节继续引用，代价会复利 |
+| 出口 3 | 为 R25 补一条端到端用例（桩网关先 403、再 429），断言"身份未被变更" | 需先实现回滚才能通过；推荐与出口 1 同批落地 |
+
+**发布建议**：`8247c364` **可以随版发布**——它修掉的是"某子人群永久 403"（第九轮唯一 🟠），且修复已被运行时证据确证。**R23 建议在下次文档更新时一并修正**（列名错是唯一可能被实施方直接照抄的一项）。
+
+**收敛信号**：本轮**四条意见中三条为文档描述级、一条为窄可达性的设计判断**，且首次实现"客户端自愈链可复现"。**判定：代码审查实质收敛**——后续若仍只有文案级残留，转为只对 R23/R25 的落地 diff 做反向探针验收，不再展开新战线。
 
 
