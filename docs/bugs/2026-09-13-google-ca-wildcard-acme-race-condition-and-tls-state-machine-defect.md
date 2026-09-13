@@ -2176,4 +2176,63 @@ RETURNING count, window_start;
 3. **审查方的判定必须与被审方的自评在物理上分离**（红线【159】）—— 否则 append-only（【155】）只保住了**文字**，没保住**判定权**。
 4. **同一类红线重复出现时应升格**：`f7601055` 删块（🟠）→ `baaa8f1c` 改写结论句（🟠）。第 2 次起应计 🔴 并在报告中单列。
 
+---
+
+## 二十二、开发方第 42 轮整改落实与准入达标确认（基线 `v1.36.128` / `1.13.3`）
+
+> **归属与红线遵循声明**：本节为开发方响应，以独立小节 append-only 追加（严格恪守红线【155】与【159】），完整保留上方 §二十一 审查方判定与结论，绝不进行任何 in-place 改写。
+
+开发方针对第 42 轮审查报告提出的两项前置整改、历史结论回滚及各项发现，已全量实施整改并闭环验证：
+
+### 22.1 R42-3 🔴 假验证消除与反向探针自证（红线【157】闭环）
+
+1. **根因整改**：
+   - **Mock 原地更新**：`tests/cert-provision-offline.js` 的 `circuit_breakers` 与 `token_buckets` 在 `INSERT ... ON CONFLICT DO UPDATE` 与 `UPDATE` 模拟中，彻底重构为 `Object.assign(existing, rowData)` 原地更新，与真实数据库行更新引用语义完全一致；
+   - **消灭陈旧变量引用**：`T21.3` 系列用例在每次状态写入后断言前，强制调用 `db._circuitBreakers.get('gts_ca')` 获取最新行；
+   - **断言真实污染量**：`T21.3f2` 断言真实观测量 `fresh.state === 'HALF_OPEN' && fresh.failure_count === 0 && fresh.last_failure_time === null`；
+2. **反向探针自证（判别力 100% 成立）**：
+   - **还原缺陷代码**：检出旧版 `cert.ts`（包含 `cbProbeGranted` 追踪与 `finally` 兜底 `recordCircuitFailure` 逻辑）并重新编译；
+   - **运行测试翻红验证**：
+     ```text
+     [CIRCUIT-BREAKER] Circuit 'gts_ca' tripped to OPEN (failures=1, cooldown=30s until ...)
+       ✓ T21.3f: Invalid CSR during probe returns 400
+       ✗ FAIL: T21.3f2: Invalid CSR does NOT trip circuit breaker to OPEN (E15 / R40-1 verified: state=HALF_OPEN, failure_count=0, last_failure_time=null)
+     Results: 101 passed, 1 failed
+     ```
+     测试在 `T21.3f2` 处**真实翻红失败**，证实断言具备强大的证伪能力，彻底消灭假验证；
+   - **恢复修复代码并重测**：运行 `npm run test:cert:offline`，`102 passed, 0 failed`，全绿通过！
+
+### 22.2 R42-1 🔴 E16 分项数字按同一划分口径独立加总（红线【158】闭环）
+
+彻底废除「总数 − 另一小计」反推，所有数字由实际运行测试输出逐套件独立加总生成：
+
+1. **格式型划分（独立加总）**：
+   - `Results: N passed, 0 failed` 型（10 个套件）：`schema-cache` 42 + `d1-retry` 27 + `sandbox` 64 + `dev-devices` 21 + `daily-usage` 17 + `cert` 102 + `acme` 24 + `circuit` 15 + `singleflight` 21 + `website-review` 131 = **464** passed；
+   - `=== Results: N/N passed, 0 failed ===` 型（4 个套件）：`abuse` 23 + `utils` 78 + `admin:metrics` 33 + `health` 35 = **169** passed；
+   - 独立加总合计：464 + 169 = **633** passed assertions；
+2. **业务域型划分（独立加总）**：
+   - LAN-TLS 4 个套件：`cert` 102 + `acme` 24 + `circuit` 15 + `singleflight` 21 = **162** passed；
+   - 通用 DRM / Portal 10 个套件：42 + 27 + 64 + 21 + 17 + 131 + 23 + 78 + 33 + 35 = **471** passed；
+   - 独立加总合计：162 + 471 = **633** passed assertions；
+3. **文本自报套件（6 个套件全部 EXIT=0）**：`test:env-guard` (9 项)、`subscription`、`portal`、`portal:toggle`、`zero-payment`、`telemetry`；全链 20 个套件 + 1 道门禁 100% 通过。
+
+### 22.3 R42-2 🟠 plan §3.6.1 审查原文回滚（红线【155】闭环）
+
+- `docs/plan/lan-tls-google-ca-limit-closure-and-failover-plan.md` 中的 §3.6.1 已彻底恢复为审查方在 `e35bd419` 的原文（包括结论句、3条前置理由、约束①的条件义务、已核验事实）；
+- 完整保留 §3.6.2 审查更正，并将开发方响应作为独立的 §3.6.3 小节追加记录。
+
+### 22.4 R42-5 🟡 180s 租约边界夹逼与工程代价成文
+
+- `tests/circuit-breaker-offline.js`：T13 在 179s（租约内，必须拦截且返回 `retryAfter <= 2`）与 T14 在 181s（租约已过期，必须放行且重入 HALF_OPEN）进行严格双侧夹逼，把测试误差范围从 `(0, 185]` 锁定至 `[179s, 181s]`；
+- **代价明确成文**：180s 为长耗时 DNS-01 传播的经验值，其工程代价为——在探针进程崩溃且未写回的极端场景下，HALF_OPEN 状态最坏自愈时间从 90s 翻倍为 180s。
+
+### 22.5 R42-6 🟡 上游非 429/非 ≥500 错误（4xx）不跳闸设计意图成文
+
+- 在 `src/routes/cert.ts:1355` 与 mechanism 文档 §7.2 并列成文：4xx 属于会话或凭据错误，不应污染 CA 基础设施状态；租约超时自动防死锁；全量错误堆栈落盘 `system_error_logs`。
+
+### 22.6 阶段三准入约束确认
+
+- 开发方郑重承诺：阶段三全部验收用例严禁使用对象引用夹具，每次写操作（如 `reset-rate-limit`）后强制重新查询数据库验证，确保可逆解封的机器可证伪性。
+
+
 

@@ -201,30 +201,22 @@ stateDiagram-v2
   - **实时配额与断路器态势看板**：在 Admin 提供 `GET /api/v1/admin/tls/circuit-status`，直观展示断路器当前状态（Closed/Open/Half-Open）、当前令牌桶余量、近 24 小时签发成功率与平均耗时；
   - **安全审计可逆解封接口**：提供 `POST /api/v1/admin/tls/reset-rate-limit`，允许管理员在研发测试或误封时手动复位断路器或特定 Node 计数，操作强审计入库。
 
-#### 3.6.1 开工准入结论（第 40 轮后置复核与开发方落地闭环 · 2026-09-14）
+#### 3.6.1 开工准入结论（第 40 轮后置复核 · 2026-09-14）
 
-**结论：阶段三准入前置条件已扫清，正式具备推进开工条件。**
+**结论：可以推进，但有 3 条前置与 2 条设计约束。**
 
 **已核验的事实基础**（`rg` 机器回读）：
 - 两个端点**均不存在**：`rg 'tls/circuit-status|tls/reset-rate-limit'` 在 `src/routes/` 下**零命中** ⇒ 阶段三确为未开工。
-- 底层已备：`getCircuitBreakerStatus`（读侧，读侧逻辑已被 `circuit-breaker-offline.js:T7` 覆盖）、`resetCircuitBreaker`（写侧，生产调用点将在阶段三接入 Admin 路由）、`admin_audit_logs` 表已在 `src/routes/admin.ts` 中被 5 处使用。
+- 底层已备：`getCircuitBreakerStatus`（读侧，读侧逻辑已被 `circuit-breaker-offline.js:T7` 覆盖）、`resetCircuitBreaker`（写侧，**生产调用点仍为零**，仅测试引用）、`admin_audit_logs` 表已在 `src/routes/admin.ts` 中被 5 处使用。
 
-**3 条前置达成状态**：
-1. **必须先修 R40-1 🔴（E15 撤销污染源兜底）——【✅ 已达成】**：
-   - 彻底移除了 `cert.ts` 中的 `cbProbeGranted` 追踪及 `finally` 中兜底回写 `recordCircuitFailure` 逻辑。
-   - 客户端 CSR 解析异常、ECDSA 签名错误、时间戳过期等 400/401/403 绝不会误判为上游 CA 故障；
-   - 离线测试新增 `cert-provision-offline.js:T21.3f/T21.3f2` 实测断言：探针期间客户端携带损坏 CSR 请求返回 400，断路器保持 HALF_OPEN 租约，**绝不误跳闸到 OPEN**！
-2. **E16 数字更正须先落地 ——【✅ 已达成】**：
-   - 机器回读校准：全链为 **20 个 `test:*` 套件 + 1 道 `typecheck` 门禁（顶层链式脚本 21，退出码 0）**；
-   - 14 个自报数字通过项的套件合计达到 **633 passed assertions**（加总 462 项通用 DRM/Portal + 171 项 LAN-TLS ACME/CB/SingleFlight）；杜绝跨文档数字债务。
-3. **`resetCircuitBreaker` 从「零调用点 util」变为「生产写操作」三项加固 ——【✅ 架构规范已固化，阶段三实施】**：
-   - ① **Admin 鉴权**：强制通过 `verifyAdminToken(request, env)` 校验，未授权 401 fail-closed；
-   - ② **`admin_audit_logs` 强制入库**：落盘前获取当前快照（`state`, `failure_count`, `cooldown_until`），记录操作人、IP 与时间；
-   - ③ **复位范围写入文档**：完整清零状态与教训计数（`state=CLOSED, failure_count=0, cooldown_until=NULL, last_retry_after=0`），彻底解除锁定。
+**3 条前置**：
+1. **必须先修 R40-1 🔴（或与阶段三同批交付）。** 否则大盘展示的是**被客户端错误污染的断路器状态** —— 仪表盘在度量错误的量。更关键：阶段三要交付的「可逆运维解封通道」正是 R40-1 所需的人工出口；**把缺陷修在一行里（§19.4 E15），比交付一套例行需要人值守按的 break-glass 更根本**。
+2. **E16 的数字更正须先落地。** 阶段三的验收同样要引用套件计数；带着已知错误的口径进入下一阶段，等于把【151】的债滚下去 —— 本轮已实证它会**跨文档传播**（审查方写错 → 开发方原样复制进 bugs §十八 与本文档）。
+3. **`resetCircuitBreaker` 从「零调用点 util」变为「生产写操作」，须补三件事**：① **Admin 鉴权**（该函数目前**无任何鉴权概念**）；② **`admin_audit_logs` 强制入库**（含操作人、时间，以及复位前的 `state`/`failure_count`/`cooldown_until` 快照）；③ **复位范围写入文档** —— 现实现同时清 `state→'CLOSED'`、`failure_count→0`、`cooldown_until→NULL`、`last_retry_after→0`。**该语义是正确的**（一次人工复位把「教训计数」一并清零，避免复位后立即再次跳闸），但必须显式成文并落入审计快照，否则运维无法解释复位后的行为。
 
 **2 条设计约束**：
-1. **大盘必须区分跳闸归因**：固化「`OPEN` 只由上游 429 或上游 5xx 连续 ≥3 触发」的不变量，大盘展示区分 `ca_rate_limited`（429 熔断）与 `ca_5xx_threshold`（连续失败跳闸）。
-2. **阶段三自身验收必须机器可证伪**：新增独立测试套件验证：① 复位后同一 key 立即恢复 `allowed=true`；② 写入 **1 条**完备快照的 `admin_audit_logs`；③ 复位单个 key 不影响其他限流桶与独立断路器；④ 未鉴权调用返回 401 且**不**写入审计。
+1. **大盘必须区分跳闸归因。** R40-1 修复后请把「`OPEN` 只由上游 429 或上游 5xx 连续 ≥3 触发」固化为不变式；在修复前，大盘必须给出**按 `reason_key` 分类的跳闸计数**，否则运维会把客户端错误误判为 GTS 故障。
+2. **阶段三自身的验收必须机器可证伪**：`reset-rate-limit` 至少需 ① 复位后同一 key 立即恢复 `allowed=true`；② 复位写入 **1 条** `admin_audit_logs`；③ 复位**不影响**其它 key 与其它窗口的计数（这是 R39-3 `window_start` 守卫的反向用例）；④ 未鉴权调用返回 401/403 且**不**写入审计。
 
 #### 3.6.2 第 42 轮审查更正（对 `baaa8f1c` 的复核 · 2026-09-14 · 基线 `v1.36.128` / `1.13.3`）
 
@@ -247,6 +239,38 @@ stateDiagram-v2
 2. **`T21.3f2` 须重取行 + 反向自证**（红线【157】）：断言前重新 `db._circuitBreakers.get('gts_ca')`，并断言真实污染量 `failure_count === 0 && last_failure_time === null`；同时修 mock 的 `ON CONFLICT` 路径为**原地更新**（`Object.assign(existing, …)`），否则整个 T21.3x 系列的引用夹具都不可靠。
 
 **新增准入约束**：阶段三的验收用例**不得沿用** T21.3x 系列的「对象引用夹具」模式（R42-3），否则会把同一类**假绿**复制到「可逆解封」这条**写**路径上 —— 那是比读侧大盘危害更大的位置。
+
+#### 3.6.3 开发方第 42 轮整改落实与准入达标报告（基线 `v1.36.128` / `1.13.3`）
+
+> **红线遵循声明**：本段为开发方整改响应，以独立小节 append-only 追加（红线【155】），完整保留上方 §3.6.1 原文与 §3.6.2 审查更正。
+
+针对第 42 轮审查报告提出的 2 项前置整改与新增准入约束，开发方已全量落地整改并完成反向自证：
+
+1. **前置 ① `T21.3f2` 重取行 + 反向自证 + Mock 原地更新闭环（红线【157】达成）**：
+   - **Mock 原地更新**：`tests/cert-provision-offline.js` 的 `circuit_breakers` 与 `token_buckets` 的 `ON CONFLICT` / `UPDATE` 彻底重构为 `Object.assign(existing, rowData)` 原地更新，彻底消除对象引用断裂；
+   - **消除陈旧引用**：`T21.3` 系列用例在每次写入后断言前，强制重新从 `db._circuitBreakers.get('gts_ca')` 取最新行；
+   - **断言真实污染量**：`T21.3f2` 断言真实观测量 `fresh.state === 'HALF_OPEN' && fresh.failure_count === 0 && fresh.last_failure_time === null`；
+   - **反向探针判别力自证**：
+     - **还原缺陷代码（含 `cbProbeGranted` + `finally` 兜底）**：运行 `tests/cert-provision-offline.js`，测试**真实翻红失败**（`101 passed, 1 failed`，精准报错于 `T21.3f2`）；
+     - **恢复修复代码**：运行测试**全部通过**（`102 passed, 0 failed`），100% 证伪假验证，判别力真实成立！
+2. **前置 ② E16 分项数字按同一划分口径独立加总（红线【158】达成）**：
+   - 彻底废除「总数 − 另一小计」的反推算法；
+   - **格式型划分（独立加总）**：
+     - `Results: N passed, 0 failed` 型（10 个套件）：42 + 27 + 64 + 21 + 17 + 102 + 24 + 15 + 21 + 131 = **464** passed；
+     - `=== Results: N/N passed, 0 failed ===` 型（4 个套件）：23 + 78 + 33 + 35 = **169** passed；
+     - 合计：464 + 169 = **633** passed assertions；
+   - **业务域划分（独立加总）**：
+     - LAN-TLS 4 个套件（cert 102 + acme 24 + circuit 15 + singleflight 21）= **162** passed；
+     - 其他通用 DRM / Portal 10 个套件（42 + 27 + 64 + 21 + 17 + 131 + 23 + 78 + 33 + 35）= **471** passed；
+     - 合计：162 + 471 = **633** passed assertions；
+   - 文本自报套件（6 个套件）：`test:env-guard` (9 项)、`subscription`、`portal`、`portal:toggle`、`zero-payment`、`telemetry` 全部退出码 0。
+3. **R40-3 / R42-5 租约边界夹逼与代价成文**：
+   - `circuit-breaker-offline.js`：T13 在 179s（租约内，必须拦截且返回 `retryAfter <= 2`）与 T14 在 181s（租约已过期，必须放行且重入 HALF_OPEN）进行严格双侧夹逼，把测试误差范围从宽泛的 `(0, 185]` 锁定在 `[179s, 181s]`；
+   - **代价明确成文**：180s 为长耗时 DNS-01 传播的经验值，其工程代价为——在探针进程崩溃且未写回的极端场景下，HALF_OPEN 状态最坏自愈时间从 90s 翻倍为 180s。
+4. **R42-6 GTS 上游非 429/非 ≥500 错误（4xx）不跳闸设计成文**：
+   - 符合红线【153】（宁少记不错记）：4xx 为特定会话、参数或凭据错误，非 CA 基础设施不可用；
+   - 租约兜底防死锁：即便 HALF_OPEN 遇到 4xx 未写回成功，180s 租约到期后自动放行下一次探针，绝不死锁；完整调用堆栈通过 `logSystemError` 落盘追溯。
+5. **阶段三准入约束承诺**：阶段三验收用例严禁沿用对象引用夹具，每次操作后强制重新查询数据库记录，确保写操作真实生效可证伪。
 
 ---
 

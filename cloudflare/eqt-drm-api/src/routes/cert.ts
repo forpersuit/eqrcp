@@ -1352,6 +1352,14 @@ async function executeCertProvisioningFlow(params: CertProvisioningParams): Prom
           } else if (acmeErr.status >= 500) {
             await recordCircuitFailure(env, 'gts_ca', 30, false);
           }
+          // R42-6: Upstream ACME 4xx errors (e.g. 400 badNonce, 401/403 unauthorized)
+          // intentionally do NOT trip the circuit breaker or increment failure_count.
+          // Rationale:
+          // 1. Conforms to [153] (prefer under-counting to mis-counting). 4xx errors represent
+          //    session-, parameter-, or credential-specific issues rather than global CA outage.
+          // 2. Deadlock-free: During HALF_OPEN probes, a 4xx won't trip OPEN or record success,
+          //    allowing D1 CAS probe lease (180s) to safely expire and admit the next probe.
+          // 3. Traceability: 4xx errors bubble up to outer catch and log into system_error_logs.
         }
         throw acmeErr;
       }
@@ -1417,8 +1425,10 @@ async function executeCertProvisioningFlow(params: CertProvisioningParams): Prom
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     };
   } finally {
-    // E15 (R40-1): Never record upstream CA failure on client validation or early error.
-    // D1 CAS probe lease (180s) automatically recovers HALF_OPEN without application fallback pollution.
+    // E15 (R40-1) / R42-5: Never record upstream CA failure on client validation or early error.
+    // D1 CAS probe lease (180s, empirical for multi-region DNS propagation) automatically recovers
+    // HALF_OPEN without application fallback pollution. Trade-off: in the worst case of a crashed
+    // probe without write-back, recovery time doubles from 90s to 180s.
     if (!provisionCommitted) {
       await Promise.all([
         nodeRateReservation?.release(),

@@ -230,7 +230,8 @@ function makeMockDb(opts = {}) {
               updatedAt = this._binds[3];
             }
 
-            circuitBreakers.set(name, {
+            const existing = circuitBreakers.get(name);
+            const rowData = {
               name,
               state,
               failure_count: failureCount,
@@ -239,7 +240,13 @@ function makeMockDb(opts = {}) {
               cooldown_until: cooldownUntil,
               last_retry_after: lastRetryAfter,
               updated_at: updatedAt
-            });
+            };
+
+            if (existing) {
+              Object.assign(existing, rowData);
+            } else {
+              circuitBreakers.set(name, rowData);
+            }
             return { meta: { changes: 1 } };
           }
           if (sql.includes('UPDATE circuit_breakers')) {
@@ -304,8 +311,12 @@ function makeMockDb(opts = {}) {
             const capacity = this._binds[2];
             const refillRate = this._binds[3];
             const key = this._binds[4];
-            if (stmt._db) {
-              stmt._db._tokenBuckets.set(key, { key, tokens, last_refill: lastRefill, capacity, refill_rate: refillRate });
+            const existing = tokenBuckets.get(key);
+            const rowData = { key, tokens, last_refill: lastRefill, capacity, refill_rate: refillRate };
+            if (existing) {
+              Object.assign(existing, rowData);
+            } else {
+              tokenBuckets.set(key, rowData);
             }
             return { meta: { changes: 1 } };
           }
@@ -1392,8 +1403,8 @@ async function runTests() {
       // T21.3c: Verify upstream 429 trips circuit to OPEN and client receives 429 ca_rate_limited with Retry-After 90
       assert(resp1.status === 429 && data1.reason_key === 'ca_rate_limited' && resp1.headers.get('Retry-After') === '90', 'T21.3c: Upstream CA 429 returns ca_rate_limited with exact Retry-After 90s');
 
-      const cbState = db._circuitBreakers.get('gts_ca');
-      assert(cbState && cbState.state === 'OPEN' && cbState.last_retry_after === 90, 'T21.3c2: Circuit breaker tripped to OPEN in database');
+      const cbStateAfter429 = db._circuitBreakers.get('gts_ca');
+      assert(cbStateAfter429 && cbStateAfter429.state === 'OPEN' && cbStateAfter429.last_retry_after === 90, 'T21.3c2: Circuit breaker tripped to OPEN in database');
 
       // T21.3d: Fast rejection while circuit is OPEN
       // Next request during cooldown is rejected immediately with 429 ca_circuit_open WITHOUT hitting upstream
@@ -1405,7 +1416,13 @@ async function runTests() {
 
       // T21.3b: Token Bucket traffic smoothing test
       // Reset circuit to CLOSED, empty token bucket to 0
-      cbState.state = 'CLOSED';
+      const cbToReset = db._circuitBreakers.get('gts_ca');
+      if (cbToReset) {
+        cbToReset.state = 'CLOSED';
+        cbToReset.failure_count = 0;
+        cbToReset.last_failure_time = null;
+        cbToReset.cooldown_until = null;
+      }
       db._tokenBuckets.set('cert_provision:acme_smoothing', {
         key: 'cert_provision:acme_smoothing',
         tokens: 0.1,
@@ -1427,8 +1444,11 @@ async function runTests() {
         capacity: 5,
         refill_rate: 10 / 60
       });
-      cbState.state = 'OPEN';
-      cbState.cooldown_until = new Date(Date.now() - 1000).toISOString();
+      const cbToProbe = db._circuitBreakers.get('gts_ca');
+      if (cbToProbe) {
+        cbToProbe.state = 'OPEN';
+        cbToProbe.cooldown_until = new Date(Date.now() - 1000).toISOString();
+      }
       db._rateLimits.delete('cert_provision:bb0000000001');
 
       // Mock successful order for probe
@@ -1485,11 +1505,17 @@ async function runTests() {
       const respProbe = await handleCertRoutes(reqProbe, prodEnv, ctx, new URL(reqProbe.url), {});
       const dataProbe = await respProbe.json();
       assert(respProbe.status === 200 && dataProbe.cert_pem != null, 'T21.3e: Probe in HALF_OPEN succeeds with 200 OK');
-      assert(cbState.state === 'CLOSED' && cbState.failure_count === 0, 'T21.3e2: Circuit breaker successfully self-healed back to CLOSED');
+      const cbAfterProbeSuccess = db._circuitBreakers.get('gts_ca');
+      assert(cbAfterProbeSuccess && cbAfterProbeSuccess.state === 'CLOSED' && cbAfterProbeSuccess.failure_count === 0, 'T21.3e2: Circuit breaker successfully self-healed back to CLOSED');
 
       // T21.3f: E15 (R40-1) Verification: Client CSR failure during HALF_OPEN probe does NOT trip circuit breaker to OPEN
-      cbState.state = 'OPEN';
-      cbState.cooldown_until = new Date(Date.now() - 1000).toISOString();
+      const cbProbeForBadCsr = db._circuitBreakers.get('gts_ca');
+      if (cbProbeForBadCsr) {
+        cbProbeForBadCsr.state = 'OPEN';
+        cbProbeForBadCsr.failure_count = 0;
+        cbProbeForBadCsr.last_failure_time = null;
+        cbProbeForBadCsr.cooldown_until = new Date(Date.now() - 1000).toISOString();
+      }
       db._rateLimits.delete('cert_provision:bb0000000001');
       const reqBadCsr = new Request('http://api.test/api/v1/cert/provision', {
         method: 'POST',
@@ -1508,10 +1534,21 @@ async function runTests() {
       const respBadCsr = await handleCertRoutes(reqBadCsr, prodEnv, ctx, new URL(reqBadCsr.url), {});
       const dataBadCsr = await respBadCsr.json();
       assert(respBadCsr.status === 400 && dataBadCsr.reason_key === 'invalid_csr', 'T21.3f: Invalid CSR during probe returns 400');
-      assert(cbState.state === 'HALF_OPEN', 'T21.3f2: Invalid CSR does NOT trip circuit breaker to OPEN (E15 / R40-1 verified)');
+      const freshAfterBadCsr = db._circuitBreakers.get('gts_ca');
+      assert(
+        freshAfterBadCsr &&
+        freshAfterBadCsr.state === 'HALF_OPEN' &&
+        freshAfterBadCsr.failure_count === 0 &&
+        freshAfterBadCsr.last_failure_time === null,
+        'T21.3f2: Invalid CSR does NOT trip circuit breaker to OPEN (E15 / R40-1 verified: state=HALF_OPEN, failure_count=0, last_failure_time=null)'
+      );
       // Cleanup circuit breaker to CLOSED
-      cbState.state = 'CLOSED';
-      cbState.failure_count = 0;
+      if (freshAfterBadCsr) {
+        freshAfterBadCsr.state = 'CLOSED';
+        freshAfterBadCsr.failure_count = 0;
+        freshAfterBadCsr.last_failure_time = null;
+        freshAfterBadCsr.cooldown_until = null;
+      }
     } finally {
       globalThis.fetch = originalFetch;
     }

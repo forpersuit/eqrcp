@@ -162,28 +162,31 @@ async function runTests() {
     `T12: Token bucket burst concurrency allows exactly capacity=5 (got ${allowedTb.length}) and rejects 5 with retryAfter`
   );
 
-  // --- Test 13: HALF_OPEN Probe Lease Enforcement and Dynamic retryAfter (R39-15 / E11 / R40-3) ---
-  // cbConcKey is currently HALF_OPEN with updated_at ~ now.
-  // Verify that subsequent probes are rejected with dynamic retryAfter <= 180
+  // --- Test 13: HALF_OPEN Probe Lease Enforcement and Dynamic retryAfter (R39-15 / E11 / R40-3 / R42-5) ---
+  // Strict lower bound at 179s (< 180s):
+  // Set updated_at to now - 179s. In-flight probe must still block callers with retryAfter <= 2.
+  const nearExpiryProbeIso = new Date(Date.now() - 179000).toISOString();
+  db.db.prepare("UPDATE circuit_breakers SET updated_at = ? WHERE name = ?").run(nearExpiryProbeIso, cbConcKey);
   const midLeaseProbe = await canExecuteCircuit(env, cbConcKey);
   assert(
     !midLeaseProbe.allowed &&
     midLeaseProbe.state === 'HALF_OPEN' &&
     midLeaseProbe.retryAfter > 0 &&
-    midLeaseProbe.retryAfter <= 180,
-    `T13: In-flight HALF_OPEN probe blocks concurrent callers with dynamic retryAfter (${midLeaseProbe.retryAfter}s)`
+    midLeaseProbe.retryAfter <= 2,
+    `T13: In-flight HALF_OPEN probe at 179s (<180s) blocks callers with dynamic retryAfter (${midLeaseProbe.retryAfter}s)`
   );
 
-  // --- Test 14: HALF_OPEN Probe Crash / Lease Expiry Self-Healing (R39-15 / E11 / R40-3) ---
-  // Simulate probe crash/loss: updated_at expired beyond 180s lease
-  const expiredProbeIso = new Date(Date.now() - 185000).toISOString();
+  // --- Test 14: HALF_OPEN Probe Crash / Lease Expiry Self-Healing (R39-15 / E11 / R40-3 / R42-5) ---
+  // Strict upper bound at 181s (> 180s):
+  // Simulate probe crash/loss: updated_at expired at 181s beyond 180s lease
+  const expiredProbeIso = new Date(Date.now() - 181000).toISOString();
   db.db.prepare("UPDATE circuit_breakers SET updated_at = ? WHERE name = ?").run(expiredProbeIso, cbConcKey);
 
   // Next caller must succeed in reclaiming the probe slot (deadlock broken)
   const reclaimedProbe = await canExecuteCircuit(env, cbConcKey);
   assert(
     reclaimedProbe.allowed && reclaimedProbe.state === 'HALF_OPEN',
-    'T14: Expired HALF_OPEN probe lease (>180s) allows next caller to reclaim probe (absorptive deadlock eliminated)'
+    'T14: Expired HALF_OPEN probe lease at 181s (>180s) allows next caller to reclaim probe (absorptive deadlock eliminated)'
   );
   const reclaimedRow = db.db.prepare("SELECT updated_at FROM circuit_breakers WHERE name = ?").get(cbConcKey);
   const refreshedAt = new Date(reclaimedRow.updated_at).getTime();
