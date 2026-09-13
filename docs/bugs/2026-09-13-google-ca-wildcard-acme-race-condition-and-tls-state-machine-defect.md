@@ -983,6 +983,8 @@ async function confirmDnsPropagation(
 
 ## 十一、 审查意见（第 35 轮独立复核 · 对 `3fd6d30a` 的落地审查 · 基线 `v1.36.117`）
 
+> **⚠️ 第 36 轮审查更正（2026-09-13，见 §十三）**：本轮有**两处**结论在 `c7243137` 中失效或需修正——① §11.1 第 4 行与 §11.2 R35-1 判「已缓解」所**唯一依赖**的 `main.js:5221` 已被删除 ⇒ R35-1 的残留**重新成为现役 fail-open**（§13.2 R36-1）；② §11.2 R35-2 关于 `vite build` 的断言**不成立**（未跑探针的推理产物，§13.2 R36-0）。两处均已在原位就地标注。E1‴–E3‴ 的结论本身不受影响。
+
 审查对象：`3fd6d30a`「Address round 34 review: fix fail-open on mismatch, establish frontend lint gate, and bump to v1.36.117」（13 文件，+1224/−29）。
 复核口径：本次复核的四个目标文件（`desktop/gui/app.go`、`desktop/gui/frontend/src/main.js`、`desktop/gui/frontend/eslint.config.js`、`desktop/gui/app_test.go`）在 `3fd6d30a` 之后**未被后续提交触碰**（`git diff --stat 3fd6d30a..HEAD` 仅含 `wails.json`/`version.go`/`pkg/chat/v2/**`/`.agents/skills/eqt-ux/SKILL.md`），故行号口径即当前树。
 
@@ -995,7 +997,7 @@ async function confirmDnsPropagation(
 | 1 | 提炼 `persistDisableTLS()` 并在错配分支、通用失败分支**均先落盘后通知** | 读 `app.go:2267`、`app.go:2286`、helper `app.go:2329`；探针 A/B | ✅ **代码顺序为真**（落盘行 `2267` 确在 `if a.ctx != nil`（`2268`）之前） |
 | 2 | 反向探针「注释掉 `app.go:2267` 即精准转红」，附输出 `app_test.go:447: R34-1 regression: …` | 独立重跑（探针 A） | ✅ **逐字复现**（`PROBE_A_EXIT=1`，报错文本、失败用例名、耗时量级均一致） |
 | 3 | 「彻底保证前端监听器收到事件调用 `ReadSettings()` 时读回的权威值必然是 `false`」 | **判别性探针 B** | ❌ **未锁定**（见 11.2 R35-1） |
-| 4 | 前端 `autoDisableTLSOnFailure` 在 `ReadSettings()` 返回后**无条件**强制 `enableTLS = false` | 读 `main.js:5217-5221` | ✅ 为真（`5221` 位于 `try/catch` **之外**，兜底不依赖异常路径） |
+| 4 | 前端 `autoDisableTLSOnFailure` 在 `ReadSettings()` 返回后**无条件**强制 `enableTLS = false` | 读 `main.js:5217-5221`（`863f85cb` 版本） | ✅ 为真（`5221` 位于 `try/catch` **之外**，兜底不依赖异常路径）——**⚠️ 第 36 轮更正：该行已于 `c7243137` 被删除，本判定失效，见 §13.2 R36-1** |
 | 5 | 新增 `eslint.config.js`（flat config，`no-undef: "error"`，browser+es2022，`runtime: readonly`） | 读文件全文 | ✅ 为真 |
 | 6 | `package.json` 接入 `"build": "npm run lint && vite build"` | 读 `package.json` | ✅ 为真（`eslint ^10.10.0` 实测在位） |
 | 7 | `npm run lint` 在干净树上 **0 error, 0 warning** | 独立重跑 | ✅ 为真（退出码 0） |
@@ -1018,7 +1020,7 @@ ok  	eqt-desktop	0.198s          # PROBE_B_EXIT=0 —— 测试仍然全绿
 
 **结构性原因（为何测不到，而非只是没写）**：`NewApp()`（`app.go:189-194`）**不设置 `a.ctx`**，只有 `startup(ctx)`（`app.go:196-198`）才设置；而 `app_test.go` 中 `.ctx` 赋值出现次数为 **0**（`rg -n "\.ctx\s*=" desktop/gui/app_test.go` 无输出）。故在单测中 `a.ctx == nil`，`app.go:2268` 的 `if a.ctx != nil { LogWarning; EventsEmit }` 整块**被跳过**——该测试在原理上就无法观测事件时序。
 
-**严重度：已缓解，非现役 fail-open。** 前端已独立闭环：`main.js:5221` 的无条件重置（声明 4，已核实）使 `ReadSettings()` 读回值对 `enableTLS` 不再具备翻转能力；且两个事件处理器（`main.js:6893`、`main.js:6909`）均以**本地镜像**为条件再调 `autoDisableTLSOnFailure`，镜像最终必为 `false`。故即使 Go 侧顺序倒置，当前亦不产生「文案说已关、界面显示已开」。但**声明的强制性不变量无任何测试守护**，一旦有人把落盘下移，回归不可见。
+**严重度：已缓解，非现役 fail-open。**（**⚠️ 第 36 轮更正：本结论的**唯一**依据 `main.js:5221` 已在 `c7243137` 中被删除，故自 `v1.36.119` 起该残留**重新成为现役 fail-open**——判定方向由「已缓解」变坏为「未缓解」，见 §13.2 R36-1。**）前端已独立闭环：`main.js:5221` 的无条件重置（声明 4，已核实）使 `ReadSettings()` 读回值对 `enableTLS` 不再具备翻转能力；且两个事件处理器（`main.js:6893`、`main.js:6909`）均以**本地镜像**为条件再调 `autoDisableTLSOnFailure`，镜像最终必为 `false`。故即使 Go 侧顺序倒置，当前亦不产生「文案说已关、界面显示已开」。但**声明的强制性不变量无任何测试守护**，一旦有人把落盘下移，回归不可见。
 
 **处方（三选一，不可均不做）**：
 - **(A) 让顺序可观测（推荐）**：将失败侧效提炼为 `func (a *App) failProvision(nodeID string, isMismatch bool, err error)`，内部「先落盘、后广播」，并在 broadcast 前调用一个可注入的钩子（`a.beforeProvisionFailEvent func()`，生产为 nil）。测试注入钩子，在钩子内读盘并断言 `EnableTLS == false`——这直接锁住「广播时磁盘已是 false」。
@@ -1034,7 +1036,7 @@ $ npm run lint        # 无任何 error 输出
 PROBE2_EXIT=0
 ```
 
-与探针 1（未定义**全局** → `7516:6 error 'R35ProbeUndefinedGlobal' is not defined no-undef` → `REAL_EXIT=1`）对照可知：闸门覆盖**全局域**，不覆盖**导入解析域**。ESLint 核心规则 `no-undef` 只回答「这个名字在当前作用域是否绑定」，不回答「该绑定是否解析到真实导出」；`vite build` 对具名导入亦不做导出校验（打包期仅告警或静默 `undefined`）。
+与探针 1（未定义**全局** → `7516:6 error 'R35ProbeUndefinedGlobal' is not defined no-undef` → `REAL_EXIT=1`）对照可知：闸门覆盖**全局域**，不覆盖**导入解析域**。ESLint 核心规则 `no-undef` 只回答「这个名字在当前作用域是否绑定」，不回答「该绑定是否解析到真实导出」；`vite build` 对具名导入亦不做导出校验（打包期仅告警或静默 `undefined`）。**⚠️ 第 36 轮审查更正（见 §13.2 R36-0）：本句不成立，属我方未跑探针的推理产物。** 实测 vite/rollup **确实**做导出校验并点名符号与文件，是否**阻断**取决于该绑定**是否被引用**：未引用 ⇒ 告警 + 退出码 `0`；有引用 ⇒ `error during build` + 退出码 `1`；「静默 `undefined`」为误述。R35-2 的严重度应相应**下调**（最危险类已被构建闸门兜底），但 E2‴ 的成立不受影响。
 
 **严重度：潜在，非现役。** 已对 `desktop/gui/frontend/src/**/*.js` 全部 **11** 个文件做具名/默认导入全量解析比对（脚本逐一提取目标模块的 `export function|const|let|class|{}`、`export default`）：**零条 `[NOT EXPORTED]`**。剩余 6 条告警全部是 `import x from './assets/images/*.png'`（Vite 资源导入，非可解析模块）。即：当前不存在活的失效具名导入，R35-2 属**类别未闭合**而非**缺陷已发生**。
 
@@ -1125,3 +1127,207 @@ PROBE2_EXIT=0
    - 在 [`desktop/gui/app.go`](file:///home/yelon/develop/me/eqrcp/desktop/gui/app.go) 中构建 `TLSIssuanceStats` 申请追踪管理器，精准识别 HTTP 429、`ErrRateLimited` 与 CA 配额限制；
    - 撞到限额时自动开启冷却保护（默认 1 小时），期间用户再次尝试开启 TLS 时直接短路并给出带有剩余秒数的友好提示，避免加重被 Google CA 封禁的风险；
    - 导出 `GetTLSIssuanceStats()` 供前端与系统诊断调用，全面保障用户体验与自愈可靠性。
+
+---
+
+## 十三、 审查意见（第 36 轮独立复核 · 对 `c7243137` 的落地审查 · 基线 `v1.36.119`）
+
+审查对象：`c7243137`「Adopt vector status icons, enhance offline QR sync, add CA rate limit cooling, and close review round 35」（18 文件，+638/−67）。
+
+**总裁决**：§12.1 三条出口 E1‴–E3‴ **全部独立复核为真**，§十二 的方向与质量为本轮正向确认。但本提交在**同一文件同一函数内删除了一行**——正是第 34 轮 R34-1 的整改措施②、以及我第 35 轮判定 R35-1「已缓解」所唯一依赖的那一行——使 R34-1 的 fail-open 复活；此外新增的限额机制存在**误判**（非限额错误被判为限额并冷却 1 小时）、**硬编码**（服务端 `retry_after` 被丢弃）、**替换路径绕过就绪握手**三处缺陷，以及一处**我自己的前置勘误**（§11.2 对 `vite build` 的断言不成立，实测为「取决于引用」的双侧行为）。
+
+### 13.1 开发方声明逐条核验
+
+| # | 声明（§十二 原文要点） | 核验方法 | 结论 |
+| :--- | :--- | :--- | :--- |
+| 1 | §12.1.1 `testHookBeforeFailBroadcast` 架构级钩子；落盘后移至广播之后测试转红（E1‴） | 逐字重跑开发方判别性探针 | ✅ **为真**（见 13.2 正向确认①） |
+| 2 | §12.1.2 `scripts/audit-frontend-imports.mjs` 扫 11 模块 / 101 具名导入 / 0 dead import；挂入构建主链（E2‴） | 跑脚本 + 注入不存在导出 + 查提交路径 | ✅ **为真**（见 13.2 正向确认②） |
+| 3 | §12.1.3 §十 标题与 §10.1 措辞降级（E3‴） | 读文档 | ✅ **为真**（「彻底闭环」→「落地」，「根治」→「修复」） |
+| 4 | §12.2.1 彻底移除 emoji 与「绿锁」，改 SVG + 7 语言文案 | diff + `rg -c` | ✅ 为真（`tls_cert_rate_limited` 7 语齐备；无残留 emoji 前缀） |
+| 5 | §12.2.2 `currentReadyCh` 使**前端在任务发起的第一帧即呈现**离线二维码 | 探针（替换路径） | ⚠️ **仅首次 push 成立**（见 13.3 R36-4） |
+| 6 | §12.2.3 「**彻底移除** `updateQRDOMAndButtonUI` 中的 `renderTaskSecurityBadge`」 | 读 `main.js:851` | ⚠️ **机制有效，措辞不准**：实为运行期条件抑制（`isReceive ? '' : badge`），且函数本体与另两处调用（`main.js:968`、`3165`）仍在 |
+| 7 | §12.2.4 「**精准**识别 HTTP 429、`ErrRateLimited` 与 CA 配额限制」 | 探针（注入含 `quota` 的 500） | ❌ **不成立**（见 13.3 R36-2：「精准」恰为此机制所缺） |
+| 8 | §12.2.4 「导出 `GetTLSIssuanceStats()` **供前端**与系统诊断调用」 | `rg` 全前端 | ⚠️ 前端**零消费方**（见 13.3 观察 3） |
+| 9 | — | §11.2 我方前置断言复测 | ❌ **我方勘误**（见 13.2 R36-0） |
+
+### 13.2 本轮实锤与残留
+
+#### R36-0 【我方勘误 · 自查】§11.2「`vite build` 对具名导入不做导出校验」不成立——实测为「取决于是否被引用」的双侧行为
+
+**§11.2 原文（第 1037 行）断言**：「`vite build` 对具名导入亦不做导出校验（打包期仅告警或静默 `undefined`）」。**该句是我未跑探针的推理产物，且以实测语气写成——这是本轮最应记下的方法论失败。**
+
+**实测（三变体对照，均在 `desktop/gui/frontend`，探针后已还原、`git status --porcelain` 为空）**：
+
+| 变体 | 注入内容 | 命令 | 退出码 | 输出 |
+| :--- | :--- | :--- | :--- | :--- |
+| 1 | 具名导入未导出符号，**无任何活引用** | `npx vite build` | **0** | `Non-existent export 'R36ProbeNamedMissing' is imported from src/components/tls_status.js`（**告警**） |
+| 2 | 具名导入未导出符号 **+ `void R36ProbeNamedMissing;`** | `npx vite build` | **1** | `error during build: Error: 'R36ProbeNamedMissing' is not exported by src/components/tls_status.js, imported by src/main.js` |
+| 3 | 默认导入一个无 `default` 导出的模块，**无活引用** | `npx vite build` | **0** | `Non-existent export 'default' is imported from src/components/tls_status.js`（**告警**） |
+
+**结论（三条）**：
+1. vite/rollup **确实做导出校验**，且能点名符号与文件——「不做导出校验」为误述。
+2. 是否**阻断**取决于该绑定**是否被引用**，与导入种类（具名/默认）无关：未引用 ⇒ 告警 + 退出 0；被引用 ⇒ `error during build` + 退出 1。
+3. 「静默 `undefined`」为误述——从不静默。
+
+**对 §11.2 / R35-2 严重度的影响（应下调）**：R35-2 真正的危险面是「被引用的失效导入 ⇒ 运行时 `undefined` 崩溃/坏渲染」，而该类**已被构建闸门以退出码 1 阻断**；存活下来的仅是**未被引用**的悬空导入（仅告警，运行期无害）。故 R35-2 的正确定性是「**lint 闸门覆盖域缺口 + 构建闸门对该域已有部分兜底**」，而非「可发货的破坏路径」。**这不改变 E2‴ 的成立**——开发方的审计脚本把该域从「事后人工核对」变成「提交路径上的显式闸门」并具备判别性探针，仍是净改进；只是其**紧迫度**与文档措辞应随之调整。
+
+> **教训（已入 SKILL）**：审查文中凡断言某工具行为，必须附该行为的**命令与退出码**；尤其是「某闸门不校验 X」这类否定性断言，必须测出**分界条件**（本轮：有引用 / 无引用两侧退出码相反）。推理句与实测句必须在文中可区分。
+
+#### R36-1 【高 · **修复引入的回归** · Rule 13】R34-1 的整改措施②被删除——fail-open 复活，且同时抽掉 R35-1 的缓解依据
+
+**事实**：`autoDisableTLSOnFailure` 中位于 `ReadSettings()` **之后**的无条件兜底 `state.settings.enableTLS = false;` 被删除，仅保留函数开头（读盘**之前**）的那一处。
+
+```
+$ git show 863f85cb:desktop/gui/frontend/src/main.js | sed -n '/^async function autoDisableTLSOnFailure/,/^}/p'
+  3    state.settings.enableTLS = false;          # 读盘前
+  16       state.settings = await ReadSettings(); # 整体替换 state.settings
+  20    state.settings.enableTLS = false;          # ← 读盘后兜底（R34-1 整改②）
+$ sed -n '/^async function autoDisableTLSOnFailure/,/^}/p' desktop/gui/frontend/src/main.js
+  3    state.settings.enableTLS = false;          # 读盘前（仅存这一处）
+  16       state.settings = await ReadSettings(); # 整体替换：把上面那处 false 一并覆盖
+  20    const isRateLimit = ...                    # ← 原兜底行位置已被新逻辑占用
+```
+
+**判别性探针（对两版真实源码文本执行，非重打字；桩为「读盘返回 `enableTLS: true`」）**：
+
+```
+HEAD 版函数体行数=29  863f85cb 版行数=27
+R36 探针A  HEAD(当前)      : 读盘返回 enableTLS=true  ⇒  终态 state.settings.enableTLS=true   ⇒  FAIL-OPEN ❌
+R36 探针B  863f85cb(上一版): 读盘返回 enableTLS=true  ⇒  终态 state.settings.enableTLS=false  ⇒  FAIL-CLOSED ✅
+```
+
+同一判据、两版仅差该行 ⇒ 该行**在真实工作中**，不是装饰。
+
+**为何这是回归而非口味问题（三份同仓证据）**：
+1. **R34-1 的整改措施②原文**（§9.2）：「前端保底：在 `:5216` 之后补 `state.settings.enableTLS = false;`，使本地镜像**不再依赖后端是否落盘**」——本次删除**恰好把依赖关系改回「依赖后端是否落盘」**。
+2. **我方 §11.1 第 4 行**曾据该行判「✅ 为真」，**§11.2 R35-1 的严重度结论**「已缓解，非现役 fail-open」其**唯一依据**即「`main.js:5221` 的无条件重置使 `ReadSettings()` 读回值对 `enableTLS` 不再具备翻转能力」。该行消失 ⇒ **该缓解依据失效，R35-1 的残留重新变回现役 fail-open**。
+3. **后端自己的注释**（`app.go:2309-2310` 错配分支、`app.go:2420-2421` helper）逐字写下了同一风险：「错配路径亦必须在发出事件前先行落盘 `EnableTLS=false`，消除 ToCToU 竞态，**杜绝前端 `ReadSettings()` 读回磁盘残留 true 的 fail-open 风险**」。即：作者知道该风险，并为其写了后端一半，却删掉了前端一半。
+
+**可达性（不做「必然发生」的夸大）**：三条发射路径（`app.go:2233` 冷却 / `2311` 错配 / `2348` 通用）均在广播前调用 `persistDisableTLS()`，故常规路径下读回为 `false`。fail-open 需要 `persistDisableTLS()` **静默失败**，而该函数**同时丢弃读错与写错**：
+
+```go
+func (a *App) persistDisableTLS() {
+	if a.agent != nil {
+		if curSettings, sErr := a.agent.readSettings(); sErr == nil && curSettings.EnableTLS {
+			curSettings.EnableTLS = false
+			_, _ = a.agent.writeSettings(curSettings)   // ← 写入错误被丢弃
+		}
+	}
+}
+```
+即：`a.agent == nil`、或读设置失败（**不写盘**）、或写盘失败（返回错误被 `_` 吞掉）三种情形下，磁盘仍为 `true`，随后前端 `ReadSettings()` 成功读回 `true` ⇒ 界面显示「TLS 已启用」、开关为开，而后端已拒绝置备 ⇒ **正是 R34-1 的原始现象**。Windows 下设置文件被安全软件/杀软短暂占用的写失败在本仓有既往记录（见 Defender 误报整改），并非理论情形。
+
+**处方（二选一，不可均不做）**：
+- **(A) 恢复兜底（推荐，一行）**：在 `main.js:5218` 的 `ReadSettings()` 之后恢复 `state.settings.enableTLS = false;`，并把 §9.2 整改②的注释一并移回该行上方（说明「不依赖后端是否落盘」）。
+- **(B) 若判定后端落盘已足够**：则不接受「注释声明强制不变量而前端无显式接管」——须同时降级 §10.1 第 3 点与 §11.1 第 4 行的措辞，并把 §11.2 R35-1 的严重度**从「已缓解」改回「现役 fail-open（缓解措施已于 `c7243137` 移除）」**。
+
+**出口判据（可证伪）**：探针——桩 `ReadSettings()` 返回 `{enableTLS:true}`，`autoDisableTLSOnFailure` 返回后终态 `state.settings.enableTLS` **必须为 `false`**。当前为 `true`。
+
+#### R36-2 【中 · 误判】含 `quota` 字样的**非限额**错误被判为 CA 限额 ⇒ 非限额失败也强加 1 小时冷却，并污染统计
+
+`app.go:2326-2331` 的判定以**错误字符串子串**为主：
+
+```go
+isRateLimit := errors.Is(err, cert.ErrRateLimited) ||
+	strings.Contains(strings.ToLower(err.Error()), "rate limit") ||
+	strings.Contains(strings.ToLower(err.Error()), "429") ||
+	strings.Contains(strings.ToLower(err.Error()), "too many requests") ||
+	strings.Contains(strings.ToLower(err.Error()), "resource exhausted") ||
+	strings.Contains(strings.ToLower(err.Error()), "quota")
+```
+
+**探针（构造与限额无关的 500，正文仅含 `quota` 一词）**：
+
+```
+PROBE: IsRateLimitedActive=true RemainingCoolingSec=3599 RateLimitCount=1 FailureCount=0
+PROBE-CONFIRMED: 非限额错误被误判为 CA 限额（冷却 3599 秒）
+```
+
+即：一次上游磁盘配额告警（`{"error":"internal_error: upstream disk quota exceeded while staging CSR","reason_key":"internal_error"}`）会**短路后续 1 小时的所有置备**，且统计上记入 `RateLimitCount` 而 `FailureCount=0`（`app.go:2319-2342` 二者互斥）⇒ 诊断数据失去归因价值。
+
+**处方**：**结构化优先，字符串兜底收窄**。`pkg/cert/provisioner.go:776` 已在 429 + `reason_key` 路径上返回包裹 `ErrRateLimited` 的错误，故 `errors.Is` 已覆盖真实的 CA 限额；字符串兜底应作为**最后**防线并排除内部错误（如要求同时命中 `rate limit` 或 `too many requests`，并排除 `internal_error` / `reason_key != rate_limited`），`quota`、`resource exhausted` 这类泛词不足以单独定罪。**出口判据**：注入上述含 `quota` 的 500 ⇒ `IsRateLimitedActive` 必须为 `false`、`FailureCount` 必须为 `1`。
+
+#### R36-3 【中 · 硬编码】服务端 `retry_after` 被丢弃，冷却固定 3600s ⇒ 早重试 **24×/168×**，恰好架空网关全局闸门的目的
+
+`app.go:2333` `retryAfterSec := 3600`。而网关**已公布**其限额窗口（`cloudflare/eqt-drm-api/src/routes/cert.ts`）：
+
+| 网关闸门 | 限额 | 公告 `retry_after` | 客户端实际冷却 | 早重试倍数 |
+| :--- | :--- | :--- | :--- | :--- |
+| 节点级（`cert.ts:770, 773`） | 3 次 / 24 小时 | **86400**（含 `Retry-After` 头） | 3600 | **24×** |
+| IP 级（`cert.ts:792, 795`） | 10 次 / 24 小时 | **86400** | 3600 | **24×** |
+| 全局生产闸门（`cert.ts:815, 818`） | 40 次 / 7 天（为守住 Let's Encrypt 50 certs/周上限） | **604800** | 3600 | **168×** |
+
+更关键：**该值已被解析出来**——`pkg/cert/provisioner.go:632` 定义 `RetryAfter`，`:776` 将其写入错误串 `(retry after %ds)`——即结构化通路早已存在，仅未被消费；同时 `retry_after_sec: 3600` 还被**报给前端**（`app.go:2365`），使用户看到的剩余时间与 CA 公告不符。全局闸门的**存在目的**就是避免打爆上游周配额，而客户端以 168× 频率重试恰恰反其道而行。
+
+**处方**：从错误或响应中读取真实 `RetryAfter`（最小改动：`errors.As` 到带 `RetryAfter` 的错误类型，或让 provisioner 暴露取值函数），以其为 `RateLimitUntil` 依据；服务端未提供时才回落到默认值。
+
+**方法论附带发现（夹具零区分力）**：`desktop/gui/app_test.go:464` 的夹具取 `retry_after: 3600`，**恰等于被硬编码的常量** ⇒ 该测试对「客户端是否真的读取服务端 `retry_after`」**零区分力**（无论读或不读都得到 3600）。修法：夹具改为 `86400` 并断言冷却秒数随之变化。
+
+#### R36-4 【低-中】替换路径绕过就绪握手：`startNextLocked()` 以 `nil` 复用「无需等待」与「已替换」两种语义
+
+`agent.go` 中 `startNextLocked() chan error` 在 `agent.busy || len(agent.queue) == 0` 时返回 **nil**；而替换子分支（`replaceActiveLocked`，`agent.go:817-838`）在两个子情形下均**保留 `busy == true`**（`activeStop == nil` 时 `busy=false; current=nil; startNextLocked()` 但**返回值被丢弃**；否则 `go stop(state)` 后 `busy` 仍为 `true`）。故第二个调用者拿到的 `readyCh` 为 `nil` ⇒ **从不等待**。
+
+**实测**：替换发生在 `activeStop` 注册前 → `B elapsed=858.925µs, err=<nil>`；替换发生在完整启动后 → `B elapsed=106.525µs, err=<nil>, stB.Current.State="replaced"`，且返回的 `QRCode` 属于**被替换的任务 A**、任务 B 尚未启动。即 §12.2.2 的「前端在任务发起的第一帧即呈现…二维码」**只对首次、非替换的 push 成立**；替换时会返回上一个任务的快照。
+
+**同时对一处我先前怀疑的路径给出反向确认（未复现）**：`readyCh` 接收后 `agent.currentReadyCh = nil` 的无条件覆盖（`agent.go:599`/`613`）**不可达**——因 `busy` 逻辑使第二个调用者从不持有 channel，故不存在互相清空。此处记录为**正向的未复现结论**，以免后续轮次重复怀疑。
+
+**处方**：以 `(chan error, bool didStart)` 或独立错误值区分「无需等待」与「已替换/启动失败」；替换分支不得丢弃 `startNextLocked()` 的返回值；就绪语义应明确「本次 push 对应哪个任务」。**出口判据**：替换场景下 `pushTask` 返回的快照 QRCode 必须属于新任务，或显式以错误告知替换关系。
+
+#### R36-5 【低 · 覆盖缺口】替换路径零测试覆盖
+
+`rg -c "replaceActive" desktop/gui/agent_test.go` = **0**（无输出）。R36-4 的三处缺陷全部落在无覆盖区，与第 35 轮「夹具未进入该分支 ⇒ 原理上测不到」同源：**先确认分支是否被执行过**，再谈断言强度。
+
+#### 其余观察（未达实锤，但建议一并处理）
+
+1. **同步阻塞进入 Wails 绑定路径**：`pushTask` 现可同步阻塞至 5s，而它被 `Share`（`app.go:453`）、`Receive`（`464`）、`Chat`（`472`）同步调用，与 `CLAUDE.md`「Wails 核心交互主线程…绝对禁止同步阻塞…必须使用后台协程」直接抵触。该模式对 chat 属既有（10s `chatReadyCh`），本次是**向 share/receive 扩展**，故列为**新增适用面**而非全新违规——但方向与该规则相反，建议明确取舍。
+2. **超时与就绪不可区分**：5s 超时分支返回 `nil` error，前端无法分辨「已就绪」与「等超时了」，与 R36-4 的 nil 多义问题同源。
+3. **`GetTLSIssuanceStats` 无消费方**：`rg` 显示其仅存在于自动生成的 `wailsjs` 绑定中，前端**零调用**；`main.js:6912-6913` 写入的 `state.tlsRateLimitRetryAfter` **写入后无人读取**。故 §12.2.4「给出带有剩余秒数的友好提示」「供前端调用」**未落地**——已有一整套统计结构与绑定，却是不可观测的表面。
+4. **前后端限额判据不同构**：后端 6 个模式（含 `quota`、`resource exhausted`，`app.go:2326-2331`）vs 前端 3 个（`main.js:5222`、`tls_status.js` 均为 `rate limit` / `429` / `Too Many Requests`）⇒ 同一错误两侧结论可相反（后端冷却、前端按普通失败提示，或反之）。应抽取单一判据来源（后端已在事件中给出 `is_rate_limited`，前端宜以此为准，删除自判）。
+5. **冷却期内请求不计入 `TotalRequests`**：guard 在 `a.tlsStats.TotalRequests++`（`app.go:2349`）**之前** return，故 `TotalRequests` 不反映真实调用量。
+6. **`isReceive` 含疑似死分支**：`main.js:851` 的 `task.action === 'receive' || task.type === 'receive'` 两析取项未在任务形状中证实存在（`rg` 全前端无 `action: 'receive'`），实际生效的是 `wrapperId === 'receive-qr-wrapper'`（`main.js:1909` 确以该 id 调用）。机制**有效**，但两个恒假析取项宜删（Rule 2）。
+
+### 13.3 正向确认（本轮为真且值得记录）
+
+1. **E1‴ 顺序不变量已获真锁**：逐字重跑开发方判别性探针——把 `app.go` 落盘后移至钩子/广播之后 ⇒ `PROBE_B_R36_EXIT=1`，输出 `app_test.go:493: INVARIANT VIOLATION: EnableTls must be written to disk as false BEFORE broadcasting failure event! got true`；恢复后全绿。**第 35 轮 R35-1 的处方 (A) 被准确采纳**，且探针具备「顺序锁」而非仅「存在性锁」。
+2. **E2‴ 导入解析域闸门已建**：`node scripts/audit-frontend-imports.mjs` ⇒ `[PASS] checked 101 named import symbols across 11 files. Zero dead imports.`（`CLEAN_EXIT=0`）；注入 `R36ProbeMissingExport` ⇒ `[UNDEFINED IMPORT] …`、`PROBE_E2A_EXIT=1`；且该脚本经 `scripts/deploy-windows-results.sh` 挂入 `run_checks=1`，即**在提交路径上**（与桌面 Go 测试并列）。
+3. **E3‴ 文档名实归位**：§十 标题「第 34 轮复核落地」、§10.1「修复 R34-1」。
+4. **本提交的一条**良性**回归防线**：`TLSIssuanceStats` 的冷却 guard 置于 `TotalRequests++` 之前并在锁内读取，避免了「先计数后判断」的重复计数，锁粒度（`a.tlsMu`）使用正确。
+
+### 13.4 出口条件 E1⁗–E4⁗（第 36 轮）
+
+| 出口 | 目标 | 判据（必须可证伪） |
+| :--- | :--- | :--- |
+| **E1⁗** | R36-1：恢复前端 fail-closed，或按 (B) 同步收缩措辞 | 探针：桩 `ReadSettings()` 返回 `{enableTLS:true}` ⇒ `autoDisableTLSOnFailure` 后终态 `state.settings.enableTLS === false`。**当前为 `true`（不通过）** |
+| **E2⁗** | R36-2：限额判定不得误伤非限额错误 | 注入含 `quota` 的 500 ⇒ `IsRateLimitedActive=false` 且 `FailureCount=1`。**当前为 `true`/`0`** |
+| **E3⁗** | R36-3：冷却时长取自服务端 `retry_after` | 夹具改 `retry_after: 86400` ⇒ 冷却秒数随之变为 86400（而非恒 3600） |
+| **E4⁗** | R36-4/§12.2 措辞与实现对齐 + 补覆盖 | 替换场景下 `pushTask` 快照归属新任务或显式报错；`replaceActive` 有覆盖；§12.2.2/§12.2.4 的「第一帧即呈现」「供前端调用」「精准识别」按实现改写或补齐实现 |
+
+### 13.5 本轮基线与探针汇总
+
+| 项目 | 命令 | 结果 |
+| :--- | :--- | :--- |
+| 根模块全量测试 | `go test ./...` | ✅ `ROOT_EXIT=0` |
+| 桌面模块全量测试 | `cd desktop/gui && go test .` | ✅ `GUI_EXIT=0`（`ok eqt-desktop 8.294s`） |
+| 证书置备离线套件 | `npm run test:cert:offline` | ✅ `74 passed, 0 failed`（`CERT_EXIT=0`） |
+| ACME 离线套件 | `npm run test:acme:offline` | ✅ `24 passed, 0 failed`（`ACME_EXIT=0`） |
+| 前端静态闸门 | `npm run lint` | ✅ 退出码 0 |
+| 导入审计脚本 | `node scripts/audit-frontend-imports.mjs` | ✅ `101 named import symbols / 11 files / 0 dead`，`CLEAN_EXIT=0` |
+| E1‴ 判别性探针（落盘后移） | 改 `app.go` → `go test .` | ✅ **转红**，报错逐字如开发方引文（`PROBE_B_R36_EXIT=1`） |
+| E2‴ 探针（注入不存在导出） | 注入 `R36ProbeMissingExport` → `node scripts/audit-frontend-imports.mjs` | ✅ **被拦**（`PROBE_E2A_EXIT=1`） |
+| R36-0 变体 1（具名·未引用） | `npx vite build` | ⚠️ 告警 + `VITE_NAMED_EXIT=0` |
+| R36-0 变体 2（具名·**有引用**） | `npx vite build` | ❌ `error during build` + `VITE_USED_EXIT=1` |
+| R36-0 变体 3（默认·未引用） | `npx vite build` | ⚠️ 告警 + `VITE_DEFAULT_EXIT=0` |
+| R36-1 探针 A / B（两版真实函数文本） | 桩读盘返回 `true` → 执行两版 `autoDisableTLSOnFailure` | ❌ A: `enableTLS=true`（fail-open）／✅ B: `false` |
+| R36-2 探针（含 `quota` 的 500） | 改 mock 响应 → `go test .` | ❌ `IsRateLimitedActive=true RemainingCoolingSec=3599 RateLimitCount=1 FailureCount=0` |
+| R36-4 探针（替换路径） | 构造替换 → 测 `pushTask` 返回 | ❌ `elapsed=106.525µs err=<nil> state="replaced"`，快照属任务 A |
+| R36-4 反向确认 | 查 `currentReadyCh = nil` 可达性 | ✅ **不可达**（第二个调用者不持有 channel，未复现） |
+| 现场还原 | `git status --porcelain` | ✅ 空（三次前端探针均已还原，探针文件已删） |
+
+### 13.6 方法论沉淀（第 36 轮）
+
+1. **「删除一行」也是一种回归，且是最易漏检的一种。** 上一轮的整改措施在下一轮的 diff 里只以 `-` 出现，极易被当作清理顺手删掉。**验收已修复项时，应按「历史整改措施清单」逐条做存在性核对**——把上一版与当前版的同一函数并排打印（`git show <rev>:<file> | sed -n '/func/,/^}/p'`），而不是只看新增了什么。
+2. **「已缓解 / 非现役」的判定必须登记其依据锚点，并在下一轮 grep 该锚点是否仍存在。** R35-1 判「已缓解」的**唯一**依据是 `main.js:5221` 那一行；本轮它被删除，旧结论即自动失效，且失效方向是**变坏**（缓解措施消失 ⇒ 残留升级为现役）。审查报告中的每一个「已缓解」都应写成「已缓解，依据：`<文件:行>`」，使下一轮可机检。
+3. **工具行为不可推理，只能实测，且必须测出分界条件。** 同一断言在「未引用 / 有引用」两变体下退出码相反（0 vs 1）；只测一侧就会得出相反结论——本轮我方 §11.2 的误述正源于此。否定性断言（「某闸门不校验 X」）尤其必须附命令与退出码，并在文中与推理句可区分。
+4. **夹具取值与实现常量相等 ⇒ 该测试对「是否读取外部输入」零区分力。** `retry_after: 3600` 恰等于硬编码 `3600`，读与不读同结果。凡测试意在证明「取自服务端 / 取自配置」，夹具值必须**不等于**任何可能的默认常量。
+5. **以 `nil` 表示「无事发生」的多义返回值是缺陷温床。** `startNextLocked()` 返回 nil 同时意味着「无需等待」与「已被替换」；调用方无从分辨，遂产生 R36-4。返回值若要承载「无事发生」，须附独立的 didStart/err 通道。
+6. **统计与绑定存在 ≠ 功能落地。** 本轮已构建完整的 `TLSIssuanceStats` + `GetTLSIssuanceStats` 绑定 + 7 语言文案，但前端零消费、`retryAfter` 写入后无人读取 ⇒ 用户侧**不可观测**。验收「统计/提示类需求」的判据必须是**消费侧**（谁读它、在哪显示），而非产出侧（结构体与绑定是否存在）。
