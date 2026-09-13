@@ -2611,6 +2611,75 @@ $ EQT_CONFIG_DIR=/tmp/retired-probe go test ./pkg/config -run TestDefaultConfigF
    - 在 Fail-Soft 触发点广播 `eqt:tls-cert-failed` Wails 事件；
    - 任务卡片、二维码弹窗与详情处引入 `.tls-security-badge`，动态标识 `🔒 HTTPS` / `⚠️ HTTP (降级明文)` / `🔓 HTTP`。
 
+---
+
+### 十三、多用户并发触发 Google CA 限制墙的状态感知、Admin 监控与全生命周期解决方案
+
+#### 1. 问题机理与触发背景
+Google Trust Services (GTS) 作为公共 WebPKI CA，遵循 RFC 8555 规范并施加严格的速率控制（Rate Limits）：
+1. **主域名证书周上限 (Certificates per Registered Domain)**：以顶级/二级母域名（eTLD+1，即 `eqt.net.im`）为统计边界，施加滑动 7 天总签发量硬约束；
+2. **新订单速率限制 (New Orders per Account/IP)**：如 3 小时内最多 300 笔订单；
+3. **验证失败惩罚性冻结 (Failed Validations per Hostname per Hour)**：同一主机名 1 小时内验证失败达 5 次触发临时封禁；
+4. **多用户并发击穿风险**：所有客户端均以 `<nodeID>.direct.eqt.net.im` 为 SAN 向同一母域名申请通配符证书。在多用户密集上线或批量重装时，极易迅速击穿母域名的 GTS 周签发配额；同时若客户端遇阻后未加节制地反复重试，将迅速引发惊群效应（Thundering Herd）。
+
+#### 2. Google CA 标准错误响应
+当触发限制时，GTS 在 ACME 接口直接返回 RFC 7807 Problem Document：
+- **状态码**：HTTP 429 Too Many Requests
+- **Payload**：
+  ```json
+  {
+    "type": "urn:ietf:params:acme:error:rateLimited",
+    "detail": "Error creating new order :: too many certificates already issued for \"eqt.net.im\". Retry after 2026-09-15T00:00:00Z",
+    "status": 429
+  }
+  ```
+
+#### 3. 当前系统的状态显示实况（Admin 与客户端）
+
+##### (1) 云端网关拦截与日志沉淀 (`cert.ts`)
+- **网关三级防护闸门**：
+  - L1 节点级防护（3 次 / 24h）与 L2 IP 级防护（10 次 / 24h）：返回 HTTP 429 `{ error: '...', reason_key: 'rate_limited', retry_after: 86400 }`；
+  - L3 全局硬熔断（40 次 / 7 天，`cert.ts:803`）：返回 HTTP 429 `{ error: '...', reason_key: 'global_rate_limited', retry_after: 604800 }`；
+  - 限流触发后通过 `logRateLimitHit()` 将 `category=RATE_LIMIT_CERT_PROVISION_*`、`node_id`、`client_ip`、`trace_id` 写入 D1 `system_error_logs` 表。
+- **穿透至 Google CA 被拒**：
+  - 若穿透网关但在 Google ACME 接口收到 429 或其他异常，Worker 捕获后通过 `logSystemError(env, 'CERT_PROVISION_ERROR', 'ERROR', err, ...)` 将包含 Google CA 原始错误全文的堆栈写入 D1 `system_error_logs`；
+  - 对外返回 500 `internal_error`。
+
+##### (2) Admin 管理后台是否显示？
+- **错误日志端点已完整支持**：
+  - 管理员调用 `GET /api/v1/admin/error-logs?category=CERT_PROVISION_ERROR` 或 `category=RATE_LIMIT_CERT_PROVISION_GLOBAL`，可检索所有证书失败明细，查看 Google 原始返回的 `urn:ietf:params:acme:error:rateLimited` 详情；
+  - 在 `GET /api/v1/admin/metrics` 中，`rate_limit_hits_24h` 实时聚合包含证书限流在内的全部防刷命中统计。
+- **Admin 当前局限与改进空间**：
+  - 目前 Admin 首页尚未提供独立的“Google CA 实时周签发配额水位（如已用 38/40）”可视化卡片，需依赖日志过滤进行故障排查。
+
+##### (3) 客户端桌面 GUI 显示
+- **自动降级**：Fail-Closed 立即落盘并锁定 `enableTLS: false`，平滑回落局域网明文 HTTP 传输，保证业务不中断；
+- **UI 反馈**：
+  - 气泡提示：`触发证书颁发机构频次限制（已自动切换为局域网高速传输，保护期中）`；
+  - 设置面板：开关旁显示黄色告警三角图标（`renderAlertSvg`），Tooltip 显示错误详情；
+  - 动态冷却锁定：读取服务端 `retry_after`（86400s 或 604800s），冷却期内再次点击开关直接拦截，提示剩余秒数；
+  - 开发者面板：显示 `[Failed] Provision Failed / HTTP Fallback (error)`。
+
+#### 4. 出现限制墙后的全生命周期解决方案
+
+##### 【第一层：运行时自动恢复与保护】（已投产）
+1. **服务端 Retry-After 动态冷却锁定**：客户端继承服务端真实冷却时间，阻断盲目并发重试，消除惊群效应；
+2. **Fail-Soft 故障软降级**：不阻塞主营文件收发，界面标注 `HTTP (降级明文)`，传输功能 100% 可用；
+3. **密钥失配自愈重绑**：检测到 Node 身份漂移时自动轮换 NodeID 并通过 TOFU 机制重新绑定。
+
+##### 【第二层：管理台态势感知与运维干预】（中期演进）
+1. **Admin 仪表盘上线配额监控看板**：实时聚合过去 7 天已签发证书总量（当前值 / 40 全局熔断上限），在达到 80% 水位时触发运维告警；
+2. **Google CA (GTS) 官方配额扩容申请**：通过 Google Cloud 官方渠道提交母域名配额提升申请（GTS Rate Limit Exemption），将每周额度提升至商用规模；
+3. **Admin 紧急频控重置通道**：在管理后台提供针对特定 `node_id` 或 IP 一键清除 D1 频控计数器的接口，供紧急运维救急。
+
+##### 【第三层：彻底根治多用户并发的架构升级】（长期演进）
+1. **方案 A：多 CA 动态分流与灾备轮换池 (Multi-CA Failover Pool)**：
+   - 编排引擎支持 GTS（主力）-> Let's Encrypt（备选）-> ZeroSSL 多 CA 轮换；遇当前 CA 429 自动无感降级到下一个 CA，联合配额成倍扩展；
+2. **方案 B：主域名哈希分片池 (Domain Sharding Pool)**：
+   - 配置多个分片域名（如 `d1.eqt.im`、`d2.eqt.im` 等），依据 NodeID 哈希分流，每个分片域名独立享有完整 CA 配额；
+3. **方案 C：通配符证书集中托管与本地会话加密 (Centralized Wildcard & Ephemeral Session Security)**：
+   - 中心签发统一通配符证书（`*.direct.eqt.net.im`），将公共 CA 消耗从 $O(N)$ 降至 $O(1)$，结合应用层 ECDH 一次一密握手保障局域网传输绝对隐私。
+
 
 
 

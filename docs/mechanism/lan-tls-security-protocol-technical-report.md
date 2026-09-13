@@ -560,3 +560,122 @@ direct.eqt.net.im   type=257 ancount=0  (rcode=0, NODATA)
 - **CAA 记录状态**：目前线上权威 DNS 采用私有 API 严格鉴权。CAA 记录作为域名解析加固项已列入后续基础设施运维规划；
 - **CA 基础设施**：当前生产环境全面稳定运行在 Google Public CA (GTS) EAB 单轨架构下，Let's Encrypt 作为预留方案，目前未启用多 CA 动态灾备切换逻辑。
 
+---
+
+## 十、 多用户并发触发 Google CA 限制墙的状态感知、Admin 监控与全生命周期解决方案
+
+在多用户、多设备并发启用 LAN-TLS 的生产场景中，公共 WebPKI 证书颁发机构（Google Trust Services - GTS）的访问频次限额（Rate Limits）与配额策略是高可用架构不可忽视的关键约束。本章从第一性原理深入剖析 Google CA 限制墙的触发机理、各端状态感知链路、云端 Admin 运维能力，以及完整的应对与演进解决方案。
+
+### 10.1 Google CA 限制墙的本质机理与触发场景
+
+1. **Google CA (GTS) ACME 频控规则 (RFC 8555 & CA Baseline)**：
+   - **注册域名每周签发限额 (Certificates per Registered Domain)**：Google Public CA 对同一主域名（eTLD+1，即 `eqt.net.im`）在滑动 7 天周期内设有硬性总签发数限制（默认基线通常为每周数十至数百张不等）；
+   - **并发新订单速率限制 (New Orders Rate Limit)**：短周期（如每 3 小时 300 笔订单）内创建订单的频率峰值限制；
+   - **域名验证失败冻结限制 (Failed Validations Limit)**：单账户单主机名 1 小时内失败达到 5 次，将触发该域名的临时静默封禁；
+   - **重复证书签发限制 (Duplicate Certificates)**：完全相同域名集合（`SAN`）在 7 天内签发通常不超过 5 张。
+2. **多用户并发场景下的撞墙诱因**：
+   - **集中式主域名击穿**：各客户端独立派生自己的 `node_id`（形如 `<nodeID>.direct.eqt.net.im`），但其上层母域名均为单一的 `eqt.net.im`。当多用户在短时间内密集开启 TLS、或重装系统导致旧证书丢失重新申请时，申请量将在几天内迅速逼近或击穿 Google CA 针对该母域名的周配额；
+   - **错误重试导致的雪崩效应 (Thundering Herd)**：若客户端在首次失败后无节制频繁重试，将迅速打满 Google CA 的 Order 限频或失败冻结阈值。
+3. **Google CA 的标准错误响应特征**：
+   - 当触发 Google CA 限制时，Google GTS 的 ACME 接入点直接返回 RFC 7807 / RFC 8555 标准的 Problem Details 响应：
+     - **HTTP 状态码**：`429 Too Many Requests`
+     - **Content-Type**：`application/problem+json`
+     - **响应结构示例**：
+       ```json
+       {
+         "type": "urn:ietf:params:acme:error:rateLimited",
+         "detail": "Error creating new order :: too many certificates already issued for \"eqt.net.im\". Retry after 2026-09-15T00:00:00Z",
+         "status": 429
+       }
+       ```
+
+### 10.2 状态感知与端到端显示链路（当前工程实况）
+
+系统在云端网关、云端管理后台（Admin）与客户端桌面 GUI 建立了分层的状态感知与错误收集链路：
+
+#### 1. 云端网关拦截与日志沉淀 (`cloudflare/eqt-drm-api/src/routes/cert.ts`)
+- **前置三级主动防护（未穿透至 Google CA）**：
+  - **L1 节点级防护**（3 次 / 24h）与 **L2 IP 级防护**（10 次 / 24h）：返回 HTTP `429`，`reason_key: 'rate_limited'` 或 `'ip_rate_limited'`，下发 `retry_after: 86400`；
+  - **L3 全局熔断保护**（40 次 / 7 天）：在消耗完安全配额前主动熔断，返回 HTTP `429`，`reason_key: 'global_rate_limited'`，下发 `retry_after: 604800`；
+  - **日志持久化**：三级限流命中时均通过 `logRateLimitHit()` 将限流事件、`node_id`、`client_ip`、`trace_id` 写入 D1 数据库的 `system_error_logs` 表（`category` 为 `RATE_LIMIT_CERT_PROVISION_*`）。
+- **穿透后被 Google CA 阻断（穿透至 Google CA）**：
+  - 当请求穿透网关但在 Google ACME 接口遭遇 429 或其他异常时，Worker 异常捕获块通过 `logSystemError(env, 'CERT_PROVISION_ERROR', 'ERROR', err, ...)` 将包含 Google CA 返回的原始错误全文（如 `urn:ietf:params:acme:error:rateLimited: ...`）写入 `system_error_logs`；
+  - 对外遵循 Zero Error Exposure 安全原则，向客户端返回 500 `internal_error`。
+
+#### 2. 云端管理后台 (Admin) 会显示吗？（Admin 现状与能力）
+- **Admin 会记录并显示 Google 返回的错误信息**：
+  - **错误日志明细查询**：通过 Admin API `GET /api/v1/admin/error-logs?category=CERT_PROVISION_ERROR` 或 `category=RATE_LIMIT_CERT_PROVISION_GLOBAL`，管理员可以在后台完整检索到所有发生证书申请异常的流水，包含 Google 原始报错、发生时间、Node ID、客户端 IP 及请求上下文；
+  - **指标大盘粗粒度统计**：在 `GET /api/v1/admin/metrics` 仪表盘中，`rate_limit_hits_24h` 指标项实时聚合统计过去 24 小时内全量防刷限频（含证书限流）拦截总数。
+- **当前 Admin 面板的局限性**：
+  - 现行 Admin 管理后台尚未将“Google CA 实时签发配额水位（如：本周已用 38/40）”做成独立的可视化进度卡片。管理员当前需要通过日志过滤查看具体的 Google CA 报错详情。
+
+#### 3. 客户端桌面 GUI 如何显示这一状态？ (`desktop/gui`)
+当遭遇云端限频或 Google CA 阻断时，客户端界面形成确定性的多重反馈：
+1. **自动软降级与通知 (Fail-Soft Notification)**：
+   - 收到 429 或证书错误后，后台立即同步落盘并锁定 `enableTLS: false`，平滑回退至局域网标准明文传输；
+   - 弹出气泡通知：`触发证书颁发机构频次限制（已自动切换为局域网高速传输，保护期中）`；
+2. **设置面板开关与状态图标**：
+   - 设置面板中 TLS 开关旁自动切换为**黄色警示三角图标**（`renderAlertSvg`），点击或悬浮展示具体错误提示（如包含 `[rate_limited]` 或 `[429]`）；
+   - **动态冷却锁死**：客户端通过 `ExtractRateLimitRetryAfter` 解析服务端下发的真实 `retry_after`（86400s 或 604800s），在内存和状态机中标记 `IsRateLimitedActive: true`。在冷却期内用户再次尝试拨开开关时，前端直接拦截并提示剩余冷却秒数，严禁发起无谓重试加重 CA 封禁；
+3. **开发者选项 (Developer Options)**：
+   - 在 `LAN-TLS Certificate Debug` 区域明确显示：`[Failed] Provision Failed / HTTP Fallback (error)`，供高级用户和开发者直接排查底层原因。
+
+---
+
+### 10.3 出现 Google CA 限制墙后的系统性解决方案
+
+针对多用户引发的公共 CA 限制墙问题，系统采取“短期自愈防护 -> 中期运维干预 -> 长期架构升级”的三级演进路线：
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                    Google CA 限制墙三级系统性解决方案架构                      │
+└──────────────────────────────────────────────────────────────────────────────┘
+      │
+      ├─► 【第一层：运行时自动恢复与保护】(已投产)
+      │     ├─ 1. 服务端动态 Retry-After 冷却锁定（杜绝客户端惊群冲击）
+      │     ├─ 2. Fail-Soft 故障软降级（平滑回落局域网高速明文，业务零阻断）
+      │     └─ 3. 错配节点自愈轮换（客户端检测 key mismatch 自动重置 TOFU）
+      │
+      ├─► 【第二层：管理台态势感知与运维干预】(中期演进)
+      │     ├─ 1. Admin 仪表盘上线「LAN-TLS 配额水位与 CA 错误看板」
+      │     ├─ 2. 80% 配额预警与 Google CA (GTS) 官方配额扩容申请
+      │     └─ 3. Admin 一键重置 D1 频控计数器（紧急救援通道）
+      │
+      └─► 【第三层：彻底根治多用户并发的架构升级】(长期演进)
+            ├─ 方案 A：多 CA 动态智能分流轮换池（GTS + Let's Encrypt + ZeroSSL）
+            ├─ 方案 B：主域名哈希分片池（多域名负载均衡，配额线性扩展）
+            └─ 方案 C：通配符证书集中托管分发模式（CA 消耗由 O(N) 骤降至 O(1)）
+```
+
+#### 1. 第一层：运行时自动恢复与保护机制（已实现并投产）
+- **动态冷却规避惊群**：云端通过标准 HTTP 429 协议头 `Retry-After` 下发冷却时长，客户端动态继承并锁定重试入口，彻底消除因大量用户同时重试造成的雪崩；
+- **业务优先的软降级**：安全特性绝不反客为主阻塞文件传输。一旦证书置备受阻，系统毫秒级回落标准 HTTP 明文传输，二维码与详情卡片清晰标识 `HTTP (降级明文)`，保障核心收发链路 100% 畅通；
+- **节点身份自动愈合**：若由于密钥错配导致签发失败，客户端自动调用 `RotateDeviceNodeIdentity()` 轮换随机盐重置 NodeID，并在后续时机平滑重新置备。
+
+#### 2. 第二层：管理台态势感知与运维干预方案（建议推进）
+- **Admin 增加专门的 Google CA 配额看板**：
+  - 在 `admin.eqt.net.im` 后台增加「LAN-TLS 证书置备监控」卡片，实时查询 D1 中近 7 天有效证书签发总数（当前值 / 40 预警阈值），以进度条直观呈现；
+  - 实时聚合列出最近 10 次 `RATE_LIMIT_*` 与 `CERT_PROVISION_ERROR`（解析出 Google CA 返回的 Problem Document detail）；
+- **向 Google CA 申请官方配额提升 (GTS Rate Limit Increase)**：
+  - 针对企业级或规模化商用场景，通过 Google Cloud Support 渠道向 Google Trust Services 提交母域名 `eqt.net.im` 的 Rate Limit Exemption 申请，将每周证书签发上限从默认基线扩容至数千甚至数万张；
+- **Admin 一键清流与应急白名单**：
+  - 在 Admin API 增加针对特定 `node_id` 或 `client_ip` 的重置端点（`DELETE /api/v1/admin/rate-limits/cert-provision`），允许运维人员在排除故障后立即清除受限状态。
+
+#### 3. 第三层：根本性架构升级方案（消除单域名配额瓶颈）
+为从物理根源上解决单域名多用户引发的 CA 配额耗尽，设计如下三套高弹性长期演进路线：
+
+- **方案 A：多 CA 动态智能轮换灾备池 (Multi-CA Failover Pool)**：
+  - 在 Cloudflare Worker 中实现多 CA 动态编排客户端：
+    - **第一优先级**：Google Trust Services (GTS, 主力签发)；
+    - **第二优先级**：Let's Encrypt (LE, 50 张/周备份)；
+    - **第三优先级**：ZeroSSL / Buypass；
+  - 当检测到当前 CA 返回 429 `rateLimited` 或 5xx 服务不可用时，Worker 自动无缝降级切换至下一个备用 CA 重新生成订单。多个公信 CA 的配额形成联合资源池，实现抗毁灾备。
+- **方案 B：主域名哈希分片池 (Domain Sharding Pool)**：
+  - 由于公共 CA 的配额限制以 eTLD+1 注册域名为计算边界，系统可配置域名分片池（例如 `direct-a.eqt.im`、`direct-b.eqt.im`、`direct-c.eqt.im` 等挂载在不同顶级/二级域名下）；
+  - 网关根据客户端 `node_id` 的哈希值将请求均匀散列到不同的独立域名上。每增加一个分片域名，集群的全局 CA 签发配额即可获得等额的线性翻倍扩展。
+- **方案 C：通配符证书集中置备与安全分发模式 (Centralized Wildcard & Ephemeral Session Security)**：
+  - 当前架构为“每个客户端单独申领一张专属通配符证书”，导致 CA 证书消耗量与客户端节点数呈 $O(N)$ 线性增长；
+  - 升级为“中心节点申请全域共享公信通配符证书（`*.direct.eqt.net.im`）”：
+    - 云端每周仅向 Google CA 申请 1 张泛域名证书（CA 消耗骤降至 $O(1)$ 常数级）；
+    - 结合端到端安全的动态授权通道，向合法客户端安全分发证书，或在传输层之上建立基于 ECDH（曲线 25519）的应用层一次一密（PFS）加密管道，彻底解决局域网直连保密性与公共 CA 额度约束的天然矛盾。
+
