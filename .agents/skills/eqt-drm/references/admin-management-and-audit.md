@@ -28,3 +28,19 @@
 
 ---
 
+## 14. LAN-TLS 多 CA 断路器态势感知与运维解封 (Multi-CA Telemetry & Break-Glass Ops)
+
+### 14.1 D1 遥测自愈与防呆查询
+- **端点契约**：`GET /api/v1/admin/tls/circuit-status`（由 Cloudflare Access 保护，同源 Pages Functions 代理或沙箱直连）。
+- **表结构自愈保障**：由于新测试沙箱库在初始阶段可能尚未触发 ACME 置备或令牌桶流控，遥测查询前必须调用 `ensureCertProvisionsTable`、`ensureAuditLogTable`、`ensureTokenBucketsTable` 与 `ensureCircuitBreakersTable`。
+- **防御性查询隔离**：各区块（令牌桶状态、24h 签发指标、CA 归属分布、错误审计统计）查询必须在独立的异常保护块中执行，在表空或偶发只读异常时降级回退至默认零状态，严禁抛出裸 500 异常阻断整体大盘加载。
+
+### 14.2 双 CA 指示灯与态势大盘
+- **双断路器态势监控**：前台 `TLSCircuitCard.svelte` 统一呈现 GTS CA（主力）与 Let's Encrypt（灾备）的双断路器状态灯（🟢 CLOSED / 🟡 HALF_OPEN / 🔴 OPEN）、连续成功/失败计数及退避冷却时间。
+- **平滑令牌桶水位**：呈现 `cert_provision:acme_smoothing` 当前瞬时 Token 存量（`0~5.0`）、最大容量与填充速率（`10/min`）。
+- **精准归因跳闸分析**：区分 `ca_rate_limited (429)`、`ca_5xx_error (5xx)`、`other_cert_errors`、`rate_limit_hits` 与 `failover_events`（灾备故障转移），杜绝告警误判。
+
+### 14.3 安全可逆破窗解封 (Break-Glass)
+- **解封模态框**：提供 `TLSResetModal.svelte`，支持对主力 GTS CA 断路器重置复位、特定节点限流解锁与特定 IP 限流重置。
+- **强审计留痕**：后端统一通过 `logAdminAudit(env, request, 'RESET_CIRCUIT_BREAKER', ...)` 完整记录操作人、目标 CA、操作前状态快照，实现全生命周期操作可追溯。
+

@@ -12,6 +12,7 @@ import {
 } from '../utils/blacklist';
 import { rateLimitStatus, resetD1RateLimit } from '../utils/rate-limit';
 import { getCircuitBreakerStatus, resetCircuitBreaker } from '../utils/circuit-breaker';
+import { ensureTokenBucketsTable } from '../utils/token-bucket';
 import { ensureCertProvisionsTable } from './cert';
 import { normalizeLicenseSource } from '../utils/license-source';
 import { isTestEnvironment } from '../utils/env-guard';
@@ -1914,6 +1915,7 @@ export async function handleAdminRoutes(
 
     await ensureCertProvisionsTable(env);
     await ensureAuditLogTable(env);
+    await ensureTokenBucketsTable(env);
 
     // 1. Circuit Breaker status (Primary: GTS, Secondary/Backup: Let's Encrypt)
     const cbRecord = await getCircuitBreakerStatus(env, 'gts_ca');
@@ -1941,15 +1943,26 @@ export async function handleAdminRoutes(
     };
 
     // 2. Token Bucket status
-    const tbRecord = await env.DB.prepare(
-      'SELECT key, tokens, capacity, refill_rate, last_refill FROM token_buckets WHERE key = ?'
-    ).bind('cert_provision:acme_smoothing').first<{
+    let tbRecord: {
       key: string;
       tokens: number;
       capacity: number;
       refill_rate: number;
       last_refill: string;
-    }>();
+    } | null = null;
+    try {
+      tbRecord = await env.DB.prepare(
+        'SELECT key, tokens, capacity, refill_rate, last_refill FROM token_buckets WHERE key = ?'
+      ).bind('cert_provision:acme_smoothing').first<{
+        key: string;
+        tokens: number;
+        capacity: number;
+        refill_rate: number;
+        last_refill: string;
+      }>();
+    } catch (tbErr) {
+      console.error('Failed to query token_buckets status:', tbErr);
+    }
     const tbStatus = tbRecord || {
       key: 'cert_provision:acme_smoothing',
       tokens: 5.0,
@@ -1960,9 +1973,14 @@ export async function handleAdminRoutes(
 
     // 3. 24h Metrics: Provisions success & average duration
     const since24h = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-    const provStats = await env.DB.prepare(
-      'SELECT COUNT(*) as total_provisions, AVG(duration_ms) as avg_duration_ms FROM device_cert_provisions WHERE provisioned_at >= ?'
-    ).bind(since24h).first<{ total_provisions: number; avg_duration_ms: number | null }>();
+    let provStats: { total_provisions: number; avg_duration_ms: number | null } | null = null;
+    try {
+      provStats = await env.DB.prepare(
+        'SELECT COUNT(*) as total_provisions, AVG(duration_ms) as avg_duration_ms FROM device_cert_provisions WHERE provisioned_at >= ?'
+      ).bind(since24h).first<{ total_provisions: number; avg_duration_ms: number | null }>();
+    } catch (provErr) {
+      console.error('Failed to query provStats:', provErr);
+    }
 
     const totalSuccess = Number(provStats?.total_provisions || 0);
     const avgDuration = provStats?.avg_duration_ms != null ? Math.round(Number(provStats.avg_duration_ms) * 10) / 10 : null;
@@ -1979,9 +1997,14 @@ export async function handleAdminRoutes(
     } catch (_) {}
 
     // 4. 24h Trip reasons & failures from system_error_logs
-    const errorLogs = await env.DB.prepare(
-      "SELECT category, context_json FROM system_error_logs WHERE created_at >= ? AND (category = 'CERT_PROVISION_ERROR' OR category = 'CERT_PROVISION_FAILOVER' OR category LIKE 'RATE_LIMIT_%')"
-    ).bind(since24h).all<{ category: string; context_json: string | null }>();
+    let errorLogs: { results?: Array<{ category: string; context_json: string | null }> } | null = null;
+    try {
+      errorLogs = await env.DB.prepare(
+        "SELECT category, context_json FROM system_error_logs WHERE created_at >= ? AND (category = 'CERT_PROVISION_ERROR' OR category = 'CERT_PROVISION_FAILOVER' OR category LIKE 'RATE_LIMIT_%')"
+      ).bind(since24h).all<{ category: string; context_json: string | null }>();
+    } catch (errLogsErr) {
+      console.error('Failed to query errorLogs:', errLogsErr);
+    }
 
     let trip429 = 0;
     let trip5xx = 0;
