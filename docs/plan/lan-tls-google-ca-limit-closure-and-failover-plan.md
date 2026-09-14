@@ -712,7 +712,7 @@ export const SUPPORTED_PROVIDERS: Record<string, CAProvider> = {
 | **V4** | `resetD1RateLimit` 中 `DELETE FROM rate_limits` 删去 `WHERE key=?` | `npm run test:admin:tls:offline` | 💥 **34 passed / 2 failed**（`T4.3a`、`T4.3b` 隔离性断言翻红，`exit 1`） | ✅ **已翻红** |
 | **V5** | `resetCircuitBreaker` 不再清空 `cooldown_until` | `npm run test:admin:tls:offline` | 💥 **35 passed / 1 failed**（`T3.2` 物理状态断言翻红，`exit 1`） | ✅ **已翻红** |
 | **V8** | `duration_ms` 恒写入 `null` | `npm run test:cert:offline` | 💥 **111 passed / 1 failed**（`T21.3e3` 非负数字断言翻红，`exit 1`） | ✅ **已翻红** |
-| **V9** | 删 `cert.ts:43` 的 `ALTER TABLE` 热迁移逻辑 | `npm run test:cert:offline` | 💥 **110 passed / 1 failed**（`T24.2` 翻红，`T24.3` 抛出 `ERR_SQLITE_ERROR`，`exit 1`） | ✅ **已翻红** |
+| **V9** | 删 `cert.ts:43` 的 `ALTER TABLE` 热迁移逻辑 | `npm run test:cert:offline` | 💥 **`T24.2` 翻红（1 failed），`T24.3` 抛 `ERR_SQLITE_ERROR` 中断进程（exit 1，无 `Results:` 行，进程在 T24.3 崩溃、未输出任何计数）** | ✅ **已翻红** |
 | **V11** | 空库时 `success_rate` 误回退 `1.0` | `npm run test:admin:tls:offline` | 💥 **35 passed / 1 failed**（`T2.4b` 严格 `null` 断言翻红，`exit 1`） | ✅ **已翻红** |
 | **V12** | 重置不存在 key 时回退为误导性 “reset successfully” | `npm run test:admin:tls:offline` | 💥 **35 passed / 1 failed**（`T4.6c` 文案精准断言翻红，`exit 1`） | ✅ **已翻红** |
 
