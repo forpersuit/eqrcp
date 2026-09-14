@@ -478,6 +478,34 @@
       const ids: string[] = event.data.messageIds || [];
       const err = event.data.error || 'batch download failed';
       markBatchFailed(ids, err);
+    } else if (event.data.type === 'download-batch-success') {
+      const ids: string[] = event.data.messageIds || [];
+      const zipPath: string = event.data.zipPath || '';
+      const zipFilename: string = event.data.zipFilename || '';
+      const peer = client ? client['clientPeer'] : 'desktop';
+      if (client) {
+        client.sendLog(`[ACTION] Batch download success. Zip: ${zipFilename}, Path: ${zipPath}`);
+      }
+      for (const id of ids) {
+        if (zipPath) {
+          chatActions.updateMessageBatchZipPath(id, zipPath);
+        }
+        chatActions.markMessageDownloaded(id);
+        chatActions.updateTransfer({
+          id: resolveDownloadTransferId(id, peer),
+          state: 'completed',
+          progress: 100,
+          speed: 0,
+          error: ''
+        });
+        markBatchItemCompleted(id);
+      }
+      for (const batch of activeBatches) {
+        if (!batch.cancelled && ids.some(id => batch.messageIds.has(id))) {
+          batch.completed = true;
+          chatActions.updateBatchStatus(batch.systemMsgId, 'completed', zipPath);
+        }
+      }
     } else if (event.data.type === 'chat-download-progress') {
       const { messageId, progress } = event.data;
       const peer = client ? client['clientPeer'] : 'desktop';
@@ -1454,15 +1482,15 @@
     const first = files[0];
     const firstName = first.fileName || 'file';
     const dotIdx = firstName.lastIndexOf('.');
-    const ext = dotIdx > 0 ? firstName.substring(0, dotIdx) : firstName;
-    const base = ext.length > 15 ? ext.slice(0, 15) + '...' : ext;
+    const rawBase = dotIdx > 0 ? firstName.substring(0, dotIdx) : firstName;
+    const safeBase = rawBase.replace(/[/\\?%*:|"<>]/g, '_').trim() || 'file';
     if (files.length === 1) {
-      return `${base}.zip`;
+      return `${safeBase}.zip`;
     }
     if (lang === 'en') {
-      return `${base}_and_${files.length - 1}_more.zip`;
+      return `${safeBase}_and_${files.length - 1}_more.zip`;
     }
-    return `${base}_等${files.length}个文件.zip`;
+    return `${safeBase}_等${files.length}个文件.zip`;
   }
 
   function handleBatchDownload(e: CustomEvent<{ messages: any[] }>) {
@@ -1498,6 +1526,9 @@
     chatActions.addBatchSystemMessage(batchMsgId, batchInfo, fallbackText);
     registerActiveBatch(batchMsgId, files.map(f => f.id));
 
+    const ids = files.map(item => encodeURIComponent(item.id)).join(',');
+    const zipURL = `/chat-v2/${token}/files/zip?ids=${ids}&clientId=${peer}&filename=${encodeURIComponent(batchZipFilename)}`;
+
     if (isEmbedded) {
       const batchItems = files.map(msg => {
         const messageId = msg.id;
@@ -1518,8 +1549,14 @@
         const downloadURL = `/chat-v2/${token}/files/${messageId}?clientId=${peer}&messageId=${messageId}&filename=${encodeURIComponent(filename)}`;
         return { messageId, name: filename, url: window.location.origin + downloadURL };
       });
-      // Desktop GUI: Direct folder save via native Go host bridge
-      window.parent.postMessage({ type: 'download-batch', files: batchItems }, '*');
+      // Desktop GUI: Direct zip package save via native Go host bridge
+      window.parent.postMessage({
+        type: 'download-batch',
+        zipURL: window.location.origin + zipURL,
+        zipFilename: batchZipFilename,
+        messageIds: files.map(f => f.id),
+        files: batchItems
+      }, '*');
       return;
     }
 
@@ -1543,8 +1580,6 @@
       return { messageId, name: filename };
     });
 
-    const ids = batchItems.map(item => encodeURIComponent(item.messageId)).join(',');
-    const zipURL = `/chat-v2/${token}/files/zip?ids=${ids}&clientId=${peer}&filename=${encodeURIComponent(batchZipFilename)}`;
     const link = document.createElement('a');
     link.href = zipURL;
     link.download = batchZipFilename;
@@ -1608,8 +1643,9 @@
   function handleOpenFolder(e: CustomEvent<Message>) {
     const msg = e.detail;
     if (isEmbedded) {
-      if (msg.filePath) {
-        window.parent.postMessage({ type: 'open-path', path: msg.filePath }, '*');
+      const targetPath = msg.batchZipPath || msg.filePath;
+      if (targetPath) {
+        window.parent.postMessage({ type: 'locate-file', path: targetPath }, '*');
       } else {
         window.parent.postMessage({ type: 'open-chat-file', filename: msg.fileName }, '*');
       }

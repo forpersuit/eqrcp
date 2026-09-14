@@ -516,7 +516,7 @@
               closeMenu();
             }
           });
-          if (isEmbedded && (msg.filePath || msg.fileName)) {
+          if (isEmbedded && (msg.batchZipPath || msg.filePath || msg.fileName)) {
             options.push({
               label: getTranslation('openInFolder', currentLang),
               action: () => {
@@ -1013,11 +1013,15 @@
                     <span class="pulse-dot"></span>
                   </span>
                 {:else if msg.batchInfo.status === 'completed'}
-                  <span class="batch-status-badge status-completed" title={getTranslation('batchDownloadCompleted', currentLang)} aria-label={getTranslation('batchDownloadCompleted', currentLang)}>
+                  <button type="button" class="batch-status-badge status-completed ${isEmbedded && msg.batchInfo.zipPath ? 'clickable' : ''}" title={isEmbedded && msg.batchInfo.zipPath ? (getTranslation('openInFolder', currentLang) || '定位文件') : getTranslation('batchDownloadCompleted', currentLang)} aria-label={getTranslation('batchDownloadCompleted', currentLang)} on:click={() => {
+                    if (isEmbedded && msg.batchInfo && msg.batchInfo.zipPath) {
+                      handleOpenFolder({ ...msg, batchZipPath: msg.batchInfo.zipPath });
+                    }
+                  }}>
                     <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                       <polyline points="20 6 9 17 4 12"></polyline>
                     </svg>
-                  </span>
+                  </button>
                 {:else if msg.batchInfo.status === 'cancelled'}
                   <span class="batch-status-badge status-cancelled" title={getTranslation('batchDownloadCancelled', currentLang)} aria-label={getTranslation('batchDownloadCancelled', currentLang)}>
                     <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">

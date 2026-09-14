@@ -110,6 +110,10 @@ export function InstallUpdate(arg1) {
   return window['go']['main']['App']['InstallUpdate'](arg1);
 }
 
+export function LocateFile(arg1) {
+  return window['go']['main']['App']['LocateFile'](arg1);
+}
+
 export function OpenExternal(arg1) {
   return window['go']['main']['App']['OpenExternal'](arg1);
 }
@@ -164,6 +168,10 @@ export function SaveChatAttachmentAs(arg1, arg2) {
 
 export function SaveChatAttachments(arg1, arg2, arg3) {
   return window['go']['main']['App']['SaveChatAttachments'](arg1, arg2, arg3);
+}
+
+export function SaveChatBatchZip(arg1, arg2) {
+  return window['go']['main']['App']['SaveChatBatchZip'](arg1, arg2);
 }
 
 export function SaveSettings(arg1) {

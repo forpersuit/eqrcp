@@ -624,6 +624,43 @@ func (a *App) SaveChatAttachments(urls []string, names []string, messageIds []st
 	return results, nil
 }
 
+// SaveChatBatchZip prompts the user with a SaveFileDialog to choose a location for saving the packaged zip archive,
+// then streams the generated zip from rawURL into that target file.
+func (a *App) SaveChatBatchZip(rawURL string, zipFilename string) (string, error) {
+	parsed, err := chatAttachmentDownloadURL(rawURL)
+	if err != nil {
+		a.logError(fmt.Sprintf("[GUI] SaveChatBatchZip: invalid download URL %q: %v", rawURL, err))
+		return "", err
+	}
+	if zipFilename == "" {
+		zipFilename = "chat-attachments.zip"
+	}
+	target, err := wailsruntime.SaveFileDialog(a.ctx, wailsruntime.SaveDialogOptions{
+		Title:           "Save batch archive as",
+		DefaultFilename: safeFilename(zipFilename),
+		Filters: []wailsruntime.FileFilter{
+			{
+				DisplayName: "ZIP Archive (*.zip)",
+				Pattern:     "*.zip",
+			},
+		},
+	})
+	if err != nil {
+		a.logError(fmt.Sprintf("[GUI] SaveChatBatchZip: save dialog failed: %v", err))
+		return "", err
+	}
+	if target == "" {
+		a.logInfo("[GUI] SaveChatBatchZip: user cancelled save dialog")
+		return "", nil
+	}
+	if err := a.downloadChatAttachmentTo(parsed.String(), target); err != nil {
+		a.logError(fmt.Sprintf("[GUI] SaveChatBatchZip: download failed for %q: %v", target, err))
+		return "", err
+	}
+	a.logInfo(fmt.Sprintf("[GUI] SaveChatBatchZip: saved archive -> %q", target))
+	return target, nil
+}
+
 // SaveSharePosterImage prompts the user with a native file dialog to save the generated poster Base64 PNG image.
 func (a *App) SaveSharePosterImage(base64Data string) (string, error) {
 	if base64Data == "" {
@@ -1009,15 +1046,16 @@ func (a *App) OpenPath(path string) error {
 		}
 	}
 
+	// If target is an existing file, delegate to LocateFile to reveal and highlight it.
+	info, err := os.Stat(cleaned)
+	if err == nil && !info.IsDir() {
+		return a.LocateFile(cleaned)
+	}
+
 	// Prevent creating the file path itself as a directory.
 	// Determine the directory component to create.
 	targetDir := cleaned
-	info, err := os.Stat(cleaned)
-	if err == nil {
-		if !info.IsDir() {
-			targetDir = filepath.Dir(cleaned)
-		}
-	} else {
+	if err != nil {
 		// Heuristically assume it is a file if it has an extension (like .log)
 		if filepath.Ext(cleaned) != "" {
 			targetDir = filepath.Dir(cleaned)
@@ -1112,6 +1150,47 @@ func (a *App) OpenFile(path string) error {
 	if err := cmd.Start(); err != nil {
 		a.logError(fmt.Sprintf("[GUI] OpenFile: failed to start command: %v", err))
 		return err
+	}
+	return cmd.Process.Release()
+}
+
+// LocateFile opens the containing folder of the given path and selects/highlights the file.
+// If the target is a directory, it opens the directory. If the file does not exist, it falls back to the parent directory.
+func (a *App) LocateFile(path string) error {
+	a.logInfo(fmt.Sprintf("[GUI] LocateFile called with raw path: %s", path))
+	if path == "" {
+		return fmt.Errorf("path is empty")
+	}
+
+	path = convertCrossPlatformPath(path)
+	a.logInfo(fmt.Sprintf("[GUI] LocateFile translated path: %s", path))
+
+	cleaned := filepath.Clean(path)
+	if !filepath.IsAbs(cleaned) {
+		if abs, err := filepath.Abs(cleaned); err == nil {
+			cleaned = abs
+		}
+	}
+
+	info, err := os.Stat(cleaned)
+	if err != nil {
+		a.logInfo(fmt.Sprintf("[GUI] LocateFile: file %s does not exist, fallback to parent directory: %v", cleaned, err))
+		return a.OpenPath(filepath.Dir(cleaned))
+	}
+
+	if info.IsDir() {
+		return a.OpenPath(cleaned)
+	}
+
+	a.logInfo(fmt.Sprintf("[GUI] LocateFile resolved target: %s", cleaned))
+	cmd, err := locateFileCommand(cleaned)
+	if err != nil {
+		a.logError(fmt.Sprintf("[GUI] LocateFile: failed to create command: %v", err))
+		return a.OpenPath(filepath.Dir(cleaned))
+	}
+	if err := cmd.Start(); err != nil {
+		a.logError(fmt.Sprintf("[GUI] LocateFile: failed to start command: %v", err))
+		return a.OpenPath(filepath.Dir(cleaned))
 	}
 	return cmd.Process.Release()
 }
@@ -1822,6 +1901,36 @@ func openFileCommand(path string) (*exec.Cmd, error) {
 		return exec.Command("xdg-open", path), nil
 	default:
 		return nil, fmt.Errorf("opening files is not supported on %s", runtime.GOOS)
+	}
+}
+
+func locateFileCommand(path string) (*exec.Cmd, error) {
+	switch runtime.GOOS {
+	case "windows":
+		winPath := filepath.Clean(strings.ReplaceAll(path, "/", "\\"))
+		return exec.Command("explorer.exe", "/select,"+winPath), nil
+	case "darwin":
+		return exec.Command("open", "-R", path), nil
+	case "linux":
+		if isWSL() {
+			out, err := exec.Command("wslpath", "-w", path).Output()
+			if err == nil {
+				winPath := strings.TrimSpace(string(out))
+				if winPath != "" {
+					return exec.Command("explorer.exe", "/select,"+winPath), nil
+				}
+			}
+			return exec.Command("explorer.exe", "/select,"+path), nil
+		}
+		if _, err := exec.LookPath("nautilus"); err == nil {
+			return exec.Command("nautilus", "--select", path), nil
+		}
+		if _, err := exec.LookPath("dolphin"); err == nil {
+			return exec.Command("dolphin", "--select", path), nil
+		}
+		return openPathCommand(filepath.Dir(path))
+	default:
+		return nil, fmt.Errorf("locating files is not supported on %s", runtime.GOOS)
 	}
 }
 

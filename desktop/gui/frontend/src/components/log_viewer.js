@@ -11,7 +11,85 @@ export const logViewerState = {
     autoRefresh: false,
     autoRefreshTimer: null,
     isLoading: false,
+    offsetX: 0,
+    offsetY: 0,
+    isDragging: false,
 };
+
+let isDragActive = false;
+let dragStartX = 0;
+let dragStartY = 0;
+let initialOffsetX = 0;
+let initialOffsetY = 0;
+let dragListenersInitialized = false;
+
+export function initLogViewerDrag() {
+    if (dragListenersInitialized) return;
+    dragListenersInitialized = true;
+
+    document.addEventListener('mousedown', (e) => {
+        if (!logViewerState.isOpen) return;
+        const head = e.target.closest('.log-viewer-head');
+        if (!head) return;
+        // 忽略关闭按钮、操作按钮等交互元素
+        if (e.target.closest('button') || e.target.closest('input') || e.target.closest('a')) {
+            return;
+        }
+        if (e.button !== 0) return; // 仅左键触发
+
+        const modal = document.querySelector('.log-viewer-modal');
+        if (!modal) return;
+
+        isDragActive = true;
+        logViewerState.isDragging = true;
+        dragStartX = e.clientX;
+        dragStartY = e.clientY;
+        initialOffsetX = logViewerState.offsetX || 0;
+        initialOffsetY = logViewerState.offsetY || 0;
+
+        modal.classList.add('dragging');
+        document.body.classList.add('log-viewer-is-dragging');
+        e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!isDragActive) return;
+        const modal = document.querySelector('.log-viewer-modal');
+        if (!modal) return;
+
+        const deltaX = e.clientX - dragStartX;
+        const deltaY = e.clientY - dragStartY;
+        let newX = initialOffsetX + deltaX;
+        let newY = initialOffsetY + deltaY;
+
+        // 视口安全边界限制：至少保留头部在视口内
+        const maxOffsetX = Math.max(100, window.innerWidth / 2 - 40);
+        const minOffsetX = -maxOffsetX;
+        const maxOffsetY = Math.max(100, window.innerHeight / 2 - 40);
+        const minOffsetY = -maxOffsetY;
+
+        newX = Math.max(minOffsetX, Math.min(maxOffsetX, newX));
+        newY = Math.max(minOffsetY, Math.min(maxOffsetY, newY));
+
+        modal.style.transform = `translate(${newX}px, ${newY}px)`;
+        logViewerState.offsetX = newX;
+        logViewerState.offsetY = newY;
+    });
+
+    const endDrag = () => {
+        if (!isDragActive) return;
+        isDragActive = false;
+        logViewerState.isDragging = false;
+        const modal = document.querySelector('.log-viewer-modal');
+        if (modal) {
+            modal.classList.remove('dragging');
+        }
+        document.body.classList.remove('log-viewer-is-dragging');
+    };
+
+    document.addEventListener('mouseup', endDrag);
+    window.addEventListener('blur', endDrag);
+}
 
 // ---- 图标与辅助函数 ----
 function escapeHTML(str) {
@@ -64,6 +142,9 @@ export async function openLogViewer(renderCallback) {
     logViewerState.isOpen = true;
     logViewerState.searchKeyword = '';
     logViewerState.filter = 'ALL';
+    logViewerState.offsetX = 0;
+    logViewerState.offsetY = 0;
+    logViewerState.isDragging = false;
     if (renderCallback) renderCallback();
     await refreshLogTail(renderCallback, true);
 }
@@ -276,9 +357,9 @@ export function renderLogViewerOverlay() {
 
     return `
         <div class="log-viewer-backdrop" id="log-viewer-backdrop" role="presentation">
-            <section class="log-viewer-modal" role="dialog" aria-modal="true" aria-label="${escapeAttr(t('view_logs') || '运行日志')}">
-                <!-- 头部栏 -->
-                <div class="log-viewer-head">
+            <section class="log-viewer-modal ${logViewerState.isDragging ? 'dragging' : ''}" role="dialog" aria-modal="true" aria-label="${escapeAttr(t('view_logs') || '运行日志')}" style="transform: translate(${logViewerState.offsetX}px, ${logViewerState.offsetY}px);">
+                <!-- 头部栏 (按住可自由拖拽) -->
+                <div class="log-viewer-head" id="log-viewer-drag-handle" title="按住标题栏可拖拽移动窗口">
                     <div class="log-viewer-title-group">
                         <span class="log-viewer-icon">📋</span>
                         <h2>${escapeHTML(t('view_logs') || '运行日志')}</h2>

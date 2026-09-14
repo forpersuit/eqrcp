@@ -198,14 +198,15 @@ export const chatActions = {
   /**
    * Update the status of a batch download notice card in-place ('packaging' -> 'completed' | 'cancelled' | 'failed').
    */
-  updateBatchStatus(messageId: string, status: 'packaging' | 'completed' | 'cancelled' | 'failed') {
+  updateBatchStatus(messageId: string, status: 'packaging' | 'completed' | 'cancelled' | 'failed', zipPath?: string) {
     messages.update(list => list.map(m => {
       if (m.id === messageId && m.batchInfo) {
         return {
           ...m,
           batchInfo: {
             ...m.batchInfo,
-            status
+            status,
+            ...(zipPath ? { zipPath } : {})
           }
         };
       }
@@ -247,6 +248,19 @@ export const chatActions = {
         return {
           ...m,
           filePath: filePath
+        };
+      }
+      return m;
+    }));
+  },
+
+  updateMessageBatchZipPath(messageId: string, batchZipPath: string) {
+    messages.update(list => list.map(m => {
+      if (m.id === messageId) {
+        return {
+          ...m,
+          batchZipPath: batchZipPath,
+          downloaded: true
         };
       }
       return m;

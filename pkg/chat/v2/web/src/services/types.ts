@@ -82,6 +82,7 @@ export interface BatchDownloadInfo {
   items: BatchDownloadItem[];
   totalBytes: number;
   status: 'packaging' | 'completed' | 'cancelled' | 'failed';
+  zipPath?: string;
 }
 
 export interface Message {
@@ -102,6 +103,7 @@ export interface Message {
   mimeType?: string;
   url?: string;
   filePath?: string;
+  batchZipPath?: string;
   downloaded?: boolean;
   uploading?: boolean;
   batchInfo?: BatchDownloadInfo;

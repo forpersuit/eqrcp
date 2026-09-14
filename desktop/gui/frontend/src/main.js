@@ -13,7 +13,7 @@ import morphdom from './vendor/morphdom.js';
 import { renderSide, toggleSearchInput, updateSearchQuery, searchQuery, showSearchInput, renderHistory, showSearchDropdown, toggleSearchDropdown, activeFocusTaskId, updateActiveFocus, getMatchResults, highlightText, showClearHistoryConfirm, toggleClearHistoryConfirm } from './components/history.js';
 import { initDragDrop, sendDebugMessageToChat, showChatDragOverlay } from './dragdrop.js';
 import { renderShareOverlay, closeShareOverlay, prepareMergedQRCode, downloadSharePosterImage, resetQRPrepareFailed } from './components/share.js';
-import { renderLogViewerOverlay, openLogViewer, closeLogViewer, refreshLogTail, setLogFilter, setLogSearch, toggleAutoRefresh, copyAllLogs, exportDiagnostics, logViewerState } from './components/log_viewer.js';
+import { renderLogViewerOverlay, openLogViewer, closeLogViewer, refreshLogTail, setLogFilter, setLogSearch, toggleAutoRefresh, copyAllLogs, exportDiagnostics, logViewerState, initLogViewerDrag } from './components/log_viewer.js';
 import { renderChatTransfersTray } from './components/chat_tray.js';
 import { renderTLSSettingIcon, getDevTLSStatusText, renderTaskSecurityBadge, renderTopbarTLSIndicator } from './components/tls_status.js';
 
@@ -26,6 +26,7 @@ import {
     ChatSaveDirectory,
     ClearHistory,
     DownloadChatAttachment,
+    LocateFile,
     OpenExternal,
     OpenFile,
     OpenPath,
@@ -35,6 +36,7 @@ import {
     RepeatTask,
     SaveChatAttachmentAs,
     SaveChatAttachments,
+    SaveChatBatchZip,
     SaveSettings,
     SelectFiles,
     GetFileInfos,
@@ -175,6 +177,7 @@ window.addEventListener('unhandledrejection', (event) => {
 
 
 initDragDrop(state, handleFileDrop);
+initLogViewerDrag();
 
 // Free chat daily allowance (seconds) — must match server.FreeChatDailySeconds.
 const chatDailyFreeSeconds = 300;
@@ -347,11 +350,48 @@ window.addEventListener('message', (e) => {
                 }, targetOrigin);
             });
     } else if (e.data.type === 'download-batch') {
+        const zipURL = String(e.data.zipURL || '');
+        const zipFilename = String(e.data.zipFilename || '');
+        const messageIds = Array.isArray(e.data.messageIds) ? e.data.messageIds : [];
+
+        // 优先使用打包 Zip 方式另存为压缩包
+        if (zipURL && isTrustedChatURL(zipURL, activeChatFrameOrigin())) {
+            console.log('[Antigravity Debug] download-batch zip invoked. Zip:', zipFilename, 'messageIds:', messageIds.length);
+            SaveChatBatchZip(zipURL, zipFilename)
+                .then((savedZipPath) => {
+                    if (savedZipPath) {
+                        state.chatSaveDir = savedZipPath.replace(/[\\/][^\\/]*$/, '');
+                        e.source?.postMessage({
+                            type: 'download-batch-success',
+                            zipPath: savedZipPath,
+                            zipFilename: zipFilename,
+                            messageIds: messageIds,
+                        }, targetOrigin);
+                    } else {
+                        // 用户取消了保存
+                        e.source?.postMessage({
+                            type: 'download-batch-cancelled',
+                            messageIds: messageIds,
+                        }, targetOrigin);
+                    }
+                })
+                .catch((err) => {
+                    console.error('[Antigravity Debug] SaveChatBatchZip backend error:', err);
+                    const errMsg = String(err?.message || err || 'batch zip save failed');
+                    e.source?.postMessage({
+                        type: 'download-batch-failed',
+                        messageIds: messageIds,
+                        error: errMsg
+                    }, targetOrigin);
+                });
+            return;
+        }
+
         const files = Array.isArray(e.data.files) ? e.data.files : [];
         if (files.length === 0) return;
         const urls = [];
         const names = [];
-        const messageIds = [];
+        const fallbackIds = [];
         for (const f of files) {
             const url = String((f && f.url) || '');
             if (!url) continue;
@@ -361,15 +401,15 @@ window.addEventListener('message', (e) => {
             }
             urls.push(url);
             names.push(String((f && f.name) || 'attachment'));
-            messageIds.push(String((f && f.messageId) || ''));
+            fallbackIds.push(String((f && f.messageId) || ''));
         }
         if (urls.length === 0) return;
-        console.log('[Antigravity Debug] download-batch bridge invoked. files:', urls.length);
-        SaveChatAttachments(urls, names, messageIds)
+        console.log('[Antigravity Debug] download-batch fallback bridge invoked. files:', urls.length);
+        SaveChatAttachments(urls, names, fallbackIds)
             .then((results) => {
                 const saved = Array.isArray(results) ? results : [];
                 if (saved.length === 0) {
-                    e.source?.postMessage({ type: 'download-batch-cancelled', messageIds: messageIds }, targetOrigin);
+                    e.source?.postMessage({ type: 'download-batch-cancelled', messageIds: fallbackIds }, targetOrigin);
                     return;
                 }
                 for (const item of saved) {
@@ -384,7 +424,7 @@ window.addEventListener('message', (e) => {
             .catch((err) => {
                 console.error('[Antigravity Debug] SaveChatAttachments backend error:', err);
                 const errMsg = String(err?.message || err || 'batch download failed');
-                e.source?.postMessage({ type: 'download-batch-failed', messageIds: messageIds, error: errMsg }, targetOrigin);
+                e.source?.postMessage({ type: 'download-batch-failed', messageIds: fallbackIds, error: errMsg }, targetOrigin);
             });
     } else if (e.data.type === 'cancel-download') {
         const messageId = String(e.data.messageId || '');
@@ -393,15 +433,30 @@ window.addEventListener('message', (e) => {
         }
     } else if (e.data.type === 'open-file') {
         OpenFile(String(e.data.path || '')).catch(() => {});
+    } else if (e.data.type === 'locate-file') {
+        const targetPath = String(e.data.path || '');
+        if (targetPath) {
+            LocateFile(targetPath).catch((err) => {
+                console.warn('[Antigravity Debug] LocateFile failed, fallback to OpenPath:', err);
+                OpenPath(targetPath).catch(() => {});
+            });
+        }
     } else if (e.data.type === 'open-path') {
-        OpenPath(String(e.data.path || '')).catch(() => {});
+        const targetPath = String(e.data.path || '');
+        if (targetPath) {
+            LocateFile(targetPath).catch(() => {
+                OpenPath(targetPath).catch(() => {});
+            });
+        }
     } else if (e.data.type === 'open-chat-file') {
         const filename = String(e.data.filename || '');
         ChatSaveDirectory()
             .then((dir) => {
                 if (dir) {
                     const fullPath = dir + '/' + filename;
-                    OpenPath(fullPath).catch(() => {});
+                    LocateFile(fullPath).catch(() => {
+                        OpenPath(dir).catch(() => {});
+                    });
                 }
             })
             .catch(() => {});

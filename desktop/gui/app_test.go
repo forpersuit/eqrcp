@@ -688,3 +688,23 @@ func TestAppInfo_IsTestEnvironment(t *testing.T) {
 	}
 }
 
+func TestLocateFileCommand(t *testing.T) {
+	tempFile := filepath.Join(t.TempDir(), "test.zip")
+	if err := os.WriteFile(tempFile, []byte("dummy zip content"), 0644); err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+
+	cmd, err := locateFileCommand(tempFile)
+	if err != nil {
+		t.Fatalf("locateFileCommand failed: %v", err)
+	}
+	if cmd == nil {
+		t.Fatalf("expected non-nil cmd")
+	}
+
+	app := NewApp()
+	if err := app.LocateFile(""); err == nil {
+		t.Fatalf("expected error for empty path, got nil")
+	}
+}
+

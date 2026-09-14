@@ -3364,6 +3364,11 @@ dd {
     box-sizing: border-box;
 }
 
+.log-viewer-modal.dragging {
+    user-select: none;
+    transition: none !important;
+}
+
 .log-viewer-head {
     display: flex;
     align-items: center;
@@ -3371,6 +3376,15 @@ dd {
     padding: 12px 18px;
     border-bottom: 1px solid var(--line, #e2e8f0);
     background: var(--bg-hover, #f8fafc);
+    cursor: grab;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.log-viewer-modal.dragging .log-viewer-head,
+body.log-viewer-is-dragging,
+body.log-viewer-is-dragging * {
+    cursor: grabbing !important;
 }
 
 .log-viewer-title-group {

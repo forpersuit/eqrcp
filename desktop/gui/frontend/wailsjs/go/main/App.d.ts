@@ -57,6 +57,8 @@ export function GetTLSIssuanceStats():Promise<main.TLSIssuanceStats>;
 
 export function InstallUpdate(arg1:string):Promise<void>;
 
+export function LocateFile(arg1:string):Promise<void>;
+
 export function OpenExternal(arg1:string):Promise<void>;
 
 export function OpenFile(arg1:string):Promise<void>;
@@ -84,6 +86,8 @@ export function RightClickIntegrationStatus():Promise<main.DesktopIntegrationSta
 export function SaveChatAttachmentAs(arg1:string,arg2:string):Promise<string>;
 
 export function SaveChatAttachments(arg1:Array<string>,arg2:Array<string>,arg3:Array<string>):Promise<Array<main.ChatAttachmentSaveResult>>;
+
+export function SaveChatBatchZip(arg1:string,arg2:string):Promise<string>;
 
 export function SaveSettings(arg1:main.DesktopSettings):Promise<main.DesktopSettings>;
 
