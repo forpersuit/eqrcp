@@ -23,6 +23,43 @@ function parseBoundedInt(val: string | null | undefined, defaultVal: number, min
   return Math.max(min, Math.min(n, max));
 }
 
+export function isValidIp(ip: string): boolean {
+  if (!ip || typeof ip !== 'string') return false;
+  const trimmed = ip.trim();
+
+  // IPv4 check: 4 decimal octets, 0-255, no leading zero (except "0")
+  const v4Parts = trimmed.split('.');
+  if (v4Parts.length === 4) {
+    return v4Parts.every(part => {
+      if (!/^\d{1,3}$/.test(part)) return false;
+      if (part.length > 1 && part.startsWith('0')) return false;
+      const n = Number(part);
+      return n >= 0 && n <= 255;
+    });
+  }
+
+  // IPv6 check:
+  if (!trimmed.includes(':') || !/^[0-9a-fA-F:]+$/.test(trimmed)) {
+    return false;
+  }
+  const doubleColonCount = (trimmed.match(/::/g) || []).length;
+  if (doubleColonCount > 1 || trimmed.includes(':::')) return false;
+
+  if (doubleColonCount === 1) {
+    const [left, right] = trimmed.split('::');
+    const leftParts = left ? left.split(':') : [];
+    const rightParts = right ? right.split(':') : [];
+    const totalParts = leftParts.length + rightParts.length;
+    if (totalParts > 7) return false;
+    const allParts = [...leftParts, ...rightParts];
+    return allParts.every(p => /^[0-9a-fA-F]{1,4}$/.test(p));
+  } else {
+    const parts = trimmed.split(':');
+    if (parts.length !== 8) return false;
+    return parts.every(p => /^[0-9a-fA-F]{1,4}$/.test(p));
+  }
+}
+
 export async function handleAdminRoutes(
   request: Request,
   env: Env,
@@ -1992,7 +2029,16 @@ export async function handleAdminRoutes(
     const rawKey = (body?.key || "").trim();
 
     if (target === "circuit_breaker") {
+      const allowedCircuits = ["gts_ca", "letsencrypt_ca"];
       const cbName = rawKey || "gts_ca";
+      if (!allowedCircuits.includes(cbName)) {
+        return new Response(JSON.stringify({
+          error: `Unknown circuit breaker name: '${cbName}'. Allowed: ${allowedCircuits.join(", ")}`
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
       const prev = await getCircuitBreakerStatus(env, cbName);
       await resetCircuitBreaker(env, cbName);
 
@@ -2030,7 +2076,16 @@ export async function handleAdminRoutes(
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
       }
-      const limitKey = `cert_provision:${rawKey}`;
+      const cleanNode = rawKey.toLowerCase();
+      if (!/^[a-f0-9]{12}$/.test(cleanNode)) {
+        return new Response(JSON.stringify({
+          error: "Invalid node_id format. Must be a 12-character hex string (e.g. bb0000000001)"
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+      const limitKey = `cert_provision:${cleanNode}`;
       const res = await resetD1RateLimit(env, limitKey);
 
       await logAdminAudit(
@@ -2039,7 +2094,7 @@ export async function handleAdminRoutes(
         "TLS_RATE_LIMIT",
         limitKey,
         {
-          target_node_id: rawKey,
+          target_node_id: cleanNode,
           existed: res.existed,
           previous_snapshot: res.snapshot
         },
@@ -2065,6 +2120,14 @@ export async function handleAdminRoutes(
     if (target === "ip_rate_limit") {
       if (!rawKey) {
         return new Response(JSON.stringify({ error: "key (ip) is required for ip_rate_limit" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+      if (!isValidIp(rawKey)) {
+        return new Response(JSON.stringify({
+          error: "Invalid IPv4 or IPv6 address format"
+        }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });

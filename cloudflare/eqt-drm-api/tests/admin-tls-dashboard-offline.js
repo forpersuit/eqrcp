@@ -291,8 +291,8 @@ async function runTests() {
     // Node A (full 3/24h), Node B (full 3/24h), IP X (full 10/24h)
     d1.db.prepare(`
       INSERT INTO rate_limits (key, count, window_start) VALUES
-      ('cert_provision:node_victim_A', 3, ?),
-      ('cert_provision:node_victim_B', 3, ?),
+      ('cert_provision:aa0000000001', 3, ?),
+      ('cert_provision:aa0000000002', 3, ?),
       ('cert_provision:ip:203.0.113.50', 10, ?)
     `).run(nowIso, nowIso, nowIso);
 
@@ -300,19 +300,19 @@ async function runTests() {
     const reqResetNodeA = new Request('http://api.test/api/v1/admin/tls/reset-rate-limit', {
       method: 'POST',
       headers: { ...validAuthHeader, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ target: 'node_rate_limit', key: 'node_victim_A' })
+      body: JSON.stringify({ target: 'node_rate_limit', key: 'aa0000000001' })
     });
     const respResetNodeA = await handleAdminRoutes(reqResetNodeA, env, ctx, new URL(reqResetNodeA.url), corsHeaders);
-    assert(respResetNodeA && respResetNodeA.status === 200, 'T4.1: Reset node rate limit for node_victim_A returns 200 OK');
+    assert(respResetNodeA && respResetNodeA.status === 200, 'T4.1: Reset node rate limit for aa0000000001 returns 200 OK');
 
     // Physical row verification: Node A deleted
-    const rowNodeA = d1.db.prepare("SELECT * FROM rate_limits WHERE key = 'cert_provision:node_victim_A'").get();
-    assert(rowNodeA === undefined, 'T4.2: Rate limit row for node_victim_A physically deleted (resets to 0 count)');
+    const rowNodeA = d1.db.prepare("SELECT * FROM rate_limits WHERE key = 'cert_provision:aa0000000001'").get();
+    assert(rowNodeA === undefined, 'T4.2: Rate limit row for aa0000000001 physically deleted (resets to 0 count)');
 
     // Strict Isolation Verification (R39-3 Reverse Test):
     // Node B must NOT be modified (count remains 3)
-    const rowNodeB = d1.db.prepare("SELECT count FROM rate_limits WHERE key = 'cert_provision:node_victim_B'").get();
-    assert(rowNodeB && rowNodeB.count === 3, 'T4.3a: R39-3 Strict Isolation: Unrelated node_victim_B count is strictly preserved at 3');
+    const rowNodeB = d1.db.prepare("SELECT count FROM rate_limits WHERE key = 'cert_provision:aa0000000002'").get();
+    assert(rowNodeB && rowNodeB.count === 3, 'T4.3a: R39-3 Strict Isolation: Unrelated aa0000000002 count is strictly preserved at 3');
 
     // IP X must NOT be modified (count remains 10)
     const rowIp = d1.db.prepare("SELECT count FROM rate_limits WHERE key = 'cert_provision:ip:203.0.113.50'").get();
@@ -334,7 +334,7 @@ async function runTests() {
     const reqResetNonExistent = new Request('http://api.test/api/v1/admin/tls/reset-rate-limit', {
       method: 'POST',
       headers: { ...validAuthHeader, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ target: 'node_rate_limit', key: 'node_never_seen' })
+      body: JSON.stringify({ target: 'node_rate_limit', key: 'ee0000000000' })
     });
     const respResetNonExistent = await handleAdminRoutes(reqResetNonExistent, env, ctx, new URL(reqResetNonExistent.url), corsHeaders);
     assert(respResetNonExistent && respResetNonExistent.status === 200, 'T4.6a: Reset non-existent key returns 200 OK');
@@ -344,10 +344,35 @@ async function runTests() {
       dataNonExistent.message && dataNonExistent.message.includes('was not active (already clear)'),
       'T4.6c: Message accurately describes key was not active instead of misleading successfully reset'
     );
-    const auditNonExistent = d1.db.prepare("SELECT details_json FROM admin_audit_logs WHERE target_id = 'cert_provision:node_never_seen'").get();
+    const auditNonExistent = d1.db.prepare("SELECT details_json FROM admin_audit_logs WHERE target_id = 'cert_provision:ee0000000000'").get();
     assert(
       auditNonExistent && JSON.parse(auditNonExistent.details_json).existed === false,
       'T4.6d: Audit log records existed: false snapshot for non-existent key reset'
+    );
+
+    // T4.7: F1 Reverse Proof: Reset with UPPERCASE node ID must clear lowercase D1 row and report existed: true
+    d1.db.prepare(`
+      INSERT INTO rate_limits (key, count, window_start) VALUES
+      ('cert_provision:bb0000000001', 3, ?)
+    `).run(nowIso);
+
+    const reqUppercaseNode = new Request('http://api.test/api/v1/admin/tls/reset-rate-limit', {
+      method: 'POST',
+      headers: { ...validAuthHeader, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target: 'node_rate_limit', key: 'BB0000000001' })
+    });
+    const respUppercaseNode = await handleAdminRoutes(reqUppercaseNode, env, ctx, new URL(reqUppercaseNode.url), corsHeaders);
+    assert(respUppercaseNode && respUppercaseNode.status === 200, 'T4.7a: Reset with uppercase Node ID returns 200 OK');
+    const dataUppercase = await respUppercaseNode.json();
+    assert(dataUppercase.existed === true, 'T4.7b: Uppercase Node ID reset successfully clears existing lowercase row (existed: true)');
+
+    const rowUppercaseCleared = d1.db.prepare("SELECT * FROM rate_limits WHERE key = 'cert_provision:bb0000000001'").get();
+    assert(rowUppercaseCleared === undefined, 'T4.7c: Physical row cert_provision:bb0000000001 confirmed deleted from D1');
+
+    const auditUppercase = d1.db.prepare("SELECT details_json FROM admin_audit_logs WHERE target_id = 'cert_provision:bb0000000001' ORDER BY id DESC LIMIT 1").get();
+    assert(
+      auditUppercase && JSON.parse(auditUppercase.details_json).target_node_id === 'bb0000000001',
+      'T4.7d: Audit log normalizes target_node_id to lowercase bb0000000001'
     );
   }
 
@@ -372,6 +397,44 @@ async function runTests() {
     });
     const respNoKey = await handleAdminRoutes(reqNoKey, env, ctx, new URL(reqNoKey.url), corsHeaders);
     assert(respNoKey && respNoKey.status === 400, 'T5.2: POST /reset-rate-limit with node_rate_limit but no key returns 400 Bad Request');
+
+    // T5.3: F2 Guardrail: circuit_breaker with unknown/residual name returns 400 and creates NO rows
+    const reqBadCircuit = new Request('http://api.test/api/v1/admin/tls/reset-rate-limit', {
+      method: 'POST',
+      headers: { ...validAuthHeader, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target: 'circuit_breaker', key: 'bb0000000001' })
+    });
+    const respBadCircuit = await handleAdminRoutes(reqBadCircuit, env, ctx, new URL(reqBadCircuit.url), corsHeaders);
+    assert(respBadCircuit && respBadCircuit.status === 400, 'T5.3a: Reset circuit_breaker with unknown name is rejected with 400');
+    const ghostRow = d1.db.prepare("SELECT * FROM circuit_breakers WHERE name = 'bb0000000001'").get();
+    assert(ghostRow === undefined, 'T5.3b: No ghost circuit breaker row created for invalid name');
+
+    // T5.4: F4 Guardrail: ip_rate_limit with invalid IPv4 (octet > 255) returns 400
+    const reqBadIpV4 = new Request('http://api.test/api/v1/admin/tls/reset-rate-limit', {
+      method: 'POST',
+      headers: { ...validAuthHeader, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target: 'ip_rate_limit', key: '999.999.999.999' })
+    });
+    const respBadIpV4 = await handleAdminRoutes(reqBadIpV4, env, ctx, new URL(reqBadIpV4.url), corsHeaders);
+    assert(respBadIpV4 && respBadIpV4.status === 400, 'T5.4: Reset IP rate limit with invalid IPv4 999.999.999.999 returns 400');
+
+    // T5.5: F4 Guardrail: ip_rate_limit with invalid IPv6 (:::) returns 400
+    const reqBadIpV6 = new Request('http://api.test/api/v1/admin/tls/reset-rate-limit', {
+      method: 'POST',
+      headers: { ...validAuthHeader, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target: 'ip_rate_limit', key: ':::' })
+    });
+    const respBadIpV6 = await handleAdminRoutes(reqBadIpV6, env, ctx, new URL(reqBadIpV6.url), corsHeaders);
+    assert(respBadIpV6 && respBadIpV6.status === 400, 'T5.5: Reset IP rate limit with invalid IPv6 ::: returns 400');
+
+    // T5.6: Invalid node_id format (non-12 hex) returns 400
+    const reqBadNodeId = new Request('http://api.test/api/v1/admin/tls/reset-rate-limit', {
+      method: 'POST',
+      headers: { ...validAuthHeader, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target: 'node_rate_limit', key: 'not_a_valid_hex' })
+    });
+    const respBadNodeId = await handleAdminRoutes(reqBadNodeId, env, ctx, new URL(reqBadNodeId.url), corsHeaders);
+    assert(respBadNodeId && respBadNodeId.status === 400, 'T5.6: Reset node rate limit with invalid non-hex key returns 400');
   }
 
   console.log(`\n============================================================`);

@@ -636,7 +636,10 @@ Content-Type: application/json
 
 - **参数约束**：
   - `target`：必填，枚举为 `circuit_breaker` | `node_rate_limit` | `ip_rate_limit`。
-  - `key`：重置 node 或 ip 时必填（对应 node_id 或 client_ip）；断路器缺省为 `gts_ca`。
+  - `key`：
+    - `circuit_breaker`：选填，缺省为 `gts_ca`；若指定必须属于白名单（`gts_ca`、`letsencrypt_ca`），未知名称返回 400（杜绝幽灵电路行创建）。
+    - `node_rate_limit`：必填，12 位十六进制 Node ID，大小写不敏感（服务端自动归一为小写 `cert_provision:${node_id.toLowerCase()}` 查删与审计，格式非法返回 400）。
+    - `ip_rate_limit`：必填，必须为合规的 IPv4 或 IPv6 地址，格式非法返回 400。
 - **幂等性与隔离保证**：
   - 通过 `DELETE FROM rate_limits WHERE key = ?` 实现单键物理删除，绝不触碰或放大其他节点/IP 计数（R39-3 隔离保证）。
   - 若指定 Key 并不存在，返回 200 且明确标明 `existed: false`，文案为 `was not active (already clear)`。

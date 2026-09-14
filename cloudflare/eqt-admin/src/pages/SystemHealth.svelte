@@ -143,13 +143,17 @@
         {#if tlsStatus}
           <div class="probe-item">
             <div>
-              <div class="probe-name">LAN-TLS GTS CA 断路器</div>
+              <div class="probe-name">{$t('health.probeTlsTitle')}</div>
               <div class="probe-desc">
-                状态: <code>{tlsStatus.circuit_breaker?.state || 'UNKNOWN'}</code> · 连续成功: {tlsStatus.circuit_breaker?.success_count ?? 0} · 连续失败: {tlsStatus.circuit_breaker?.failure_count ?? 0}
+                {$t('health.probeTlsDesc', {
+                  state: tlsStatus.circuit_breaker?.state || 'UNKNOWN',
+                  success: tlsStatus.circuit_breaker?.success_count ?? 0,
+                  failure: tlsStatus.circuit_breaker?.failure_count ?? 0
+                })}
               </div>
             </div>
             <span class={`badge badge-${tlsStatus.circuit_breaker?.state === 'CLOSED' ? 'active' : tlsStatus.circuit_breaker?.state === 'HALF_OPEN' ? 'warn' : 'error'}`}>
-              {tlsStatus.circuit_breaker?.state === 'CLOSED' ? '正常 (CLOSED)' : tlsStatus.circuit_breaker?.state === 'HALF_OPEN' ? '试探 (HALF_OPEN)' : '熔断 (OPEN)'}
+              {tlsStatus.circuit_breaker?.state === 'CLOSED' ? $t('health.probeTlsClosed') : tlsStatus.circuit_breaker?.state === 'HALF_OPEN' ? $t('health.probeTlsHalfOpen') : $t('health.probeTlsOpen')}
             </span>
           </div>
         {/if}

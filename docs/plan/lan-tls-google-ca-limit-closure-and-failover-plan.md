@@ -800,4 +800,43 @@ export const SUPPORTED_PROVIDERS: Record<string, CAProvider> = {
 - **生产物理构建**：运行 `npm run build`（Vite build），**147 modules 编译打包成功（EXIT=0）**；
 - **版本对齐**：`cloudflare/eqt-admin/package.json` 升级至 `1.8.8`；产品核心版本 `pkg/version/version.go` 与 `desktop/gui/wails.json` 遵照规范升级至 `v1.36.135` / `1.36.135`。
 
+---
+
+#### 3.6.11 阶段三审查缺陷 F1–F6 闭环报告（2026-09-14 · 基线 `v1.36.135` / `1.13.7` / `admin 1.8.8`）
+
+> **红线遵循声明**：本小节严格遵循红线【155】append-only 追加，不修改上方任何轮次原文。
+
+针对复核指出的阶段三管理卡片与破窗重置写路径上的缺陷（F1–F6），实施双端彻底闭环与自证：
+
+**一、缺陷闭环逐项对照**
+
+1. **F1 🔴（大写 Node ID 静默空操作重置）**：
+   - **前端**：`TLSResetModal.svelte` 在发送请求时执行 `payload.key = targetKey.trim().toLowerCase()`；
+   - **后端**：`admin.ts` 对 `target === 'node_rate_limit'` 执行 `cleanNode = rawKey.toLowerCase()` 归一化，严格匹配 12 位十六进制正则 `/^[a-f0-9]{12}$/`，并记录小写化审计行；
+   - **反向自证测试**：在 `admin-tls-dashboard-offline.js` 中新增 `T4.7a-d`：以小写键预插 `cert_provision:bb0000000001`，调用接口传大写 `key: "BB0000000001"`，严格断言返回 `existed: true`，且通过 SQLite 物理重查证实该行已被彻底删除，审计日志记录 `bb0000000001`。
+2. **F2 🟠（切换目标不清 targetKey 凭空创建幽灵电路行）**：
+   - **前端**：`TLSResetModal.svelte` 的 `<select>` 绑定 `onchange={() => { errorMsg = ''; targetKey = ''; }}`；并在 `handleExecute` 中仅当 `target !== 'circuit_breaker'` 时才携带 `key`；
+   - **后端**：`admin.ts` 对 `circuit_breaker` 增加白名单守卫（仅允许 `gts_ca`、`letsencrypt_ca`），未知电路名直接返回 400 Bad Request，从源头阻断幽灵记录创建；
+   - **自证测试**：在 `admin-tls-dashboard-offline.js` 中新增 `T5.3a-b`：传入未知电路名 `bb0000000001` 返回 400，物理重查证实数据库零建行、零幽灵审计。
+3. **F3 🟡（硬编码中文彻底移入双语词典）**：
+   - `TLSCircuitCard.svelte`（`:84` 自动刷新 title、`:168` 24h发起 sub、`:182` 时延 sub、`:190` 归因 hint）全面替换为 `$t('tls.*')`；
+   - `TLSResetModal.svelte`（校验报错、确认框「目标:/· Key:」）替换为 `$t('tls.*')`；
+   - `SystemHealth.svelte`（`:146-153` 探针标题、描述与三态机徽标）全面接入 `$t('health.probeTls*')`；
+   - `zh.ts` 与 `en.ts` 同步补齐对应键值；`i18n.test.ts` 新增对齐测试断言。
+4. **F4 🟡（IP 校验过松漏洞修补）**：
+   - 前后端统一引入 `isValidIp` 严格验证函数：约束 IPv4 4 段 0–255 且无前导 0；约束 IPv6 有效字符、冒号组数及压缩段合法性；
+   - 后端 `admin.ts` 对 `ip_rate_limit` 实施同样校验，非法 IP 返回 400；
+   - 测试新增 `T5.4`（`999.999.999.999` 返回 400）、`T5.5`（`:::` 返回 400）。
+5. **F5 ⚪（拼接文案生硬）**：
+   - 增加 `tls.nodeIdRequired` 与 `tls.ipRequired` 专属词条，消灭生硬拼接。
+6. **F6 ⚪（circuitBadge 调用优化）**：
+   - 使用 Svelte `{@const badge = circuitBadge(...)}`，单次渲染只调用 1 次。
+
+**二、质量门禁复跑真值**
+
+- **Admin 前端**：`npm test` 14/14 passed（新增 1 项双语完整对齐测试），`svelte-check` 0 errors / 0 warnings，`vite build` 147 modules EXIT=0；
+- **Worker 后端**：`npm run test:admin:tls:offline` **45 passed / 0 failed**（由 36 净增 9 项断言至 45，包含 T4.7 与 T5.3–5.6）；
+- **全量离线门禁**：`npm run test:offline` **131 passed / 0 failed**，全套离线套件无一翻红；
+- **Go 核心门禁**：`go test ./...` 全部通过。
+
 

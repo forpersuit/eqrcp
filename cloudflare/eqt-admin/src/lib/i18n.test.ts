@@ -26,4 +26,36 @@ describe('i18n translate function', () => {
     expect(translate('non.existent.key', undefined, 'zh')).toBe('non.existent.key');
     expect(translate('non.existent.key', undefined, 'en')).toBe('non.existent.key');
   });
+
+  it('should have complete parity for all new TLS and health probe keys in zh and en', () => {
+    const keysToCheck = [
+      'tls.autoRefreshTitle',
+      'tls.totalAttemptsSub',
+      'tls.avgDurationSub',
+      'tls.attributionHint',
+      'tls.nodeIdRequired',
+      'tls.nodeIdInvalid',
+      'tls.ipRequired',
+      'tls.ipInvalid',
+      'tls.confirmTarget',
+      'tls.confirmKey',
+      'health.probeTlsTitle',
+      'health.probeTlsClosed',
+      'health.probeTlsHalfOpen',
+      'health.probeTlsOpen'
+    ];
+
+    for (const key of keysToCheck) {
+      const zhVal = translate(key, undefined, 'zh');
+      const enVal = translate(key, undefined, 'en');
+      expect(zhVal).not.toBe(key);
+      expect(enVal).not.toBe(key);
+      expect(zhVal).not.toBe(enVal);
+    }
+
+    const descZh = translate('health.probeTlsDesc', { state: 'CLOSED', success: 5, failure: 0 }, 'zh');
+    const descEn = translate('health.probeTlsDesc', { state: 'CLOSED', success: 5, failure: 0 }, 'en');
+    expect(descZh).toContain('状态: CLOSED · 连续成功: 5 · 连续失败: 0');
+    expect(descEn).toContain('State: CLOSED · Successes: 5 · Failures: 0');
+  });
 });

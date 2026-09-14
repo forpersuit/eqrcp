@@ -81,7 +81,7 @@
     </div>
 
     <div class="tls-actions">
-      <label class="auto-refresh-toggle" title="每 30 秒自动刷新">
+      <label class="auto-refresh-toggle" title={$t('tls.autoRefreshTitle')}>
         <input type="checkbox" bind:checked={autoRefresh} />
         <span>{$t('licenses.autoRefresh')}</span>
       </label>
@@ -102,14 +102,15 @@
   {#if loading && !data}
     <div class="loading-state">{$t('common.loading')}</div>
   {:else if data}
+    {@const badge = circuitBadge(data.circuit_breaker?.state)}
     <!-- Status & Watermark Row -->
     <div class="telemetry-grid">
       <!-- Circuit Breaker State -->
       <div class="telemetry-block circuit-block">
         <div class="block-header">
           <span class="block-title">{$t('tls.circuitStatus')}</span>
-          <span class="badge {circuitBadge(data.circuit_breaker?.state).cls}">
-            {circuitBadge(data.circuit_breaker?.state).icon} {circuitBadge(data.circuit_breaker?.state).label}
+          <span class="badge {badge.cls}">
+            {badge.icon} {badge.label}
           </span>
         </div>
 
@@ -165,7 +166,7 @@
       <div class="kpi-card">
         <div class="kpi-label">{$t('tls.totalAttempts')}</div>
         <div class="kpi-num">{data.metrics_24h?.total_attempts ?? 0}</div>
-        <div class="kpi-sub">近 24 小时总发起</div>
+        <div class="kpi-sub">{$t('tls.totalAttemptsSub')}</div>
       </div>
 
       <div class="kpi-card">
@@ -179,7 +180,7 @@
       <div class="kpi-card">
         <div class="kpi-label">{$t('tls.avgDuration')}</div>
         <div class="kpi-num">{formatDuration(data.metrics_24h?.avg_duration_ms)}</div>
-        <div class="kpi-sub">RFC 8555 闭环平均时延</div>
+        <div class="kpi-sub">{$t('tls.avgDurationSub')}</div>
       </div>
     </div>
 
@@ -187,7 +188,7 @@
     <div class="attribution-box">
       <div class="attribution-header">
         <span class="attribution-title">{$t('tls.tripReasons')}</span>
-        <span class="attribution-hint">根据系统错误审计精准归因，杜绝误判</span>
+        <span class="attribution-hint">{$t('tls.attributionHint')}</span>
       </div>
 
       <div class="reasons-pills">

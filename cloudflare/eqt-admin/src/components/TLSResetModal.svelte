@@ -19,6 +19,38 @@
   let errorMsg = $state('');
   let confirmStage = $state(false);
 
+  function isValidIp(ip: string): boolean {
+    if (!ip || typeof ip !== 'string') return false;
+    const trimmed = ip.trim();
+    const v4Parts = trimmed.split('.');
+    if (v4Parts.length === 4) {
+      return v4Parts.every(part => {
+        if (!/^\d{1,3}$/.test(part)) return false;
+        if (part.length > 1 && part.startsWith('0')) return false;
+        const n = Number(part);
+        return n >= 0 && n <= 255;
+      });
+    }
+    if (!trimmed.includes(':') || !/^[0-9a-fA-F:]+$/.test(trimmed)) {
+      return false;
+    }
+    const doubleColonCount = (trimmed.match(/::/g) || []).length;
+    if (doubleColonCount > 1 || trimmed.includes(':::')) return false;
+    if (doubleColonCount === 1) {
+      const [left, right] = trimmed.split('::');
+      const leftParts = left ? left.split(':') : [];
+      const rightParts = right ? right.split(':') : [];
+      const totalParts = leftParts.length + rightParts.length;
+      if (totalParts > 7) return false;
+      const allParts = [...leftParts, ...rightParts];
+      return allParts.every(p => /^[0-9a-fA-F]{1,4}$/.test(p));
+    } else {
+      const parts = trimmed.split(':');
+      if (parts.length !== 8) return false;
+      return parts.every(p => /^[0-9a-fA-F]{1,4}$/.test(p));
+    }
+  }
+
   function resetForm() {
     target = 'circuit_breaker';
     targetKey = '';
@@ -37,22 +69,20 @@
     const trimmed = targetKey.trim();
     if (target === 'node_rate_limit') {
       if (!trimmed) {
-        errorMsg = $t('tls.nodeIdLabel') + ' ' + $t('common.failed');
+        errorMsg = $t('tls.nodeIdRequired');
         return false;
       }
       if (!/^[a-fA-F0-9]{12}$/.test(trimmed)) {
-        errorMsg = 'Node ID 必须为 12 位十六进制字符串 (如 bb0000000001)';
+        errorMsg = $t('tls.nodeIdInvalid');
         return false;
       }
     } else if (target === 'ip_rate_limit') {
       if (!trimmed) {
-        errorMsg = $t('tls.ipLabel') + ' ' + $t('common.failed');
+        errorMsg = $t('tls.ipRequired');
         return false;
       }
-      // Simple IPv4 / IPv6 validation
-      const isIp = /^(\d{1,3}\.){3}\d{1,3}$|^([0-9a-fA-F:]+)$/.test(trimmed);
-      if (!isIp) {
-        errorMsg = '请输入合法的 IPv4 或 IPv6 地址';
+      if (!isValidIp(trimmed)) {
+        errorMsg = $t('tls.ipInvalid');
         return false;
       }
     }
@@ -69,9 +99,9 @@
     errorMsg = '';
     try {
       const payload: Record<string, string> = { target };
-      if (target !== 'circuit_breaker') {
-        payload.key = targetKey.trim();
-      } else if (targetKey.trim()) {
+      if (target === 'node_rate_limit') {
+        payload.key = targetKey.trim().toLowerCase();
+      } else if (target === 'ip_rate_limit') {
         payload.key = targetKey.trim();
       }
       const res = await adminFetch<ResetRateLimitResponse>('/api/v1/admin/tls/reset-rate-limit', {
@@ -98,7 +128,7 @@
     {#if !confirmStage}
       <div class="form-group">
         <label for="reset-target-select" class="form-label">{$t('tls.targetLabel')}</label>
-        <select id="reset-target-select" class="input select-input" bind:value={target} onchange={() => { errorMsg = ''; }}>
+        <select id="reset-target-select" class="input select-input" bind:value={target} onchange={() => { errorMsg = ''; targetKey = ''; }}>
           <option value="circuit_breaker">{$t('tls.targetCircuitBreaker')}</option>
           <option value="node_rate_limit">{$t('tls.targetNodeLimit')}</option>
           <option value="ip_rate_limit">{$t('tls.targetIpLimit')}</option>
@@ -152,9 +182,9 @@
         <div class="warn-text">
           <strong>{$t('tls.resetConfirm')}</strong>
           <p class="warn-detail">
-            目标: <code>{target}</code>
-            {#if targetKey.trim()}
-              · Key: <code>{targetKey.trim()}</code>
+            {$t('tls.confirmTarget')}: <code>{target}</code>
+            {#if target !== 'circuit_breaker' && targetKey.trim()}
+              · {$t('tls.confirmKey')}: <code>{targetKey.trim()}</code>
             {/if}
           </p>
         </div>
