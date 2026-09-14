@@ -66,7 +66,14 @@
   </div>
 
   <div class="stats-grid">
-    <div class="card stat-card">
+    <div
+      class="card stat-card clickable"
+      onclick={() => go('licenses')}
+      role="button"
+      tabindex="0"
+      onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') go('licenses'); }}
+      title={$t('nav.licenses')}
+    >
       <div class="stat-icon">🔑</div>
       <div>
         <div class="stat-num">{loading ? '...' : stats.total_licenses}</div>
@@ -74,7 +81,14 @@
       </div>
     </div>
 
-    <div class="card stat-card">
+    <div
+      class="card stat-card clickable"
+      onclick={() => go('metrics')}
+      role="button"
+      tabindex="0"
+      onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') go('metrics'); }}
+      title={$t('nav.metrics')}
+    >
       <div class="stat-icon">💻</div>
       <div>
         <div class="stat-num">{loading ? '...' : stats.today_activations}</div>
@@ -82,18 +96,34 @@
       </div>
     </div>
 
-    <div class="card stat-card">
-      <div class="stat-icon">⚠️</div>
+    <div
+      class="card stat-card clickable"
+      class:stat-card-warn={stats.errors_24h > 0}
+      onclick={() => go('audit')}
+      role="button"
+      tabindex="0"
+      onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') go('audit'); }}
+      title={$t('nav.errorAudit')}
+    >
+      <div class="stat-icon" class:stat-icon-warn={stats.errors_24h > 0}>⚠️</div>
       <div>
-        <div class="stat-num">{loading ? '...' : stats.total_error_logs}</div>
+        <div class="stat-num" class:warn-num={stats.errors_24h > 0}>{loading ? '...' : stats.total_error_logs}</div>
         <div class="stat-label">{$t('errorAudit.title')} (24h: {stats.errors_24h})</div>
       </div>
     </div>
 
-    <div class="card stat-card">
-      <div class="stat-icon">⚡</div>
+    <div
+      class="card stat-card clickable"
+      class:stat-card-error={stats.db_status === 'error'}
+      onclick={() => go('health')}
+      role="button"
+      tabindex="0"
+      onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') go('health'); }}
+      title={$t('nav.health')}
+    >
+      <div class="stat-icon" class:stat-icon-error={stats.db_status === 'error'}>⚡</div>
       <div>
-        <div class="stat-num">{stats.db_status.toUpperCase()}</div>
+        <div class="stat-num" class:success-num={stats.db_status === 'ok'} class:error-num={stats.db_status === 'error'}>{stats.db_status.toUpperCase()}</div>
         <div class="stat-label">{$t('health.dbStatus')}</div>
       </div>
     </div>
