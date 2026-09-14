@@ -48,6 +48,16 @@ export interface Env {
   ACME_EAB_KID?: string;
   /** Optional RFC 8555 External Account Binding HMAC Key (Base64URL encoded) */
   ACME_EAB_HMAC_KEY?: string;
+  /** Optional override URL for Google Trust Services directory */
+  ACME_GTS_DIRECTORY_URL?: string;
+  /** Optional override URL for Let's Encrypt directory */
+  ACME_LE_DIRECTORY_URL?: string;
+  /** Optional dedicated account key for Let's Encrypt (defaults to ACME_ACCOUNT_KEY) */
+  ACME_LE_ACCOUNT_KEY?: string;
+  /** Optional dedicated contact email for Let's Encrypt (defaults to ACME_EMAIL) */
+  ACME_LE_EMAIL?: string;
+  /** Optional disable Multi-CA automatic failover (defaults to false / enabled) */
+  ACME_DISABLE_FAILOVER?: boolean | string;
 }
 
 export interface DownloadRecord {

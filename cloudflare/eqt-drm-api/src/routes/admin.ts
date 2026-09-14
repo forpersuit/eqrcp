@@ -1915,10 +1915,22 @@ export async function handleAdminRoutes(
     await ensureCertProvisionsTable(env);
     await ensureAuditLogTable(env);
 
-    // 1. Circuit Breaker status
+    // 1. Circuit Breaker status (Primary: GTS, Secondary/Backup: Let's Encrypt)
     const cbRecord = await getCircuitBreakerStatus(env, 'gts_ca');
     const cbStatus = cbRecord || {
       name: 'gts_ca',
+      state: 'CLOSED',
+      failure_count: 0,
+      success_count: 0,
+      last_failure_time: null,
+      cooldown_until: null,
+      last_retry_after: 0,
+      updated_at: new Date().toISOString()
+    };
+
+    const backupCbRecord = await getCircuitBreakerStatus(env, 'letsencrypt_ca');
+    const backupCbStatus = backupCbRecord || {
+      name: 'letsencrypt_ca',
       state: 'CLOSED',
       failure_count: 0,
       success_count: 0,
@@ -1957,13 +1969,14 @@ export async function handleAdminRoutes(
 
     // 4. 24h Trip reasons & failures from system_error_logs
     const errorLogs = await env.DB.prepare(
-      "SELECT category, context_json FROM system_error_logs WHERE created_at >= ? AND (category = 'CERT_PROVISION_ERROR' OR category LIKE 'RATE_LIMIT_%')"
+      "SELECT category, context_json FROM system_error_logs WHERE created_at >= ? AND (category = 'CERT_PROVISION_ERROR' OR category = 'CERT_PROVISION_FAILOVER' OR category LIKE 'RATE_LIMIT_%')"
     ).bind(since24h).all<{ category: string; context_json: string | null }>();
 
     let trip429 = 0;
     let trip5xx = 0;
     let otherCertErrors = 0;
     let rateLimitHits = 0;
+    let failoverEvents = 0;
 
     for (const log of (errorLogs?.results || [])) {
       if (log.category === 'CERT_PROVISION_ERROR') {
@@ -1980,6 +1993,8 @@ export async function handleAdminRoutes(
         } else {
           otherCertErrors++;
         }
+      } else if (log.category === 'CERT_PROVISION_FAILOVER') {
+        failoverEvents++;
       } else if (log.category.startsWith('RATE_LIMIT_')) {
         rateLimitHits++;
       }
@@ -1991,6 +2006,7 @@ export async function handleAdminRoutes(
     return new Response(JSON.stringify({
       ok: true,
       circuit_breaker: cbStatus,
+      backup_circuit_breaker: backupCbStatus,
       token_bucket: tbStatus,
       metrics_24h: {
         total_attempts: totalAttempts,
@@ -2002,7 +2018,8 @@ export async function handleAdminRoutes(
           ca_5xx_error: trip5xx,
           other_cert_errors: otherCertErrors
         },
-        rate_limit_hits: rateLimitHits
+        rate_limit_hits: rateLimitHits,
+        failover_events: failoverEvents
       }
     }), {
       status: 200,

@@ -135,10 +135,14 @@ async function runTests() {
     const nowIso = new Date().toISOString();
     const probeUpdatedAt = new Date(Date.now() - 60000).toISOString(); // 60s ago
 
-    // Seed circuit breaker into HALF_OPEN state
+    // Seed circuit breaker in HALF_OPEN state (Primary GTS and Backup LE)
     d1.db.prepare(`
       INSERT INTO circuit_breakers (name, state, failure_count, success_count, cooldown_until, last_retry_after, updated_at)
       VALUES ('gts_ca', 'HALF_OPEN', 1, 42, NULL, 60, ?)
+    `).run(probeUpdatedAt);
+    d1.db.prepare(`
+      INSERT INTO circuit_breakers (name, state, failure_count, success_count, cooldown_until, last_retry_after, updated_at)
+      VALUES ('letsencrypt_ca', 'CLOSED', 0, 10, NULL, 0, ?)
     `).run(probeUpdatedAt);
 
     // Seed token bucket with 3.5 tokens
@@ -157,7 +161,7 @@ async function runTests() {
       VALUES ('node_002', 'node_002.direct.eqt.net.im', ?, ?, 80)
     `).run(nowIso, nowIso);
 
-    // Seed system_error_logs: 1 ca_rate_limited (429) + 1 ca_5xx_error (502) + 1 other CERT_PROVISION_ERROR + 1 rate_limit hit
+    // Seed system_error_logs: 1 ca_rate_limited (429) + 1 ca_5xx_error (502) + 1 other CERT_PROVISION_ERROR + 1 rate_limit hit + 1 failover
     d1.db.prepare(`
       INSERT INTO system_error_logs (category, error_message, context_json, created_at)
       VALUES ('CERT_PROVISION_ERROR', 'HTTP 429', ?, ?)
@@ -178,6 +182,11 @@ async function runTests() {
       VALUES ('RATE_LIMIT_CERT_PROVISION', 'Rate limit hit', ?, ?)
     `).run(JSON.stringify({ node_id: 'node_blocked' }), nowIso);
 
+    d1.db.prepare(`
+      INSERT INTO system_error_logs (category, error_message, context_json, created_at)
+      VALUES ('CERT_PROVISION_FAILOVER', 'Pre-flight failover', ?, ?)
+    `).run(JSON.stringify({ trigger: 'preflight_circuit_open', from_ca: 'gts_ca', to_ca: 'letsencrypt_ca' }), nowIso);
+
     // Query status endpoint with admin auth
     const reqStatus = new Request('http://api.test/api/v1/admin/tls/circuit-status', {
       method: 'GET',
@@ -189,6 +198,7 @@ async function runTests() {
     const data = await respStatus.json();
     assert(data.ok === true, 'T2.2a: Dashboard payload reports ok: true');
     assert(data.circuit_breaker && data.circuit_breaker.state === 'HALF_OPEN', 'T2.2b: Circuit breaker reports current state HALF_OPEN');
+    assert(data.backup_circuit_breaker && data.backup_circuit_breaker.name === 'letsencrypt_ca' && data.backup_circuit_breaker.success_count === 10, 'T2.2b2: Backup circuit breaker reports letsencrypt_ca in CLOSED state with success_count=10');
     assert(data.token_bucket && data.token_bucket.tokens === 3.5, 'T2.2c: Token bucket accurately reflects available tokens (3.5)');
 
     // Verify 24h Metrics & Attribution
@@ -205,6 +215,7 @@ async function runTests() {
     );
     assert(m && m.success_rate === 0.4, `T2.3e3: Accurate success rate calculation 2/5 = 0.4 (got ${m.success_rate})`);
     assert(m && m.rate_limit_hits === 1, `T2.3f: Rate limit hits tracked accurately (1)`);
+    assert(m && m.failover_events === 1, `T2.3g: Failover events tracked accurately (1)`);
 
     // T2.4: Empty database baseline returns null success_rate instead of false 100% (R44-9)
     const emptyD1 = new SqliteD1Mock();

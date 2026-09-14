@@ -39,9 +39,10 @@ description: Architectural guidelines, disaster recovery, authoritative DNS oper
 - **仅计服务侧故障**: 严格仅统计 CA 端 5xx、超时及真实 429 速率限制；客户端 4xx/400 业务错误严禁计入 failure_count 污染熔断状态。
 - **规格来源**: `cloudflare/eqt-drm-api/src/utils/circuit-breaker.ts` 与 `src/routes/cert.ts`。
 
-### 2.5 Layer 5: 双机权威 DNS 高可用与 ACME 容灾 (DNS & ACME High Availability)
-- **双节点委派**: `ns1.eqt.net.im` (Ubuntu 53) 与 `ns2.eqt.net.im` (Ubuntu 53)，RFC 1035 双 NS 冗余，HTTP 管理端口强锁 `127.0.0.1:5380`。
-- **ACME 账户三地冷备**: 生产豁免账户私钥严格同步至 ns1、ns2 与离线运维机（权限 0400）。
+### 2.5 Layer 5: 双机权威 DNS 高可用与 Multi-CA 灾备调度 (DNS & Multi-CA High Availability)
+- **双机权威与 ns1/ns2 反代**: `ns1.eqt.net.im` 与 `ns2.eqt.net.im` RFC 1035 双 NS 冗余；暴露 `/le-proxy` 权威反向代理供 Let's Encrypt 签发使用，绕开 Cloudflare Edge 525 握手环。
+- **Multi-CA 两级故障转移**: Primary 为 GTS（需 EAB，直连 GFE），Secondary 为 Let's Encrypt（免 EAB）。Pre-flight 预检分流 + In-flight 运行期 429/5xx 熔断救回，保障公信证书签发高可用与端侧零感知。
+- **规格来源**: `cloudflare/eqt-drm-api/src/utils/acme-provider.ts` 與 `src/routes/cert.ts`。
 
 ---
 

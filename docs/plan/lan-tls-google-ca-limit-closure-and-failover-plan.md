@@ -389,16 +389,16 @@ export const SUPPORTED_PROVIDERS: Record<string, CAProvider> = {
                                            │
                                            ▼
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
-│ 阶段三：Admin 态势大盘与可逆运维解封通道上线（进行中 · 下一步重点）                    │
-│   • Admin 首页透出断路器健康状态指示灯、实时 QPS 曲线与平均签发耗时；                 │
-│   • 交付 POST /api/v1/admin/tls/reset-rate-limit 紧急运维通道并配齐审计日志。          │
+│ 【已完成 · 100% 交付】阶段三：Admin 态势大盘与安全可逆解封通道上线 (v1.36.135)          │
+│   • Admin 首页透出断路器健康状态指示灯、实时 QPS 水位、平均签发耗时与精确跳闸归因；   │
+│   • 交付 POST /api/v1/admin/tls/reset-rate-limit 紧急运维通道并配齐强审计日志。         │
 └──────────────────────────────────────────┬─────────────────────────────────────────────┘
                                            │
                                            ▼
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
-│ 阶段四：Multi-CA 动态灾备池与自动故障转移（规划中 · 终极高可用）                       │
-│   • 当 GTS 断路器跳闸时，网关自动将订单无缝转移给 Let's Encrypt 备用反代链路；         │
-│   • 完成极端故障注入压测（模拟 GTS 全面熔断，验证客户端无感拿到 LE 公信证书）。        │
+│ 【已完成 · 100% 交付】阶段四：Multi-CA 动态灾备池与自动故障切换 (v1.36.136)            │
+│   • 当 GTS 断路器跳闸或运行中遇 429/5xx 时，网关自动将订单无缝转移给 Let's Encrypt；   │
+│   • 落地 Pre-flight 预检转移 + In-flight 失败救回 + 双熔断保护，SQLite 离线测试全通过。 │
 └────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -838,5 +838,50 @@ export const SUPPORTED_PROVIDERS: Record<string, CAProvider> = {
 - **Worker 后端**：`npm run test:admin:tls:offline` **45 passed / 0 failed**（由 36 净增 9 项断言至 45，包含 T4.7 与 T5.3–5.6）；
 - **全量离线门禁**：`npm run test:offline` **131 passed / 0 failed**，全套离线套件无一翻红；
 - **Go 核心门禁**：`go test ./...` 全部通过。
+
+---
+
+#### 3.6.12 阶段四 Multi-CA 动态灾备池与自动故障切换落地报告（2026-09-14 · 基线 `v1.36.136` / `1.13.8` / `admin 1.8.9`）
+
+> **红线遵循声明**：本小节严格遵循红线【155】append-only 追加，不修改上方任何历史轮次记录。
+
+针对路线图阶段四「Multi-CA 动态灾备池与自动故障转移（终极高可用）」要求，网关核心签发调度引擎、遥测大盘及离线可证伪测试套件已全量落地并达成 100% 实质闭环：
+
+**一、核心交付机制与功能清单**
+
+1. **统一 CA 提供商抽象策略层（`src/utils/acme-provider.ts`）**：
+   - 提取 `CAProvider` 接口，解耦不同上游 CA 的特征约束；
+   - 落地 `GTS_PROVIDER`（主力通道：`gts_ca`，需 EAB，直连 GFE 无握手环）；
+   - 落地 `LETSENCRYPT_PROVIDER`（灾备通道：`letsencrypt_ca`，免 EAB，走自建权威反代 `le-proxy` 绕开 Cloudflare 525 握手环）。
+2. **两级无感故障转移引擎（`src/routes/cert.ts`）**：
+   - **Level 1: Pre-flight 预检分流**：在签发前检测 `gts_ca` 断路器，若处于 `OPEN` 且备用通道可用，自动预先转移至 `letsencrypt_ca` 下发订单，并写入 `CERT_PROVISION_FAILOVER` 系统审计，保护 GTS 免遭无效试探；
+   - **Level 2: In-flight 失败无缝救回**：若 GTS 在签发途遇 429 或 5xx，调度引擎**先记录 GTS 断路器跳闸并落盘错误审计**（严格维护 V1/V2/V7 反向探针判别力），随后立即在内存中动态转移至 Let's Encrypt 签发公信证书，客户端毫秒级拿到 200 OK 与证书，上游 CA 故障端侧零感知；
+   - **双熔断保护**：当 GTS 与 Let's Encrypt 均处于 `OPEN` 时，快速拒绝返回 429 `ca_circuit_open`，保护网关；
+   - **配置灵活性**：支持 `ACME_DISABLE_FAILOVER`（显式禁用灾备回退至单 CA 隔离模式）、`ACME_GTS_DIRECTORY_URL`、`ACME_LE_DIRECTORY_URL`、`ACME_LE_ACCOUNT_KEY` 等精细化配置。
+3. **Admin 态势大盘与遥测扩展（`admin.ts` + `TLSCircuitCard.svelte` + API 契约 §2.11）**：
+   - `GET /api/v1/admin/tls/circuit-status` 扩展透出 `backup_circuit_breaker`（Let's Encrypt 状态机、成功数、失败数）与 24 小时灾备事件总数 `failover_events`；
+   - 前端管理卡片呈现多 CA 主备指示灯与灾备转移动态胶囊。
+
+**二、离线可证伪自证测试（Test 25）**
+
+在 `cloudflare/eqt-drm-api/tests/cert-provision-offline.js` 中新增第 25 组完整测试，16 项断言全部通过：
+- **T25.1a-c**：默认 GTS 正常置备，`gts_ca` 记录成功数 1，LE 接收恰好 0 次调用；
+- **T25.2a-e**：GTS 事先置为 OPEN，Pre-flight 自动路由至 LE 签发成功，GTS 获保护收 0 次调用，LE 成功置备，精准记录 `CERT_PROVISION_FAILOVER`；
+- **T25.3a-d**：GTS 运行时模拟 429 报错，GTS 跳闸至 OPEN（retry_after=90s），In-flight 动态切换至 LE 签发成功，客户端无感获得 200 OK 证书，精确写入 failover 审计；
+- **T25.4a-b**：GTS 与 LE 双双 OPEN，快速拒绝返回 429 `ca_circuit_open`，零上游网络调用；
+- **T25.5a-b**：设置 `ACME_DISABLE_FAILOVER: true`，GTS OPEN 时直接拒绝返回 429，绝不向 LE 发送任何请求。
+
+**三、全量离线质量门禁（门禁数字独立加总真值）**
+
+- `npm run test:offline` 包含 22 个步骤（1 个 `typecheck` + 21 个离线测试套件），**0 failed**，退出码 0；
+- 独立加总结果：
+  - `Results: N passed, 0 failed` 型（11 个套件）：42 + 27 + 64 + 21 + 17 + 128 + 24 + 15 + 21 + 47 + 131 = **527** passed；
+  - `=== Results: N/N passed, 0 failed ===` 型（4 个套件）：23 + 78 + 33 + 35 = **169** passed；
+  - 格式化断言合计：527 + 169 = **696** passed；
+  - 文本自报套件（6 个套件）：`test:env-guard` (9 项)、`subscription`、`portal`、`portal:toggle`、`zero-payment`、`telemetry` 全部退出码 0；
+- `npm test`（Admin 前端）：**14 passed (14)**，`svelte-check` **0 errors, 0 warnings**，`vite build` **147 modules transformed (EXIT=0)**；
+- `bash .agents/skills/eqt-lan-tls/scripts/check-tls-offline.sh`：Worker 离线测试 + Go 端测试全部通过；
+- `go test ./...` 100% 通过。
+
 
 

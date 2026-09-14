@@ -4,6 +4,7 @@ import { reserveD1RateLimit, RateLimitReservation, isD1RateLimited, logRateLimit
 import { checkManualBlacklist } from '../utils/blacklist';
 import { AcmeClient, computeDns01ChallengeValue, AcmeHttpError } from '../utils/acme';
 import { canExecuteCircuit, recordCircuitSuccess, recordCircuitFailure } from '../utils/circuit-breaker';
+import { CAProvider, GTS_PROVIDER, LETSENCRYPT_PROVIDER } from '../utils/acme-provider';
 import { consumeToken } from '../utils/token-bucket';
 import { SingleFlightGroup } from '../utils/singleflight';
 
@@ -644,6 +645,166 @@ export async function confirmDnsPropagation(
   );
 }
 
+async function executeSingleAcmeProvision(
+  provider: CAProvider,
+  cleanNode: string,
+  expectedCommonName: string,
+  expectedWildcard: string,
+  parsedCSR: ParsedCSR,
+  env: Env,
+  ctx: ExecutionContext
+): Promise<{ certPEM: string; expiresAt: string }> {
+  console.log(`[LAN-TLS-PROVISION] [ACME] Starting RFC 8555 DNS-01 issuance for nodeID=${cleanNode} via provider=${provider.name}...`);
+  const endpoints = (env.ACME_DNS_API_ENDPOINTS || '').split(',').map(s => s.trim()).filter(Boolean);
+  const dnsToken = env.ACME_DNS_API_TOKEN || '';
+
+  // Route outbound ACME requests to Let's Encrypt via secure reverse proxies (ns1/ns2)
+  // to circumvent Cloudflare Edge 525 SSL Handshake Loop while maintaining end-to-end JWS integrity
+  const proxyBases = endpoints.map(ep => `${ep.replace(/\/+$/, '')}/le-proxy`);
+  const acmeCustomFetch: typeof fetch = async (input, init) => {
+    const originalUrl = typeof input === 'string' ? input : (input instanceof Request ? input.url : String(input));
+    let proxyPath = '';
+    let isLE = false;
+    if (originalUrl.startsWith('https://acme-v02.api.letsencrypt.org')) {
+      proxyPath = originalUrl.slice('https://acme-v02.api.letsencrypt.org'.length);
+      isLE = true;
+    } else if (originalUrl.startsWith('https://acme-staging-v02.api.letsencrypt.org')) {
+      proxyPath = originalUrl.slice('https://acme-staging-v02.api.letsencrypt.org'.length);
+      isLE = true;
+    }
+
+    if (isLE && proxyBases.length > 0) {
+      let lastErr: any;
+      for (const base of proxyBases) {
+        try {
+          const targetUrl = `${base}${proxyPath}`;
+          const res = await fetch(targetUrl, init);
+          if (res.status !== 502 && res.status !== 504) {
+            return res;
+          }
+        } catch (err: any) {
+          lastErr = err;
+        }
+      }
+      if (lastErr) throw lastErr;
+    }
+
+    return await fetch(input, init);
+  };
+
+  const eabOpts = provider.getEAB(env);
+  const dirUrl = provider.getDirectoryUrl(env);
+  const accountKey = provider.getAccountKey(env);
+  const contactEmail = provider.getContactEmail(env);
+
+  const acmeClient = await AcmeClient.create({
+    directoryUrl: dirUrl,
+    accountKeyJWK: accountKey,
+    customFetch: acmeCustomFetch,
+    eab: eabOpts
+  });
+
+  if (contactEmail) {
+    await acmeClient.initAccount(contactEmail);
+  }
+
+  const { orderUrl, order } = await acmeClient.newOrder([expectedCommonName, expectedWildcard]);
+  const thumbprint = await acmeClient.getThumbprint();
+
+  const cleanupTasks: Array<() => Promise<void>> = [];
+  try {
+    // Phase 1: Collect all authorizations and identify pending challenges
+    const pendingChallenges: Array<{
+      authzUrl: string;
+      domain: string;
+      challengeUrl: string;
+      challengeVal: string;
+      recordName: string;
+    }> = [];
+
+    for (const authzUrl of order.authorizations) {
+      const authz = await acmeClient.getAuthorization(authzUrl);
+      const domainVal = authz.identifier?.value || 'domain';
+      if (authz.status === 'valid') {
+        console.log(`[ACME] Authorization for ${domainVal} is already valid, skipping challenge.`);
+        continue;
+      }
+
+      const dnsChall = authz.challenges.find(c => c.type === 'dns-01');
+      if (!dnsChall) {
+        throw new Error(`no dns-01 challenge found in authorization for ${domainVal}`);
+      }
+
+      const challengeVal = await computeDns01ChallengeValue(dnsChall.token, thumbprint);
+      const recordName = `_acme-challenge.${cleanNode}.direct.eqt.net.im.`;
+
+      // Pre-register cleanup task before setting challenge to guarantee cleanup on timeout/abort
+      cleanupTasks.push(() => clearDns01Challenge(endpoints, dnsToken, recordName, challengeVal));
+
+      pendingChallenges.push({
+        authzUrl,
+        domain: domainVal,
+        challengeUrl: dnsChall.url,
+        challengeVal,
+        recordName
+      });
+    }
+
+    // Phase 2: Batch write all DNS-01 challenge records to all authoritative DNS endpoints
+    for (const pending of pendingChallenges) {
+      await setDns01Challenge(endpoints, dnsToken, pending.recordName, pending.challengeVal);
+      console.log(`[ACME] Injected DNS-01 challenge TXT for ${pending.domain}: ${pending.recordName}`);
+    }
+
+    // Phase 3: Positive confirmation of DNS propagation across all authoritative DNS endpoints
+    if (pendingChallenges.length > 0) {
+      const valuesByRecord: Record<string, string[]> = {};
+      for (const pending of pendingChallenges) {
+        if (!valuesByRecord[pending.recordName]) {
+          valuesByRecord[pending.recordName] = [];
+        }
+        if (!valuesByRecord[pending.recordName].includes(pending.challengeVal)) {
+          valuesByRecord[pending.recordName].push(pending.challengeVal);
+        }
+      }
+
+      for (const [recName, expectedVals] of Object.entries(valuesByRecord)) {
+        console.log(`[ACME] Confirming DNS propagation across ${endpoints.length} authoritative nodes for ${recName} (expected: ${expectedVals.join(', ')})...`);
+        await confirmDnsPropagation(endpoints, dnsToken, recName, expectedVals, 10000, 1000, 8);
+      }
+      console.log(`[ACME] Confirmed all expected DNS-01 TXT values published across all authoritative endpoints.`);
+
+      // Phase 4: Trigger all challenges
+      for (const pending of pendingChallenges) {
+        console.log(`[ACME] Triggering CA validation for ${pending.domain}...`);
+        await acmeClient.triggerChallenge(pending.challengeUrl);
+      }
+    }
+
+    // Phase 5: Wait for all DNS authorizations to be verified and the order to transition to 'ready'
+    await acmeClient.pollOrder(orderUrl, 'ready', 60000, 2000);
+
+    await acmeClient.finalizeOrder(order.finalize, parsedCSR.rawDER);
+    const validOrder = await acmeClient.pollOrder(orderUrl, 'valid', 90000, 2500);
+    if (!validOrder.certificate) {
+      throw new Error('ACME order finalized but no certificate URL was returned');
+    }
+
+    const certPEM = await acmeClient.downloadCertificate(validOrder.certificate);
+    let expiresAt: string;
+    try {
+      expiresAt = parseCertificateExpiry(certPEM).toISOString();
+    } catch (e: any) {
+      console.warn(`[ACME] Failed to parse leaf cert expiry, falling back to 90d default: ${e?.message}`);
+      expiresAt = new Date(Date.now() + 90 * 24 * 3600 * 1000).toISOString();
+    }
+
+    return { certPEM, expiresAt };
+  } finally {
+    ctx.waitUntil(Promise.all(cleanupTasks.map(fn => fn().catch(err => console.warn('[ACME] DNS cleanup warning:', err)))));
+  }
+}
+
 /**
  * Primary HTTP router for Certificate operations (/api/v1/cert/*)
  */
@@ -883,7 +1044,12 @@ async function executeCertProvisioningFlow(params: CertProvisioningParams): Prom
   let provisionCommitted = false;
 
   try {
-    const acmeRequested = Boolean(env.ACME_DIRECTORY_URL || (env.ENVIRONMENT === 'test' && env.ACME_DNS_API_ENDPOINTS));
+    const acmeRequested = Boolean(
+      env.ACME_DIRECTORY_URL ||
+      env.ACME_GTS_DIRECTORY_URL ||
+      env.ACME_LE_DIRECTORY_URL ||
+      (env.ENVIRONMENT === 'test' && env.ACME_DNS_API_ENDPOINTS)
+    );
 
     // 5. Multi-tier Rate Limiting Defense with Two-Phase (2PC) Reservation
     // 5.1 Node-ID Rate Limit: Maximum 3 certificate provisions per 24 hours per node_id
@@ -951,20 +1117,60 @@ async function executeCertProvisioningFlow(params: CertProvisioningParams): Prom
       }
     }
 
-    // 5.4 Upstream CA Adaptive Circuit Breaker Pre-Flight Check
+    // 5.4 Multi-CA Adaptive Circuit Breaker Pre-Flight Check & Failover Routing
+    const failoverDisabled = env.ACME_DISABLE_FAILOVER === true || env.ACME_DISABLE_FAILOVER === 'true';
+    let activeProvider: CAProvider = GTS_PROVIDER;
+    let fallbackProvider: CAProvider | null = failoverDisabled ? null : LETSENCRYPT_PROVIDER;
+
     if (acmeRequested) {
-      const cbCheck = await canExecuteCircuit(env, 'gts_ca');
-      if (!cbCheck.allowed) {
-        console.warn(`[LAN-TLS-PROVISION] [CIRCUIT-BREAKER] GTS CA circuit is OPEN (retryAfter=${cbCheck.retryAfter}s)`);
-        return {
-          status: 429,
-          body: JSON.stringify({
-            error: 'Certificate authority is temporarily undergoing rate-limit cooldown. Please retry later.',
-            reason_key: 'ca_circuit_open',
-            retry_after: cbCheck.retryAfter
-          }),
-          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': String(cbCheck.retryAfter) }
-        };
+      const gtsCheck = await canExecuteCircuit(env, 'gts_ca');
+      if (!gtsCheck.allowed) {
+        console.warn(`[LAN-TLS-PROVISION] [CIRCUIT-BREAKER] GTS CA circuit is OPEN (retryAfter=${gtsCheck.retryAfter}s)`);
+        if (fallbackProvider) {
+          const leCheck = await canExecuteCircuit(env, fallbackProvider.circuitBreakerName);
+          if (leCheck.allowed) {
+            console.log(`[LAN-TLS-PROVISION] [FAILOVER] Pre-flight failover triggered: GTS is OPEN, switching to ${fallbackProvider.name}`);
+            ctx.waitUntil(logSystemError(
+              env,
+              'CERT_PROVISION_FAILOVER',
+              'WARN',
+              new Error(`Pre-flight failover from GTS to ${fallbackProvider.name} due to OPEN circuit`),
+              {
+                node_id: cleanNode,
+                device_id: deviceIdHeader,
+                ip: clientIp,
+                trigger: 'preflight_circuit_open',
+                from_ca: 'gts_ca',
+                to_ca: fallbackProvider.circuitBreakerName
+              },
+              traceId
+            ));
+            activeProvider = fallbackProvider;
+            fallbackProvider = null;
+          } else {
+            console.warn(`[LAN-TLS-PROVISION] [CIRCUIT-BREAKER] Both GTS and Let's Encrypt circuits are OPEN!`);
+            const retryAfter = Math.min(gtsCheck.retryAfter, leCheck.retryAfter) || gtsCheck.retryAfter || 60;
+            return {
+              status: 429,
+              body: JSON.stringify({
+                error: 'Certificate authority is temporarily undergoing rate-limit cooldown. Please retry later.',
+                reason_key: 'ca_circuit_open',
+                retry_after: retryAfter
+              }),
+              headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': String(retryAfter) }
+            };
+          }
+        } else {
+          return {
+            status: 429,
+            body: JSON.stringify({
+              error: 'Certificate authority is temporarily undergoing rate-limit cooldown. Please retry later.',
+              reason_key: 'ca_circuit_open',
+              retry_after: gtsCheck.retryAfter
+            }),
+            headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': String(gtsCheck.retryAfter) }
+          };
+        }
       }
     }
 
@@ -1189,209 +1395,122 @@ async function executeCertProvisioningFlow(params: CertProvisioningParams): Prom
         };
       }
 
-      try {
-        console.log(`[LAN-TLS-PROVISION] [ACME] Starting RFC 8555 DNS-01 certificate issuance for nodeID=${cleanNode}...`);
-        const endpoints = env.ACME_DNS_API_ENDPOINTS.split(',').map(s => s.trim()).filter(Boolean);
-        const dnsToken = env.ACME_DNS_API_TOKEN;
+      let currentProvider = activeProvider;
+      let failoverOccurred = false;
 
-        // Route outbound ACME requests to Let's Encrypt via secure reverse proxies (ns1/ns2)
-        // to circumvent Cloudflare Edge 525 SSL Handshake Loop while maintaining end-to-end JWS integrity
-        const proxyBases = endpoints.map(ep => `${ep.replace(/\/+$/, '')}/le-proxy`);
-        const acmeCustomFetch: typeof fetch = async (input, init) => {
-          const originalUrl = typeof input === 'string' ? input : (input instanceof Request ? input.url : String(input));
-          let proxyPath = '';
-          let isLE = false;
-          if (originalUrl.startsWith('https://acme-v02.api.letsencrypt.org')) {
-            proxyPath = originalUrl.slice('https://acme-v02.api.letsencrypt.org'.length);
-            isLE = true;
-          } else if (originalUrl.startsWith('https://acme-staging-v02.api.letsencrypt.org')) {
-            proxyPath = originalUrl.slice('https://acme-staging-v02.api.letsencrypt.org'.length);
-            isLE = true;
-          }
-
-          if (isLE && proxyBases.length > 0) {
-            let lastErr: any;
-            for (const base of proxyBases) {
-              try {
-                const targetUrl = `${base}${proxyPath}`;
-                const res = await fetch(targetUrl, init);
-                if (res.status !== 502 && res.status !== 504) {
-                  return res;
-                }
-              } catch (err: any) {
-                lastErr = err;
-              }
-            }
-            if (lastErr) throw lastErr;
-          }
-
-          return await fetch(input, init);
-        };
-
-        const eabOpts = (env.ACME_EAB_KID && env.ACME_EAB_HMAC_KEY) ? {
-          keyId: env.ACME_EAB_KID,
-          macKey: env.ACME_EAB_HMAC_KEY
-        } : undefined;
-
-        const acmeClient = await AcmeClient.create({
-          directoryUrl: env.ACME_DIRECTORY_URL || 'https://acme-v02.api.letsencrypt.org/directory',
-          accountKeyJWK: env.ACME_ACCOUNT_KEY,
-          customFetch: acmeCustomFetch,
-          eab: eabOpts
-        });
-        if (env.ACME_EMAIL) {
-          await acmeClient.initAccount(env.ACME_EMAIL);
-        }
-
-        const { orderUrl, order } = await acmeClient.newOrder([expectedCommonName, expectedWildcard]);
-        const thumbprint = await acmeClient.getThumbprint();
-
-        const cleanupTasks: Array<() => Promise<void>> = [];
+      while (true) {
         try {
-          // Phase 1: Collect all authorizations and identify pending challenges
-          const pendingChallenges: Array<{
-            authzUrl: string;
-            domain: string;
-            challengeUrl: string;
-            challengeVal: string;
-            recordName: string;
-          }> = [];
+          console.log(`[LAN-TLS-PROVISION] [ACME] Starting RFC 8555 DNS-01 certificate issuance for nodeID=${cleanNode} via ${currentProvider.name}...`);
+          const result = await executeSingleAcmeProvision(
+            currentProvider,
+            cleanNode,
+            expectedCommonName,
+            expectedWildcard,
+            parsedCSR,
+            env,
+            ctx
+          );
+          certPEM = result.certPEM;
+          expiresAt = result.expiresAt;
+          await recordCircuitSuccess(env, currentProvider.circuitBreakerName);
+          break;
+        } catch (acmeErr: any) {
+          if (acmeErr instanceof AcmeHttpError) {
+            if (acmeErr.status === 429) {
+              const retrySec = acmeErr.retryAfter || 60;
+              await recordCircuitFailure(env, currentProvider.circuitBreakerName, retrySec, true);
+              console.error(`[LAN-TLS-PROVISION] [CIRCUIT-BREAKER] Tripped ${currentProvider.circuitBreakerName} to OPEN due to upstream 429 (retryAfter=${retrySec}s): ${acmeErr.message}`);
+              ctx.waitUntil(logSystemError(
+                env,
+                'CERT_PROVISION_ERROR',
+                'WARN',
+                acmeErr,
+                { node_id: cleanNode, device_id: deviceIdHeader, ip: clientIp, reason_key: 'ca_rate_limited', retry_after: retrySec, ca_provider: currentProvider.name },
+                traceId
+              ));
+            } else if (acmeErr.status >= 500) {
+              await recordCircuitFailure(env, currentProvider.circuitBreakerName, 30, false);
+              console.error(`[LAN-TLS-PROVISION] [CIRCUIT-BREAKER] Recorded failure for ${currentProvider.circuitBreakerName} due to upstream 5xx (${acmeErr.status}): ${acmeErr.message}`);
+              ctx.waitUntil(logSystemError(
+                env,
+                'CERT_PROVISION_ERROR',
+                'ERROR',
+                acmeErr,
+                { node_id: cleanNode, device_id: deviceIdHeader, ip: clientIp, reason_key: 'ca_5xx_error', status_code: acmeErr.status, ca_provider: currentProvider.name },
+                traceId
+              ));
+            }
+          }
 
-          for (const authzUrl of order.authorizations) {
-            const authz = await acmeClient.getAuthorization(authzUrl);
-            if (authz.status === 'valid') {
-              console.log(`[ACME] Authorization for ${authz.identifier.value} is already valid, skipping challenge.`);
+          const canFailover = fallbackProvider &&
+            !failoverOccurred &&
+            currentProvider.id === 'gts' &&
+            acmeErr instanceof AcmeHttpError &&
+            (acmeErr.status === 429 || acmeErr.status >= 500);
+
+          if (canFailover) {
+            const fallbackCheck = await canExecuteCircuit(env, fallbackProvider!.circuitBreakerName);
+            if (fallbackCheck.allowed) {
+              console.warn(`[LAN-TLS-PROVISION] [FAILOVER] In-flight failover triggered: ${currentProvider.name} failed with HTTP ${acmeErr.status}, switching to ${fallbackProvider!.name}...`);
+              ctx.waitUntil(logSystemError(
+                env,
+                'CERT_PROVISION_FAILOVER',
+                'WARN',
+                new Error(`In-flight failover from ${currentProvider.name} to ${fallbackProvider!.name} triggered by HTTP ${acmeErr.status}`),
+                {
+                  node_id: cleanNode,
+                  device_id: deviceIdHeader,
+                  ip: clientIp,
+                  trigger: 'inflight_ca_failure',
+                  trigger_status: acmeErr.status,
+                  from_ca: currentProvider.circuitBreakerName,
+                  to_ca: fallbackProvider!.circuitBreakerName
+                },
+                traceId
+              ));
+              currentProvider = fallbackProvider!;
+              fallbackProvider = null;
+              failoverOccurred = true;
               continue;
-            }
-
-            const dnsChall = authz.challenges.find(c => c.type === 'dns-01');
-            if (!dnsChall) {
-              throw new Error(`no dns-01 challenge found in authorization for ${authz.identifier.value}`);
-            }
-
-            const challengeVal = await computeDns01ChallengeValue(dnsChall.token, thumbprint);
-            const recordName = `_acme-challenge.${cleanNode}.direct.eqt.net.im.`;
-
-            // Pre-register cleanup task before setting challenge to guarantee cleanup on timeout/abort (FINDING 8)
-            cleanupTasks.push(() => clearDns01Challenge(endpoints, dnsToken, recordName, challengeVal));
-
-            pendingChallenges.push({
-              authzUrl,
-              domain: authz.identifier.value,
-              challengeUrl: dnsChall.url,
-              challengeVal,
-              recordName
-            });
-          }
-
-          // Phase 2: Batch write all DNS-01 challenge records to all authoritative DNS endpoints
-          // Crucial: BOTH main domain and wildcard challenge values must exist in DNS before ANY challenge is triggered.
-          for (const pending of pendingChallenges) {
-            await setDns01Challenge(endpoints, dnsToken, pending.recordName, pending.challengeVal);
-            console.log(`[ACME] Injected DNS-01 challenge TXT for ${pending.domain}: ${pending.recordName}`);
-          }
-
-          // Phase 3: Positive confirmation of DNS propagation across all authoritative DNS endpoints (Scheme A)
-          if (pendingChallenges.length > 0) {
-            const valuesByRecord: Record<string, string[]> = {};
-            for (const pending of pendingChallenges) {
-              if (!valuesByRecord[pending.recordName]) {
-                valuesByRecord[pending.recordName] = [];
-              }
-              if (!valuesByRecord[pending.recordName].includes(pending.challengeVal)) {
-                valuesByRecord[pending.recordName].push(pending.challengeVal);
-              }
-            }
-
-            for (const [recName, expectedVals] of Object.entries(valuesByRecord)) {
-              console.log(`[ACME] Confirming DNS propagation across ${endpoints.length} authoritative nodes for ${recName} (expected: ${expectedVals.join(', ')})...`);
-              // 显式约束 maxAttempts=8 (单次至多 8 轮 * 2 节点 = 16 subrequests，严控在 50 次保守子请求预算内)
-              await confirmDnsPropagation(endpoints, dnsToken, recName, expectedVals, 10000, 1000, 8);
-            }
-            console.log(`[ACME] Confirmed all expected DNS-01 TXT values published across all authoritative endpoints.`);
-
-            // Phase 4: Trigger all challenges
-            for (const pending of pendingChallenges) {
-              console.log(`[ACME] Triggering CA validation for ${pending.domain}...`);
-              await acmeClient.triggerChallenge(pending.challengeUrl);
+            } else {
+              console.warn(`[LAN-TLS-PROVISION] [FAILOVER] Cannot failover to ${fallbackProvider!.name}: circuit is also OPEN`);
             }
           }
 
-          // Phase 5: Wait for all DNS authorizations to be verified and the order to transition to 'ready'
-          await acmeClient.pollOrder(orderUrl, 'ready', 60000, 2000);
-
-          await acmeClient.finalizeOrder(order.finalize, parsedCSR.rawDER);
-          const validOrder = await acmeClient.pollOrder(orderUrl, 'valid', 90000, 2500);
-          if (!validOrder.certificate) {
-            throw new Error('ACME order finalized but no certificate URL was returned');
+          if (acmeErr instanceof AcmeHttpError) {
+            if (acmeErr.status === 429) {
+              const retrySec = acmeErr.retryAfter || 60;
+              return {
+                status: 429,
+                body: JSON.stringify({
+                  error: 'Upstream Certificate Authority returned rate limit. Circuit cooldown initiated.',
+                  reason_key: 'ca_rate_limited',
+                  retry_after: retrySec
+                }),
+                headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': String(retrySec) }
+              };
+            } else if (acmeErr.status >= 500) {
+              return {
+                status: 502,
+                body: JSON.stringify({
+                  error: 'Upstream Certificate Authority returned server error. Failure recorded in circuit breaker.',
+                  reason_key: 'ca_5xx_error',
+                  status_code: acmeErr.status
+                }),
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+              };
+            }
+            // R42-6: Upstream ACME 4xx errors (e.g. 400 badNonce, 401/403 unauthorized)
+            // intentionally do NOT trip the circuit breaker or increment failure_count.
+            // Rationale:
+            // 1. Conforms to [153] (prefer under-counting to mis-counting). 4xx errors represent
+            //    session-, parameter-, or credential-specific issues rather than global CA outage.
+            // 2. Deadlock-free: During HALF_OPEN probes, a 4xx won't trip OPEN or record success,
+            //    allowing D1 CAS probe lease (180s) to safely expire and admit the next probe.
+            // 3. Traceability: 4xx errors bubble up to outer catch and log into system_error_logs.
           }
-
-          certPEM = await acmeClient.downloadCertificate(validOrder.certificate);
-          try {
-            expiresAt = parseCertificateExpiry(certPEM).toISOString();
-          } catch (e: any) {
-            console.warn(`[ACME] Failed to parse leaf cert expiry, falling back to 90d default: ${e?.message}`);
-            expiresAt = new Date(Date.now() + 90 * 24 * 3600 * 1000).toISOString();
-          }
-        } finally {
-          ctx.waitUntil(Promise.all(cleanupTasks.map(fn => fn().catch(err => console.warn('[ACME] DNS cleanup warning:', err)))));
+          throw acmeErr;
         }
-
-        await recordCircuitSuccess(env, 'gts_ca');
-      } catch (acmeErr: any) {
-        if (acmeErr instanceof AcmeHttpError) {
-          if (acmeErr.status === 429) {
-            const retrySec = acmeErr.retryAfter || 60;
-            await recordCircuitFailure(env, 'gts_ca', retrySec, true);
-            console.error(`[LAN-TLS-PROVISION] [CIRCUIT-BREAKER] Tripped to OPEN due to upstream 429 (retryAfter=${retrySec}s): ${acmeErr.message}`);
-            ctx.waitUntil(logSystemError(
-              env,
-              'CERT_PROVISION_ERROR',
-              'WARN',
-              acmeErr,
-              { node_id: cleanNode, device_id: deviceIdHeader, ip: clientIp, reason_key: 'ca_rate_limited', retry_after: retrySec },
-              traceId
-            ));
-            return {
-              status: 429,
-              body: JSON.stringify({
-                error: 'Upstream Certificate Authority returned rate limit. Circuit cooldown initiated.',
-                reason_key: 'ca_rate_limited',
-                retry_after: retrySec
-              }),
-              headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': String(retrySec) }
-            };
-          } else if (acmeErr.status >= 500) {
-            await recordCircuitFailure(env, 'gts_ca', 30, false);
-            console.error(`[LAN-TLS-PROVISION] [CIRCUIT-BREAKER] Recorded failure due to upstream 5xx (${acmeErr.status}): ${acmeErr.message}`);
-            ctx.waitUntil(logSystemError(
-              env,
-              'CERT_PROVISION_ERROR',
-              'ERROR',
-              acmeErr,
-              { node_id: cleanNode, device_id: deviceIdHeader, ip: clientIp, reason_key: 'ca_5xx_error', status_code: acmeErr.status },
-              traceId
-            ));
-            return {
-              status: 502,
-              body: JSON.stringify({
-                error: 'Upstream Certificate Authority returned server error. Failure recorded in circuit breaker.',
-                reason_key: 'ca_5xx_error',
-                status_code: acmeErr.status
-              }),
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-            };
-          }
-          // R42-6: Upstream ACME 4xx errors (e.g. 400 badNonce, 401/403 unauthorized)
-          // intentionally do NOT trip the circuit breaker or increment failure_count.
-          // Rationale:
-          // 1. Conforms to [153] (prefer under-counting to mis-counting). 4xx errors represent
-          //    session-, parameter-, or credential-specific issues rather than global CA outage.
-          // 2. Deadlock-free: During HALF_OPEN probes, a 4xx won't trip OPEN or record success,
-          //    allowing D1 CAS probe lease (180s) to safely expire and admit the next probe.
-          // 3. Traceability: 4xx errors bubble up to outer catch and log into system_error_logs.
-        }
-        throw acmeErr;
       }
 
     } else {

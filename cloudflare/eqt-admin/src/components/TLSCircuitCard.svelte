@@ -103,12 +103,13 @@
     <div class="loading-state">{$t('common.loading')}</div>
   {:else if data}
     {@const badge = circuitBadge(data.circuit_breaker?.state)}
+    {@const backupBadge = data.backup_circuit_breaker ? circuitBadge(data.backup_circuit_breaker?.state) : null}
     <!-- Status & Watermark Row -->
     <div class="telemetry-grid">
       <!-- Circuit Breaker State -->
       <div class="telemetry-block circuit-block">
         <div class="block-header">
-          <span class="block-title">{$t('tls.circuitStatus')}</span>
+          <span class="block-title">{$t('tls.circuitStatus')} ({$t('tls.primaryCaTitle')})</span>
           <span class="badge {badge.cls}">
             {badge.icon} {badge.label}
           </span>
@@ -134,6 +135,21 @@
         {#if data.circuit_breaker?.cooldown_until}
           <div class="cooldown-banner">
             ⏱️ {$t('tls.cooldownUntil')}: <code>{data.circuit_breaker.cooldown_until}</code>
+          </div>
+        {/if}
+
+        {#if backupBadge && data.backup_circuit_breaker}
+          <div class="backup-circuit-row">
+            <div class="backup-title">
+              <span>🛡️ {$t('tls.backupCircuitStatus')}</span>
+              <span class="badge {backupBadge.cls}">
+                {backupBadge.icon} {backupBadge.label}
+              </span>
+            </div>
+            <div class="backup-metrics">
+              <span>{$t('tls.successCount')}: <strong>{data.backup_circuit_breaker.success_count ?? 0}</strong></span>
+              <span>{$t('tls.failureCount')}: <strong class:error-val={(data.backup_circuit_breaker.failure_count ?? 0) > 0}>{data.backup_circuit_breaker.failure_count ?? 0}</strong></span>
+            </div>
           </div>
         {/if}
       </div>
@@ -210,6 +226,11 @@
         <div class="reason-pill" class:has-hits={(data.metrics_24h?.rate_limit_hits ?? 0) > 0}>
           <span class="pill-name">{$t('tls.rateLimitHits')}</span>
           <span class="pill-count">{data.metrics_24h?.rate_limit_hits ?? 0}</span>
+        </div>
+
+        <div class="reason-pill" class:has-trips={(data.metrics_24h?.failover_events ?? 0) > 0}>
+          <span class="pill-name">🔄 {$t('tls.failoverEvents')}</span>
+          <span class="pill-count">{data.metrics_24h?.failover_events ?? 0}</span>
         </div>
       </div>
     </div>
@@ -355,6 +376,31 @@
 
   .success-val {
     color: #10b981;
+  }
+
+  .backup-circuit-row {
+    margin-top: 0.5rem;
+    padding-top: 0.75rem;
+    border-top: 1px dashed var(--border-color);
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .backup-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-muted);
+  }
+
+  .backup-metrics {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
   }
 
   .error-val {

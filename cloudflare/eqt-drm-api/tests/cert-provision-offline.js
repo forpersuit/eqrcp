@@ -1327,7 +1327,8 @@ async function runTests() {
       ACME_DIRECTORY_URL: 'https://acme.test/directory',
       ACME_DNS_API_ENDPOINTS: 'https://ns1.test,https://ns2.test',
       ACME_DNS_API_TOKEN: 'secret-dns-token',
-      ACME_ACCOUNT_KEY: JSON.stringify(prodAcctJwk)
+      ACME_ACCOUNT_KEY: JSON.stringify(prodAcctJwk),
+      ACME_DISABLE_FAILOVER: true
     };
 
     // Pre-seed rate_limits with 40 hits for obsolete 'cert_provision:global_acme' to prove it is ignored
@@ -1917,6 +1918,339 @@ async function runTests() {
       secondRunOk = false;
     }
     assert(secondRunOk, 'T24.4: ensureCertProvisionsTable is strictly idempotent on subsequent invocations');
+  }
+
+  // --- Test 25: Multi-CA Disaster Recovery & In-Flight Failover Engine (Stage 4) ---
+  console.log('\n--- Test 25: Multi-CA Disaster Recovery & In-Flight Failover Engine ---');
+  {
+    const multiDb = makeMockDb();
+    const acctKey = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+    const acctJwk = acctKey.privateKey.export({ format: 'jwk' });
+
+    // Seed token bucket
+    multiDb._tokenBuckets.set('cert_provision:acme_smoothing', {
+      key: 'cert_provision:acme_smoothing',
+      tokens: 10,
+      last_refill: new Date().toISOString(),
+      capacity: 10,
+      refill_rate: 10 / 60
+    });
+
+    // Seed primary & secondary circuit breakers
+    multiDb._circuitBreakers.set('gts_ca', {
+      name: 'gts_ca',
+      state: 'CLOSED',
+      failure_count: 0,
+      success_count: 0,
+      last_failure_time: null,
+      cooldown_until: null,
+      last_retry_after: 0,
+      updated_at: new Date().toISOString()
+    });
+    multiDb._circuitBreakers.set('letsencrypt_ca', {
+      name: 'letsencrypt_ca',
+      state: 'CLOSED',
+      failure_count: 0,
+      success_count: 0,
+      last_failure_time: null,
+      cooldown_until: null,
+      last_retry_after: 0,
+      updated_at: new Date().toISOString()
+    });
+
+    const multiEnv = {
+      DB: multiDb,
+      ENVIRONMENT: 'production',
+      ACME_GTS_DIRECTORY_URL: 'https://gts.test/directory',
+      ACME_LE_DIRECTORY_URL: 'https://le.test/directory',
+      ACME_DNS_API_ENDPOINTS: 'https://ns1.test,https://ns2.test',
+      ACME_DNS_API_TOKEN: 'secret-dns-token',
+      ACME_ACCOUNT_KEY: JSON.stringify(acctJwk)
+    };
+
+    let gtsBehavior = 'success'; // 'success' | '429' | '502'
+    let leBehavior = 'success';  // 'success' | '429' | '502'
+    let gtsCalls = 0;
+    let leCalls = 0;
+    let nonceIndex = 0;
+
+    const dummyCert = await issueCertificateFromCSR(parseCSR(generateTestCSR('dummy000001').csrPEM), 90);
+
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = async (input, init) => {
+      const url = typeof input === 'string' ? input : (input instanceof Request ? input.url : String(input));
+
+      // Authoritative DNS Endpoints
+      if (url.includes('/acme/challenge')) {
+        return new Response(JSON.stringify({ ok: true, records: {} }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+
+      // Google Trust Services (GTS) endpoints
+      if (url.startsWith('https://gts.test/')) {
+        gtsCalls++;
+        if (url === 'https://gts.test/directory') {
+          return new Response(JSON.stringify({
+            newNonce: 'https://gts.test/nonce',
+            newAccount: 'https://gts.test/new-acct',
+            newOrder: 'https://gts.test/new-order'
+          }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+        if (url === 'https://gts.test/nonce') {
+          return new Response(null, { status: 200, headers: { 'Replay-Nonce': `gts-nonce-${nonceIndex++}` } });
+        }
+        if (url === 'https://gts.test/new-acct') {
+          return new Response(JSON.stringify({ status: 'valid' }), {
+            status: 200,
+            headers: { 'Location': 'https://gts.test/acct/1', 'Replay-Nonce': `gts-nonce-${nonceIndex++}`, 'Content-Type': 'application/json' }
+          });
+        }
+        if (url === 'https://gts.test/new-order') {
+          if (gtsBehavior === '429') {
+            return new Response(JSON.stringify({
+              type: 'urn:ietf:params:acme:error:rateLimited',
+              detail: 'GTS CA rate limit exceeded'
+            }), {
+              status: 429,
+              headers: { 'Content-Type': 'application/json', 'Retry-After': '90' }
+            });
+          }
+          if (gtsBehavior === '502') {
+            return new Response(JSON.stringify({
+              type: 'urn:ietf:params:acme:error:serverInternal',
+              detail: 'GTS CA Server Error'
+            }), {
+              status: 502,
+              headers: { 'Content-Type': 'application/json' }
+            });
+          }
+          return new Response(JSON.stringify({
+            status: 'pending',
+            authorizations: ['https://gts.test/authz/1'],
+            finalize: 'https://gts.test/finalize/1'
+          }), {
+            status: 201,
+            headers: { 'Location': 'https://gts.test/order/1', 'Replay-Nonce': `gts-nonce-${nonceIndex++}`, 'Content-Type': 'application/json' }
+          });
+        }
+        if (url === 'https://gts.test/authz/1') {
+          return new Response(JSON.stringify({
+            status: 'valid',
+            identifier: { type: 'dns', value: 'test.direct.eqt.net.im' },
+            challenges: [{ type: 'dns-01', url: 'https://gts.test/chal/1', token: 'gts-tok-1' }]
+          }), { status: 200, headers: { 'Replay-Nonce': `gts-nonce-${nonceIndex++}`, 'Content-Type': 'application/json' } });
+        }
+        if (url === 'https://gts.test/finalize/1') {
+          return new Response(JSON.stringify({
+            status: 'valid',
+            certificate: 'https://gts.test/cert/1'
+          }), { status: 200, headers: { 'Replay-Nonce': `gts-nonce-${nonceIndex++}`, 'Content-Type': 'application/json' } });
+        }
+        if (url === 'https://gts.test/order/1') {
+          return new Response(JSON.stringify({
+            status: 'valid',
+            certificate: 'https://gts.test/cert/1'
+          }), { status: 200, headers: { 'Replay-Nonce': `gts-nonce-${nonceIndex++}`, 'Content-Type': 'application/json' } });
+        }
+        if (url === 'https://gts.test/cert/1') {
+          return new Response(dummyCert.certPEM, { status: 200, headers: { 'Content-Type': 'application/pem-certificate-chain' } });
+        }
+      }
+
+      // Let's Encrypt (LE) endpoints
+      if (url.startsWith('https://le.test/')) {
+        leCalls++;
+        if (url === 'https://le.test/directory') {
+          return new Response(JSON.stringify({
+            newNonce: 'https://le.test/nonce',
+            newAccount: 'https://le.test/new-acct',
+            newOrder: 'https://le.test/new-order'
+          }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+        if (url === 'https://le.test/nonce') {
+          return new Response(null, { status: 200, headers: { 'Replay-Nonce': `le-nonce-${nonceIndex++}` } });
+        }
+        if (url === 'https://le.test/new-acct') {
+          return new Response(JSON.stringify({ status: 'valid' }), {
+            status: 200,
+            headers: { 'Location': 'https://le.test/acct/1', 'Replay-Nonce': `le-nonce-${nonceIndex++}`, 'Content-Type': 'application/json' }
+          });
+        }
+        if (url === 'https://le.test/new-order') {
+          if (leBehavior === '429') {
+            return new Response(JSON.stringify({
+              type: 'urn:ietf:params:acme:error:rateLimited',
+              detail: 'LE rate limit'
+            }), { status: 429, headers: { 'Content-Type': 'application/json', 'Retry-After': '60' } });
+          }
+          return new Response(JSON.stringify({
+            status: 'pending',
+            authorizations: ['https://le.test/authz/1'],
+            finalize: 'https://le.test/finalize/1'
+          }), {
+            status: 201,
+            headers: { 'Location': 'https://le.test/order/1', 'Replay-Nonce': `le-nonce-${nonceIndex++}`, 'Content-Type': 'application/json' }
+          });
+        }
+        if (url === 'https://le.test/authz/1') {
+          return new Response(JSON.stringify({
+            status: 'valid',
+            identifier: { type: 'dns', value: 'test.direct.eqt.net.im' },
+            challenges: [{ type: 'dns-01', url: 'https://le.test/chal/1', token: 'le-tok-1' }]
+          }), { status: 200, headers: { 'Replay-Nonce': `le-nonce-${nonceIndex++}`, 'Content-Type': 'application/json' } });
+        }
+        if (url === 'https://le.test/finalize/1') {
+          return new Response(JSON.stringify({
+            status: 'valid',
+            certificate: 'https://le.test/cert/1'
+          }), { status: 200, headers: { 'Replay-Nonce': `le-nonce-${nonceIndex++}`, 'Content-Type': 'application/json' } });
+        }
+        if (url === 'https://le.test/order/1') {
+          return new Response(JSON.stringify({
+            status: 'valid',
+            certificate: 'https://le.test/cert/1'
+          }), { status: 200, headers: { 'Replay-Nonce': `le-nonce-${nonceIndex++}`, 'Content-Type': 'application/json' } });
+        }
+        if (url === 'https://le.test/cert/1') {
+          return new Response(dummyCert.certPEM, { status: 200, headers: { 'Content-Type': 'application/pem-certificate-chain' } });
+        }
+      }
+
+      return new Response('Not Found', { status: 404 });
+    };
+
+    function buildNodeReq(nodeId) {
+      const nowTs = Math.floor(Date.now() / 1000);
+      const { csrPEM, privateKey } = generateTestCSR(nodeId);
+      const sig = signNodePayload(privateKey, nodeId, nowTs);
+      return new Request('http://api.test/api/v1/cert/provision', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-EQT-Timestamp': String(nowTs),
+          'X-EQT-Device-Signature': sig,
+          'X-EQT-Device-ID': `dev_${nodeId}`,
+          'CF-Connecting-IP': '203.0.113.199'
+        },
+        body: JSON.stringify({ node_id: nodeId, csr_pem: csrPEM })
+      });
+    }
+
+    try {
+      // T25.1: Default primary (GTS) success issuance
+      gtsCalls = 0;
+      leCalls = 0;
+      gtsBehavior = 'success';
+      const req25_1 = buildNodeReq('ff0000000001');
+      const ctx25_1 = makeMockCtx();
+      const resp25_1 = await handleCertRoutes(req25_1, multiEnv, ctx25_1, new URL(req25_1.url), {});
+      const data25_1 = await resp25_1.json();
+      await ctx25_1.drain();
+
+      assert(resp25_1.status === 200 && data25_1.cert_pem != null, 'T25.1a: Default issuance via GTS succeeds with 200 OK');
+      assert(gtsCalls > 0 && leCalls === 0, 'T25.1b: Primary GTS called, secondary LE received exactly 0 calls');
+      const gtsCb = multiDb._circuitBreakers.get('gts_ca');
+      assert(gtsCb && gtsCb.state === 'CLOSED' && gtsCb.success_count === 1, 'T25.1c: GTS circuit breaker recorded success_count=1');
+
+      // T25.2: Pre-flight failover (GTS OPEN -> automatically route to Let's Encrypt)
+      multiDb._circuitBreakers.set('gts_ca', {
+        name: 'gts_ca',
+        state: 'OPEN',
+        failure_count: 3,
+        success_count: 0,
+        last_failure_time: new Date().toISOString(),
+        cooldown_until: new Date(Date.now() + 60000).toISOString(),
+        last_retry_after: 60,
+        updated_at: new Date().toISOString()
+      });
+      gtsCalls = 0;
+      leCalls = 0;
+      const req25_2 = buildNodeReq('ff0000000002');
+      const ctx25_2 = makeMockCtx();
+      const resp25_2 = await handleCertRoutes(req25_2, multiEnv, ctx25_2, new URL(req25_2.url), {});
+      const data25_2 = await resp25_2.json();
+      await ctx25_2.drain();
+
+      assert(resp25_2.status === 200 && data25_2.cert_pem != null, 'T25.2a: Pre-flight failover to LE succeeds with 200 OK');
+      assert(gtsCalls === 0, 'T25.2b: GTS in OPEN state received 0 upstream requests (protected)');
+      assert(leCalls > 0, 'T25.2c: Secondary LE successfully executed ACME issuance');
+      const leCb = multiDb._circuitBreakers.get('letsencrypt_ca');
+      assert(leCb && leCb.state === 'CLOSED' && leCb.success_count === 1, 'T25.2d: Let\'s Encrypt circuit breaker recorded success_count=1');
+      const preflightLog = multiDb._errorLogs.find(l => l.category === 'CERT_PROVISION_FAILOVER' && JSON.parse(l.context_json || '{}').trigger === 'preflight_circuit_open');
+      assert(preflightLog != null, 'T25.2e: Pre-flight failover event recorded in system_error_logs');
+
+      // T25.3: In-flight failover (GTS returns 429 during new-order -> trip GTS to OPEN and immediately failover to LE)
+      multiDb._circuitBreakers.set('gts_ca', {
+        name: 'gts_ca',
+        state: 'CLOSED',
+        failure_count: 0,
+        success_count: 0,
+        last_failure_time: null,
+        cooldown_until: null,
+        last_retry_after: 0,
+        updated_at: new Date().toISOString()
+      });
+      gtsBehavior = '429';
+      gtsCalls = 0;
+      leCalls = 0;
+      const req25_3 = buildNodeReq('ff0000000003');
+      const ctx25_3 = makeMockCtx();
+      const resp25_3 = await handleCertRoutes(req25_3, multiEnv, ctx25_3, new URL(req25_3.url), {});
+      const data25_3 = await resp25_3.json();
+      await ctx25_3.drain();
+
+      assert(resp25_3.status === 200 && data25_3.cert_pem != null, 'T25.3a: In-flight failover smoothly rescues client with 200 OK certificate');
+      assert(gtsCalls > 0 && leCalls > 0, 'T25.3b: GTS was attempted first, then failover transitioned to LE');
+      const gtsCbAfter429 = multiDb._circuitBreakers.get('gts_ca');
+      assert(gtsCbAfter429 && gtsCbAfter429.state === 'OPEN' && gtsCbAfter429.last_retry_after === 90, 'T25.3c: GTS tripped to OPEN due to 429 in-flight failure');
+      const inflightLog = multiDb._errorLogs.find(l => l.category === 'CERT_PROVISION_FAILOVER' && JSON.parse(l.context_json || '{}').trigger === 'inflight_ca_failure');
+      assert(inflightLog != null, 'T25.3d: In-flight failover audit event recorded in system_error_logs');
+
+      // T25.4: Dual OPEN Circuit Protection (Both GTS and LE OPEN -> fast rejection)
+      multiDb._circuitBreakers.set('letsencrypt_ca', {
+        name: 'letsencrypt_ca',
+        state: 'OPEN',
+        failure_count: 3,
+        success_count: 0,
+        last_failure_time: new Date().toISOString(),
+        cooldown_until: new Date(Date.now() + 60000).toISOString(),
+        last_retry_after: 60,
+        updated_at: new Date().toISOString()
+      });
+      gtsCalls = 0;
+      leCalls = 0;
+      const req25_4 = buildNodeReq('ff0000000004');
+      const ctx25_4 = makeMockCtx();
+      const resp25_4 = await handleCertRoutes(req25_4, multiEnv, ctx25_4, new URL(req25_4.url), {});
+      const data25_4 = await resp25_4.json();
+      await ctx25_4.drain();
+
+      assert(resp25_4.status === 429 && data25_4.reason_key === 'ca_circuit_open', 'T25.4a: Dual OPEN circuits return 429 ca_circuit_open');
+      assert(gtsCalls === 0 && leCalls === 0, 'T25.4b: Zero upstream requests made when all CA circuits are OPEN');
+
+      // T25.5: ACME_DISABLE_FAILOVER fallback check
+      multiDb._circuitBreakers.set('letsencrypt_ca', {
+        name: 'letsencrypt_ca',
+        state: 'CLOSED',
+        failure_count: 0,
+        success_count: 0,
+        last_failure_time: null,
+        cooldown_until: null,
+        last_retry_after: 0,
+        updated_at: new Date().toISOString()
+      });
+      gtsCalls = 0;
+      leCalls = 0;
+      const req25_5 = buildNodeReq('ff0000000005');
+      const ctx25_5 = makeMockCtx();
+      const resp25_5 = await handleCertRoutes(req25_5, { ...multiEnv, ACME_DISABLE_FAILOVER: true }, ctx25_5, new URL(req25_5.url), {});
+      const data25_5 = await resp25_5.json();
+      await ctx25_5.drain();
+
+      assert(resp25_5.status === 429 && data25_5.reason_key === 'ca_circuit_open', 'T25.5a: When failover disabled, GTS OPEN returns 429 ca_circuit_open');
+      assert(leCalls === 0, 'T25.5b: LE receives 0 requests when ACME_DISABLE_FAILOVER is true');
+    } finally {
+      globalThis.fetch = origFetch;
+    }
   }
 
   console.log(`\nResults: ${passed} passed, ${failed} failed`);

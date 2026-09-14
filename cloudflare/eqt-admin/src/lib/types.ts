@@ -319,11 +319,13 @@ export interface TLSMeterics24h {
     other_cert_errors: number;
   };
   rate_limit_hits: number;
+  failover_events?: number;
 }
 
 export interface AdminTLSCircuitStatusResponse {
   ok: boolean;
   circuit_breaker: CircuitBreakerStatus;
+  backup_circuit_breaker?: CircuitBreakerStatus;
   token_bucket: TokenBucketStatus;
   metrics_24h: TLSMeterics24h;
 }

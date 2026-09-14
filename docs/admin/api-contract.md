@@ -562,6 +562,7 @@ GET /api/v1/admin/tls/circuit-status
 - **指标与对账公式（SSOT）**：
   - `total_attempts = provisions_success + ca_rate_limited + ca_5xx_error + other_cert_errors`
   - `success_rate`：当 `total_attempts > 0` 时为 `provisions_success / total_attempts`（精确到千分位）；当无数据时回退为 `null`（严禁伪造 100%）。
+  - `failover_events`：近 24 小时由 GTS 自动转移至 Let's Encrypt 备用链路的事件总数（`CERT_PROVISION_FAILOVER`）。
 - **响应（200 OK）：**
 ```json
 {
@@ -571,6 +572,16 @@ GET /api/v1/admin/tls/circuit-status
     "state": "CLOSED",
     "failure_count": 0,
     "success_count": 42,
+    "last_failure_time": null,
+    "cooldown_until": null,
+    "last_retry_after": 0,
+    "updated_at": "2026-09-14T01:30:00.000Z"
+  },
+  "backup_circuit_breaker": {
+    "name": "letsencrypt_ca",
+    "state": "CLOSED",
+    "failure_count": 0,
+    "success_count": 10,
     "last_failure_time": null,
     "cooldown_until": null,
     "last_retry_after": 0,
@@ -593,7 +604,8 @@ GET /api/v1/admin/tls/circuit-status
       "ca_5xx_error": 1,
       "other_cert_errors": 0
     },
-    "rate_limit_hits": 5
+    "rate_limit_hits": 5,
+    "failover_events": 0
   }
 }
 ```
