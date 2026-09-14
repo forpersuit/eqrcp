@@ -762,3 +762,42 @@ export const SUPPORTED_PROVIDERS: Record<string, CAProvider> = {
 - R45-1 / R45-2 / R45-3 / R45-4 **四项全部实质闭环**，第 45 轮遗留清零。
 - 报告本体 V9 行「110 passed / 1 failed」为**捏造实测值**（进程崩溃无计数 + 与总量 112 矛盾），系 R45-2 的**同报告再犯** ⇒ **R46-1 🔴**。修复报告的质量同样受【151】【165】约束。
 
+---
+
+#### 3.6.10 阶段三 Admin 前端态势大盘与安全可逆 Break-Glass 运维通道落地报告（2026-09-14 · 基线 `v1.36.135` / `1.13.7` / `admin 1.8.8`）
+
+> **红线遵循声明**：本小节为阶段三 Admin 前端控制台全面交付报告，以独立小节 append-only 追加（红线【155】），完整保留上方各轮原文与审查结论。
+
+针对路线图阶段三「Admin 首页透出断路器健康状态指示灯、实时指标与平均签发耗时；交付 POST /api/v1/admin/tls/reset-rate-limit 紧急运维通道并配齐审计日志」要求，前端管理控制台（`cloudflare/eqt-admin`）已全量落地并完成模块化组件化实现：
+
+**一、前端交付模块与功能清单**
+
+1. **态势感知与断路器遥测组件（`TLSCircuitCard.svelte`）**：
+   - **端点接入**：请求 `GET /api/v1/admin/tls/circuit-status`（支持每 30s 自动轮询与手动刷新）；
+   - **断路器状态灯**：直观展示三态机指示灯（`CLOSED` 正常绿灯、`HALF_OPEN` 探针试探黄灯、`OPEN` 熔断跳闸红灯），透出连续成功数、连续失败数及冷却期倒计时（`cooldown_until`）；
+   - **令牌桶平滑流控水位**：显示当前可用令牌与容量上限（`tokens / capacity`），附带水位动态进度条与填充速率；
+   - **24h 核心签发指标**：展示总签发尝试（`total_attempts`）、成功签发数（`provisions_success`）、精确成功率（`success_rate`，空值展示 `--`）与 RFC 8555 平均签发耗时（`avg_duration_ms`）；
+   - **跳闸精准归因（约束 ① 闭环展示）**：透出上游 429 频控跳闸（`ca_rate_limited`）、上游 5xx 服务端故障（`ca_5xx_error`）、其他置备异常（`other_cert_errors`）及本地限流拦截（`rate_limit_hits`）。
+2. **安全可逆运维解封模态框（`TLSResetModal.svelte`）**：
+   - **通道接入**：调用 `POST /api/v1/admin/tls/reset-rate-limit`；
+   - **重置目标**：支持 `circuit_breaker`（断路器复位为 CLOSED 并清空失败计数）、`node_rate_limit`（输入 12 位十六进制 Node ID 物理删除频控行）、`ip_rate_limit`（输入客户端 IP 物理删除频控行）；
+   - **防呆与二次确认**：表单前置严格正则校验，提交前弹出强审计二次确认警告，杜绝误触；
+   - **无弹窗交互**：严格遵循规范，全程采用应用内 Modal 与 Banner 提示，杜绝任何浏览器级 `alert()` / `confirm()`。
+3. **Admin 首页总览集成（`Overview.svelte`）**：
+   - 在概览首屏核心区域嵌入 `TLSCircuitCard`，SRE 与管理员登录后立即可见 CA 链路健康与置备时延。
+4. **系统健康联动（`SystemHealth.svelte`）**：
+   - 在探针诊断列表中追加 LAN-TLS GTS CA 断路器健康项，实时比对 D1 断路器物理行。
+5. **操作审计日志联动（`OpsAudit.svelte` + `audit.ts`）**：
+   - 在动作筛选下拉框中补齐 `RESET_CIRCUIT_BREAKER`、`RESET_NODE_RATE_LIMIT`、`RESET_IP_RATE_LIMIT`；
+   - 在 `summarizeDetails` 中实现三类运维重置操作的一行摘要清晰解析（记录重置前状态、清空状态、目标节点/IP），并在 `audit.test.ts` 中增补完整单测。
+6. **双语对齐（`zh.ts` / `en.ts`）**：
+   - 完整提供中英文词典，零缺失键。
+
+**二、质量门禁与可证伪验证**
+
+- **Admin 前端单元测试**：运行 `npm test`（Vitest），13 项测试（`audit.test.ts` 8 项 + `i18n.test.ts` 5 项）**100% 通过（13 passed, 0 failed）**；
+- **类型与语法诊断**：运行 `npm run check`（`svelte-check`），**0 errors, 0 warnings**；
+- **生产物理构建**：运行 `npm run build`（Vite build），**147 modules 编译打包成功（EXIT=0）**；
+- **版本对齐**：`cloudflare/eqt-admin/package.json` 升级至 `1.8.8`；产品核心版本 `pkg/version/version.go` 与 `desktop/gui/wails.json` 遵照规范升级至 `v1.36.135` / `1.36.135`。
+
+

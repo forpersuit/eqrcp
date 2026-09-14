@@ -315,7 +315,10 @@ export const en = {
       QUERY_LIVE_DEVICES: "Query Live Devices (QUERY_LIVE)",
       PRUNE: "Prune Logs (PRUNE)",
       BLACKLIST_ADD: "Add Blacklist (BLACKLIST_ADD)",
-      BLACKLIST_REMOVE: "Remove Blacklist (BLACKLIST_REMOVE)"
+      BLACKLIST_REMOVE: "Remove Blacklist (BLACKLIST_REMOVE)",
+      RESET_CIRCUIT_BREAKER: "Reset Circuit Breaker (RESET_CB)",
+      RESET_NODE_RATE_LIMIT: "Reset Node Limit (RESET_NODE_LIMIT)",
+      RESET_IP_RATE_LIMIT: "Reset IP Limit (RESET_IP_LIMIT)"
     },
     summary: {
       maxDevices: "Max Devices {count}",
@@ -340,7 +343,12 @@ export const en = {
       queryLocations: "Locations ({devices} devs / {countries} countries / {arcs} arcs)",
       queryLiveDevices: "Live Devices [{window}] ({devices} total / Paid {paid} / Free {free})",
       pruneSummary: "Pruned Logs ({errorLogs} error logs / {auditLogs} audit logs)",
-      reasonPrefix: "Reason: {reason}"
+      reasonPrefix: "Reason: {reason}",
+      resetCircuitBreaker: "Reset Circuit Breaker ({name}) · {prev} → CLOSED",
+      resetNodeLimit: "Reset Node Limit ({node}) · {status}",
+      resetIpLimit: "Reset IP Limit ({ip}) · {status}",
+      resetCleared: "Cleared",
+      resetInactive: "Not Active"
     }
   },
   opsAudit: {
@@ -385,5 +393,49 @@ export const en = {
     tableDate: "Date",
     tableCrashes: "Crashes",
     tableTrend: "Trend"
+  },
+  tls: {
+    title: "LAN-TLS GTS CA Observability & Break-Glass",
+    subtitle: "Real-time monitoring of Google CA circuit breaker, token bucket smoothing, 24h metrics & safe reversible reset",
+    circuitStatus: "CA Circuit Breaker Status",
+    stateClosed: "Operational (CLOSED)",
+    stateOpen: "Tripped (OPEN)",
+    stateHalfOpen: "Probing (HALF_OPEN)",
+    successCount: "Consecutive Successes",
+    failureCount: "Consecutive Failures",
+    cooldownUntil: "Cooldown Until",
+    lastRetryAfter: "Retry-After Interval",
+    tokenBucket: "Token Bucket Watermark",
+    availableTokens: "Available Tokens",
+    capacity: "Capacity Ceiling",
+    refillRate: "Refill Rate",
+    metrics24h: "Past 24 Hours Telemetry",
+    totalAttempts: "Total Issuance Attempts",
+    provisionsSuccess: "Successful Provisions",
+    successRate: "Success Rate",
+    avgDuration: "Avg Duration",
+    tripReasons: "Trip Attribution Breakdown",
+    rateLimited: "Upstream 429 Rate Limit",
+    serverError: "Upstream 5xx Server Error",
+    otherErrors: "Other Provision Errors",
+    rateLimitHits: "Local Rate Limit Hits",
+    resetBtn: "⚡ Break-Glass Reset",
+    modalTitle: "LAN-TLS Safe Reversible Reset",
+    modalDesc: "Reset circuit breaker or selectively clear rate limits for specific nodes or IPs. All operations write audited snapshots.",
+    targetLabel: "Reset Target Type",
+    targetCircuitBreaker: "Reset GTS CA Circuit Breaker (CLOSED)",
+    targetNodeLimit: "Reset Node Rate Limit",
+    targetIpLimit: "Reset IP Rate Limit",
+    nodeIdLabel: "Node ID",
+    nodeIdPlaceholder: "Enter 12-char hex Node ID (e.g. bb0000000001)",
+    ipLabel: "Client IP Address",
+    ipPlaceholder: "Enter IPv4 / IPv6 address",
+    resetConfirm: "Are you sure you want to execute this reset operation? This action is immediately audited.",
+    resetting: "Executing reset...",
+    resetSuccess: "Reset operation completed successfully",
+    resetFailed: "Reset operation failed",
+    circuitBreakerHint: "Resets circuit breaker to CLOSED, clearing failure count and cooldown interval.",
+    nodeLimitHint: "Physically removes the 24h rate limit record for this node, restoring provisioning eligibility immediately.",
+    ipLimitHint: "Physically removes the 24h rate limit record for this client IP, restoring access immediately."
   }
 };

@@ -4,6 +4,7 @@
   import { t } from '../lib/i18n';
   import type { AdminHealthResponse, AdminTab } from '../lib/types';
   import LicenseGlobeCard from '../components/LicenseGlobeCard.svelte';
+  import TLSCircuitCard from '../components/TLSCircuitCard.svelte';
 
   interface Props {
     onNavigate?: (tab: AdminTab, prefillQuery?: string) => void;
@@ -98,6 +99,10 @@
     </div>
   </div>
 
+  <div class="tls-section">
+    <TLSCircuitCard />
+  </div>
+
   <div class="globe-section">
     <LicenseGlobeCard onNavigateToLicense={(code) => onNavigate?.('licenses', code)} />
   </div>
@@ -116,4 +121,5 @@
   .stat-label { font-size: 0.85rem; color: var(--text-muted); }
 
   .globe-section { width: 100%; max-width: 100%; box-sizing: border-box; overflow: hidden; }
+  .tls-section { width: 100%; max-width: 100%; box-sizing: border-box; }
 </style>

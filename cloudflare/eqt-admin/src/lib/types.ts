@@ -19,8 +19,11 @@ export type AdminAuditAction =
   | 'QUERY_LIVE_DEVICES'
   | 'PRUNE'
   | 'BLACKLIST_ADD'
-  | 'BLACKLIST_REMOVE';
-export type AdminAuditTargetType = 'LICENSE' | 'ACTIVATION' | 'SYSTEM' | 'BLACKLIST';
+  | 'BLACKLIST_REMOVE'
+  | 'RESET_CIRCUIT_BREAKER'
+  | 'RESET_NODE_RATE_LIMIT'
+  | 'RESET_IP_RATE_LIMIT';
+export type AdminAuditTargetType = 'LICENSE' | 'ACTIVATION' | 'SYSTEM' | 'BLACKLIST' | 'TLS_CIRCUIT' | 'TLS_RATE_LIMIT';
 
 /** GET/POST /api/v1/admin/dev-devices */
 export interface DevDeviceEntry {
@@ -284,3 +287,59 @@ export interface DownloadStatsResponse {
     sources: Array<{ source: string; count: number }>;
   };
 }
+
+/** GET /api/v1/admin/tls/circuit-status — ACME GTS CA telemetry (§2.11) */
+export interface CircuitBreakerStatus {
+  name: string;
+  state: 'CLOSED' | 'OPEN' | 'HALF_OPEN';
+  failure_count: number;
+  success_count: number;
+  last_failure_time: string | null;
+  cooldown_until: string | null;
+  last_retry_after: number;
+  updated_at: string;
+}
+
+export interface TokenBucketStatus {
+  key: string;
+  tokens: number;
+  capacity: number;
+  refill_rate: number;
+  last_refill: string;
+}
+
+export interface TLSMeterics24h {
+  total_attempts: number;
+  provisions_success: number;
+  avg_duration_ms: number;
+  success_rate: number | null;
+  trip_reasons: {
+    ca_rate_limited: number;
+    ca_5xx_error: number;
+    other_cert_errors: number;
+  };
+  rate_limit_hits: number;
+}
+
+export interface AdminTLSCircuitStatusResponse {
+  ok: boolean;
+  circuit_breaker: CircuitBreakerStatus;
+  token_bucket: TokenBucketStatus;
+  metrics_24h: TLSMeterics24h;
+}
+
+/** POST /api/v1/admin/tls/reset-rate-limit — Break-Glass safe reset (§2.12) */
+export interface ResetRateLimitBody {
+  target: 'circuit_breaker' | 'node_rate_limit' | 'ip_rate_limit';
+  key?: string;
+}
+
+export interface ResetRateLimitResponse {
+  ok: boolean;
+  message: string;
+  target: string;
+  key?: string;
+  name?: string;
+  existed?: boolean;
+}
+

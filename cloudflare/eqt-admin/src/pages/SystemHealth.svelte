@@ -3,9 +3,10 @@
   import { adminFetch } from '../lib/api';
   import { t } from '../lib/i18n';
   import Banner from '../components/Banner.svelte';
-  import type { AdminHealthResponse, HealthProbeResult } from '../lib/types';
+  import type { AdminHealthResponse, HealthProbeResult, AdminTLSCircuitStatusResponse } from '../lib/types';
 
   let health = $state<AdminHealthResponse | null>(null);
+  let tlsStatus = $state<AdminTLSCircuitStatusResponse | null>(null);
   let loading = $state(true);
   let errorMsg = $state('');
 
@@ -29,7 +30,12 @@
     loading = true;
     errorMsg = '';
     try {
-      health = await adminFetch<AdminHealthResponse>('/api/v1/admin/health');
+      const [hData, tData] = await Promise.all([
+        adminFetch<AdminHealthResponse>('/api/v1/admin/health'),
+        adminFetch<AdminTLSCircuitStatusResponse>('/api/v1/admin/tls/circuit-status').catch(() => null)
+      ]);
+      health = hData;
+      tlsStatus = tData;
     } catch (err: any) {
       errorMsg = err.message || $t('common.failed');
     } finally {
@@ -134,6 +140,19 @@
             {probeBadge(health.probes?.db).label}
           </span>
         </div>
+        {#if tlsStatus}
+          <div class="probe-item">
+            <div>
+              <div class="probe-name">LAN-TLS GTS CA 断路器</div>
+              <div class="probe-desc">
+                状态: <code>{tlsStatus.circuit_breaker?.state || 'UNKNOWN'}</code> · 连续成功: {tlsStatus.circuit_breaker?.success_count ?? 0} · 连续失败: {tlsStatus.circuit_breaker?.failure_count ?? 0}
+              </div>
+            </div>
+            <span class={`badge badge-${tlsStatus.circuit_breaker?.state === 'CLOSED' ? 'active' : tlsStatus.circuit_breaker?.state === 'HALF_OPEN' ? 'warn' : 'error'}`}>
+              {tlsStatus.circuit_breaker?.state === 'CLOSED' ? '正常 (CLOSED)' : tlsStatus.circuit_breaker?.state === 'HALF_OPEN' ? '试探 (HALF_OPEN)' : '熔断 (OPEN)'}
+            </span>
+          </div>
+        {/if}
       </div>
     </div>
 

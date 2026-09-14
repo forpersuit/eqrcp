@@ -143,4 +143,49 @@ describe('audit helpers', () => {
     };
     expect(summarizeDetails(row, mockT)).toBe('Cleared 10 error logs');
   });
+
+  it('summarizeDetails should format RESET_CIRCUIT_BREAKER, RESET_NODE_RATE_LIMIT, RESET_IP_RATE_LIMIT', () => {
+    const cbRow: AdminAuditLog = {
+      id: 9,
+      action: 'RESET_CIRCUIT_BREAKER',
+      target_type: 'TLS_CIRCUIT',
+      target_id: 'gts_ca',
+      details_json: JSON.stringify({
+        name: 'gts_ca',
+        previous_state: 'OPEN',
+        previous_failure_count: 3
+      }),
+      operator_ip: '1.2.3.4',
+      created_at: '2026-09-14T00:00:00Z',
+    };
+    expect(summarizeDetails(cbRow)).toBe('重置断路器 (gts_ca) · OPEN → CLOSED');
+
+    const nodeRow: AdminAuditLog = {
+      id: 10,
+      action: 'RESET_NODE_RATE_LIMIT',
+      target_type: 'TLS_RATE_LIMIT',
+      target_id: 'cert_provision:bb0000000001',
+      details_json: JSON.stringify({
+        target_node_id: 'bb0000000001',
+        existed: true
+      }),
+      operator_ip: '1.2.3.4',
+      created_at: '2026-09-14T00:00:00Z',
+    };
+    expect(summarizeDetails(nodeRow)).toBe('重置节点限流 (bb0000000001) · 已清空');
+
+    const ipRow: AdminAuditLog = {
+      id: 11,
+      action: 'RESET_IP_RATE_LIMIT',
+      target_type: 'TLS_RATE_LIMIT',
+      target_id: 'cert_provision:ip:198.51.100.42',
+      details_json: JSON.stringify({
+        target_ip: '198.51.100.42',
+        existed: false
+      }),
+      operator_ip: '1.2.3.4',
+      created_at: '2026-09-14T00:00:00Z',
+    };
+    expect(summarizeDetails(ipRow)).toBe('重置IP限流 (198.51.100.42) · 未处于限流');
+  });
 });

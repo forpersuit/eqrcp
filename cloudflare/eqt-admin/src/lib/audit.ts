@@ -48,6 +48,11 @@ export function summarizeDetails(row: AdminAuditLog, tFn?: TranslateFunction): s
     if (key === 'audit.summary.queryLiveDevices') return `活跃设备 [${params?.window}] (${params?.devices} 台 / 付费 ${params?.paid} / 免费 ${params?.free})`;
     if (key === 'audit.summary.pruneSummary') return `裁剪日志 (错误日志 ${params?.errorLogs} 条 / 审计日志 ${params?.auditLogs} 条)`;
     if (key === 'audit.summary.reasonPrefix') return `原因: ${params?.reason}`;
+    if (key === 'audit.summary.resetCircuitBreaker') return `重置断路器 (${params?.name}) · ${params?.prev} → CLOSED`;
+    if (key === 'audit.summary.resetNodeLimit') return `重置节点限流 (${params?.node}) · ${params?.status}`;
+    if (key === 'audit.summary.resetIpLimit') return `重置IP限流 (${params?.ip}) · ${params?.status}`;
+    if (key === 'audit.summary.resetCleared') return '已清空';
+    if (key === 'audit.summary.resetInactive') return '未处于限流';
     return key;
   });
 
@@ -131,6 +136,24 @@ export function summarizeDetails(row: AdminAuditLog, tFn?: TranslateFunction): s
         return targetIdentity ? `${base} (${targetIdentity})` : base;
       }
       return targetIdentity ? `${tr('audit.summary.blacklistRemoveDefault')} (${targetIdentity})` : tr('audit.summary.blacklistRemoveDefault');
+    }
+
+    case 'RESET_CIRCUIT_BREAKER': {
+      const name = (d.name as string) || row.target_id || 'gts_ca';
+      const prev = d.previous_state ? String(d.previous_state) : 'OPEN';
+      return tr('audit.summary.resetCircuitBreaker', { name, prev });
+    }
+
+    case 'RESET_NODE_RATE_LIMIT': {
+      const node = (d.target_node_id as string) || row.target_id || '—';
+      const status = d.existed ? tr('audit.summary.resetCleared') : tr('audit.summary.resetInactive');
+      return tr('audit.summary.resetNodeLimit', { node, status });
+    }
+
+    case 'RESET_IP_RATE_LIMIT': {
+      const ip = (d.target_ip as string) || row.target_id || '—';
+      const status = d.existed ? tr('audit.summary.resetCleared') : tr('audit.summary.resetInactive');
+      return tr('audit.summary.resetIpLimit', { ip, status });
     }
 
     default:

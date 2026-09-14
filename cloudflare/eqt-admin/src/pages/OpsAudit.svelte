@@ -28,7 +28,10 @@
     'QUERY_LIVE_DEVICES',
     'PRUNE',
     'BLACKLIST_ADD',
-    'BLACKLIST_REMOVE'
+    'BLACKLIST_REMOVE',
+    'RESET_CIRCUIT_BREAKER',
+    'RESET_NODE_RATE_LIMIT',
+    'RESET_IP_RATE_LIMIT'
   ];
 
   async function loadLogs() {

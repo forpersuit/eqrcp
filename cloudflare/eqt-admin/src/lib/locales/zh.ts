@@ -316,7 +316,10 @@ export const zh = {
       QUERY_LIVE_DEVICES: "查询活跃设备 (QUERY_LIVE)",
       PRUNE: "日志自动裁剪 (PRUNE)",
       BLACKLIST_ADD: "添加黑名单 (BLACKLIST_ADD)",
-      BLACKLIST_REMOVE: "解除黑名单 (BLACKLIST_REMOVE)"
+      BLACKLIST_REMOVE: "解除黑名单 (BLACKLIST_REMOVE)",
+      RESET_CIRCUIT_BREAKER: "重置断路器 (RESET_CB)",
+      RESET_NODE_RATE_LIMIT: "重置节点限流 (RESET_NODE_LIMIT)",
+      RESET_IP_RATE_LIMIT: "重置IP限流 (RESET_IP_LIMIT)"
     },
     summary: {
       maxDevices: "设备上限 {count}",
@@ -341,7 +344,12 @@ export const zh = {
       queryLocations: "点位分布 ({devices} 台 / {countries} 国 / {arcs} 弧线)",
       queryLiveDevices: "活跃设备 [{window}] ({devices} 台 / 付费 {paid} / 免费 {free})",
       pruneSummary: "裁剪日志 (错误日志 {errorLogs} 条 / 审计日志 {auditLogs} 条)",
-      reasonPrefix: "原因: {reason}"
+      reasonPrefix: "原因: {reason}",
+      resetCircuitBreaker: "重置断路器 ({name}) · {prev} → CLOSED",
+      resetNodeLimit: "重置节点限流 ({node}) · {status}",
+      resetIpLimit: "重置IP限流 ({ip}) · {status}",
+      resetCleared: "已清空",
+      resetInactive: "未处于限流"
     }
   },
   opsAudit: {
@@ -386,6 +394,50 @@ export const zh = {
     tableDate: "日期",
     tableCrashes: "崩溃次数",
     tableTrend: "趋势"
+  },
+  tls: {
+    title: "LAN-TLS GTS CA 态势大盘与运维解封",
+    subtitle: "实时监控 Google CA 断路器状态机、令牌桶流控水位、24h 签发指标与安全可逆解封",
+    circuitStatus: "CA 断路器状态",
+    stateClosed: "正常运作 (CLOSED)",
+    stateOpen: "熔断跳闸 (OPEN)",
+    stateHalfOpen: "探针试探 (HALF_OPEN)",
+    successCount: "连续成功",
+    failureCount: "连续失败",
+    cooldownUntil: "冷却期截止",
+    lastRetryAfter: "退避间隔",
+    tokenBucket: "令牌桶水位",
+    availableTokens: "可用令牌",
+    capacity: "容量上限",
+    refillRate: "填充速率",
+    metrics24h: "近 24 小时遥测",
+    totalAttempts: "总签发尝试",
+    provisionsSuccess: "成功签发",
+    successRate: "成功率",
+    avgDuration: "平均耗时",
+    tripReasons: "跳闸归因统计",
+    rateLimited: "上游 429 频控",
+    serverError: "上游 5xx 故障",
+    otherErrors: "其他置备异常",
+    rateLimitHits: "本地限流拦截",
+    resetBtn: "⚡ 运维解封 (Break-Glass)",
+    modalTitle: "LAN-TLS 安全可逆运维重置",
+    modalDesc: "针对突发网络故障或测试误封，执行断路器复位或精准解除特定节点/IP的限流。所有操作将强审计记录快照。",
+    targetLabel: "重置目标类型",
+    targetCircuitBreaker: "重置 GTS CA 断路器 (CLOSED)",
+    targetNodeLimit: "重置特定节点限流 (Node Rate Limit)",
+    targetIpLimit: "重置特定 IP 限流 (IP Rate Limit)",
+    nodeIdLabel: "节点标识 (Node ID)",
+    nodeIdPlaceholder: "请输入 12 位 Node ID (如 bb0000000001)",
+    ipLabel: "客户端 IP 地址",
+    ipPlaceholder: "请输入客户端 IPv4 / IPv6 地址",
+    resetConfirm: "确定要执行此运维重置操作吗？此操作将即时写入审计记录。",
+    resetting: "重置执行中...",
+    resetSuccess: "运维重置执行成功",
+    resetFailed: "运维重置失败",
+    circuitBreakerHint: "将断路器复位为 CLOSED，清空全部失败计数与退避时间。",
+    nodeLimitHint: "物理删除该节点的 24h 频控记录，立即恢复其申请新证书的资格。",
+    ipLimitHint: "物理删除该 IP 的 24h 频控记录，立即解除该 IP 频控限制。"
   }
 };
 
