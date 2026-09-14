@@ -2151,6 +2151,10 @@ func (a *App) silentProvisionDeviceTLSCert() {
 			return
 		}
 	}
+	if !server.GetPaidStatus() && os.Getenv("EQT_TESTING") != "true" {
+		// 非付费用户不自发申请证书，严格保持网络静默
+		return
+	}
 
 	// 1. Initial grace delay to let main startup finish smoothly without competing for network/CPU
 	time.Sleep(3 * time.Second)
@@ -2173,6 +2177,9 @@ func (a *App) silentProvisionDeviceTLSCert() {
 			return
 		}
 	}
+	if !server.GetPaidStatus() && os.Getenv("EQT_TESTING") != "true" {
+		return
+	}
 
 	_, _ = a.provisionDeviceTLSCert(false)
 }
@@ -2188,6 +2195,9 @@ func (a *App) provisionDeviceTLSCert(force bool) (bool, error) {
 }
 
 func (a *App) provisionDeviceTLSCertInternal(force bool, allowSelfHeal bool) (bool, error) {
+	if !server.GetPaidStatus() && os.Getenv("EQT_TESTING") != "true" {
+		return false, fmt.Errorf("LAN-TLS is a PLUS exclusive feature; active license required")
+	}
 	nodeID := server.GetDeviceNodeID()
 	if nodeID == "" {
 		return false, fmt.Errorf("device node ID is empty")

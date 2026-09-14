@@ -2416,6 +2416,7 @@ function renderSettingsPanel() {
                             <strong>
                                 ${t('enable_tls')}
                                 ${renderTLSSettingIcon(state, t, escapeAttr)}
+                                ${!hasPaidLicense() ? '<span class="badge-pro-tag" style="margin-left: 6px; font-size: 10px; background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; padding: 2px 6px; border-radius: 4px; font-weight: 700; letter-spacing: 0.5px;">PLUS</span>' : ''}
                             </strong>
                             <span>${t('enable_tls_desc')}</span>
                         </div>
@@ -2883,6 +2884,9 @@ function renderPlanComparisonPanel() {
                             ${checkGreen} <span>${t('plan_feature_drag_and_drop')}</span>
                         </li>
                         <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-secondary); opacity: 0.85;">
+                            ${xRed} <span>${t('plan_feature_tls_free')}</span>
+                        </li>
+                        <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-secondary); opacity: 0.85;">
                             ${xRed} <span>${t('plan_feature_chat_free')}</span>
                         </li>
                         <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-secondary); opacity: 0.85;">
@@ -2914,6 +2918,9 @@ function renderPlanComparisonPanel() {
                     <ul style="list-style: none; padding: 0; margin: 0 0 16px; font-size: 12.5px; display: flex; flex-direction: column; gap: 12px; flex-grow: 1; line-height: 1.5;">
                         <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-primary);">
                             ${checkGreen} <strong>${t('plan_feature_unlimit_devices')}</strong>
+                        </li>
+                        <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-primary);">
+                            ${checkGreen} <strong>${t('plan_feature_tls_plus')}</strong>
                         </li>
                         <li style="display: flex; gap: 10px; align-items: flex-start; color: var(--text-primary);">
                             ${checkGreen} <strong>${t('plan_feature_chat_unlimit')}</strong>
@@ -4323,6 +4330,16 @@ function bindEvents() {
                 }
                 if (e.target.id === 'settings-enable-tls') {
                     const isEnabled = Boolean(e.target.checked);
+                    if (isEnabled && !hasPaidLicense()) {
+                        e.target.checked = false;
+                        if (!state.settings) state.settings = {};
+                        state.settings.enableTLS = false;
+                        syncSettingsFromDOM();
+                        handleAutoSaveSettings();
+                        showToast(t('tls_requires_paid_license') || '🔒 LAN-TLS 加密传输为 PLUS 会员专享功能，请升级或激活许可证后使用。');
+                        openPanel('license');
+                        return;
+                    }
                     if (!state.settings) state.settings = {};
                     state.settings.enableTLS = isEnabled;
                     syncSettingsFromDOM();

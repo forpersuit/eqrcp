@@ -227,7 +227,27 @@ func TestGetLogTailAndBuildDiagnosticsZip(t *testing.T) {
 	}
 }
 
+func TestDevProvisionDeviceTLSCert_FreeUserBlocked(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("EQT_CONFIG_DIR", filepath.Join(tempHome, "eqt_conf"))
+
+	app := NewApp()
+	app.logger = NewFileLogger(filepath.Join(tempHome, "desktop.log"), true)
+	defer app.logger.Close()
+
+	// When EQT_TESTING is not set and user is not paid, provisioning must be blocked
+	success, err := app.DevProvisionDeviceTLSCert()
+	if success {
+		t.Fatalf("expected success=false for free tier user, got true")
+	}
+	if err == nil || !strings.Contains(err.Error(), "PLUS exclusive") {
+		t.Fatalf("expected error mentioning PLUS exclusive, got: %v", err)
+	}
+}
+
 func TestDevProvisionDeviceTLSCert(t *testing.T) {
+	t.Setenv("EQT_TESTING", "true")
 	tempHome := t.TempDir()
 	t.Setenv("HOME", tempHome)
 	t.Setenv("EQT_CONFIG_DIR", filepath.Join(tempHome, "eqt_conf"))
@@ -264,6 +284,7 @@ func TestDevProvisionDeviceTLSCert(t *testing.T) {
 }
 
 func TestDevProvisionDeviceTLSCert_ToleratesServerLatencyAboveFiveSeconds(t *testing.T) {
+	t.Setenv("EQT_TESTING", "true")
 	tempHome := t.TempDir()
 	t.Setenv("HOME", tempHome)
 	t.Setenv("EQT_CONFIG_DIR", filepath.Join(tempHome, "eqt_conf"))
@@ -304,6 +325,7 @@ func TestDevProvisionDeviceTLSCert_ToleratesServerLatencyAboveFiveSeconds(t *tes
 }
 
 func TestDevProvisionDeviceTLSCert_Gateway500ErrorSetsLastTLSError(t *testing.T) {
+	t.Setenv("EQT_TESTING", "true")
 	tempHome := t.TempDir()
 	t.Setenv("HOME", tempHome)
 	t.Setenv("EQT_CONFIG_DIR", filepath.Join(tempHome, "eqt_conf"))
@@ -389,6 +411,7 @@ func TestSilentProvisionDeviceTLSCert_SkipsWhenTLSDisabled(t *testing.T) {
 }
 
 func TestDevProvisionDeviceTLSCert_NodeKeyMismatchAutoDisablesTLS(t *testing.T) {
+	t.Setenv("EQT_TESTING", "true")
 	tempHome := t.TempDir()
 	t.Setenv("HOME", tempHome)
 	t.Setenv("EQT_CONFIG_DIR", filepath.Join(tempHome, "eqt_conf"))
@@ -449,6 +472,7 @@ func TestDevProvisionDeviceTLSCert_NodeKeyMismatchAutoDisablesTLS(t *testing.T) 
 }
 
 func TestDevProvisionDeviceTLSCert_PersistsBeforeBroadcastAndTracksRateLimit(t *testing.T) {
+	t.Setenv("EQT_TESTING", "true")
 	tempHome := t.TempDir()
 	t.Setenv("HOME", tempHome)
 	t.Setenv("EQT_CONFIG_DIR", filepath.Join(tempHome, "eqt_conf"))
@@ -537,6 +561,7 @@ func TestDevProvisionDeviceTLSCert_PersistsBeforeBroadcastAndTracksRateLimit(t *
 }
 
 func TestDevProvisionDeviceTLSCert_ParsesServerRetryAfter86400(t *testing.T) {
+	t.Setenv("EQT_TESTING", "true")
 	tempHome := t.TempDir()
 	t.Setenv("HOME", tempHome)
 	t.Setenv("EQT_CONFIG_DIR", filepath.Join(tempHome, "eqt_conf"))
@@ -590,6 +615,7 @@ func TestDevProvisionDeviceTLSCert_ParsesServerRetryAfter86400(t *testing.T) {
 }
 
 func TestDevProvisionDeviceTLSCert_NonRateLimitQuotaErrorDoesNotTriggerCooldown(t *testing.T) {
+	t.Setenv("EQT_TESTING", "true")
 	tempHome := t.TempDir()
 	t.Setenv("HOME", tempHome)
 	t.Setenv("EQT_CONFIG_DIR", filepath.Join(tempHome, "eqt_conf"))
