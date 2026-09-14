@@ -725,3 +725,40 @@ export const SUPPORTED_PROVIDERS: Record<string, CAProvider> = {
   - 格式化断言合计：510 + 169 = **679** passed；
   - 文本自报套件（6 个套件）：`test:env-guard` (9 项)、`subscription`、`portal`、`portal:toggle`、`zero-payment`、`telemetry` 全部退出码 0。
 
+---
+
+#### 3.6.9 第 46 轮复核（对 `af67466a` 的验收 · 2026-09-14 · 基线 `v1.36.134` / `1.13.7`）
+
+**本轮结论：R45 四项缺陷全部实质闭环；但报告本体引入 1 项新 🔴（R46-1：V9 行实测值捏造），系 R45-2 在「修复 R45-2 的报告」中的再犯。**
+
+**一、R45 四项逐项验收（全部独立复跑，非采信自述）**
+
+1. **R45-1 🔴（对账等式零判别力）—— 实质闭环** ✅
+   - 夹具现注入 3 条 `CERT_PROVISION_ERROR`（`ca_rate_limited` / `ca_5xx_error` / `internal_error`），`other_cert_errors` 由 0 变为非零的 **1**（`tests/admin-tls-dashboard-offline.js:200` 断言 `=== 1`）；`total_attempts === 5`（`:201`）、等式（`:203`）、`success_rate === 0.4`（`:206`）。
+   - 复跑 V10（`admin.ts:1951` 的 `totalAttempts` 构成中移除 `otherCertErrors`）→ **33 passed / 3 failed**：`T2.3e1`（预期 5 实际 4）、`T2.3e2`（等式不平）、`T2.3e3`（预期 0.4 实际 0.5）精准翻红，与 §3.6.8 自述逐字吻合。
+2. **R45-2 🟠（实测标签纪律）—— 实质闭环** ✅
+   - V1 行修正为 **109 passed / 3 failed**（复跑一致：`T21.3g1/g2/g3` 翻红、`T21.3g4` 保持绿）；`T21.3g4` 的判别力由 V7（删 `cert.ts:1365` 的 `recordCircuitFailure`）独立实测 **111 passed / 1 failed** 证得。
+3. **R45-3 🟡（版本号对齐）—— 闭环** ✅
+   - `cloudflare/eqt-drm-api/package.json` = `1.13.7`、`pkg/version/version.go` = `v1.36.134`、`desktop/gui/wails.json` = `1.36.134`，三处实测一致。
+4. **R45-4 🟡（探针表标注纪律）—— 闭环** ✅
+   - V3/V4/V5 行改为实测数值（34/2、34/2、35/1），与第 45 轮复测一致；全表 12 行除 V9（见下）外均经本轮或第 45 轮实测核对为真。
+
+**二、全量离线门禁独立加总**
+
+- `npm run test:offline` 复跑 `EXIT=0`；11 个 `Results:` 型 42+27+64+21+17+112+24+15+21+36+131 = **510**，4 个 `===` 型 23+78+33+35 = **169**，合计 **679**，零 `✗ FAIL` —— 与 §3.6.8「三」逐项吻合，且夹具新增 `internal_error` 日志不改断言总数（改值不改数）。
+
+**三、新缺陷**
+
+| 编号 | 级别 | 类别 | 事实 |
+|---|:---:|---|---|
+| **R46-1** | 🔴 | 违反【165】（R45-2 再犯） | §3.6.8 探针表 V9 行标注「**110 passed / 1 failed**（`T24.2` 翻红，`T24.3` 抛出 `ERR_SQLITE_ERROR`，`exit 1`）」。实测：删除 `cert.ts:43` 的 `ALTER TABLE` 后跑 `npm run test:cert:offline`，`T24.1` ✓、`T24.2` ✗，随后 `T24.3` 在第 1905 行（INSERT `duration_ms`）抛 `ERR_SQLITE_ERROR`，进程经 `runTests().catch()`（`:1926`）打印 `Unhandled test failure` 后 `exit 1` —— **从未输出任何 `Results:` 行**（`rg -c "Results:"` = 0）。故「110 passed」为捏造：① 进程在 `Results:` 打印点（`:1922`）之前崩溃，计数根本不存在；② 即便正常收尾，cert 套件总量 **112**（基线 112 passed），1 条失败应为「111 passed / 1 failed」，`110` 与套件总量自相矛盾。同一单元格内「`T24.3` 抛出 `ERR_SQLITE_ERROR`，`exit 1`」与「110 passed」互为矛盾（崩溃即无计数）。§3.6.8 第 2 项声称「严禁任何由删除范围推断出的假实测数值，所有数据均来自命令行真实执行」⇒ **声称修复 R45-2 的报告本体再犯 R45-2**。正确表述应为「`T24.2` 翻红（1 failed），`T24.3` 抛 `ERR_SQLITE_ERROR` 中断进程（exit 1，无 `Results:` 行）」——探针判别力结论本身成立，仅通过数为伪造 |
+
+**四、审查方自查更正（R46-2）**
+
+- 我方第 45 轮记录（§3.6.7 探针表 V7 行、R45-2 根因段；review-history 第 45 轮 R45-2 段）将 `recordCircuitFailure` 引用为 `cert.ts:1357`。实测真值 **`cert.ts:1365`**（`git log -- src/routes/cert.ts` 显示自 `400b8579` 起未变）。逻辑结论不变（`recordCircuitFailure` 位于 V1 删除区间起点 `:1367` 之前，故 `T21.3g4` 在 V1 下保持绿），仅行号引用错误，特此更正为 1365。
+
+**五、判定**
+
+- R45-1 / R45-2 / R45-3 / R45-4 **四项全部实质闭环**，第 45 轮遗留清零。
+- 报告本体 V9 行「110 passed / 1 failed」为**捏造实测值**（进程崩溃无计数 + 与总量 112 矛盾），系 R45-2 的**同报告再犯** ⇒ **R46-1 🔴**。修复报告的质量同样受【151】【165】约束。
+
