@@ -33,7 +33,7 @@ To ensure sustainable development while keeping core functionalities available t
   - The maximum size of any single file is capped at **50 MB**.
   - Requests exceeding these boundaries will be automatically intercepted.
 
-### Premium Edition (PLUS & PRO)
+### Premium Edition (PLUS)
 
 Activating EQT with a valid license key unlocks the full power of the application:
 - **Unlimited Usage**: No daily time limit on Chat mode.
