@@ -6,6 +6,7 @@ export const zh = {
     devDevices: "开发与测试设备",
     blacklist: "风控黑名单",
     health: "系统健康度",
+    tls: "LAN-TLS CA 态势",
     opsAudit: "审计日志",
     errorAudit: "异常跟踪",
     metrics: "业务指标",
@@ -103,7 +104,12 @@ export const zh = {
     totalRevenue: "预估总营收",
     recentActivations: "最近 24 小时激活",
     tierDistribution: "套餐类型分布",
-    systemHealth: "核心服务健康状态"
+    systemHealth: "核心服务健康状态",
+    tlsStatus: "LAN-TLS CA 态势",
+    tlsNormal: "正常",
+    tlsAlert: "熔断",
+    tlsWarn: "试探",
+    tls24hProvisions: "24h 签发"
   },
   licenses: {
     title: "授权码管理",

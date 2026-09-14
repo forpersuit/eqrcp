@@ -6,7 +6,7 @@
 export type LicenseTier = 'PLUS' | 'PRO';
 export type LicenseStatus = 'active' | 'suspended' | 'revoked';
 export type ErrorLogLevel = 'ERROR' | 'WARN' | 'CRITICAL';
-export type AdminTab = 'overview' | 'audit' | 'ops' | 'licenses' | 'devDevices' | 'blacklist' | 'health' | 'metrics';
+export type AdminTab = 'overview' | 'audit' | 'ops' | 'licenses' | 'devDevices' | 'blacklist' | 'health' | 'metrics' | 'tls';
 export type BlacklistKind = 'email' | 'device';
 export type LicenseSource = 'purchase' | 'promo' | 'admin' | 'test';
 export type RevokeReason = 'refund' | 'chargeback' | 'subscription' | 'admin' | 'test' | 'expired';

@@ -35,8 +35,10 @@
 - **表结构自愈保障**：由于新测试沙箱库在初始阶段可能尚未触发 ACME 置备或令牌桶流控，遥测查询前必须调用 `ensureCertProvisionsTable`、`ensureAuditLogTable`、`ensureTokenBucketsTable` 与 `ensureCircuitBreakersTable`。
 - **防御性查询隔离**：各区块（令牌桶状态、24h 签发指标、CA 归属分布、错误审计统计）查询必须在独立的异常保护块中执行，在表空或偶发只读异常时降级回退至默认零状态，严禁抛出裸 500 异常阻断整体大盘加载。
 
-### 14.2 双 CA 指示灯与态势大盘
-- **双断路器态势监控**：前台 `TLSCircuitCard.svelte` 统一呈现 GTS CA（主力）与 Let's Encrypt（灾备）的双断路器状态灯（🟢 CLOSED / 🟡 HALF_OPEN / 🔴 OPEN）、连续成功/失败计数及退避冷却时间。
+### 14.2 双 CA 指示灯、独立侧边栏与态势大盘
+- **独立导航与异常红点 (Sidebar Tab & Alert Dot)**：左侧边栏提供独立的 **「🔒 LAN-TLS CA 态势」** 导航项（Tab: `'tls'`，承载全屏大盘与 Break-Glass 运维控制）；当任何 CA 断路器熔断跳闸（`OPEN`）时，导航项右侧即时亮起带呼吸动效的红色告警圆点（`.dot-error`），半开试探时显示黄点（`.dot-warn`），全局心跳轮询确保管理员在任意页面均能第一时间获悉异常。
+- **系统概览精炼卡片联动 (Overview Summary Card)**：`Overview.svelte` 核心指标网格中集成「🔒 LAN-TLS CA 态势」快捷卡片，展示当前主力 GTS 状态与 24h 签发数；发生熔断时卡片自动呈现红色告警边框与「熔断」文案，点击可直接平滑跳转至独立大盘。
+- **双断路器态势监控**：专属控制台 `TLSCircuitCard.svelte` 统一呈现 GTS CA（主力）与 Let's Encrypt（灾备）的双断路器状态灯（🟢 CLOSED / 🟡 HALF_OPEN / 🔴 OPEN）、连续成功/失败计数及退避冷却时间。
 - **平滑令牌桶水位**：呈现 `cert_provision:acme_smoothing` 当前瞬时 Token 存量（`0~5.0`）、最大容量与填充速率（`10/min`）。
 - **精准归因跳闸分析**：区分 `ca_rate_limited (429)`、`ca_5xx_error (5xx)`、`other_cert_errors`、`rate_limit_hits` 与 `failover_events`（灾备故障转移），杜绝告警误判。
 

@@ -1,7 +1,9 @@
 <script lang="ts">
+  import { onMount, onDestroy } from 'svelte';
   import { isAuthenticated, clearAccessSession, accessLogoutUrl } from './lib/auth';
   import { t, setLocale, currentLocale } from './lib/i18n';
   import { adminEnv, setAdminEnvironment, type AdminEnvironment } from './lib/env.svelte';
+  import { tlsState } from './lib/tls-state.svelte';
   import Login from './pages/Login.svelte';
   import Overview from './pages/Overview.svelte';
   import ErrorAudit from './pages/ErrorAudit.svelte';
@@ -11,6 +13,7 @@
   import Blacklist from './pages/Blacklist.svelte';
   import SystemHealth from './pages/SystemHealth.svelte';
   import Metrics from './pages/Metrics.svelte';
+  import TLSCircuit from './pages/TLSCircuit.svelte';
   import type { AdminTab } from './lib/types';
 
   let authed = $state(isAuthenticated());
@@ -31,7 +34,18 @@
 
   function switchEnv(target: AdminEnvironment) {
     setAdminEnvironment(target);
+    tlsState.fetchStatus();
   }
+
+  onMount(() => {
+    if (authed) {
+      tlsState.startPolling(30000);
+    }
+  });
+
+  onDestroy(() => {
+    tlsState.stopPolling();
+  });
 </script>
 
 {#if !authed}
@@ -125,6 +139,22 @@
 
         <button
           class="nav-item"
+          class:active={currentTab === 'tls'}
+          onclick={() => (currentTab = 'tls')}
+        >
+          <div class="nav-label-group">
+            <span class="nav-icon">🔒</span>
+            <span>{$t('nav.tls')}</span>
+          </div>
+          {#if tlsState.alertLevel === 'error'}
+            <span class="nav-alert-dot dot-error" title="GTS CA 熔断跳闸 (OPEN)"></span>
+          {:else if tlsState.alertLevel === 'warn'}
+            <span class="nav-alert-dot dot-warn" title="GTS CA 试探或灾备转移"></span>
+          {/if}
+        </button>
+
+        <button
+          class="nav-item"
           class:active={currentTab === 'metrics'}
           onclick={() => (currentTab = 'metrics')}
         >
@@ -180,6 +210,8 @@
           <Blacklist />
         {:else if currentTab === 'health'}
           <SystemHealth />
+        {:else if currentTab === 'tls'}
+          <TLSCircuit />
         {:else if currentTab === 'metrics'}
           <Metrics />
         {/if}
@@ -350,6 +382,48 @@
     color: var(--accent-primary);
     border: 1px solid rgba(99, 102, 241, 0.3);
     font-weight: 600;
+  }
+
+  .nav-label-group {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex: 1;
+  }
+
+  .nav-alert-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  .dot-error {
+    background-color: #ef4444;
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.9);
+    animation: alert-pulse 1.8s infinite ease-in-out;
+  }
+
+  .dot-warn {
+    background-color: #f59e0b;
+    box-shadow: 0 0 6px rgba(245, 158, 11, 0.8);
+  }
+
+  @keyframes alert-pulse {
+    0% {
+      transform: scale(0.9);
+      opacity: 0.7;
+    }
+    50% {
+      transform: scale(1.3);
+      opacity: 1;
+      box-shadow: 0 0 12px rgba(239, 68, 68, 1);
+    }
+    100% {
+      transform: scale(0.9);
+      opacity: 0.7;
+    }
   }
 
   .nav-icon {

@@ -6,6 +6,7 @@ export const en = {
     devDevices: "Dev & Test Devices",
     blacklist: "Blacklist",
     health: "System Health",
+    tls: "LAN-TLS CA",
     opsAudit: "Ops Audit",
     errorAudit: "Error Tracking",
     metrics: "Business Metrics",
@@ -102,7 +103,12 @@ export const en = {
     totalRevenue: "Estimated Revenue",
     recentActivations: "24h Activations",
     tierDistribution: "Tier Distribution",
-    systemHealth: "System Health"
+    systemHealth: "System Health",
+    tlsStatus: "LAN-TLS CA",
+    tlsNormal: "OK",
+    tlsAlert: "OPEN",
+    tlsWarn: "HALF_OPEN",
+    tls24hProvisions: "24h Issued"
   },
   licenses: {
     title: "License Management",
