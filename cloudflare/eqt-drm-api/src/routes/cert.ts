@@ -37,17 +37,24 @@ export async function ensureCertProvisionsTable(env: Env): Promise<void> {
         provisioned_at TEXT NOT NULL,
         client_ip      TEXT DEFAULT NULL,
         trace_id       TEXT DEFAULT NULL,
-        duration_ms    INTEGER DEFAULT NULL
+        duration_ms    INTEGER DEFAULT NULL,
+        ca_provider    TEXT DEFAULT 'standalone'
       )
     `).run();
     try {
       await env.DB.prepare(`ALTER TABLE device_cert_provisions ADD COLUMN duration_ms INTEGER DEFAULT NULL`).run();
+    } catch (_) {}
+    try {
+      await env.DB.prepare(`ALTER TABLE device_cert_provisions ADD COLUMN ca_provider TEXT DEFAULT 'standalone'`).run();
     } catch (_) {}
     await env.DB.prepare(
       `CREATE INDEX IF NOT EXISTS idx_cert_provisions_node ON device_cert_provisions(node_id, provisioned_at)`
     ).run();
     await env.DB.prepare(
       `CREATE INDEX IF NOT EXISTS idx_cert_provisions_device ON device_cert_provisions(device_id)`
+    ).run();
+    await env.DB.prepare(
+      `CREATE INDEX IF NOT EXISTS idx_cert_provisions_provider ON device_cert_provisions(ca_provider)`
     ).run();
     await env.DB.prepare(`
       CREATE TABLE IF NOT EXISTS node_public_keys (
@@ -1359,6 +1366,7 @@ async function executeCertProvisioningFlow(params: CertProvisioningParams): Prom
     // 7. Certificate Issuance Engine (RFC 8555 ACME DNS-01 or Fallback Signer)
     let certPEM: string;
     let expiresAt: string;
+    let finalProviderId: string = 'standalone';
 
     if (acmeRequested) {
       if (!env.ACME_DNS_API_ENDPOINTS) {
@@ -1412,6 +1420,7 @@ async function executeCertProvisioningFlow(params: CertProvisioningParams): Prom
           );
           certPEM = result.certPEM;
           expiresAt = result.expiresAt;
+          finalProviderId = currentProvider.id;
           await recordCircuitSuccess(env, currentProvider.circuitBreakerName);
           break;
         } catch (acmeErr: any) {
@@ -1527,8 +1536,8 @@ async function executeCertProvisioningFlow(params: CertProvisioningParams): Prom
       try {
         await ensureCertProvisionsTable(env);
         await env.DB.prepare(`
-          INSERT INTO device_cert_provisions (node_id, device_id, common_name, expires_at, provisioned_at, client_ip, trace_id, duration_ms)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO device_cert_provisions (node_id, device_id, common_name, expires_at, provisioned_at, client_ip, trace_id, duration_ms, ca_provider)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).bind(
           cleanNode,
           deviceIdHeader || null,
@@ -1537,7 +1546,8 @@ async function executeCertProvisioningFlow(params: CertProvisioningParams): Prom
           new Date().toISOString(),
           clientIp || null,
           traceId,
-          durationMs
+          durationMs,
+          finalProviderId
         ).run();
       } catch (logErr) {
         console.error(`[LAN-TLS-PROVISION] Failed to record provision in D1:`, logErr);

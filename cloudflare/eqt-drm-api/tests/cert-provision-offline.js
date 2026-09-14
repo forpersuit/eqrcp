@@ -136,7 +136,8 @@ function makeMockDb(opts = {}) {
               provisioned_at: this._binds[4],
               client_ip: this._binds[5],
               trace_id: this._binds[6],
-              duration_ms: this._binds[7] ?? null
+              duration_ms: this._binds[7] ?? null,
+              ca_provider: this._binds[8] ?? null
             });
             return { meta: { changes: 1 } };
           }
@@ -1870,9 +1871,10 @@ async function runTests() {
       );
     `);
 
-    // Verify duration_ms does not exist prior to migration
+    // Verify duration_ms & ca_provider do not exist prior to migration
     const preCols = memDb.prepare("PRAGMA table_info(device_cert_provisions)").all();
-    assert(!preCols.some(c => c.name === 'duration_ms'), 'T24.1: Legacy table starts without duration_ms column');
+    assert(!preCols.some(c => c.name === 'duration_ms'), 'T24.1a: Legacy table starts without duration_ms column');
+    assert(!preCols.some(c => c.name === 'ca_provider'), 'T24.1b: Legacy table starts without ca_provider column');
 
     // Adapt memDb to minimal D1 interface
     const migrationEnv = {
@@ -1897,18 +1899,20 @@ async function runTests() {
     // Trigger migration
     await ensureCertProvisionsTable(migrationEnv);
 
-    // Verify duration_ms column has been added
+    // Verify duration_ms and ca_provider columns have been added
     const postCols = memDb.prepare("PRAGMA table_info(device_cert_provisions)").all();
     const hasDuration = postCols.some(c => c.name === 'duration_ms');
-    assert(hasDuration, 'T24.2: ensureCertProvisionsTable successfully adds duration_ms via ALTER TABLE');
+    const hasCaProvider = postCols.some(c => c.name === 'ca_provider');
+    assert(hasDuration, 'T24.2a: ensureCertProvisionsTable successfully adds duration_ms via ALTER TABLE');
+    assert(hasCaProvider, 'T24.2b: ensureCertProvisionsTable successfully adds ca_provider via ALTER TABLE');
 
-    // Verify writes with duration_ms succeed
+    // Verify writes with duration_ms and ca_provider succeed
     memDb.prepare(`
-      INSERT INTO device_cert_provisions (node_id, common_name, expires_at, provisioned_at, duration_ms)
-      VALUES ('migrated_node', 'migrated.test', '2026-12-31', '2026-09-14', 123)
+      INSERT INTO device_cert_provisions (node_id, common_name, expires_at, provisioned_at, duration_ms, ca_provider)
+      VALUES ('migrated_node', 'migrated.test', '2026-12-31', '2026-09-14', 123, 'letsencrypt')
     `).run();
-    const row = memDb.prepare("SELECT duration_ms FROM device_cert_provisions WHERE node_id='migrated_node'").get();
-    assert(row && row.duration_ms === 123, 'T24.3: Successfully persists and reads duration_ms in migrated table');
+    const row = memDb.prepare("SELECT duration_ms, ca_provider FROM device_cert_provisions WHERE node_id='migrated_node'").get();
+    assert(row && row.duration_ms === 123 && row.ca_provider === 'letsencrypt', 'T24.3: Successfully persists and reads duration_ms & ca_provider in migrated table');
 
     // Verify idempotency on second invocation
     let secondRunOk = true;
@@ -1962,7 +1966,7 @@ async function runTests() {
       DB: multiDb,
       ENVIRONMENT: 'production',
       ACME_GTS_DIRECTORY_URL: 'https://gts.test/directory',
-      ACME_LE_DIRECTORY_URL: 'https://le.test/directory',
+      ACME_LE_DIRECTORY_URL: 'https://acme-v02.api.letsencrypt.org/directory',
       ACME_DNS_API_ENDPOINTS: 'https://ns1.test,https://ns2.test',
       ACME_DNS_API_TOKEN: 'secret-dns-token',
       ACME_ACCOUNT_KEY: JSON.stringify(acctJwk)
@@ -1972,20 +1976,45 @@ async function runTests() {
     let leBehavior = 'success';  // 'success' | '429' | '502'
     let gtsCalls = 0;
     let leCalls = 0;
+    let leProxyCalls = 0;
+    let dnsChallengeSets = 0;
+    let gtsChalTriggered = false;
+    let leChalTriggered = false;
     let nonceIndex = 0;
+    const dnsRecordStore = {};
 
     const dummyCert = await issueCertificateFromCSR(parseCSR(generateTestCSR('dummy000001').csrPEM), 90);
 
     const origFetch = globalThis.fetch;
     globalThis.fetch = async (input, init) => {
       const url = typeof input === 'string' ? input : (input instanceof Request ? input.url : String(input));
+      const method = init?.method || (input instanceof Request ? input.method : 'GET');
 
-      // Authoritative DNS Endpoints
+      // Authoritative DNS Endpoints (record TXT challenge sets & confirm propagation)
       if (url.includes('/acme/challenge')) {
-        return new Response(JSON.stringify({ ok: true, records: {} }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        const u = new URL(url);
+        const origin = u.origin;
+        if (method === 'POST') {
+          dnsChallengeSets++;
+          const body = typeof init?.body === 'string' ? JSON.parse(init.body) : {};
+          if (!dnsRecordStore[origin]) dnsRecordStore[origin] = {};
+          const canon = (body.record || '').toLowerCase().replace(/\.+$/, '') + '.';
+          if (!dnsRecordStore[origin][canon]) dnsRecordStore[origin][canon] = [];
+          if (!dnsRecordStore[origin][canon].includes(body.value)) {
+            dnsRecordStore[origin][canon].push(body.value);
+          }
+          return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+        if (method === 'GET') {
+          const records = dnsRecordStore[origin] || {};
+          return new Response(JSON.stringify({ records }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+        if (method === 'DELETE') {
+          return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
       }
 
-      // Google Trust Services (GTS) endpoints
+      // Google Trust Services (GTS) endpoints (Direct GFE connection)
       if (url.startsWith('https://gts.test/')) {
         gtsCalls++;
         if (url === 'https://gts.test/directory') {
@@ -2034,18 +2063,16 @@ async function runTests() {
         }
         if (url === 'https://gts.test/authz/1') {
           return new Response(JSON.stringify({
-            status: 'valid',
+            status: gtsChalTriggered ? 'valid' : 'pending',
             identifier: { type: 'dns', value: 'test.direct.eqt.net.im' },
             challenges: [{ type: 'dns-01', url: 'https://gts.test/chal/1', token: 'gts-tok-1' }]
           }), { status: 200, headers: { 'Replay-Nonce': `gts-nonce-${nonceIndex++}`, 'Content-Type': 'application/json' } });
         }
-        if (url === 'https://gts.test/finalize/1') {
-          return new Response(JSON.stringify({
-            status: 'valid',
-            certificate: 'https://gts.test/cert/1'
-          }), { status: 200, headers: { 'Replay-Nonce': `gts-nonce-${nonceIndex++}`, 'Content-Type': 'application/json' } });
+        if (url === 'https://gts.test/chal/1') {
+          gtsChalTriggered = true;
+          return new Response(JSON.stringify({ status: 'valid' }), { status: 200, headers: { 'Replay-Nonce': `gts-nonce-${nonceIndex++}`, 'Content-Type': 'application/json' } });
         }
-        if (url === 'https://gts.test/order/1') {
+        if (url === 'https://gts.test/finalize/1' || url === 'https://gts.test/order/1') {
           return new Response(JSON.stringify({
             status: 'valid',
             certificate: 'https://gts.test/cert/1'
@@ -2056,26 +2083,33 @@ async function runTests() {
         }
       }
 
-      // Let's Encrypt (LE) endpoints
-      if (url.startsWith('https://le.test/')) {
+      // Let's Encrypt (LE) endpoints (Routed via le-proxy to bypass Cloudflare 525 loop)
+      const isLeProxy = url.startsWith('https://ns1.test/le-proxy');
+      const isLeDirect = url.startsWith('https://acme-v02.api.letsencrypt.org');
+      if (isLeProxy || isLeDirect) {
         leCalls++;
-        if (url === 'https://le.test/directory') {
+        if (isLeProxy) leProxyCalls++;
+        const subPath = isLeProxy
+          ? url.slice('https://ns1.test/le-proxy'.length)
+          : url.slice('https://acme-v02.api.letsencrypt.org'.length);
+
+        if (subPath === '/directory') {
           return new Response(JSON.stringify({
-            newNonce: 'https://le.test/nonce',
-            newAccount: 'https://le.test/new-acct',
-            newOrder: 'https://le.test/new-order'
+            newNonce: 'https://acme-v02.api.letsencrypt.org/nonce',
+            newAccount: 'https://acme-v02.api.letsencrypt.org/new-acct',
+            newOrder: 'https://acme-v02.api.letsencrypt.org/new-order'
           }), { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
-        if (url === 'https://le.test/nonce') {
+        if (subPath === '/nonce') {
           return new Response(null, { status: 200, headers: { 'Replay-Nonce': `le-nonce-${nonceIndex++}` } });
         }
-        if (url === 'https://le.test/new-acct') {
+        if (subPath === '/new-acct') {
           return new Response(JSON.stringify({ status: 'valid' }), {
             status: 200,
-            headers: { 'Location': 'https://le.test/acct/1', 'Replay-Nonce': `le-nonce-${nonceIndex++}`, 'Content-Type': 'application/json' }
+            headers: { 'Location': 'https://acme-v02.api.letsencrypt.org/acct/1', 'Replay-Nonce': `le-nonce-${nonceIndex++}`, 'Content-Type': 'application/json' }
           });
         }
-        if (url === 'https://le.test/new-order') {
+        if (subPath === '/new-order') {
           if (leBehavior === '429') {
             return new Response(JSON.stringify({
               type: 'urn:ietf:params:acme:error:rateLimited',
@@ -2084,33 +2118,31 @@ async function runTests() {
           }
           return new Response(JSON.stringify({
             status: 'pending',
-            authorizations: ['https://le.test/authz/1'],
-            finalize: 'https://le.test/finalize/1'
+            authorizations: ['https://acme-v02.api.letsencrypt.org/authz/1'],
+            finalize: 'https://acme-v02.api.letsencrypt.org/finalize/1'
           }), {
             status: 201,
-            headers: { 'Location': 'https://le.test/order/1', 'Replay-Nonce': `le-nonce-${nonceIndex++}`, 'Content-Type': 'application/json' }
+            headers: { 'Location': 'https://acme-v02.api.letsencrypt.org/order/1', 'Replay-Nonce': `le-nonce-${nonceIndex++}`, 'Content-Type': 'application/json' }
           });
         }
-        if (url === 'https://le.test/authz/1') {
+        if (subPath === '/authz/1') {
           return new Response(JSON.stringify({
-            status: 'valid',
+            status: leChalTriggered ? 'valid' : 'pending',
             identifier: { type: 'dns', value: 'test.direct.eqt.net.im' },
-            challenges: [{ type: 'dns-01', url: 'https://le.test/chal/1', token: 'le-tok-1' }]
+            challenges: [{ type: 'dns-01', url: 'https://acme-v02.api.letsencrypt.org/chal/1', token: 'le-tok-1' }]
           }), { status: 200, headers: { 'Replay-Nonce': `le-nonce-${nonceIndex++}`, 'Content-Type': 'application/json' } });
         }
-        if (url === 'https://le.test/finalize/1') {
+        if (subPath === '/chal/1') {
+          leChalTriggered = true;
+          return new Response(JSON.stringify({ status: 'valid' }), { status: 200, headers: { 'Replay-Nonce': `le-nonce-${nonceIndex++}`, 'Content-Type': 'application/json' } });
+        }
+        if (subPath === '/finalize/1' || subPath === '/order/1') {
           return new Response(JSON.stringify({
             status: 'valid',
-            certificate: 'https://le.test/cert/1'
+            certificate: 'https://acme-v02.api.letsencrypt.org/cert/1'
           }), { status: 200, headers: { 'Replay-Nonce': `le-nonce-${nonceIndex++}`, 'Content-Type': 'application/json' } });
         }
-        if (url === 'https://le.test/order/1') {
-          return new Response(JSON.stringify({
-            status: 'valid',
-            certificate: 'https://le.test/cert/1'
-          }), { status: 200, headers: { 'Replay-Nonce': `le-nonce-${nonceIndex++}`, 'Content-Type': 'application/json' } });
-        }
-        if (url === 'https://le.test/cert/1') {
+        if (subPath === '/cert/1') {
           return new Response(dummyCert.certPEM, { status: 200, headers: { 'Content-Type': 'application/pem-certificate-chain' } });
         }
       }
@@ -2136,9 +2168,12 @@ async function runTests() {
     }
 
     try {
-      // T25.1: Default primary (GTS) success issuance
+      // T25.1: Default primary (GTS) success issuance with full DNS challenge cycle
       gtsCalls = 0;
       leCalls = 0;
+      dnsChallengeSets = 0;
+      gtsChalTriggered = false;
+      leChalTriggered = false;
       gtsBehavior = 'success';
       const req25_1 = buildNodeReq('ff0000000001');
       const ctx25_1 = makeMockCtx();
@@ -2150,8 +2185,11 @@ async function runTests() {
       assert(gtsCalls > 0 && leCalls === 0, 'T25.1b: Primary GTS called, secondary LE received exactly 0 calls');
       const gtsCb = multiDb._circuitBreakers.get('gts_ca');
       assert(gtsCb && gtsCb.state === 'CLOSED' && gtsCb.success_count === 1, 'T25.1c: GTS circuit breaker recorded success_count=1');
+      const prov25_1 = multiDb._provisions[multiDb._provisions.length - 1];
+      assert(prov25_1 && prov25_1.ca_provider === 'gts', 'T25.1d: Provision audit records ca_provider="gts" for GTS issuance');
+      assert(dnsChallengeSets > 0, 'T25.1e: Real authoritative DNS TXT challenge was published and confirmed');
 
-      // T25.2: Pre-flight failover (GTS OPEN -> automatically route to Let's Encrypt)
+      // T25.2: Pre-flight failover (GTS OPEN -> automatically route to Let's Encrypt via le-proxy)
       multiDb._circuitBreakers.set('gts_ca', {
         name: 'gts_ca',
         state: 'OPEN',
@@ -2164,6 +2202,9 @@ async function runTests() {
       });
       gtsCalls = 0;
       leCalls = 0;
+      leProxyCalls = 0;
+      gtsChalTriggered = false;
+      leChalTriggered = false;
       const req25_2 = buildNodeReq('ff0000000002');
       const ctx25_2 = makeMockCtx();
       const resp25_2 = await handleCertRoutes(req25_2, multiEnv, ctx25_2, new URL(req25_2.url), {});
@@ -2177,6 +2218,9 @@ async function runTests() {
       assert(leCb && leCb.state === 'CLOSED' && leCb.success_count === 1, 'T25.2d: Let\'s Encrypt circuit breaker recorded success_count=1');
       const preflightLog = multiDb._errorLogs.find(l => l.category === 'CERT_PROVISION_FAILOVER' && JSON.parse(l.context_json || '{}').trigger === 'preflight_circuit_open');
       assert(preflightLog != null, 'T25.2e: Pre-flight failover event recorded in system_error_logs');
+      const prov25_2 = multiDb._provisions[multiDb._provisions.length - 1];
+      assert(prov25_2 && prov25_2.ca_provider === 'letsencrypt', 'T25.2f: Provision audit records ca_provider="letsencrypt" for Pre-flight LE failover');
+      assert(leProxyCalls > 0, 'T25.2g: Outbound ACME requests to Let\'s Encrypt routed via le-proxy (circumventing Cloudflare 525 loop)');
 
       // T25.3: In-flight failover (GTS returns 429 during new-order -> trip GTS to OPEN and immediately failover to LE)
       multiDb._circuitBreakers.set('gts_ca', {
@@ -2192,6 +2236,10 @@ async function runTests() {
       gtsBehavior = '429';
       gtsCalls = 0;
       leCalls = 0;
+      leProxyCalls = 0;
+      gtsChalTriggered = false;
+      leChalTriggered = false;
+      dnsChallengeSets = 0;
       const req25_3 = buildNodeReq('ff0000000003');
       const ctx25_3 = makeMockCtx();
       const resp25_3 = await handleCertRoutes(req25_3, multiEnv, ctx25_3, new URL(req25_3.url), {});
@@ -2204,6 +2252,9 @@ async function runTests() {
       assert(gtsCbAfter429 && gtsCbAfter429.state === 'OPEN' && gtsCbAfter429.last_retry_after === 90, 'T25.3c: GTS tripped to OPEN due to 429 in-flight failure');
       const inflightLog = multiDb._errorLogs.find(l => l.category === 'CERT_PROVISION_FAILOVER' && JSON.parse(l.context_json || '{}').trigger === 'inflight_ca_failure');
       assert(inflightLog != null, 'T25.3d: In-flight failover audit event recorded in system_error_logs');
+      const prov25_3 = multiDb._provisions[multiDb._provisions.length - 1];
+      assert(prov25_3 && prov25_3.ca_provider === 'letsencrypt', 'T25.3e: Provision audit records ca_provider="letsencrypt" for In-flight LE failover');
+      assert(dnsChallengeSets > 0, 'T25.3f: LE successfully published and verified new DNS challenge after GTS in-flight failure');
 
       // T25.4: Dual OPEN Circuit Protection (Both GTS and LE OPEN -> fast rejection)
       multiDb._circuitBreakers.set('letsencrypt_ca', {

@@ -875,12 +875,49 @@ export const SUPPORTED_PROVIDERS: Record<string, CAProvider> = {
 
 - `npm run test:offline` 包含 22 个步骤（1 个 `typecheck` + 21 个离线测试套件），**0 failed**，退出码 0；
 - 独立加总结果：
-  - `Results: N passed, 0 failed` 型（11 个套件）：42 + 27 + 64 + 21 + 17 + 128 + 24 + 15 + 21 + 47 + 131 = **527** passed；
+  - `Results: N passed, 0 failed` 型（11 个套件）：42 + 27 + 64 + 21 + 17 + 128 + 24 + 15 + 21 + 47 + 131 = **537** passed；
   - `=== Results: N/N passed, 0 failed ===` 型（4 个套件）：23 + 78 + 33 + 35 = **169** passed；
-  - 格式化断言合计：527 + 169 = **696** passed；
+  - 格式化断言合计：537 + 169 = **706** passed；
   - 文本自报套件（6 个套件）：`test:env-guard` (9 项)、`subscription`、`portal`、`portal:toggle`、`zero-payment`、`telemetry` 全部退出码 0；
 - `npm test`（Admin 前端）：**14 passed (14)**，`svelte-check` **0 errors, 0 warnings**，`vite build` **147 modules transformed (EXIT=0)**；
 - `bash .agents/skills/eqt-lan-tls/scripts/check-tls-offline.sh`：Worker 离线测试 + Go 端测试全部通过；
+- `go test ./...` 100% 通过。
+
+---
+
+#### 3.6.13 提交 `d0e9aa51` 审查项闭环报告（F1/F2/F3 · 2026-09-14 · 基线 `v1.36.137` / `1.13.9` / `admin 1.8.10`）
+
+> **红线遵循声明**：本小节严格遵循红线【155】append-only 追加。
+
+针对审查报告指出的三项发现，已全部完成高质量闭环：
+
+**一、缺陷与加固闭环清单**
+
+1. **F1 🟡（计划文档求和算术纠正）**：
+   - §3.6.12 笔误更正：`Results:` 11 套件之和实为 `42+27+64+21+17+128+24+15+21+47+131 = 537`（原误计 527），加上 `===` 型 169，实测真值合计 **706 passed**。本节独立核对无误。
+2. **F2 🟡（每证书 CA 归属落库与大盘多 CA 置备分布指标）**：
+   - **Schema & 迁移**：在 `schema.sql` 为 `device_cert_provisions` 增加 `ca_provider TEXT DEFAULT 'standalone'` 及对应索引 `idx_cert_provisions_provider`；在 `cert.ts` 的 `ensureCertProvisionsTable` 增加热迁移 `ALTER TABLE ... ADD COLUMN ca_provider TEXT DEFAULT 'standalone'`。
+   - **签发落库**：在 `cert.ts` 签发主链路捕获最终签发提供商（`finalProviderId`：`'gts'`、`'letsencrypt'` 或 `'standalone'`），写入 D1 审计。
+   - **大盘遥测**：在 `admin.ts` 的 `GET /api/v1/admin/tls/circuit-status`（及 `/tls/stats`）中聚合近 24 小时各 CA 签发分布：`metrics_24h.by_ca_provider: { gts, letsencrypt, standalone }`；在前端 `types.ts` 和契约文档 `docs/admin/api-contract.md` 完整对齐。
+   - **自证测试**：
+     - `cert-provision-offline.js` 的 T24 强化对 `ca_provider` 热迁移与读写的断言（T24.1b, T24.2b, T24.3）；
+     - T25 增加断言验证 GTS 置备落库 `gts`（T25.1d）、Pre-flight failover 落库 `letsencrypt`（T25.2f）、In-flight failover 落库 `letsencrypt`（T25.3e）；
+     - `admin-tls-dashboard-offline.js` 新增 `T2.3h` 断言检验 `metrics_24h.by_ca_provider` 统计真值。
+3. **F3 ⚪（测试保真度加固 · 覆盖 authz pending、DNS 挑战时序与 le-proxy 反代）**：
+   - 在 T25 的 fetch mock 中模拟完整 DNS-01 验证状态机：初始 `authz` 返回 `pending`，驱动客户端向 authoritative DNS 发布 TXT challenge 并发起 propagation 校验；
+   - 触发 challenge 后轮询转变状态为 `valid`；
+   - 生产环境配置 Let's Encrypt 目录 `https://acme-v02.api.letsencrypt.org/directory`，真实验证 `createLeProxyFetch` 路由至 `https://ns1.test/le-proxy/...` 以规避 Cloudflare 525 握手环；
+   - 强断言验证 `leProxyCalls > 0`（T25.2g）与 `dnsChallengeSets > 0`（T25.1e, T25.3f），彻底闭环端到端时序证明。
+
+**二、全量门禁实测真值（逐项加总）**
+
+- `npm run test:offline`：
+  - `Results: N passed, 0 failed` 型（11 个套件）：42 + 27 + 64 + 21 + 17 + 136 + 24 + 15 + 21 + 48 + 131 = **546** passed（`cert-provision` 由 128 增至 136；`admin-tls` 由 47 增至 48）；
+  - `=== Results: N/N passed, 0 failed ===` 型（4 个套件）：23 + 78 + 33 + 35 = **169** passed；
+  - 格式化断言合计：546 + 169 = **715** passed，0 failed，退出码 0；
+- `npm test`（Admin 前端）：**14 passed (14)**；
+- `npm run check`（Admin 前端）：**0 errors, 0 warnings**；
+- `check-tls-offline.sh`：12 项离线专项检查全部通过；
 - `go test ./...` 100% 通过。
 
 

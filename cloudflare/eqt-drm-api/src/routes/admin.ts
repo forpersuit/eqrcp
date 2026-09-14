@@ -1967,6 +1967,17 @@ export async function handleAdminRoutes(
     const totalSuccess = Number(provStats?.total_provisions || 0);
     const avgDuration = provStats?.avg_duration_ms != null ? Math.round(Number(provStats.avg_duration_ms) * 10) / 10 : null;
 
+    // 3.1 Provisions grouped by ca_provider
+    const byCaProvider: Record<string, number> = { gts: 0, letsencrypt: 0, standalone: 0 };
+    try {
+      const caRows = await env.DB.prepare(
+        "SELECT COALESCE(ca_provider, 'standalone') as provider, COUNT(*) as count FROM device_cert_provisions WHERE provisioned_at >= ? GROUP BY provider"
+      ).bind(since24h).all<{ provider: string; count: number }>();
+      for (const row of (caRows?.results || [])) {
+        byCaProvider[row.provider] = Number(row.count || 0);
+      }
+    } catch (_) {}
+
     // 4. 24h Trip reasons & failures from system_error_logs
     const errorLogs = await env.DB.prepare(
       "SELECT category, context_json FROM system_error_logs WHERE created_at >= ? AND (category = 'CERT_PROVISION_ERROR' OR category = 'CERT_PROVISION_FAILOVER' OR category LIKE 'RATE_LIMIT_%')"
@@ -2013,6 +2024,7 @@ export async function handleAdminRoutes(
         provisions_success: totalSuccess,
         avg_duration_ms: avgDuration,
         success_rate: successRate,
+        by_ca_provider: byCaProvider,
         trip_reasons: {
           ca_rate_limited: trip429,
           ca_5xx_error: trip5xx,

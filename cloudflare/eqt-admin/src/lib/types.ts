@@ -320,6 +320,7 @@ export interface TLSMeterics24h {
   };
   rate_limit_hits: number;
   failover_events?: number;
+  by_ca_provider?: Record<string, number>;
 }
 
 export interface AdminTLSCircuitStatusResponse {

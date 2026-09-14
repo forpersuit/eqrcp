@@ -151,14 +151,14 @@ async function runTests() {
       VALUES ('cert_provision:acme_smoothing', 3.5, ?, 5.0, 0.1667)
     `).run(nowIso);
 
-    // Seed 2 successful provisions with duration 120ms and 80ms
+    // Seed 2 successful provisions with duration 120ms and 80ms (one GTS, one Let's Encrypt)
     d1.db.prepare(`
-      INSERT INTO device_cert_provisions (node_id, common_name, expires_at, provisioned_at, duration_ms)
-      VALUES ('node_001', 'node_001.direct.eqt.net.im', ?, ?, 120)
+      INSERT INTO device_cert_provisions (node_id, common_name, expires_at, provisioned_at, duration_ms, ca_provider)
+      VALUES ('node_001', 'node_001.direct.eqt.net.im', ?, ?, 120, 'gts')
     `).run(nowIso, nowIso);
     d1.db.prepare(`
-      INSERT INTO device_cert_provisions (node_id, common_name, expires_at, provisioned_at, duration_ms)
-      VALUES ('node_002', 'node_002.direct.eqt.net.im', ?, ?, 80)
+      INSERT INTO device_cert_provisions (node_id, common_name, expires_at, provisioned_at, duration_ms, ca_provider)
+      VALUES ('node_002', 'node_002.direct.eqt.net.im', ?, ?, 80, 'letsencrypt')
     `).run(nowIso, nowIso);
 
     // Seed system_error_logs: 1 ca_rate_limited (429) + 1 ca_5xx_error (502) + 1 other CERT_PROVISION_ERROR + 1 rate_limit hit + 1 failover
@@ -216,6 +216,7 @@ async function runTests() {
     assert(m && m.success_rate === 0.4, `T2.3e3: Accurate success rate calculation 2/5 = 0.4 (got ${m.success_rate})`);
     assert(m && m.rate_limit_hits === 1, `T2.3f: Rate limit hits tracked accurately (1)`);
     assert(m && m.failover_events === 1, `T2.3g: Failover events tracked accurately (1)`);
+    assert(m && m.by_ca_provider && m.by_ca_provider.gts === 1 && m.by_ca_provider.letsencrypt === 1, `T2.3h: 24h provisions accurately grouped by ca_provider (gts: 1, letsencrypt: 1)`);
 
     // T2.4: Empty database baseline returns null success_rate instead of false 100% (R44-9)
     const emptyD1 = new SqliteD1Mock();

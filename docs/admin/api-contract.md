@@ -563,6 +563,7 @@ GET /api/v1/admin/tls/circuit-status
   - `total_attempts = provisions_success + ca_rate_limited + ca_5xx_error + other_cert_errors`
   - `success_rate`：当 `total_attempts > 0` 时为 `provisions_success / total_attempts`（精确到千分位）；当无数据时回退为 `null`（严禁伪造 100%）。
   - `failover_events`：近 24 小时由 GTS 自动转移至 Let's Encrypt 备用链路的事件总数（`CERT_PROVISION_FAILOVER`）。
+  - `by_ca_provider`：近 24 小时按实际签发 CA 提供商分布统计（`gts`、`letsencrypt`、`standalone`）。
 - **响应（200 OK）：**
 ```json
 {
@@ -599,6 +600,11 @@ GET /api/v1/admin/tls/circuit-status
     "provisions_success": 42,
     "avg_duration_ms": 112.5,
     "success_rate": 0.955,
+    "by_ca_provider": {
+      "gts": 40,
+      "letsencrypt": 2,
+      "standalone": 0
+    },
     "trip_reasons": {
       "ca_rate_limited": 1,
       "ca_5xx_error": 1,
