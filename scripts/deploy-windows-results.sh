@@ -160,6 +160,12 @@ if [[ "$build_gui" -eq 1 ]]; then
     rm -f /tmp/wailsbindings "$root_dir/desktop/gui/eqt-desktop-res.syso" || true
     # The Wails GUI binary is the consolidated 3-in-1 tool (CLI + Launcher + GUI). Copy directly as customer executable.
     cp "$root_dir/desktop/gui/build/bin/eqt-desktop.exe" "$results_dir/eqt.exe"
+
+    echo "Building Windows test executable (eqt-test.exe) with -tags eqtdev..."
+    rm -f /tmp/wailsbindings "$root_dir/desktop/gui/eqt-desktop-res.syso" || true
+    (cd "$root_dir/desktop/gui" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" "$wails_cmd" build -clean -tags eqtdev -ldflags "-H=windowsgui" -o eqt-test.exe -platform windows/amd64)
+    rm -f /tmp/wailsbindings "$root_dir/desktop/gui/eqt-desktop-res.syso" || true
+    cp "$root_dir/desktop/gui/build/bin/eqt-test.exe" "$results_dir/eqt-test.exe"
   else
     echo "error: wails CLI not found in PATH or GOPATH/bin" >&2
     exit 1
@@ -180,13 +186,20 @@ if os.path.exists(exe_path):
     with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as z:
         z.write(exe_path, 'EQT.exe')
     print(f'Packaged {zip_path} successfully (containing EQT.exe)')
+
+test_exe_path = os.path.join(results_dir, 'eqt-test.exe')
+if os.path.exists(test_exe_path):
+    test_zip_path = os.path.join(results_dir, 'eqt-desktop-test-windows-amd64.zip')
+    with zipfile.ZipFile(test_zip_path, 'w', zipfile.ZIP_DEFLATED) as z:
+        z.write(test_exe_path, 'EQT.exe')
+    print(f'Packaged {test_zip_path} successfully (containing test EQT.exe)')
 " || true
 
 # Close any lingering test agent processes that may have spawned during tests
 echo "Ensuring all lingering processes are closed..."
 close_eqt_processes
 
-# Clean up obsolete test binaries or test leftovers if present in acceptance dir
-rm -f "$results_dir"/eqt-*-test.exe "$results_dir"/eqt-test*.exe "$results_dir"/eqt-desktop-*.exe "$results_dir"/test_file*.txt "$results_dir"/test_resumable_single.bin 2>/dev/null || true
+# Clean up temporary test files if present in acceptance dir
+rm -f "$results_dir"/test_file*.txt "$results_dir"/test_resumable_single.bin 2>/dev/null || true
 
 echo "Acceptance artifacts written to: $results_dir"

@@ -39,18 +39,18 @@ export async function handleDownloadDomain(
   if (pathname === "/update-metadata.json" && (request.method === "GET" || request.method === "HEAD")) {
     if (env.ENVIRONMENT === "test") {
       const testResult = {
-        version: "v1.36.138",
-        published_at: "2026-09-14T13:20:00Z",
-        changelog: "Test build: LAN-TLS Google Trust Services CA, Multi-CA failover, PLUS gate",
+        version: "v1.36.139",
+        published_at: "2026-09-14T14:00:00Z",
+        changelog: "Test build: LAN-TLS Google Trust Services CA, enhanced portal navigation & modern security key",
         assets: [
           {
             name: "EQT-test-windows-amd64.zip",
-            download_url: "https://download.eqt.net.im/downloads/test/EQT-test-windows-amd64.zip?v=1.36.138",
+            download_url: "https://download.eqt.net.im/downloads/test/EQT-test-windows-amd64.zip?v=1.36.139",
             size: 7785632
           },
           {
             name: "EQT.exe",
-            download_url: "https://download.eqt.net.im/downloads/test/EQT.exe?v=1.36.138",
+            download_url: "https://download.eqt.net.im/downloads/test/EQT.exe?v=1.36.139",
             size: 19052032
           }
         ]

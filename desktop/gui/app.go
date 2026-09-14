@@ -1272,6 +1272,27 @@ func (a *App) ValidateFreeTier(paths []string) string {
 	return ""
 }
 
+func (a *App) isTestEnvironment() bool {
+	if server.IsTestBuild() {
+		return true
+	}
+	if os.Getenv("EQT_ENV") == "test" || os.Getenv("EQT_TESTING") == "1" || os.Getenv("EQT_TESTING") == "true" {
+		return true
+	}
+	if exePath, err := os.Executable(); err == nil {
+		base := strings.ToLower(filepath.Base(exePath))
+		if strings.Contains(base, "test") {
+			return true
+		}
+	}
+	if a.agent != nil {
+		if s, err := a.agent.readSettings(); err == nil && s.DevMode {
+			return true
+		}
+	}
+	return false
+}
+
 func (a *App) AppInfo() AppInfo {
 	logPath := ""
 	if a.logger != nil {
@@ -1297,7 +1318,7 @@ func (a *App) AppInfo() AppInfo {
 		OS:              runtime.GOOS,
 		Arch:            runtime.GOARCH,
 		LogPath:         logPath,
-		IsTest:          server.IsTestBuild(),
+		IsTest:          a.isTestEnvironment(),
 		HasValidTLSCert: hasValidCert,
 		TLSNodeID:       nodeID,
 		TLSError:        tlsErr,

@@ -2804,9 +2804,9 @@ function renderAboutPanel() {
             <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 16px; border-top: 1px solid var(--line); padding-top: 16px; box-sizing: border-box; width: 100%;">
                 <div style="background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; text-align: left;">
                     <span style="font-size: 10px; color: var(--text-secondary); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">${t('product') || 'Product'}</span>
-                    <span style="font-size: 12px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeAttr(info.product || 'EQT')} / ${escapeAttr(info.name || 'Easy QR Transfer')}${info.isTest ? ` (${escapeAttr(t('test_version_badge') || 'Test Build')})` : ''}">
+                    <span style="font-size: 12px; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeAttr(info.product || 'EQT')} / ${escapeAttr(info.name || 'Easy QR Transfer')}${isTestEnvironment() ? ` (${escapeAttr(t('test_version_badge') || 'Test Build')})` : ''}">
                         <span style="overflow: hidden; text-overflow: ellipsis;">${escapeHTML(info.product || 'EQT')} / ${escapeHTML(info.name || 'Easy QR Transfer')}</span>
-                        ${info.isTest ? `<span class="test-version-tag" style="font-size: 10px; font-weight: 800; color: #d97706; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.35); padding: 1px 5px; border-radius: 4px; letter-spacing: 0.03em; line-height: 1.2; flex-shrink: 0;">${escapeHTML(t('test_version_badge') || 'Test Build')}</span>` : ''}
+                        ${isTestEnvironment() ? `<span class="test-version-tag" style="font-size: 10px; font-weight: 800; color: #d97706; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.35); padding: 1px 5px; border-radius: 4px; letter-spacing: 0.03em; line-height: 1.2; flex-shrink: 0;">${escapeHTML(t('test_version_badge') || 'Test Build')}</span>` : ''}
                     </span>
                 </div>
                 <div style="background: var(--bg-hover); border: 1.2px solid var(--line); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; text-align: left;">
@@ -3482,7 +3482,7 @@ function bindEvents() {
             if (portalBtn) {
                 e.preventDefault();
                 const lang = (state && state.settings && state.settings.lang) || getSystemLocale();
-                let portalUrl = state.appInfo?.isTest
+                let portalUrl = isTestEnvironment()
                     ? 'https://test.eqt.net.im/portal.html'
                     : 'https://www.eqt.net.im/portal.html';
                 const params = new URLSearchParams();
@@ -3503,7 +3503,7 @@ function bindEvents() {
             if (buyLicBtn) {
                 e.preventDefault();
                 const lang = (state && state.settings && state.settings.lang) || getSystemLocale();
-                let pricingUrl = state.appInfo?.isTest
+                let pricingUrl = isTestEnvironment()
                     ? 'https://test.eqt.net.im/pricing.html'
                     : 'https://www.eqt.net.im/pricing.html';
                 if (lang) {
@@ -6305,6 +6305,27 @@ function hasPaidLicense() {
     return Boolean(license && license.tier && licenseTiers[license.tier]);
 }
 
+function isTestEnvironment() {
+    if (state.appInfo && typeof state.appInfo.isTest === 'boolean') {
+        if (state.appInfo.isTest) return true;
+    }
+    if (state.settings && state.settings.devMode) {
+        return true;
+    }
+    if (state.status && state.status.isServerDev) {
+        return true;
+    }
+    if (state.license) {
+        const lic = state.license;
+        if (lic.source === 'test' || lic.tier === 'TEST') return true;
+        if (lic.code && String(lic.code).toUpperCase().startsWith('TEST-')) return true;
+    }
+    if (state.status && state.status.buyerEmail && String(state.status.buyerEmail).toLowerCase().includes('test')) {
+        return true;
+    }
+    return false;
+}
+
 
 function loadLicense() {
     try {
@@ -6712,7 +6733,7 @@ function editIcon() {
 }
 
 function licenseManagerIcon() {
-    return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"></circle><path d="m10.7 12.3 8.8-8.8m-3 0 3 3m-5-1 3 3"></path></svg>';
+    return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 2-2 2m-1.5 1.5L8.9 14.1a6 6 0 1 0 2.8 2.8L20.3 8.3M17 5l3 3M14 8l2 2"></path><circle cx="7" cy="17" r="1.5" fill="currentColor" stroke="none"></circle></svg>';
 }
 
 function cartUpgradeIcon() {

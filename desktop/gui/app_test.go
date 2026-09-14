@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/zip"
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -667,6 +668,23 @@ func TestDevProvisionDeviceTLSCert_NonRateLimitQuotaErrorDoesNotTriggerCooldown(
 	}
 	if stats.RemainingCoolingSec != 0 {
 		t.Fatalf("expected RemainingCoolingSec=0, got %d", stats.RemainingCoolingSec)
+	}
+}
+
+func TestAppInfo_IsTestEnvironment(t *testing.T) {
+	app := &App{ctx: context.Background()}
+
+	// Case 1: EQT_ENV=test
+	t.Setenv("EQT_ENV", "test")
+	if !app.isTestEnvironment() {
+		t.Errorf("expected isTestEnvironment()=true when EQT_ENV=test")
+	}
+
+	// Case 2: EQT_TESTING=1
+	t.Setenv("EQT_ENV", "")
+	t.Setenv("EQT_TESTING", "1")
+	if !app.isTestEnvironment() {
+		t.Errorf("expected isTestEnvironment()=true when EQT_TESTING=1")
 	}
 }
 

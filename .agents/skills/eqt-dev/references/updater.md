@@ -61,3 +61,19 @@ go run scripts/generate-update-sig/main.go <path/to/eqt-desktop-windows-amd64.ex
      go build -a -o ./test_eqt ./cmd/eqt
      ```
   3. 调试静态资源时清理浏览器强缓存（如重载时带上 `ignoreCache: true` 或随机时间戳）。
+
+---
+
+## 4. 测试环境编译、物料打包与多维环境识别
+
+### 4.1 测试物料生成与分发
+- **构建 Tag 区分**：带 `-tags eqtdev` 编译测试版，不带 tag 编译生产版。
+- **发布脚本规范 (`scripts/deploy-windows-results.sh`)**：
+  - 同时输出生产版 `eqt.exe`（`eqt-desktop-windows-amd64.zip`）与测试版 `eqt-test.exe`（`eqt-desktop-test-windows-amd64.zip`）。
+  - 产物清理步骤禁止误删 `eqt-test.exe` 或测试 zip 包。
+- **Cloudflare R2 上传规避**：WSL 环境下环境变量若包含 `socks5h://` 代理，调用 `npx wrangler` 会触发 `undici` 的 `InvalidArgumentError`。执行 `wrangler r2` 命令需使用 `env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u all_proxy` 剥离不兼容代理。
+
+### 4.2 客户端环境多维识别防呆
+- **单点判定脆弱性**：仅依赖编译 tag `server.IsTestBuild()` 易因构建遗漏导致前端误跳生产域名。
+- **Go 端综合判定 (`AppInfo().IsTest`)**：结合 `server.IsTestBuild()`、环境变量（`EQT_ENV=test` / `EQT_TESTING=1`）、二进制名称（含 `test`）及 `settings.DevMode`。
+- **前端统一判决函数 (`isTestEnvironment()`)**：在跳转 Portal（`test.eqt.net.im/portal.html`）及 Pricing 时统一校验 `appInfo.isTest`、`settings.devMode`、`status.isServerDev` 及测试激活码特征。
