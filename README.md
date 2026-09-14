@@ -22,7 +22,7 @@ This project is a fork of [`qrcp`](https://github.com/claudiodangelis/qrcp). The
 
 ## Free Limitations & Licensing
 
-EQT is offered in two editions: **Free** and **Premium (PLUS / PRO)**.
+EQT is offered in two editions: **Free** and **Premium (PLUS)**.
 
 ### Free Edition Limitations
 
