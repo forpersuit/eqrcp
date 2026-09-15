@@ -1,6 +1,6 @@
 ---
 name: eqt-dev
-description: Guides EQT developer mode configurations, log system structures, logging paths (Windows & Linux), and dev tracing techniques. Use when you need to: (1) Check or debug local logs, (2) Inspect or troubleshoot auto-update, signature verification, and Cloudflare Pages deployments, (3) Integrate and run e2e-multi-device-simulation tests, or (4) Maintain Cloudflare Workers feedback APIs.
+description: Guides EQT developer mode configurations, log system structures, logging paths (Windows & Linux), build/deploy/publish operation semantics, and dev tracing techniques. Use when you need to: (1) Publish to test environment or understand build vs deploy vs publish commands, (2) Check or debug local logs, (3) Inspect or troubleshoot auto-update, signature verification, and Cloudflare Pages deployments, or (4) Maintain Cloudflare Workers APIs.
 ---
 
 # EQT 开发者模式与主控导航指南 (EQT DevMode & Navigation Guidelines)
@@ -9,7 +9,22 @@ description: Guides EQT developer mode configurations, log system structures, lo
 
 ---
 
-## 1. 开发者模式 (Developer Mode & DebugLog)
+## 1. 操作语义与命令标准：编译、部署与发布 (Build, Deploy, Publish)
+
+为杜绝「部署成功但主页下不到新版」的操作脱节，全工程严格区分三层操作语义：
+
+| 语义 | 操作范围 | 对应命令 | 用户与环境可见影响 |
+| :--- | :--- | :--- | :--- |
+| **本地编译 (Build)** | 仅编译本地代码，生成 Windows / 跨平台二进制与 zip 包 | `scripts/deploy-windows-results.sh` | 仅输出到本地（如 `/mnt/e/developer/results/`），远端与首页无变化 |
+| **边缘部署 (Deploy)** | 仅更新 Cloudflare 边缘无状态代码（Worker API、Pages 站点） | `npx wrangler deploy --env test`<br>或 push 到 `dev` 触发 `deploy-test.yml` | 接口与页面逻辑生效，**但不上传安装包，主页不更新下载版本** |
+| **完整发布 (Publish)** | **端到端完整交付**：编译物料 -> 上传 R2 分发桶 -> 同步元数据/时间戳 -> 部署并彻底刷新主页 | **`scripts/publish-test.sh`** | **测试站主页立即显示最新版本，下载按钮直通新版安装包** |
+
+> **关键准则**：
+> 当指令是「发布到测试环境」或「发布测试版」时，**必须执行 `scripts/publish-test.sh`**，绝对不可仅执行 `deploy`。只有执行了完备发布流程，终端用户才能在首页直接下载最新构建的安装包。
+
+---
+
+## 2. 开发者模式 (Developer Mode & DebugLog)
 
 ### 1.1 配置文件路径与开启方式 (Config Path SSOT & Trigger)
 - **唯一配置与数据存储根目录 (SSOT)**：所有平台的配置文件、离线数字证书（`.lic`）及历史记录均**严格且统一存放在用户家目录的 `.local/eqt/` 下**：
@@ -25,7 +40,7 @@ description: Guides EQT developer mode configurations, log system structures, lo
 
 ---
 
-## 2. 大文件传输与断点续传技术规格 (Large File Transfer Specs)
+## 3. 大文件传输与断点续传技术规格 (Large File Transfer Specs)
 
 1. **普通接收模式 (Receive 命令行/移动端上传方向)**：采用 **Tus 协议分片上传**，客户端使用 `tus-js-client`。服务端支持 Tus 并发上传与 Offset HEAD 对齐，支持大文件断点续传。
 2. **Chat 模式附件发送 (上传方向)**：采用标准的单 HTTP `Multipart Form` 一次性上传。中途断开需重新上传。
@@ -36,7 +51,7 @@ description: Guides EQT developer mode configurations, log system structures, lo
 
 ---
 
-## 3. 局域网网络绑定与 IP 解析 (LAN Network Binding)
+## 4. 局域网网络绑定与 IP 解析 (LAN Network Binding)
 
 在启动局域网互传/聊天服务（Share、Receive、Chat 模式）监听 `0.0.0.0` 时：
 - **UDP 路由探测 (UDP Routing Probe)**：
@@ -48,7 +63,7 @@ description: Guides EQT developer mode configurations, log system structures, lo
 
 ---
 
-## 4. 多模块 Go 工程 pkg 规范与 Windows/WSL 路径优化
+## 5. 多模块 Go 工程 pkg 规范与 Windows/WSL 路径优化
 
 1. **pkg 共享包隔离**：
    - 跨模块重用共享代码时，统一在 `pkg/` 下（如 `pkg/config`）定义。禁止使用 `internal/` 包。
@@ -60,13 +75,15 @@ description: Guides EQT developer mode configurations, log system structures, lo
 
 ---
 
-## 5. 详细技术细节导航 (Reference Files Navigation)
-
 ## 6. Wails 启动期事件竞态与崩溃上报调试 (Startup Event Race & Crash Report Debug)
 
 - **竞态规则**：Wails 的 `OnStartup` 在 WebView 前端 JS 加载完成前异步触发，此时 `EventsEmit` 发出的前端事件会因监听器未注册而被静默丢弃（Wails JS 事件分发无队列）。
   若需让前端在启动时感知状态（如崩溃 dump 待上报），**必须由前端初始化时主动调用绑定方法**（如 `CheckCrashReport()`），事件通道仅作次要路径。
 - **崩溃上报调试链路**：`config.yml` 开启 `dev: liyuelong` → 设置 → 开发者选项 →「触发崩溃测试」写入 `~/.local/eqt/crash.dump` → 重启 GUI 验证：`...` 菜单小蓝点 + 反馈面板预填。Go 端日志出现 `Pending crash dump found, notifying frontend` 但前端无反应，即为此竞态（事件丢失），不是 dump 未写入。
+
+---
+
+## 7. 详细技术细节导航 (Reference Files Navigation)
 
 详细排坑指南、部署说明、表结构和测试方案，请查阅以下参考文档：
 

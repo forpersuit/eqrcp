@@ -77,3 +77,10 @@ go run scripts/generate-update-sig/main.go <path/to/eqt-desktop-windows-amd64.ex
 - **单点判定脆弱性**：仅依赖编译 tag `server.IsTestBuild()` 易因构建遗漏导致前端误跳生产域名。
 - **Go 端综合判定 (`AppInfo().IsTest`)**：结合 `server.IsTestBuild()`、环境变量（`EQT_ENV=test` / `EQT_TESTING=1`）、二进制名称（含 `test`）及 `settings.DevMode`。
 - **前端统一判决函数 (`isTestEnvironment()`)**：在跳转 Portal（`test.eqt.net.im/portal.html`）及 Pricing 时统一校验 `appInfo.isTest`、`settings.devMode`、`status.isServerDev` 及测试激活码特征。
+
+### 4.3 测试环境完整发布闭环 (`scripts/publish-test.sh`)
+为杜绝仅跑边缘部署导致测试站下载仍为旧安装包的问题，执行「发布到测试环境」时必须调用 `scripts/publish-test.sh` 完成端到端闭环：
+1. **自动构建**：调用 `scripts/deploy-windows-results.sh --no-tests` 编译生成最新 `eqt-test.exe` 与测试 zip 安装包；
+2. **直传远端 R2**：自动剥离代理并使用 `wrangler r2 object put --remote` 将安装包推入 `eqt-downloads/downloads/test/`；
+3. **自同步元数据**：自动读取实际文件字节数（`size`）与当前发布时间戳，替换 `github.ts` 与 `index.html` 中的测试直链参数（防 CDN/浏览器强缓存）；
+4. **触发全网生效**：自动提交元数据并推送到 `dev` 分支，由 GitHub Actions `deploy-test.yml` 自动同步测试站边缘代码。
