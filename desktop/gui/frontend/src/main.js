@@ -2579,7 +2579,7 @@ function renderSettingsPanel() {
                         <div class="setting-copy">
                             <strong>
                                 ${t('enable_tls')}
-                                ${!hasPaidLicense() ? '<span class="badge-pro-tag">PLUS</span>' : ''}
+                                ${!hasPaidLicense() ? '<span class="badge-pro-tag" style="color: #ffffff;">PLUS</span>' : ''}
                             </strong>
                             <span>${t('enable_tls_desc')}</span>
                         </div>

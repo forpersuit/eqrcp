@@ -3798,18 +3798,20 @@ body.log-viewer-is-dragging * {
     color: #ef4444;
 }
 
-.badge-pro-tag {
+.badge-pro-tag,
+.setting-copy strong .badge-pro-tag,
+.setting-copy .badge-pro-tag {
     background: var(--accent, #156f5a);
-    color: #fff;
+    color: #ffffff !important;
+    font-size: 10px !important;
+    line-height: 1.2 !important;
     padding: 2px 6px;
     border-radius: 4px;
     font-weight: 700;
-    font-size: 10px;
     letter-spacing: 0.5px;
     margin-left: 6px;
     display: inline-block;
     vertical-align: middle;
-    line-height: 1.2;
 }
 
 
