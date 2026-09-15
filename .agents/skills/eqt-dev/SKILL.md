@@ -11,16 +11,19 @@ description: Guides EQT developer mode configurations, log system structures, lo
 
 ## 1. 操作语义与命令标准：编译、部署与发布 (Build, Deploy, Publish)
 
-为杜绝「部署成功但主页下不到新版」的操作脱节，全工程严格区分三层操作语义：
+为杜绝操作脱节并确保生产与测试环境彻底隔离，全工程严格区分三层操作语义并全面落地 **GitHub Actions 云端自动化 + 差异化增量部署**：
 
-| 语义 | 操作范围 | 对应命令 | 用户与环境可见影响 |
+| 语义 | 操作范围 | 对应命令 / 流水线 | 增量检测与环境隔离机制 |
 | :--- | :--- | :--- | :--- |
 | **本地编译 (Build)** | 仅编译本地代码，生成 Windows / 跨平台二进制与 zip 包 | `scripts/deploy-windows-results.sh` | 仅输出到本地（如 `/mnt/e/developer/results/`），远端与首页无变化 |
-| **边缘部署 (Deploy)** | 仅更新 Cloudflare 边缘无状态代码（Worker API、Pages 站点） | `npx wrangler deploy --env test`<br>或 push 到 `dev` 触发 `deploy-test.yml` | 接口与页面逻辑生效，**但不上传安装包，主页不更新下载版本** |
-| **完整发布 (Publish)** | **端到端完整交付**：编译物料 -> 上传 R2 分发桶 -> 同步元数据/时间戳 -> 部署并彻底刷新主页 | **`scripts/publish-test.sh`** | **测试站主页立即显示最新版本，下载按钮直通新版安装包** |
+| **测试云端发布 (Test Publish)** | **云端全自动闭环**：检测变更 -> 编译 Windows 测试客户端 -> 上传 R2 -> 增量部署 CF 服务 | **push 到 `dev` 分支**<br>触发 `.github/workflows/deploy-test.yml` | 1. **增量编译**：仅当客户端（Go/GUI）代码修改时，才启动 Windows runner 编译测试包（带 `-tags eqtdev`）并推送到 R2 `downloads/test/`<br>2. **增量部署**：仅对发生代码变更的 Cloudflare 服务（drm-api / feedback-api / website / admin）执行部署，未变更模块自动跳过<br>3. **测试隔离**：绑定专属测试域名（`lic-test.eqt.net.im` / `test.eqt.net.im`），无人工审批门禁，秒级极速迭代 |
+| **生产边缘部署 (Prod Deploy)** | 部署 Cloudflare 生产边缘服务 (Workers / Pages) | **push 到 `master` 分支**<br>触发 `.github/workflows/deploy.yml` | 1. CI 通过后触发，**受 GitHub `production` 环境人工审批门禁保护**<br>2. 同样支持路径变更检测，仅部署有改动的生产 Worker/Pages，未变动服务直接跳过 |
+| **生产正式发布 (Prod Release)** | 编译生产正式客户端 -> GitHub Release -> R2 全球分发 -> 官网更新 | **push `v*` tag**<br>触发 `.github/workflows/release.yml` | 1. Windows runner 编译生产二进制（**绝无 `-tags eqtdev`**）<br>2. Ed25519 签名，发 GitHub Release<br>3. 上传至 R2 `downloads/v*/` 与 `downloads/latest/`<br>4. 部署生产官网 `eqt.net.im` |
 
 > **关键准则**：
-> 当指令是「发布到测试环境」或「发布测试版」时，**必须执行 `scripts/publish-test.sh`**，绝对不可仅执行 `deploy`。只有执行了完备发布流程，终端用户才能在首页直接下载最新构建的安装包。
+> 1. **测试发布全走云端**：日常开发无需在本地机器手动跑编译和 R2 上传，只需提交代码并使用 `scripts/git-push-smart.sh origin dev` 推送到 `dev` 分支，GitHub Actions 全自动完成差异化发布。
+> 2. **差异化增量保障**：修改某个 Worker 时，流水线绝对不会空跑 5 分钟去编译 Windows GUI；修改文档或配置时，所有编译部署均秒级跳过。
+> 3. **本地发布脚本备用**：`scripts/publish-test.sh` 仅保留作为本地单机脱网或紧急手工发布的后备工具。
 
 ---
 

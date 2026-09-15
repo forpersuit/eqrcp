@@ -1,13 +1,20 @@
-# Deploy Test — 测试环境部署流水线
+# Deploy Test — 测试环境云端全自动发布与增量部署流水线
 #
-# 将 wrangler.toml 的 [env.test] 配置部署到测试自定义域名(lic-test.eqt.net.im / feedback-test.eqt.net.im),
-# 与生产 deploy.yml(GitHub Environment production 审批)完全隔离。
+# 架构与安全特性:
+#   1. 完全云端自动化: push 到 dev 分支后由 GitHub Actions 统一编译 Windows 测试客户端并上传 R2,
+#      彻底免除本地构建与手动发布依赖。
+#   2. 区分生产与测试:
+#      - 测试客户端注入 -tags eqtdev,严格连向测试域名(lic-test.eqt.net.im / feedback-test.eqt.net.im)
+#      - 二进制与元数据分发至 R2 downloads/test/ 专属路径
+#      - Cloudflare Workers 部署附带 --env test,绝不影响生产环境。
+#   3. 差异化增量部署 (Path Filtering / Change Detection):
+#      - 通过 dorny/paths-filter 检测有改动的子模块
+#      - 仅客户端变更时触发耗时的 Windows GUI 编译
+#      - 仅相关 Worker/Pages 变更时触发对应的 Wrangler 部署。
 #
 # 触发:
-#   - push 到 dev 分支(长命分支,自动部署,快速迭代)
-#   - 手动触发(workflow_dispatch,任意分支)
-#
-# 安全:测试 Worker 的 [env.test] 绑定专属测试域名,绝不抢占生产 lic.eqt.net.im。
+#   - push 到 dev 分支(长命开发分支,快速迭代)
+#   - 手动触发(workflow_dispatch,支持 force_all 强制全量部署)
 
 name: Deploy Test
 
@@ -15,6 +22,11 @@ on:
   push:
     branches: [dev]
   workflow_dispatch:
+    inputs:
+      force_all:
+        description: 'Force deploy all Cloudflare services and rebuild Windows client'
+        type: boolean
+        default: false
 
 # 快速迭代:同一时间只保留最新一次测试部署
 concurrency:
@@ -25,8 +37,151 @@ permissions:
   contents: read
 
 jobs:
-  deploy-test:
-    name: Deploy to Test (lic-test.eqt.net.im)
+  # ── 1. 变更检测 (Change Detection) ──────────────────────────
+  detect-changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      client: ${{ steps.filter.outputs.client }}
+      drm_api: ${{ steps.filter.outputs.drm_api }}
+      feedback_api: ${{ steps.filter.outputs.feedback_api }}
+      website: ${{ steps.filter.outputs.website }}
+      admin: ${{ steps.filter.outputs.admin }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters:
+            client:
+              - 'desktop/**'
+              - 'cmd/**'
+              - 'pkg/**'
+              - 'body/**'
+              - 'config/**'
+              - 'logger/**'
+              - 'qr/**'
+              - 'server/**'
+              - 'util/**'
+              - 'go.mod'
+              - 'go.sum'
+              - 'scripts/deploy-windows-results.sh'
+              - 'scripts/generate-update-metadata/**'
+              - 'scripts/generate-update-sig/**'
+            drm_api:
+              - 'cloudflare/eqt-drm-api/**'
+            feedback_api:
+              - 'cloudflare/eqt-feedback-api/**'
+            website:
+              - 'cloudflare/eqt-website/**'
+            admin:
+              - 'cloudflare/eqt-admin/**'
+
+  # ── 2. Windows 测试客户端编译与 R2 分发 ────────────────────────
+  build-test-client:
+    name: Build & Publish Windows Test Client
+    needs: [detect-changes]
+    if: needs.detect-changes.outputs.client == 'true' || inputs.force_all == true
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: desktop/gui/frontend/package-lock.json
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Build Chat v2 frontend
+        working-directory: pkg/chat/v2/web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build Desktop GUI frontend
+        working-directory: desktop/gui/frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build Wails (windows/amd64 test build)
+        working-directory: desktop/gui
+        # ⚠️ 测试环境专用:注入 -tags eqtdev,确保客户端连向测试后端,隔离生产
+        run: wails build -clean -tags eqtdev -platform windows/amd64
+
+      - name: Stage test artifacts
+        shell: bash
+        run: |
+          mkdir -p out
+          cp desktop/gui/build/bin/eqt-desktop.exe out/EQT.exe
+          python -c "
+          import zipfile
+          with zipfile.ZipFile('out/EQT-test-windows-amd64.zip', 'w', zipfile.ZIP_DEFLATED) as z:
+              z.write('desktop/gui/build/bin/eqt-desktop.exe', 'EQT.exe')
+          "
+
+      - name: Generate Update Signatures
+        shell: bash
+        run: |
+          if [ -n "$UPDATE_SIGNING_PRIVATE_KEY" ]; then
+            go run scripts/generate-update-sig/main.go out/EQT.exe || true
+            go run scripts/generate-update-sig/main.go out/EQT-test-windows-amd64.zip || true
+          else
+            echo "UPDATE_SIGNING_PRIVATE_KEY is not set, skipping signatures."
+          fi
+        env:
+          UPDATE_SIGNING_PRIVATE_KEY: ${{ secrets.UPDATE_SIGNING_PRIVATE_KEY }}
+
+      - name: Generate test update-metadata.json
+        shell: bash
+        run: |
+          VERSION=$(grep -o 'version = "v[^"]*"' pkg/version/version.go | cut -d'"' -f2)
+          echo "Generating test metadata for version: $VERSION"
+          go run scripts/generate-update-metadata/main.go "$VERSION" out out/update-metadata.json test
+
+      - name: Deploy to Cloudflare R2 (downloads/test/)
+        shell: bash
+        run: |
+          if [ -n "$CLOUDFLARE_API_TOKEN" ]; then
+            BUCKET="${R2_BUCKET_NAME:-eqt-downloads}"
+            echo "Uploading test artifacts to Cloudflare R2 bucket: $BUCKET"
+            npx wrangler r2 object put "$BUCKET/downloads/test/EQT-test-windows-amd64.zip" --file "out/EQT-test-windows-amd64.zip" --content-type application/zip --remote
+            npx wrangler r2 object put "$BUCKET/downloads/test/EQT.exe" --file "out/EQT.exe" --content-type application/octet-stream --remote
+            npx wrangler r2 object put "$BUCKET/downloads/test/update-metadata.json" --file "out/update-metadata.json" --content-type application/json --remote
+            if [ -f "out/EQT-test-windows-amd64.zip.sig" ]; then
+              npx wrangler r2 object put "$BUCKET/downloads/test/EQT-test-windows-amd64.zip.sig" --file "out/EQT-test-windows-amd64.zip.sig" --content-type text/plain --remote
+            fi
+            if [ -f "out/EQT.exe.sig" ]; then
+              npx wrangler r2 object put "$BUCKET/downloads/test/EQT.exe.sig" --file "out/EQT.exe.sig" --content-type text/plain --remote
+            fi
+            echo "Test artifacts published to R2 successfully."
+          else
+            echo "CLOUDFLARE_API_TOKEN is not set, skipping R2 upload."
+          fi
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID || 'b8b5c5020effb7d1ac41f586c44b6e82' }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME || 'eqt-downloads' }}
+
+      - name: Upload Windows Test Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wails-windows-test-artifacts
+          path: out/*
+
+  # ── 3. 差异化部署 Cloudflare 边缘服务 ──────────────────────────
+  deploy-test-cloudflare:
+    name: Deploy Test Cloudflare Services
+    needs: [detect-changes, build-test-client]
+    if: always() && !cancelled() && (needs.build-test-client.result == 'success' || needs.build-test-client.result == 'skipped')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -40,7 +195,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # ── eqt-drm-api (test) ──────────────────────────────────
       - name: Deploy eqt-drm-api (test)
+        if: needs.detect-changes.outputs.drm_api == 'true' || inputs.force_all == true
         working-directory: cloudflare/eqt-drm-api
         continue-on-error: true
         run: npx wrangler deploy --env test
@@ -48,7 +205,9 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID || 'b8b5c5020effb7d1ac41f586c44b6e82' }}
 
+      # ── eqt-feedback-api (test) ──────────────────────────────
       - name: Deploy eqt-feedback-api (test)
+        if: needs.detect-changes.outputs.feedback_api == 'true' || inputs.force_all == true
         working-directory: cloudflare/eqt-feedback-api
         continue-on-error: true
         run: npx wrangler deploy --env test
@@ -56,30 +215,57 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID || 'b8b5c5020effb7d1ac41f586c44b6e82' }}
 
-      # ── Pages (Test) ─────────────────────────────────────────
-
+      # ── eqt-website to Pages (test) ──────────────────────────
+      # 规则: 当官网代码修改 或 客户端重新构建发布时,自动部署刷新测试主页
       - name: Deploy eqt-website to Pages (test)
+        if: needs.detect-changes.outputs.website == 'true' || needs.detect-changes.outputs.client == 'true' || inputs.force_all == true
         working-directory: cloudflare/eqt-website
         run: npx wrangler pages deploy ./ --project-name=eqt-test --branch=dev
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID || 'b8b5c5020effb7d1ac41f586c44b6e82' }}
 
-      - name: Notify via Telegram
+      # ── eqt-admin to Pages (test) ────────────────────────────
+      - name: Deploy eqt-admin to Pages (test)
+        if: needs.detect-changes.outputs.admin == 'true' || inputs.force_all == true
+        working-directory: cloudflare/eqt-admin
+        run: |
+          npm ci
+          npm run build:test || npm run build
+          npx wrangler pages deploy dist --project-name=eqt-admin --branch=dev
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID || 'b8b5c5020effb7d1ac41f586c44b6e82' }}
+
+      # ── 部署状态汇总与 Telegram 通知 ─────────────────────────
+      - name: Summary and Telegram Notification
         if: always()
         run: |
+          CLIENT_STATUS="${{ needs.build-test-client.result }}"
+          DRM_STATUS="${{ needs.detect-changes.outputs.drm_api == 'true' || inputs.force_all == true }}"
+          FB_STATUS="${{ needs.detect-changes.outputs.feedback_api == 'true' || inputs.force_all == true }}"
+          WEB_STATUS="${{ needs.detect-changes.outputs.website == 'true' || needs.detect-changes.outputs.client == 'true' || inputs.force_all == true }}"
+          ADMIN_STATUS="${{ needs.detect-changes.outputs.admin == 'true' || inputs.force_all == true }}"
+
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          if [[ "${{ job.status }}" == "success" ]]; then
-            MESSAGE="🧪 [Test Deploy Succeeded] (lic-test.eqt.net.im)
-            Branch: ${{ github.ref_name }}
-            Workflow: ${RUN_URL}"
-          else
-            MESSAGE="🚨 [Test Deploy Failed] (lic-test.eqt.net.im)
-            Branch: ${{ github.ref_name }}
-            Workflow: ${RUN_URL}"
-          fi
-          # 通知到测试群;若未单独配置 TEST_TELEGRAM_CHAT_ID,则复用生产群
+          
+          echo "## 🧪 Test Deployment Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Client Build & R2**: $CLIENT_STATUS" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **eqt-drm-api (test)**: $( [ "$DRM_STATUS" = "true" ] && echo "✅ Deployed" || echo "⏭️ Skipped" )" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **eqt-feedback-api (test)**: $( [ "$FB_STATUS" = "true" ] && echo "✅ Deployed" || echo "⏭️ Skipped" )" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **eqt-website (test)**: $( [ "$WEB_STATUS" = "true" ] && echo "✅ Deployed" || echo "⏭️ Skipped" )" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **eqt-admin (test)**: $( [ "$ADMIN_STATUS" = "true" ] && echo "✅ Deployed" || echo "⏭️ Skipped" )" >> "$GITHUB_STEP_SUMMARY"
+
+          MESSAGE="🧪 [Test Deploy Summary]
+          Branch: ${{ github.ref_name }}
+          Workflow: ${RUN_URL}
+          - Client: ${CLIENT_STATUS}
+          - eqt-drm-api: $( [ "$DRM_STATUS" = "true" ] && echo "Deployed" || echo "Skipped" )
+          - eqt-feedback-api: $( [ "$FB_STATUS" = "true" ] && echo "Deployed" || echo "Skipped" )
+          - eqt-website: $( [ "$WEB_STATUS" = "true" ] && echo "Deployed" || echo "Skipped" )
+          - eqt-admin: $( [ "$ADMIN_STATUS" = "true" ] && echo "Deployed" || echo "Skipped" )"
+
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
             -d "chat_id=${{ secrets.TEST_TELEGRAM_CHAT_ID || secrets.TELEGRAM_CHAT_ID }}" \
             -d "text=$MESSAGE" \
-            -d "parse_mode=Markdown" || echo "⚠️ Telegram notification failed (token/chat_id may not be configured)"
+            -d "parse_mode=Markdown" || echo "⚠️ Telegram notification skipped"

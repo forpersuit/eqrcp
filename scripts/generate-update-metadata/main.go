@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -37,9 +38,22 @@ func main() {
 		os.Exit(1)
 	}
 
+	channel := ""
+	if len(os.Args) >= 5 {
+		channel = os.Args[4]
+	} else if envChan := os.Getenv("UPDATE_CHANNEL"); envChan != "" {
+		channel = envChan
+	}
+
+	timestamp := time.Now().UTC().Format("200601021504")
+
 	var assets []UpdateAsset
 	for _, file := range files {
 		if file.IsDir() {
+			continue
+		}
+		// Skip metadata file itself and signature files from download asset list
+		if file.Name() == "update-metadata.json" || strings.HasSuffix(file.Name(), ".sig") {
 			continue
 		}
 		info, err := file.Info()
@@ -48,8 +62,13 @@ func main() {
 			continue
 		}
 
-		// Download URL will point to Cloudflare Pages static downloads directory with version-based path segregation
-		downloadURL := fmt.Sprintf("https://download.eqt.net.im/downloads/%s/%s", version, file.Name())
+		var downloadURL string
+		if channel == "test" {
+			downloadURL = fmt.Sprintf("https://download.eqt.net.im/downloads/test/%s?t=%s", file.Name(), timestamp)
+		} else {
+			// Download URL will point to Cloudflare R2 downloads directory with version-based path segregation
+			downloadURL = fmt.Sprintf("https://download.eqt.net.im/downloads/%s/%s", version, file.Name())
+		}
 
 		assets = append(assets, UpdateAsset{
 			Name:        file.Name(),
@@ -58,10 +77,15 @@ func main() {
 		})
 	}
 
+	changelog := fmt.Sprintf("EQT %s release updates.", version)
+	if channel == "test" {
+		changelog = fmt.Sprintf("EQT %s test release build.", version)
+	}
+
 	response := UpdateResponse{
 		Version:     version,
 		PublishedAt: time.Now().UTC().Format(time.RFC3339),
-		Changelog:   fmt.Sprintf("EQT %s release updates.", version),
+		Changelog:   changelog,
 		Assets:      assets,
 	}
 

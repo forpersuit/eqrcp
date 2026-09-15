@@ -1317,7 +1317,7 @@
     async function fetchLatestVersion() {
         const downloadLinkEl = document.getElementById('download-link');
         if (window.EQT_IS_TEST && downloadLinkEl) {
-            downloadLinkEl.href = 'https://download.eqt.net.im/downloads/test/EQT-test-windows-amd64.zip?t=202609152020';
+            downloadLinkEl.href = 'https://download.eqt.net.im/downloads/test/EQT-test-windows-amd64.zip';
         }
         try {
             const res = await fetch(`${window.EQT_API_BASE}/update-metadata.json`);
@@ -1326,7 +1326,7 @@
                 if (data && data.version) {
                     window.latestVersion = data.version;
                     if (window.EQT_IS_TEST) {
-                        let downloadUrl = 'https://download.eqt.net.im/downloads/test/EQT-test-windows-amd64.zip?t=202609152020';
+                        let downloadUrl = 'https://download.eqt.net.im/downloads/test/EQT-test-windows-amd64.zip';
                         if (data.assets && Array.isArray(data.assets)) {
                             const targetAsset = data.assets.find(a => a.name && (a.name.includes('test') || a.name.endsWith('.zip')));
                             if (targetAsset && targetAsset.download_url) {

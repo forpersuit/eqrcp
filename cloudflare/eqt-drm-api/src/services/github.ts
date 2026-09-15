@@ -38,19 +38,38 @@ export async function handleDownloadDomain(
   // 2. GET /update-metadata.json
   if (pathname === "/update-metadata.json" && (request.method === "GET" || request.method === "HEAD")) {
     if (env.ENVIRONMENT === "test") {
+      try {
+        const r2MetaRes = await fetch("https://download.eqt.net.im/downloads/test/update-metadata.json", {
+          cf: { cacheTtl: 60 }
+        });
+        if (r2MetaRes.ok) {
+          const metaJson = await r2MetaRes.json();
+          return new Response(JSON.stringify(metaJson), {
+            status: 200,
+            headers: {
+              ...corsHeaders,
+              "Content-Type": "application/json",
+              "Cache-Control": "public, s-maxage=60"
+            }
+          });
+        }
+      } catch (err) {
+        console.warn("Failed to fetch test update-metadata from R2, falling back to static config:", err);
+      }
+
       const testResult = {
-        version: "v1.36.141",
+        version: "v1.36.142",
         published_at: new Date().toISOString(),
-        changelog: "Test build: Draggable log viewer modal, batch zip filename & file reveal highlight, harden download URL origin validation",
+        changelog: "Test build: Automated cloud release pipeline, change-detection incremental deployment",
         assets: [
           {
             name: "EQT-test-windows-amd64.zip",
-            download_url: "https://download.eqt.net.im/downloads/test/EQT-test-windows-amd64.zip?t=202609152020",
+            download_url: "https://download.eqt.net.im/downloads/test/EQT-test-windows-amd64.zip",
             size: 7790422
           },
           {
             name: "EQT.exe",
-            download_url: "https://download.eqt.net.im/downloads/test/EQT.exe?t=202609152020",
+            download_url: "https://download.eqt.net.im/downloads/test/EQT.exe",
             size: 19067904
           }
         ]
