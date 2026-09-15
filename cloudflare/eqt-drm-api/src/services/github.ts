@@ -39,19 +39,19 @@ export async function handleDownloadDomain(
   if (pathname === "/update-metadata.json" && (request.method === "GET" || request.method === "HEAD")) {
     if (env.ENVIRONMENT === "test") {
       const testResult = {
-        version: "v1.36.140",
+        version: "v1.36.141",
         published_at: new Date().toISOString(),
         changelog: "Test build: Draggable log viewer modal, batch zip filename & file reveal highlight, harden download URL origin validation",
         assets: [
           {
             name: "EQT-test-windows-amd64.zip",
-            download_url: "https://download.eqt.net.im/downloads/test/EQT-test-windows-amd64.zip?t=20260915",
-            size: 7790431
+            download_url: "https://download.eqt.net.im/downloads/test/EQT-test-windows-amd64.zip?t=202609152020",
+            size: 7790422
           },
           {
             name: "EQT.exe",
-            download_url: "https://download.eqt.net.im/downloads/test/EQT.exe?t=20260915",
-            size: 19068928
+            download_url: "https://download.eqt.net.im/downloads/test/EQT.exe?t=202609152020",
+            size: 19067904
           }
         ]
       };
