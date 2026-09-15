@@ -41,17 +41,17 @@ export async function handleDownloadDomain(
       const testResult = {
         version: "v1.36.140",
         published_at: new Date().toISOString(),
-        changelog: "Test build: Draggable log viewer modal, full batch zip filenames & file reveal highlight",
+        changelog: "Test build: Draggable log viewer modal, batch zip filename & file reveal highlight, harden download URL origin validation",
         assets: [
           {
             name: "EQT-test-windows-amd64.zip",
-            download_url: "https://download.eqt.net.im/downloads/test/EQT-test-windows-amd64.zip?v=1.36.140",
-            size: 7785632
+            download_url: "https://download.eqt.net.im/downloads/test/EQT-test-windows-amd64.zip?t=20260915",
+            size: 7790431
           },
           {
             name: "EQT.exe",
-            download_url: "https://download.eqt.net.im/downloads/test/EQT.exe?v=1.36.140",
-            size: 19052032
+            download_url: "https://download.eqt.net.im/downloads/test/EQT.exe?t=20260915",
+            size: 19068928
           }
         ]
       };
