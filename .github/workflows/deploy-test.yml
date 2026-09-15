@@ -49,10 +49,13 @@ jobs:
       admin: ${{ github.event.inputs.force_all == 'true' || steps.filter.outputs.admin }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 100
 
       - uses: dorny/paths-filter@v3
         id: filter
         with:
+          base: ${{ github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000' && github.event.before || '' }}
           filters: |
             client:
               - 'desktop/**'
