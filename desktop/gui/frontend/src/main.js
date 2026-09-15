@@ -2579,12 +2579,12 @@ function renderSettingsPanel() {
                         <div class="setting-copy">
                             <strong>
                                 ${t('enable_tls')}
-                                ${renderTLSSettingIcon(state, t, escapeAttr)}
-                                ${!hasPaidLicense() ? '<span class="badge-pro-tag" style="margin-left: 6px; font-size: 10px; background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; padding: 2px 6px; border-radius: 4px; font-weight: 700; letter-spacing: 0.5px;">PLUS</span>' : ''}
+                                ${!hasPaidLicense() ? '<span class="badge-pro-tag">PLUS</span>' : ''}
                             </strong>
                             <span>${t('enable_tls_desc')}</span>
                         </div>
                         <div class="setting-control-stack">
+                            ${renderTLSSettingIcon(state, t, escapeAttr)}
                             ${renderSwitch('settings-enable-tls', Boolean(state.settings?.enableTLS))}
                         </div>
                     </div>

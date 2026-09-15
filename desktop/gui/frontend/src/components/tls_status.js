@@ -66,37 +66,31 @@ export function getTLSState(state) {
 
 /**
  * 渲染设置面板中启用 TLS 开关旁边的状态图标
- * 状态为 ready 时使用品牌主题色锁；未开启/关闭时使用灰色样式锁；告警/置备中使用对应状态图标
+ * 状态为 ready 或 disabled 时不显示图标（开关自身开启/关闭状态足以表征）；
+ * 处于置备中(preparing)时显示旋转加载图标；失败(failed/mismatch)时显示警告图标。
  * @param {object} state 全局状态对象
  * @param {Function} t 国际化翻译函数
  * @param {Function} escapeAttr 属性转义函数
- * @returns {string} 图标 HTML
+ * @returns {string} 图标 HTML 或空字符串
  */
 export function renderTLSSettingIcon(state, t, escapeAttr) {
     const status = getTLSState(state);
     switch (status) {
-        case 'ready':
-            return `<span class="tls-status-icon ready" role="img" aria-label="${escapeAttr(t('tls_cert_ready'))}" title="${escapeAttr(t('tls_cert_ready'))}" style="margin-left: 6px; display: inline-flex; align-items: center;">${renderLockSvg({ color: 'var(--accent, #156f5a)', size: 14 })}</span>`;
         case 'mismatch':
-            return `<span class="tls-status-icon mismatch" role="img" aria-label="${escapeAttr(state?.tlsKeyMismatchMsg || t('tls_key_mismatch_msg'))}" title="${escapeAttr(state?.tlsKeyMismatchMsg || t('tls_key_mismatch_msg'))}" style="margin-left: 6px; display: inline-flex; align-items: center; cursor: help;">${renderAlertSvg({ color: '#d97706', size: 14 })}</span>`;
+            return `<span class="tls-status-icon mismatch" role="img" aria-label="${escapeAttr(state?.tlsKeyMismatchMsg || t('tls_key_mismatch_msg'))}" title="${escapeAttr(state?.tlsKeyMismatchMsg || t('tls_key_mismatch_msg'))}" style="display: inline-flex; align-items: center; cursor: help;">${renderAlertSvg({ color: '#d97706', size: 14 })}</span>`;
         case 'failed': {
             const err = state?.tlsProvisionError || state?.appInfo?.tlsError || '';
             const isRateLimit = err && (err.includes('rate limit') || err.includes('429') || err.includes('Too Many Requests'));
             const fallbackTooltip = isRateLimit ? t('tls_cert_rate_limited') : t('tls_cert_failed_tooltip');
             const tooltip = (fallbackTooltip || '证书置备遇到异常（已自动降级为明文传输保障传输），点击查看详情或重试') + (err ? ` [${err}]` : '');
-            return `<span class="tls-status-icon failed" role="img" aria-label="${escapeAttr(tooltip)}" title="${escapeAttr(tooltip)}" style="margin-left: 6px; display: inline-flex; align-items: center; cursor: help;">${renderAlertSvg({ color: '#d97706', size: 14 })}</span>`;
+            return `<span class="tls-status-icon failed" role="img" aria-label="${escapeAttr(tooltip)}" title="${escapeAttr(tooltip)}" style="display: inline-flex; align-items: center; cursor: help;">${renderAlertSvg({ color: '#d97706', size: 14 })}</span>`;
         }
         case 'preparing':
-            return `<span class="tls-status-icon preparing" role="img" aria-label="${escapeAttr(t('tls_cert_preparing'))}" title="${escapeAttr(t('tls_cert_preparing'))}" style="margin-left: 6px; display: inline-flex; align-items: center;">${renderSpinnerSvg({ color: 'var(--accent, #156f5a)', size: 14 })}</span>`;
+            return `<span class="tls-status-icon preparing" role="img" aria-label="${escapeAttr(t('tls_cert_preparing'))}" title="${escapeAttr(t('tls_cert_preparing'))}" style="display: inline-flex; align-items: center;">${renderSpinnerSvg({ color: 'var(--accent, #156f5a)', size: 14 })}</span>`;
+        case 'ready':
         case 'disabled':
-        default: {
-            const lastErr = state?.tlsProvisionError || state?.appInfo?.tlsError;
-            if (lastErr && state?.tlsProvisionFailed) {
-                const tooltip = (t('tls_failed_auto_disabled') || '证书置备遇到异常，已自动关闭局域网 TLS 并保持标准明文传输') + ` [${lastErr}]`;
-                return `<span class="tls-status-icon disabled" role="img" aria-label="${escapeAttr(tooltip)}" title="${escapeAttr(tooltip)}" style="margin-left: 6px; display: inline-flex; align-items: center; cursor: help;">${renderLockSvg({ color: 'var(--text-muted, #94a3b8)', size: 14, open: true })}</span>`;
-            }
-            return `<span class="tls-status-icon disabled" role="img" aria-label="${escapeAttr(t('tls_disabled_tooltip'))}" title="${escapeAttr(t('tls_disabled_tooltip'))}" style="margin-left: 6px; display: inline-flex; align-items: center; opacity: 0.75;">${renderLockSvg({ color: 'var(--text-muted, #94a3b8)', size: 14, open: true })}</span>`;
-        }
+        default:
+            return '';
     }
 }
 
