@@ -258,8 +258,8 @@ func TestDevProvisionDeviceTLSCert(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusTooManyRequests)
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"error":      "Certificate issuance rate limit exceeded (maximum 3 requests per 24 hours)",
-			"reason_key": "rate_limited",
+			"error":       "Certificate issuance rate limit exceeded (maximum 3 requests per 24 hours)",
+			"reason_key":  "rate_limited",
 			"retry_after": 86400,
 		})
 	}))
@@ -296,8 +296,8 @@ func TestDevProvisionDeviceTLSCert_ToleratesServerLatencyAboveFiveSeconds(t *tes
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusTooManyRequests)
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"error":      "Certificate issuance rate limit exceeded",
-			"reason_key": "rate_limited",
+			"error":       "Certificate issuance rate limit exceeded",
+			"reason_key":  "rate_limited",
 			"retry_after": 86400,
 		})
 	}))
@@ -708,3 +708,47 @@ func TestLocateFileCommand(t *testing.T) {
 	}
 }
 
+func TestValidateChatDownloadURL(t *testing.T) {
+	ctx := context.Background()
+	agent := newDesktopAgent(ctx)
+	agent.chat = &TaskRecord{
+		PageURL: "http://127.0.0.1:18081/chat-v2/token123",
+	}
+	app := &App{
+		ctx:   ctx,
+		agent: agent,
+	}
+
+	// 1. Valid local chat zip download URL
+	validZipURL := "http://127.0.0.1:18081/chat-v2/token123/files/zip?ids=msg1,msg2&clientId=c1&filename=test.zip"
+	parsed, err := app.validateChatDownloadURL(validZipURL)
+	if err != nil {
+		t.Fatalf("expected valid zip URL to pass, got err: %v", err)
+	}
+	if parsed == nil || parsed.Query().Get("download") != "1" {
+		t.Fatalf("expected parsed URL with download=1 query, got %v", parsed)
+	}
+
+	// 2. Valid localhost alias on same port
+	validLocalhostURL := "http://localhost:18081/chat-v2/token123/files/file1"
+	if _, err := app.validateChatDownloadURL(validLocalhostURL); err != nil {
+		t.Fatalf("expected localhost alias to pass, got err: %v", err)
+	}
+
+	// 3. Untrusted external host must be rejected
+	maliciousURLs := []string{
+		"https://attacker.com/chat-v2/token123/files/zip?ids=1",
+		"http://attacker.com:18081/chat-v2/token123/files/zip",
+		"https://evil.com/malware.zip",
+		"http://127.0.0.1:9999/chat-v2/token123/files/zip", // wrong port
+		"http://127.0.0.1:18081/not-chat-path/malware.zip", // invalid path
+		"ftp://127.0.0.1:18081/chat-v2/token123/files/zip", // unsupported scheme
+		"", // empty
+	}
+
+	for _, malURL := range maliciousURLs {
+		if _, err := app.validateChatDownloadURL(malURL); err == nil {
+			t.Errorf("expected URL %q to be rejected, but it passed", malURL)
+		}
+	}
+}

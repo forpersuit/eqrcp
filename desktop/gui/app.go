@@ -46,19 +46,19 @@ var (
 )
 
 type App struct {
-	ctx           context.Context
-	client        *http.Client
-	mu            sync.Mutex
-	closeBehavior string
-	forceQuit     bool
-	logger        *FileLogger
-	agent         *desktopAgent
-	downloadsMu   sync.Mutex
-	downloads     map[string]context.CancelFunc
-	tlsMu         sync.RWMutex
-	lastTLSError  string
-	provisionMu   sync.Mutex
-	tlsStats      TLSIssuanceStats
+	ctx                         context.Context
+	client                      *http.Client
+	mu                          sync.Mutex
+	closeBehavior               string
+	forceQuit                   bool
+	logger                      *FileLogger
+	agent                       *desktopAgent
+	downloadsMu                 sync.Mutex
+	downloads                   map[string]context.CancelFunc
+	tlsMu                       sync.RWMutex
+	lastTLSError                string
+	provisionMu                 sync.Mutex
+	tlsStats                    TLSIssuanceStats
 	testHookBeforeFailBroadcast func()
 }
 
@@ -500,9 +500,9 @@ func (a *App) ChatSaveDirectory() (string, error) {
 
 func (a *App) DownloadChatAttachment(rawURL string, filename string) (string, error) {
 	a.logInfo(fmt.Sprintf("[GUI] DownloadChatAttachment: rawURL=%q, filename=%q", rawURL, filename))
-	parsed, err := chatAttachmentDownloadURL(rawURL)
+	parsed, err := a.validateChatDownloadURL(rawURL)
 	if err != nil {
-		a.logError(fmt.Sprintf("[GUI] DownloadChatAttachment: URL parsing failed: %v", err))
+		a.logError(fmt.Sprintf("[GUI] DownloadChatAttachment: URL validation failed: %v", err))
 		return "", err
 	}
 	dir, err := a.ChatSaveDirectory()
@@ -528,7 +528,7 @@ func (a *App) DownloadChatAttachment(rawURL string, filename string) (string, er
 }
 
 func (a *App) SaveChatAttachmentAs(rawURL string, filename string) (string, error) {
-	parsed, err := chatAttachmentDownloadURL(rawURL)
+	parsed, err := a.validateChatDownloadURL(rawURL)
 	if err != nil {
 		return "", err
 	}
@@ -593,10 +593,10 @@ func (a *App) SaveChatAttachments(urls []string, names []string, messageIds []st
 			messageID = messageIds[i]
 		}
 		res := ChatAttachmentSaveResult{MessageID: messageID, Name: filename}
-		parsed, perr := chatAttachmentDownloadURL(rawURL)
+		parsed, perr := a.validateChatDownloadURL(rawURL)
 		if perr != nil {
 			res.Error = perr.Error()
-			a.logError(fmt.Sprintf("[GUI] SaveChatAttachments: URL parse failed for %q: %v", filename, perr))
+			a.logError(fmt.Sprintf("[GUI] SaveChatAttachments: URL validation failed for %q: %v", filename, perr))
 			results = append(results, res)
 			continue
 		}
@@ -627,7 +627,7 @@ func (a *App) SaveChatAttachments(urls []string, names []string, messageIds []st
 // SaveChatBatchZip prompts the user with a SaveFileDialog to choose a location for saving the packaged zip archive,
 // then streams the generated zip from rawURL into that target file.
 func (a *App) SaveChatBatchZip(rawURL string, zipFilename string) (string, error) {
-	parsed, err := chatAttachmentDownloadURL(rawURL)
+	parsed, err := a.validateChatDownloadURL(rawURL)
 	if err != nil {
 		a.logError(fmt.Sprintf("[GUI] SaveChatBatchZip: invalid download URL %q: %v", rawURL, err))
 		return "", err
@@ -732,6 +732,18 @@ func chatAttachmentDownloadURL(rawURL string) (*url.URL, error) {
 	query := parsed.Query()
 	query.Set("download", "1")
 	parsed.RawQuery = query.Encode()
+	return parsed, nil
+}
+
+func (a *App) validateChatDownloadURL(rawURL string) (*url.URL, error) {
+	parsed, err := chatAttachmentDownloadURL(rawURL)
+	if err != nil {
+		return nil, err
+	}
+	if a.agent != nil && !a.agent.isTrustedChatDownloadURL(parsed) {
+		a.logError(fmt.Sprintf("[GUI] Security: untrusted chat download URL rejected: %q (host: %q, path: %q)", rawURL, parsed.Host, parsed.Path))
+		return nil, fmt.Errorf("untrusted download URL %q", rawURL)
+	}
 	return parsed, nil
 }
 
@@ -2560,4 +2572,3 @@ func (a *App) persistDisableTLS() {
 		}
 	}
 }
-

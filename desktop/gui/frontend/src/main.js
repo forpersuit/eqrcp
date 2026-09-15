@@ -355,7 +355,16 @@ window.addEventListener('message', (e) => {
         const messageIds = Array.isArray(e.data.messageIds) ? e.data.messageIds : [];
 
         // 优先使用打包 Zip 方式另存为压缩包
-        if (zipURL && isTrustedChatURL(zipURL, activeChatFrameOrigin())) {
+        if (zipURL) {
+            if (!isTrustedChatURL(zipURL, activeChatFrameOrigin())) {
+                console.warn('[Antigravity Security] download-batch: rejected untrusted zipURL:', zipURL);
+                e.source?.postMessage({
+                    type: 'download-batch-failed',
+                    messageIds: messageIds,
+                    error: 'untrusted zip download url'
+                }, targetOrigin);
+                return;
+            }
             console.log('[Antigravity Debug] download-batch zip invoked. Zip:', zipFilename, 'messageIds:', messageIds.length);
             SaveChatBatchZip(zipURL, zipFilename)
                 .then((savedZipPath) => {
@@ -506,76 +515,176 @@ window.addEventListener('message', (e) => {
 
 function activeChatFrameOrigin() {
     const frame = document.querySelector('#chat-iframe');
-    if (!frame?.src) { return ''; }
-    try { return new URL(frame.src).origin; } catch { return ''; }
+    if (frame?.src) {
+        try {
+            const u = new URL(frame.src);
+            if (u.origin && u.origin !== 'null') {
+                return u.origin;
+            }
+        } catch { }
+    }
+    const pageUrl = activeChatPageURL();
+    if (pageUrl) {
+        try {
+            const u = new URL(pageUrl);
+            if (u.origin && u.origin !== 'null') {
+                return u.origin;
+            }
+        } catch { }
+    }
+    return '';
+}
+
+function getTrustedChatOrigins() {
+    const origins = new Set();
+    const addOrigin = (raw) => {
+        if (!raw) return;
+        try {
+            const u = new URL(raw);
+            if (u.origin && u.origin !== 'null') {
+                origins.add(u.origin);
+                const portPart = u.port ? `:${u.port}` : '';
+                if (u.hostname === 'localhost') {
+                    origins.add(`${u.protocol}//127.0.0.1${portPart}`);
+                } else if (u.hostname === '127.0.0.1') {
+                    origins.add(`${u.protocol}//localhost${portPart}`);
+                }
+            }
+        } catch { }
+    };
+
+    const frame = document.querySelector('#chat-iframe');
+    if (frame?.src) {
+        addOrigin(frame.src);
+    }
+    const pageUrl = activeChatPageURL();
+    if (pageUrl) {
+        addOrigin(pageUrl);
+    }
+    const task = state.status?.chat || state.status?.current;
+    if (task?.pageUrl) {
+        addOrigin(task.pageUrl);
+    }
+    return origins;
 }
 
 function isTrustedChatFrameMessage(event) {
     const frame = document.querySelector('#chat-iframe');
     if (!frame) {
-        console.warn('[Antigravity Debug] isTrustedChatFrameMessage: iframe #chat-iframe not found');
+        console.warn('[Antigravity Security] isTrustedChatFrameMessage: iframe #chat-iframe not found');
         return false;
     }
-    const origin = activeChatFrameOrigin();
+    const trustedOrigins = getTrustedChatOrigins();
     const normalizeOrigin = (orig) => {
         if (!orig) return '';
         return orig.replace('://localhost', '://127.0.0.1');
     };
     const evOriginNorm = normalizeOrigin(event.origin);
-    const frameOriginNorm = normalizeOrigin(origin);
-    
-    // Accept origin match, or WebView2 cross-protocol null/empty origins
-    const isSourceMatch = (event.source === frame.contentWindow);
-    const originMatched = (evOriginNorm === frameOriginNorm) || evOriginNorm === '' || evOriginNorm === 'null';
-    
-    console.log('[Antigravity Debug] isTrustedChatFrameMessage validation:', {
-        eventOrigin: event.origin,
-        frameOrigin: origin,
-        eventOriginNormalized: evOriginNorm,
-        frameOriginNormalized: frameOriginNorm,
-        isSourceMatch: isSourceMatch,
-        originMatched: originMatched,
-        data: event.data
-    });
-    
+
+    // Strict source check: if frame has contentWindow, message source MUST match
+    const isSourceMatch = Boolean(frame.contentWindow && event.source === frame.contentWindow);
+    if (frame.contentWindow && event.source && !isSourceMatch) {
+        console.warn('[Antigravity Security] isTrustedChatFrameMessage: rejected message from non-chat frame source');
+        return false;
+    }
+
+    // Accept empty or 'null' origin only if the source strictly matches the chat iframe
+    if (evOriginNorm === '' || evOriginNorm === 'null') {
+        if (!isSourceMatch) {
+            console.warn('[Antigravity Security] isTrustedChatFrameMessage: rejected opaque origin with non-matching source');
+            return false;
+        }
+        return true;
+    }
+
+    let originMatched = false;
+    for (const t of trustedOrigins) {
+        if (normalizeOrigin(t) === evOriginNorm) {
+            originMatched = true;
+            break;
+        }
+    }
+
     if (!originMatched) {
-        console.warn('[Antigravity Debug] isTrustedChatFrameMessage: origin mismatch. event.origin:', event.origin, 'expected:', origin);
+        console.warn('[Antigravity Security] isTrustedChatFrameMessage: origin mismatch. event.origin:', event.origin, 'expected one of:', Array.from(trustedOrigins));
         return false;
     }
     return true;
 }
 
-function isTrustedChatURL(rawURL, origin) {
+function isTrustedChatURL(rawURL, originHint) {
+    if (!rawURL) return false;
     try {
         const parsed = new URL(rawURL);
+        const protocolOk = (parsed.protocol === 'http:' || parsed.protocol === 'https:');
+        if (!protocolOk) {
+            console.warn('[Antigravity Security] isTrustedChatURL: rejected unsupported protocol:', parsed.protocol);
+            return false;
+        }
+
+        // Path whitelist: must be a chat path
+        const isChatPath = parsed.pathname.startsWith('/chat-v2/') || parsed.pathname.startsWith('/chat/');
+        if (!isChatPath) {
+            console.warn('[Antigravity Security] isTrustedChatURL: rejected non-chat path:', parsed.pathname);
+            return false;
+        }
+
+        const trustedOrigins = getTrustedChatOrigins();
+        if (trustedOrigins.size === 0) {
+            console.warn('[Antigravity Security] isTrustedChatURL: no active chat origins found');
+            return false;
+        }
+
         const normalizeOrigin = (orig) => {
             if (!orig) return '';
             return orig.replace('://localhost', '://127.0.0.1');
         };
+
         const parsedNormalized = normalizeOrigin(parsed.origin);
-        const originNormalized = normalizeOrigin(origin);
-        
-        // Accept matching loopback origin or null/empty target origin from WebView2 cross-protocol messages
-        const originOk = (parsedNormalized === originNormalized) || originNormalized === '' || originNormalized === 'null';
-        const protocolOk = (parsed.protocol === 'http:' || parsed.protocol === 'https:');
-        const matched = originOk && protocolOk;
-        
-        console.log('[Antigravity Debug] isTrustedChatURL validation:', {
-            rawURL: rawURL,
-            origin: origin,
-            parsedOriginNormalized: parsedNormalized,
-            originNormalized: originNormalized,
-            originOk: originOk,
-            protocolOk: protocolOk,
-            matched: matched
-        });
-        
-        if (!matched) {
-            console.warn('[Antigravity Debug] isTrustedChatURL check failed. parsed.origin:', parsed.origin, 'event.origin:', origin);
+
+        // parsed.origin MUST match a trusted origin from the active chat server (host whitelist)
+        // Under NO circumstances does an empty or 'null' origin bypass host validation!
+        let originMatched = false;
+        for (const t of trustedOrigins) {
+            if (normalizeOrigin(t) === parsedNormalized) {
+                originMatched = true;
+                break;
+            }
         }
-        return matched;
+
+        // If a valid non-opaque originHint was provided, verify it is consistent
+        if (originHint && originHint !== 'null' && originHint !== '') {
+            const hintNorm = normalizeOrigin(originHint);
+            let hintIsTrusted = false;
+            for (const t of trustedOrigins) {
+                if (normalizeOrigin(t) === hintNorm) {
+                    hintIsTrusted = true;
+                    break;
+                }
+            }
+            if (hintIsTrusted && hintNorm !== parsedNormalized) {
+                console.warn('[Antigravity Security] isTrustedChatURL: parsed.origin does not match originHint:', parsedNormalized, 'vs', hintNorm);
+                return false;
+            }
+        }
+
+        console.log('[Antigravity Debug] isTrustedChatURL validation:', {
+            rawURL,
+            originHint,
+            parsedOriginNormalized: parsedNormalized,
+            trustedOrigins: Array.from(trustedOrigins),
+            originMatched,
+            protocolOk
+        });
+
+        if (!originMatched) {
+            console.warn('[Antigravity Security] isTrustedChatURL check failed. parsed.origin:', parsed.origin, 'not in trusted origins:', Array.from(trustedOrigins));
+            return false;
+        }
+
+        return true;
     } catch (err) {
-        console.error('[Antigravity Debug] isTrustedChatURL: error parsing rawURL:', rawURL, err);
+        console.error('[Antigravity Security] isTrustedChatURL: error parsing rawURL:', rawURL, err);
         return false;
     }
 }

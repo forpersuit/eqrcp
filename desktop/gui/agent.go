@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -29,27 +30,27 @@ const desktopAgentMaxHistory = 20
 const desktopAgentHistoryFilename = "desktop-agent-history.json"
 
 type desktopAgent struct {
-	mu            sync.Mutex
-	baseFlags     application.Flags
-	log           logger.Logger
-	fileLogger    *FileLogger
-	startedAt     time.Time
-	busy          bool
-	current       *TaskRecord
-	chat          *TaskRecord
-	queue         []AgentTask
-	history       []TaskRecord
-	nextID        int
-	activeStop    func(string)
-	chatStop      func(string)
-	lastError     string
-	historyPath   string
-	notified      map[int]map[string]bool
-	activeServer  *server.Server
-	ctx           context.Context
-	notifyEnabled bool
-	notifier      func(title string, message string) error
-	chatReadyCh   chan error
+	mu             sync.Mutex
+	baseFlags      application.Flags
+	log            logger.Logger
+	fileLogger     *FileLogger
+	startedAt      time.Time
+	busy           bool
+	current        *TaskRecord
+	chat           *TaskRecord
+	queue          []AgentTask
+	history        []TaskRecord
+	nextID         int
+	activeStop     func(string)
+	chatStop       func(string)
+	lastError      string
+	historyPath    string
+	notified       map[int]map[string]bool
+	activeServer   *server.Server
+	ctx            context.Context
+	notifyEnabled  bool
+	notifier       func(title string, message string) error
+	chatReadyCh    chan error
 	currentReadyCh chan error
 }
 
@@ -509,6 +510,73 @@ func (agent *desktopAgent) UpdateLogDir(logDir string) {
 	if agent.activeServer != nil {
 		agent.activeServer.ChatLogDir = logDir
 	}
+}
+
+// isTrustedChatDownloadURL checks if the parsed URL is served by the currently active chat server.
+func (agent *desktopAgent) isTrustedChatDownloadURL(parsed *url.URL) bool {
+	if parsed == nil {
+		return false
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return false
+	}
+	// Path whitelist: only allow chat endpoints
+	if !strings.HasPrefix(parsed.Path, "/chat-v2/") && !strings.HasPrefix(parsed.Path, "/chat/") {
+		return false
+	}
+
+	agent.mu.Lock()
+	defer agent.mu.Unlock()
+
+	allowedHosts := make(map[string]bool)
+	addHost := func(targetURL string) {
+		if targetURL == "" {
+			return
+		}
+		u, err := url.Parse(targetURL)
+		if err != nil || u.Host == "" {
+			return
+		}
+		allowedHosts[u.Host] = true
+		host, port, err := net.SplitHostPort(u.Host)
+		if err == nil {
+			if host == "localhost" {
+				allowedHosts["127.0.0.1:"+port] = true
+			} else if host == "127.0.0.1" {
+				allowedHosts["localhost:"+port] = true
+			}
+			allowedHosts["127.0.0.1:"+port] = true
+			allowedHosts["localhost:"+port] = true
+		}
+	}
+
+	if agent.chat != nil && agent.chat.PageURL != "" {
+		addHost(agent.chat.PageURL)
+	}
+	if agent.activeServer != nil {
+		addHost(agent.activeServer.BaseURL)
+		addHost(agent.activeServer.ChatURL)
+	}
+
+	if len(allowedHosts) == 0 {
+		return false
+	}
+
+	if allowedHosts[parsed.Host] {
+		return true
+	}
+
+	pHost, pPort, err := net.SplitHostPort(parsed.Host)
+	if err == nil && (pHost == "127.0.0.1" || pHost == "localhost") {
+		for ah := range allowedHosts {
+			_, aPort, err2 := net.SplitHostPort(ah)
+			if err2 == nil && aPort == pPort {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func (agent *desktopAgent) handleChatHostRename(newName string) {
