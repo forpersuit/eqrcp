@@ -94,7 +94,7 @@ export async function registerOrRefreshDevice(
       newTier = 'paid';
     } else if (tier === 'free' && matchedRow.tier_label === 'paid') {
       // Tier protection: existing paid device gets free-tier request — keep paid
-      logSystemError(env, 'DEVICE_REGISTRY', 'WARN', new Error('tier_protection'), {
+      logSystemError(env, 'DEVICE_REGISTRY', 'WARN', 'tier_protection', {
         device_id: matchedRow.device_id,
         existing_tier: matchedRow.tier_label,
         incoming_tier: tier
@@ -167,7 +167,7 @@ export async function registerOrRefreshDevice(
   ).run();
 
   // Audit: new device created (no fingerprint match found)
-  logSystemError(env, 'DEVICE_REGISTRY', 'INFO', new Error('new_device'), {
+  logSystemError(env, 'DEVICE_REGISTRY', 'INFO', 'new_device', {
     device_id_prefix: newDeviceId.substring(0, 8),
     has_cpu_hash: Boolean(cpu),
     has_disk_hash: Boolean(disk),

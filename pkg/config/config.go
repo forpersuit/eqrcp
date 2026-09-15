@@ -56,13 +56,18 @@ func New(app application.App) (Config, error) {
 		defer file.Close()
 	}
 	if err := v.ReadInConfig(); err != nil {
-		return Config{}, fmt.Errorf("fatal error config file: %s", err)
+		BackupCorruptConfigFile(v.ConfigFileUsed())
+		v = GetViperInstance(app)
+		_ = v.ReadInConfig()
 	}
 	// Load file
 	cfg.Interface = v.GetString("interface")
 	cfg.Bind = v.GetString("bind")
 	cfg.Mode = strings.ToLower(strings.TrimSpace(v.GetString("mode")))
 	cfg.Port = v.GetInt("port")
+	if cfg.Port < 0 || cfg.Port > 65535 {
+		cfg.Port = 0
+	}
 	cfg.KeepAlive = v.GetBool("keepAlive")
 	cfg.Path = v.GetString("path")
 	cfg.Secure = v.GetBool("secure")

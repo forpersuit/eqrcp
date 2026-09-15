@@ -94,7 +94,9 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 		return DesktopSettings{}, err
 	}
 	if err := v.ReadInConfig(); err != nil {
-		return DesktopSettings{}, fmt.Errorf("fatal error config file: %s", err)
+		BackupCorruptConfigFile(v.ConfigFileUsed())
+		v = GetViperInstance(app)
+		_ = v.ReadInConfig()
 	}
 	options, err := desktopInterfaceOptions(app.Flags.ListAllInterfaces)
 	if err != nil {
@@ -192,12 +194,16 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 	}
 	chatDownloadDir := v.GetString("chatDownloadDir")
 	logDir := v.GetString("logDir")
+	port := v.GetInt("port")
+	if port < 0 || port > 65535 {
+		port = 0
+	}
 	return DesktopSettings{
 		ConfigPath:               v.ConfigFileUsed(),
 		Interface:                selectedInterface,
 		InterfaceOptions:         options,
 		Mode:                     strings.ToLower(strings.TrimSpace(v.GetString("mode"))),
-		Port:                     v.GetInt("port"),
+		Port:                     port,
 		Output:                   output,
 		Browser:                  browser,
 		ChatAutoSave:             chatAutoSave,
@@ -349,7 +355,7 @@ func WriteDesktopSettings(app application.App, settings DesktopSettings) (Deskto
 		return DesktopSettings{}, err
 	}
 	if err := v.ReadInConfig(); err != nil {
-		return DesktopSettings{}, fmt.Errorf("fatal error config file: %s", err)
+		BackupCorruptConfigFile(v.ConfigFileUsed())
 	}
 	cleanV := viper.New()
 	cleanV.SetConfigFile(v.ConfigFileUsed())
@@ -389,7 +395,7 @@ func WriteDesktopSettings(app application.App, settings DesktopSettings) (Deskto
 	cleanV.Set("blockProxy", settings.BlockProxy)
 	cleanV.Set("chatDownloadDir", strings.TrimSpace(settings.ChatDownloadDir))
 	cleanV.Set("logDir", strings.TrimSpace(settings.LogDir))
-	if err := cleanV.WriteConfig(); err != nil {
+	if err := AtomicWriteConfigFile(cleanV, v.ConfigFileUsed()); err != nil {
 		return DesktopSettings{}, err
 	}
 	return ReadDesktopSettings(app)
