@@ -39,10 +39,10 @@ jobs:
     if: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push') || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     outputs:
-      drm_api: ${{ steps.filter.outputs.drm_api }}
-      feedback_api: ${{ steps.filter.outputs.feedback_api }}
-      website: ${{ steps.filter.outputs.website }}
-      admin: ${{ steps.filter.outputs.admin }}
+      drm_api: ${{ github.event.inputs.force_all == 'true' || steps.filter.outputs.drm_api }}
+      feedback_api: ${{ github.event.inputs.force_all == 'true' || steps.filter.outputs.feedback_api }}
+      website: ${{ github.event.inputs.force_all == 'true' || steps.filter.outputs.website }}
+      admin: ${{ github.event.inputs.force_all == 'true' || steps.filter.outputs.admin }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -52,7 +52,7 @@ jobs:
       - uses: dorny/paths-filter@v3
         id: filter
         with:
-          filters:
+          filters: |
             drm_api:
               - 'cloudflare/eqt-drm-api/**'
             feedback_api:
@@ -85,7 +85,7 @@ jobs:
       # ── Workers ──────────────────────────────────────────────
 
       - name: Deploy eqt-drm-api Worker
-        if: needs.detect-changes.outputs.drm_api == 'true' || inputs.force_all == true
+        if: needs.detect-changes.outputs.drm_api == 'true'
         working-directory: cloudflare/eqt-drm-api
         run: npx wrangler deploy
         env:
@@ -93,7 +93,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID || 'b8b5c5020effb7d1ac41f586c44b6e82' }}
 
       - name: Deploy eqt-feedback-api Worker
-        if: needs.detect-changes.outputs.feedback_api == 'true' || inputs.force_all == true
+        if: needs.detect-changes.outputs.feedback_api == 'true'
         working-directory: cloudflare/eqt-feedback-api
         run: npx wrangler deploy
         env:
@@ -111,16 +111,16 @@ jobs:
             echo "**Timestamp**: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
             echo ""
             echo "### Worker status"
-            echo "- eqt-drm-api: $( [ "${{ needs.detect-changes.outputs.drm_api == 'true' || inputs.force_all == true }}" = "true" ] && echo 'Deployed' || echo 'Skipped (no changes)' )"
-            echo "- eqt-feedback-api: $( [ "${{ needs.detect-changes.outputs.feedback_api == 'true' || inputs.force_all == true }}" = "true" ] && echo 'Deployed' || echo 'Skipped (no changes)' )"
-            echo "- eqt-website: $( [ "${{ needs.detect-changes.outputs.website == 'true' || inputs.force_all == true }}" = "true" ] && echo 'Deployed' || echo 'Skipped (no changes)' )"
-            echo "- eqt-admin: $( [ "${{ needs.detect-changes.outputs.admin == 'true' || inputs.force_all == true }}" = "true" ] && echo 'Deployed' || echo 'Skipped (no changes)' )"
+            echo "- eqt-drm-api: $( [ "${{ needs.detect-changes.outputs.drm_api == 'true' }}" = "true" ] && echo 'Deployed' || echo 'Skipped (no changes)' )"
+            echo "- eqt-feedback-api: $( [ "${{ needs.detect-changes.outputs.feedback_api == 'true' }}" = "true" ] && echo 'Deployed' || echo 'Skipped (no changes)' )"
+            echo "- eqt-website: $( [ "${{ needs.detect-changes.outputs.website == 'true' }}" = "true" ] && echo 'Deployed' || echo 'Skipped (no changes)' )"
+            echo "- eqt-admin: $( [ "${{ needs.detect-changes.outputs.admin == 'true' }}" = "true" ] && echo 'Deployed' || echo 'Skipped (no changes)' )"
           } >> "$GITHUB_STEP_SUMMARY"
 
       # ── Pages ────────────────────────────────────────────────
 
       - name: Build and Deploy eqt-admin
-        if: needs.detect-changes.outputs.admin == 'true' || inputs.force_all == true
+        if: needs.detect-changes.outputs.admin == 'true'
         working-directory: cloudflare/eqt-admin
         run: |
           npm ci
@@ -131,7 +131,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID || 'b8b5c5020effb7d1ac41f586c44b6e82' }}
 
       - name: Deploy eqt-website to Pages
-        if: needs.detect-changes.outputs.website == 'true' || inputs.force_all == true
+        if: needs.detect-changes.outputs.website == 'true'
         working-directory: cloudflare/eqt-website
         run: npx wrangler pages deploy ./ --project-name=eqt --branch=master
         env:
@@ -144,10 +144,10 @@ jobs:
         if: success()
         run: |
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          DRM_STATUS="${{ needs.detect-changes.outputs.drm_api == 'true' || inputs.force_all == true }}"
-          FB_STATUS="${{ needs.detect-changes.outputs.feedback_api == 'true' || inputs.force_all == true }}"
-          WEB_STATUS="${{ needs.detect-changes.outputs.website == 'true' || inputs.force_all == true }}"
-          ADMIN_STATUS="${{ needs.detect-changes.outputs.admin == 'true' || inputs.force_all == true }}"
+          DRM_STATUS="${{ needs.detect-changes.outputs.drm_api == 'true' }}"
+          FB_STATUS="${{ needs.detect-changes.outputs.feedback_api == 'true' }}"
+          WEB_STATUS="${{ needs.detect-changes.outputs.website == 'true' }}"
+          ADMIN_STATUS="${{ needs.detect-changes.outputs.admin == 'true' }}"
 
           MESSAGE="✅ [Production Deploy Succeeded]
           Repository: ${{ github.repository }}

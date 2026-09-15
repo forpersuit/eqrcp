@@ -68,6 +68,7 @@ func TestFormatDirectDomainWithNode(t *testing.T) {
 func TestLoadOrGenerateDeviceKey(t *testing.T) {
 	tempHome := t.TempDir()
 	t.Setenv("HOME", tempHome)
+	t.Setenv("EQT_CONFIG_DIR", filepath.Join(tempHome, ".config", "eqt"))
 
 	nodeID := "testnode1234"
 
@@ -90,7 +91,11 @@ func TestLoadOrGenerateDeviceKey(t *testing.T) {
 	logBuf.Reset()
 
 	// Verify file permissions
-	keyPath := filepath.Join(tempHome, ".config", "eqt", "certs", nodeID, "privkey.pem")
+	certDir, err := GetDeviceCertDir(nodeID)
+	if err != nil {
+		t.Fatalf("failed to get device cert dir: %v", err)
+	}
+	keyPath := filepath.Join(certDir, "privkey.pem")
 	info, err := os.Stat(keyPath)
 	if err != nil {
 		t.Fatalf("key file does not exist: %v", err)

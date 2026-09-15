@@ -42,18 +42,18 @@ jobs:
     name: Detect Changes
     runs-on: ubuntu-latest
     outputs:
-      client: ${{ steps.filter.outputs.client }}
-      drm_api: ${{ steps.filter.outputs.drm_api }}
-      feedback_api: ${{ steps.filter.outputs.feedback_api }}
-      website: ${{ steps.filter.outputs.website }}
-      admin: ${{ steps.filter.outputs.admin }}
+      client: ${{ github.event.inputs.force_all == 'true' || steps.filter.outputs.client }}
+      drm_api: ${{ github.event.inputs.force_all == 'true' || steps.filter.outputs.drm_api }}
+      feedback_api: ${{ github.event.inputs.force_all == 'true' || steps.filter.outputs.feedback_api }}
+      website: ${{ github.event.inputs.force_all == 'true' || steps.filter.outputs.website }}
+      admin: ${{ github.event.inputs.force_all == 'true' || steps.filter.outputs.admin }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: dorny/paths-filter@v3
         id: filter
         with:
-          filters:
+          filters: |
             client:
               - 'desktop/**'
               - 'cmd/**'
@@ -82,7 +82,7 @@ jobs:
   build-test-client:
     name: Build & Publish Windows Test Client
     needs: [detect-changes]
-    if: needs.detect-changes.outputs.client == 'true' || inputs.force_all == true
+    if: needs.detect-changes.outputs.client == 'true'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -197,7 +197,7 @@ jobs:
 
       # ── eqt-drm-api (test) ──────────────────────────────────
       - name: Deploy eqt-drm-api (test)
-        if: needs.detect-changes.outputs.drm_api == 'true' || inputs.force_all == true
+        if: needs.detect-changes.outputs.drm_api == 'true'
         working-directory: cloudflare/eqt-drm-api
         continue-on-error: true
         run: npx wrangler deploy --env test
@@ -207,7 +207,7 @@ jobs:
 
       # ── eqt-feedback-api (test) ──────────────────────────────
       - name: Deploy eqt-feedback-api (test)
-        if: needs.detect-changes.outputs.feedback_api == 'true' || inputs.force_all == true
+        if: needs.detect-changes.outputs.feedback_api == 'true'
         working-directory: cloudflare/eqt-feedback-api
         continue-on-error: true
         run: npx wrangler deploy --env test
@@ -218,7 +218,7 @@ jobs:
       # ── eqt-website to Pages (test) ──────────────────────────
       # 规则: 当官网代码修改 或 客户端重新构建发布时,自动部署刷新测试主页
       - name: Deploy eqt-website to Pages (test)
-        if: needs.detect-changes.outputs.website == 'true' || needs.detect-changes.outputs.client == 'true' || inputs.force_all == true
+        if: needs.detect-changes.outputs.website == 'true' || needs.detect-changes.outputs.client == 'true'
         working-directory: cloudflare/eqt-website
         run: npx wrangler pages deploy ./ --project-name=eqt-test --branch=dev
         env:
@@ -227,7 +227,7 @@ jobs:
 
       # ── eqt-admin to Pages (test) ────────────────────────────
       - name: Deploy eqt-admin to Pages (test)
-        if: needs.detect-changes.outputs.admin == 'true' || inputs.force_all == true
+        if: needs.detect-changes.outputs.admin == 'true'
         working-directory: cloudflare/eqt-admin
         run: |
           npm ci
@@ -242,10 +242,10 @@ jobs:
         if: always()
         run: |
           CLIENT_STATUS="${{ needs.build-test-client.result }}"
-          DRM_STATUS="${{ needs.detect-changes.outputs.drm_api == 'true' || inputs.force_all == true }}"
-          FB_STATUS="${{ needs.detect-changes.outputs.feedback_api == 'true' || inputs.force_all == true }}"
-          WEB_STATUS="${{ needs.detect-changes.outputs.website == 'true' || needs.detect-changes.outputs.client == 'true' || inputs.force_all == true }}"
-          ADMIN_STATUS="${{ needs.detect-changes.outputs.admin == 'true' || inputs.force_all == true }}"
+          DRM_STATUS="${{ needs.detect-changes.outputs.drm_api == 'true' }}"
+          FB_STATUS="${{ needs.detect-changes.outputs.feedback_api == 'true' }}"
+          WEB_STATUS="${{ needs.detect-changes.outputs.website == 'true' || needs.detect-changes.outputs.client == 'true' }}"
+          ADMIN_STATUS="${{ needs.detect-changes.outputs.admin == 'true' }}"
 
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           

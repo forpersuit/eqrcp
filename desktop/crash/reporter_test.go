@@ -61,13 +61,16 @@ func TestReadLogTail(t *testing.T) {
 	})
 }
 
+func setupTestConfigDir(t *testing.T) string {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("EQT_CONFIG_DIR", tempHome)
+	return tempHome
+}
+
 // TestSaveAndLoadDump tests writing and reading a crash dump file.
 func TestSaveAndLoadDump(t *testing.T) {
-	// Use a temp HOME to redirect DefaultConfigDir
-	tempHome := t.TempDir()
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tempHome)
-	defer os.Setenv("HOME", oldHome)
+	setupTestConfigDir(t)
 
 	// Save a dump
 	SaveDump("test panic: something went wrong")
@@ -104,10 +107,7 @@ func TestSaveAndLoadDump(t *testing.T) {
 // TestHasPendingDump tests the pending dump detection.
 func TestHasPendingDump(t *testing.T) {
 	t.Run("no dump file", func(t *testing.T) {
-		tempHome := t.TempDir()
-		oldHome := os.Getenv("HOME")
-		os.Setenv("HOME", tempHome)
-		defer os.Setenv("HOME", oldHome)
+		setupTestConfigDir(t)
 
 		if HasPendingDump() {
 			t.Error("HasPendingDump should be false when no dump exists")
@@ -115,10 +115,7 @@ func TestHasPendingDump(t *testing.T) {
 	})
 
 	t.Run("dump exists and not uploaded", func(t *testing.T) {
-		tempHome := t.TempDir()
-		oldHome := os.Getenv("HOME")
-		os.Setenv("HOME", tempHome)
-		defer os.Setenv("HOME", oldHome)
+		setupTestConfigDir(t)
 
 		SaveDump("panic")
 		if !HasPendingDump() {
@@ -127,10 +124,7 @@ func TestHasPendingDump(t *testing.T) {
 	})
 
 	t.Run("dump marked as uploaded", func(t *testing.T) {
-		tempHome := t.TempDir()
-		oldHome := os.Getenv("HOME")
-		os.Setenv("HOME", tempHome)
-		defer os.Setenv("HOME", oldHome)
+		setupTestConfigDir(t)
 
 		SaveDump("panic")
 		_ = MarkUploaded()
@@ -140,10 +134,7 @@ func TestHasPendingDump(t *testing.T) {
 	})
 
 	t.Run("dump marked as dismissed", func(t *testing.T) {
-		tempHome := t.TempDir()
-		oldHome := os.Getenv("HOME")
-		os.Setenv("HOME", tempHome)
-		defer os.Setenv("HOME", oldHome)
+		setupTestConfigDir(t)
 
 		SaveDump("panic")
 		_ = MarkDismissed()
@@ -155,10 +146,7 @@ func TestHasPendingDump(t *testing.T) {
 
 // TestClearDump tests removing the crash dump file.
 func TestClearDump(t *testing.T) {
-	tempHome := t.TempDir()
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tempHome)
-	defer os.Setenv("HOME", oldHome)
+	setupTestConfigDir(t)
 
 	SaveDump("panic")
 	if !HasPendingDump() {
@@ -179,10 +167,7 @@ func TestClearDump(t *testing.T) {
 // a later launch, while LoadRawDump still returns it so a subsequent Send can
 // upload the report.
 func TestLoadRawDumpAfterDismiss(t *testing.T) {
-	tempHome := t.TempDir()
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tempHome)
-	defer os.Setenv("HOME", oldHome)
+	setupTestConfigDir(t)
 
 	SaveDump("panic")
 
@@ -215,10 +200,7 @@ func TestLoadRawDumpAfterDismiss(t *testing.T) {
 // TestMarkUploadedThenDismissed tests that a dump marked as uploaded
 // is not affected by a subsequent MarkDismissed call (it stays not pending).
 func TestMarkUploadedThenDismissed(t *testing.T) {
-	tempHome := t.TempDir()
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tempHome)
-	defer os.Setenv("HOME", oldHome)
+	setupTestConfigDir(t)
 
 	SaveDump("panic")
 	_ = MarkUploaded()
@@ -252,10 +234,7 @@ func TestCollect(t *testing.T) {
 
 // TestSaveDumpWithNil tests that SaveDump handles nil recovery gracefully.
 func TestSaveDumpWithNil(t *testing.T) {
-	tempHome := t.TempDir()
-	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", tempHome)
-	defer os.Setenv("HOME", oldHome)
+	setupTestConfigDir(t)
 
 	// SaveDump(nil) simulates a signal-triggered crash
 	SaveDump(nil)
