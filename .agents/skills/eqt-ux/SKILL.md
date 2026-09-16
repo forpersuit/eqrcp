@@ -56,7 +56,7 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
     - iOS WebKit 底层 `zoomToRect` 机制规定：任何可输入元素（`input, textarea, select`）计算字号 `< 16px` 时，聚焦瞬间会无条件将整个页面放大至 1.25x~1.3x。
     - 在全局、`@media (max-width: 820px)` 以及 `@media (hover: none) and (pointer: coarse)` 下必须强制 `font-size: 16px !important;`，且在 `html` 上声明 `-webkit-text-size-adjust: 100%; text-size-adjust: 100%;`，从源头彻底阻断 iOS 触发自动放大。
   - **Meta Viewport 完整契约约束**：
-    - `index.html` 必须声明 `<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />`。
+    - `index.html` 必须声明 `<meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content, viewport-fit=cover" />`，严禁加入 `user-scalable=no`（避免诱发移动端软键盘进入 Overlay 遮挡模式）。
   - **移动端与桌面端发送后焦点隔离 (Platform-Isolated Post-Submit Focus)**：
     - 桌面端（实体键盘）：`handleSubmit` 中保留 `textareaEl.focus()`，支持连续打字。
     - 移动端（触屏/窄屏）：用户发送消息后，**严禁**重新强行 `textareaEl.focus()`（强行 focus 会导致 iOS 软键盘无法收起、输入框持续激活、视口始终锁死在放大状态）。移动端发送后必须显式调用 `textareaEl.blur()` 并解除 `isComposerActive` 激活态，让出完整屏幕查看已发送消息。

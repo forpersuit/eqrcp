@@ -64,7 +64,7 @@ assert(mockWindow.scrollX === 0, 'window.scrollX should be reset to 0');
 assert(mockDoc.body.scrollTop === 0, 'document.body.scrollTop should be reset to 0');
 assert(mockDoc.documentElement.scrollTop === 0, 'document.documentElement.scrollTop should be reset to 0');
 assert(
-  mockMeta.content === 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover',
+  mockMeta.content === 'width=device-width, initial-scale=1.0, interactive-widget=resizes-content, viewport-fit=cover',
   'viewport meta content should be updated to normalized value when visual scale deviated from 1.0'
 );
 
