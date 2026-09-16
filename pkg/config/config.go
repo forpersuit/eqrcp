@@ -155,7 +155,7 @@ func New(app application.App) (Config, error) {
 				return Config{}, err
 			}
 			v.Set("interface", cfg.Interface)
-			if err := v.WriteConfig(); err != nil {
+			if err := AtomicWriteConfigFile(v, v.ConfigFileUsed()); err != nil {
 				log.Print(fmt.Sprintf("Warning: the configuration file could not be saved: %v\n", err))
 			}
 		}
@@ -313,7 +313,7 @@ func Wizard(app application.App) error {
 		return err
 	}
 	v.Set("interface", cfg.Interface)
-	if err := v.WriteConfig(); err != nil {
+	if err := AtomicWriteConfigFile(v, v.ConfigFileUsed()); err != nil {
 		return err
 	}
 	// Ask for bind address
@@ -483,5 +483,5 @@ func Wizard(app application.App) error {
 		cfg.Reversed = v.GetBool("reversed")
 	}
 
-	return v.WriteConfig()
+	return AtomicWriteConfigFile(v, v.ConfigFileUsed())
 }

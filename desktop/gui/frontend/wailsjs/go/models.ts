@@ -358,6 +358,7 @@ export namespace main {
 	        this.blockProxy = source["blockProxy"];
 	        this.chatDownloadDir = source["chatDownloadDir"];
 	        this.logDir = source["logDir"];
+	        this.selfHealNotice = source["selfHealNotice"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

@@ -156,8 +156,8 @@ if truncateErr := os.WriteFile(configPath, []byte{}, 0600); truncateErr != nil {
 }
 ```
 
-#### 防线 3：原子写入与零数据丢失机制 (`AtomicWriteConfigFile`)
-通过同目录临时文件原子替换，并在降级处理中保留 `.old` 临时备份与临时文件，确保任何异常分支均能追溯数据。
+#### 防线 3：原子写入全路径覆盖与零数据丢失机制 (`AtomicWriteConfigFile`)
+通过同目录临时文件原子替换，不仅覆盖 GUI 设置保存（`settings.go:424`），更全面覆盖 CLI 启动接口选择、交互式向导等所有落盘路径（`config.go:158 / :316 / :486`）。在降级处理中保留 `.old` 临时备份与临时文件，确保任何异常分支均能追溯数据，彻底根除原地写中断导致 0 字节截断的隐患。
 
 #### 防线 4：自愈通知与用户主权（In-app Notification）
 自愈事件通过 `SelfHealEvent` 记录，由 `DesktopSettings.SelfHealNotice` 携带至前端，通过轻量级 `showToast` 弹出系统提示，严格遵循“禁止使用浏览器 Alert 弹窗”的项目规范。
@@ -200,7 +200,7 @@ if truncateErr := os.WriteFile(configPath, []byte{}, 0600); truncateErr != nil {
 2. **云端 DRM API 与 Admin 测试套件**：
    - `npm run test:admin:tls:offline`：48 项通过，0 失败。
    - `npm run test:device-reg:offline:live`：20 项通过，0 失败。
-   - `npm run test:offline`：131 项全部通过，0 失败。
+   - `npm run test:offline`：复合离线测试套件全部通过（串行执行约 22 个子模块共 700+ 项断言全部 PASS，末尾子套件 131 项通过，总失败数 0）。
    - `npm test` (eqt-admin)：14 项全部通过，0 失败。
 3. **远端 D1 数据库**：
    - `eqt-drm-db-test` 与 `eqt-drm-db` 均成功落地 `token_buckets` 核心表，彻底解除了 Admin 控制台的 500 报错根源。
