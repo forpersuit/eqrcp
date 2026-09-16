@@ -383,12 +383,11 @@ h1 {
 .more-menu-panel {
     background: var(--panel);
     border: 1px solid var(--line);
-    border-radius: 12px;
-    box-shadow: 0 18px 36px rgba(24, 33, 31, 0.16);
+    border-radius: 10px;
+    box-shadow: 0 10px 25px rgba(24, 33, 31, 0.16);
     display: none;
-    flex-direction: column;
-    min-width: 160px;
-    padding: 6px;
+    min-width: 0;
+    padding: 5px;
     position: absolute;
     right: 0;
     top: 44px;
@@ -398,26 +397,24 @@ h1 {
     display: flex;
 }
 .more-menu-list {
+    align-items: center;
     display: flex;
-    flex-direction: column;
-    gap: 4px;
+    flex-direction: row;
+    gap: 6px;
 }
 .more-menu-item {
     align-items: center;
-    background: none;
-    border: none;
+    background: var(--wash);
+    border: 1px solid var(--line);
     border-radius: 8px;
     color: var(--ink);
     cursor: pointer;
     display: flex;
-    font-family: inherit;
-    font-size: 14px;
-    font-weight: 500;
-    gap: 10px;
-    padding: 8px 12px;
-    text-align: left;
-    transition: background 0.15s ease, color 0.15s ease;
-    width: 100%;
+    height: 32px;
+    justify-content: center;
+    padding: 0;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    width: 32px;
 }
 .more-menu-item svg {
     fill: none;
@@ -430,7 +427,8 @@ h1 {
     width: 16px;
 }
 .more-menu-item:hover {
-    background: var(--wash);
+    background: #e4eee3;
+    border-color: var(--accent);
     color: var(--accent-strong);
 }
 .more-menu-item.danger {
@@ -438,6 +436,7 @@ h1 {
 }
 .more-menu-item.danger:hover {
     background: #fdf2f2;
+    border-color: var(--danger);
     color: var(--danger);
 }
 
@@ -1790,10 +1789,18 @@ input:focus { border-color: var(--accent); outline: none; }
         top: calc(52px + env(safe-area-inset-top));
         right: 8px;
         left: auto;
-        min-width: 160px;
-        width: min(200px, calc(100vw - 16px));
+        min-width: 0;
+        width: auto;
         z-index: 1000;
         box-shadow: 0 10px 25px rgba(0, 0, 0, 0.18);
+    }
+    .more-menu-item {
+        height: clamp(30px, 8.5vw, 34px);
+        width: clamp(30px, 8.5vw, 34px);
+    }
+    .more-menu-item svg {
+        height: clamp(15px, 4.2vw, 17px);
+        width: clamp(15px, 4.2vw, 17px);
     }
     .device-rename-form {
         display: flex;
@@ -1832,17 +1839,19 @@ input:focus { border-color: var(--accent); outline: none; }
         height: 100%;
         min-height: 100%;
         overflow: hidden;
+        position: fixed;
         width: 100%;
     }
     .chat-viewport {
         background: var(--bg);
         height: var(--chat-viewport-height);
-        left: var(--chat-viewport-left);
+        left: 0;
+        right: 0;
         max-height: var(--chat-viewport-height);
         overflow: hidden;
         position: fixed;
-        top: var(--chat-viewport-top);
-        width: var(--chat-viewport-width);
+        top: 0;
+        width: 100%;
         z-index: 0;
         transition: none !important;
     }

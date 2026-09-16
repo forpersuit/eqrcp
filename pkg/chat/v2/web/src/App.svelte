@@ -205,7 +205,9 @@
         activeEl.tagName === 'INPUT' ||
         activeEl.tagName === 'TEXTAREA'
       ));
-      if (!isComposerActive) {
+      const vv = window.visualViewport;
+      const isHeightShrunk = vv ? (vv.height < (window.innerHeight - 60) || vv.height < (baseViewportHeight - 80)) : false;
+      if (!isComposerActive && !isHeightShrunk) {
         baseViewportHeight = window.innerHeight;
       }
     }
@@ -1027,19 +1029,25 @@
       const activeEl = e.target as HTMLElement;
       if (activeEl && (activeEl.closest('.composer') || activeEl.closest('form.composer') || activeEl.id === 'message-textarea' || activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
         runAggressiveScrollCorrection();
-        if (visualViewportHandler) {
-          visualViewportHandler();
-        }
+        const sync = () => {
+          if (visualViewportHandler) visualViewportHandler();
+        };
+        sync();
+        setTimeout(sync, 80);
+        setTimeout(sync, 200);
+        setTimeout(sync, 350);
+        setTimeout(sync, 500);
       }
     };
     document.addEventListener('focusin', handleGlobalFocusIn);
 
     handleGlobalFocusOut = () => {
-      setTimeout(() => {
-        if (visualViewportHandler) {
-          visualViewportHandler();
-        }
-      }, 50);
+      const sync = () => {
+        if (visualViewportHandler) visualViewportHandler();
+      };
+      sync();
+      setTimeout(sync, 100);
+      setTimeout(sync, 300);
     };
     document.addEventListener('focusout', handleGlobalFocusOut);
 
@@ -1091,15 +1099,14 @@
             activeEl.tagName === 'TEXTAREA'
           ));
 
-          if (!isComposerActive) {
+          const isHeightShrunk = vv.height < (window.innerHeight - 60) || vv.height < (baseViewportHeight - 80);
+          const isKeyboardOpen = isHeightShrunk || (isComposerActive && (
+            typeof window.screen !== 'undefined' && vv.height < (window.screen.availHeight || window.screen.height || 9999) - 100
+          ));
+
+          if (!isComposerActive && !isHeightShrunk) {
             baseViewportHeight = window.innerHeight;
           }
-
-          const isHeightShrunk = vv.height < (window.innerHeight - 60) || vv.height < (baseViewportHeight - 80);
-          const isKeyboardOpen = isComposerActive && (
-            isHeightShrunk ||
-            (typeof window.screen !== 'undefined' && vv.height < (window.screen.availHeight || window.screen.height || 9999) - 100)
-          );
 
           document.documentElement.classList.toggle('keyboard-open', isKeyboardOpen);
 
@@ -1850,6 +1857,8 @@
                 <button
                   type="button"
                   class="more-menu-item"
+                  title={t.sessionQR}
+                  aria-label={t.sessionQR}
                   on:click={() => {
                     showMoreMenu = false;
                     showShareModal = true;
@@ -1857,7 +1866,6 @@
                   }}
                 >
                   <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h6v6H4z"></path><path d="M14 4h6v6h-6z"></path><path d="M4 14h6v6H4z"></path><path d="M14 14h2v2h-2z"></path><path d="M18 14h2v6h-4v-2h2z"></path><path d="M14 18h2v2h-2z"></path></svg>
-                  <span>{t.sessionQR}</span>
                 </button>
               {/if}
 
@@ -1865,13 +1873,14 @@
                 <button
                   type="button"
                   class="more-menu-item"
+                  title={t.selectLanguage}
+                  aria-label={t.selectLanguage}
                   on:click={() => {
                     showMoreMenu = false;
                     showLangPanel = true;
                   }}
                 >
                   <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
-                  <span>{t.selectLanguage}</span>
                 </button>
               {/if}
 
@@ -1879,25 +1888,27 @@
                 <button
                   type="button"
                   class="more-menu-item danger"
+                  title={t.stopChat}
+                  aria-label={t.stopChat}
                   on:click={() => {
                     showMoreMenu = false;
                     handleClose();
                   }}
                 >
                   <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>
-                  <span>{t.stopChat}</span>
                 </button>
               {:else if $chatSessionStatus === 'active'}
                 <button
                   type="button"
                   class="more-menu-item danger"
+                  title={t.exitSession}
+                  aria-label={t.exitSession}
                   on:click={() => {
                     showMoreMenu = false;
                     showLeaveConfirm = true;
                   }}
                 >
                   <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-                  <span>{t.exitSession}</span>
                 </button>
               {/if}
             </div>

@@ -51,6 +51,21 @@
     }
   }
 
+  function handleFocus() {
+    if (isTouchOrMobile()) {
+      const messagesEl = document.querySelector('.messages');
+      if (messagesEl) {
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+        setTimeout(() => {
+          messagesEl.scrollTop = messagesEl.scrollHeight;
+        }, 80);
+        setTimeout(() => {
+          messagesEl.scrollTop = messagesEl.scrollHeight;
+        }, 250);
+      }
+    }
+  }
+
   function handleSendButtonMouseDown(e: MouseEvent) {
     // Only prevent default on desktop with fine mouse pointer so mobile touch dismisses cleanly
     if (!isTouchOrMobile()) {
@@ -179,6 +194,7 @@
         <svg viewBox="0.6 -0.6 24 24" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
       </label>
       <textarea 
+        id="message-textarea"
         bind:this={textareaEl}
         bind:value={text} 
         placeholder={$chatSessionStatus !== 'active' ? getTranslation('sessionEnded', currentLang) : getTranslation('inputMessage', currentLang)} 
@@ -186,6 +202,7 @@
         rows="1"
         disabled={$chatSessionStatus !== 'active'}
         on:keydown={handleKeydown}
+        on:focus={handleFocus}
         on:blur={handleBlur}
       ></textarea>
       <div class="composer-actions-right">

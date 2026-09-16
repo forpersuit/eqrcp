@@ -58,7 +58,7 @@ export async function handleDownloadDomain(
       }
 
       const testResult = {
-        version: "v1.36.151",
+        version: "v1.36.152",
         published_at: new Date().toISOString(),
         changelog: "Test build: Automated cloud release pipeline, change-detection incremental deployment",
         assets: [

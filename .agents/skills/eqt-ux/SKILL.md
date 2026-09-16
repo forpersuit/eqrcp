@@ -99,8 +99,9 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
 - **会话结束控件锁定**：
   - 手动退出会话（`chatSessionStatus !== 'active'`）时，所有输入控件（附件 label、textarea、提交按钮、文件输入框）显式设为 `disabled`（或 `pointer-events: none;`），占位符替换为“会话已结束”。
 - **移动端虚拟键盘视口贴合、零延迟同步与手势收起规范 (Mobile Virtual Keyboard Adaptive Docking & Zero-Lag Sync)**：
-  - **视口四维矩阵同步 (4D Viewport Matrix Sync)**：
+  - **视口四维矩阵同步与绝对顶部锁定 (4D Viewport Matrix & Absolute Top Pinning)**：
     - 无条件将 `window.visualViewport` 的 `height`、`offsetTop`、`offsetLeft`、`width` 实时同步至 CSS 变量（`--chat-viewport-height`、`--chat-viewport-top`、`--chat-viewport-left`、`--chat-viewport-width`）。
+    - **移动端视口顶边锁定原则**：在移动端媒体查询下，`.chat-viewport` 作为 `position: fixed` 容器必须固定在 `top: 0; left: 0; right: 0; width: 100%; height: var(--chat-viewport-height);`。**严禁**在 CSS 中设置 `top: var(--chat-viewport-top)`，因为移动端 WebKit 在键盘弹出时已将 `position: fixed` 的基准锚定在 Visual Viewport 顶部；若额外加上 `offsetTop` 会导致整个聊天卡片向下二次偏移，将底部输入框（`.composer`）完全压入软键盘下方造成严重遮挡。
     - 严禁加入任何由于焦点未就位而强制将视口高度撑回全屏（`window.innerHeight`）的反向逻辑，保证物理可见高度严格由 `vv.height` 驱动。
   - **CSS 硬件级零延迟响应 (Disable Transition on Mobile)**：
     - 在移动端媒体查询（如 `@media (max-width: 820px)`）下，必须对 `.chat-viewport` 设置 `transition: none !important;`，彻底杜绝 CSS 属性过渡动画（如 250ms 过渡）与系统级 60fps/120fps 硬件键盘升降动画发生拉扯、滞后或回弹。
@@ -116,9 +117,10 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
     - **统一入口与完整排除名单**：收敛至 Document 级单点监听，合并排除所有可交互元素（`.composer, form.composer, #message-textarea, button, a, select, [role="button"], .interactive, .modal, .menu-dropdown, .file-card, .bubble-actions, .bubble-action-btn, .action-btn`），彻底避免多层监听器导致文件卡片/气泡操作按钮点击被意外失焦或架空。
     - **移动端触控滑动收起**：在消息列表（`.messages`）上监听 `touchmove`，移动端手势滑动浏览历史记录时自动调用 `document.activeElement.blur()` 收起软键盘。
   - **屏幕旋转与基准视口自适应 (Orientation & Base Viewport Sync)**：
-    - 监听 `resize` 与 `orientationchange`。在非编辑态（`!isComposerActive`）下，无条件将 `baseViewportHeight` 实时更新为当前 `window.innerHeight`，防止手机横竖屏翻转时基准高度陈旧而导致键盘展开态误判。
-  - **移动端窄屏顶栏操作折叠与左右元素黄金比例对称规范 (Mobile Header Action Collapse & Symmetrical Layout)**：
+    - 监听 `resize` 与 `orientationchange`。在非编辑态且视口高度未被软键盘压缩（`!isComposerActive && !isHeightShrunk`）下，才允许将 `baseViewportHeight` 更新为当前 `window.innerHeight`，杜绝因软键盘展开触发的 `resize` 事件误将压缩高度存入基准值。
+  - **移动端窄屏顶栏操作折叠与纯图标横向胶囊菜单规范 (Mobile Header Action Collapse & Pure-Icon Menu Strip)**：
     - **顶部右侧按钮收敛折叠**：移动端视口（`isMobileLayout` / `<= 820px`）下，顶部右侧操作区禁止平铺展示多个按钮，仅保留「在线设备数胶囊」（`device-pill`）与「更多选项省略号按钮」（`...`，`.more-btn`），其余次要操作（会话二维码、切换语言、退出会话）收进下拉面板（`.more-menu-panel`）。桌面端/内嵌大屏环境保持扁平展示，互不干扰。
+    - **纯图标横向浮动胶囊条**：更多选项下拉面板采用纯图标横向排列（`.more-menu-list { flex-direction: row; gap: 6px; }`），去除冗余文字描述标签，各选项以 32px 统一尺寸的方形图标按钮并排陈列，保留 `title` 与 `aria-label`。在移动端下以极小面积紧凑浮动于省略号按钮下方，兼顾视觉纯粹性与单手触控便捷性。
     - **左右元素间距严密对称**：
       - 顶栏左右视觉重心由原来的 80px vs 155px 不平衡收敛为 80px vs 86px，达到视觉平衡。
       - 消息流中，移动端头像从 32px 缩放至 `clamp(28px, 8.5vw, 32px)` 时，`.message` 栅格列宽与 `.avatar-stack` 容器宽度必须同步流体缩放，彻底消除原 40px 容器内部产生的 6px 残余留白，保证对方消息左外边距与己方消息右外边距均严格为 12px 绝对对称。
