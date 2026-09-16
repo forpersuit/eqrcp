@@ -29,13 +29,13 @@ func TestGenerateMetadata_IncludesSigFilesAndExcludesMetadata(t *testing.T) {
 	}
 
 	metaOut := filepath.Join(tempDir, "dist", "update-metadata.json")
-	resp, err := GenerateMetadata("v1.36.147", outDir, metaOut, "test")
+	resp, err := GenerateMetadata("v1.36.148", outDir, metaOut, "test")
 	if err != nil {
 		t.Fatalf("GenerateMetadata failed: %v", err)
 	}
 
-	if resp.Version != "v1.36.147" {
-		t.Errorf("expected version v1.36.147, got %s", resp.Version)
+	if resp.Version != "v1.36.148" {
+		t.Errorf("expected version v1.36.148, got %s", resp.Version)
 	}
 
 	// Verify assets in memory

@@ -139,9 +139,11 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
   - 前端计算下载完结状态时，结合 `msg.downloaded` 与 `completedMap[msg.id]`。若物理传输早已成功结束，主动将 UI 从悬空的“传输中”纠正为“已就绪”状态。
 - **长文本气泡上下文菜单自适应展开与手势规范 (Bubble Context Menu Placement & Gesture Guidelines)**：
   - **手势触发规范**：移动端仅通过向左/右滑动气泡（`swipeable`）唤起操作菜单，禁用长按触发，防止与系统选词和页面手势冲突；桌面端支持右键直接触发。
-  - **左右边框箭头对齐 (Side Arrows)**：菜单箭头始终位于菜单的左右两侧边框（`placement-left` / `placement-right`），箭头垂直高度（`--arrow-y`）精准对齐手指滑动触控点的 `clientY` 坐标，禁止出现上下边框箭头。
-  - **移动端窄屏内侧自适应**：发送方（Mine）向左展开（`placement-left`），接收方（Other）向右展开（`placement-right`）；若外侧空间不足，自动贴合气泡内侧安全区域呈现。
+  - **自适应避让展开 (Adaptive Avoidance Placement)**：
+    - 外侧水平空间充足时（桌面端/短气泡）：发送方向左展开（`placement-left`），接收方向右展开（`placement-right`），箭头在侧边对齐触控点。
+    - 外侧水平空间不足时（小屏幕设备/宽气泡）：禁止横向覆盖在气泡内部遮挡消息文本和操作按钮；自动切换为在气泡上方（`placement-top`）或下方（`placement-bottom`）展开，并自适应箭头指向触控点，确保气泡内文本与底部交互按钮（重发/重新编辑/下载）100% 不被遮挡。
   - **全局失焦即时关闭**：用户点击屏幕任何非菜单区域（包括气泡、消息空白区等）时，立即在 `pointerdown` 时触发 `closeMenu()` 干净关闭。
+  - **移动端 Full-bleed 全贴边与 Safe-Area 单点吸收**：在移动端小屏设备下，外层 `main` padding 设为 `0`，`.chat-shell` 取消多余外圈边框与圆角，释放完整水平视口；安全区由顶部 `.chat-head` 与底部 `.composer` 单点吸收，彻底杜绝双重安全区下巴空白与键盘断层；图标与控制胶囊采用 `clamp()` 流体等比缩放；回到底部悬浮球（`.scroll-arrow`）置于右下角避开消息底部交互按钮。
 - **无蒙版纯净文件卡片与行内进度显示规范 (Mask-Free File Card & Inline Progress UX)**：
   - **彻底移除全覆盖蒙版与 Spinner 动画**：严禁在文件/图片卡片上层覆盖半透明或模糊遮罩（如 `.upload-mask`）及大尺寸旋转加载图标。文件卡片在上传/下载的整个生命周期中，文件类型图标与文件名必须 100% 清晰可见，不阻挡用户的视觉识别与常态浏览。
   - **行内极简状态与纯百分比展示 (Inline Subtitle Feedback)**：统一在卡片副标题区域（`.file-subtitle`）收敛所有阶段状态与进度。基于第一性原理，传输过程中动态递增的百分比本身已明确表达“传输中”，无需重复添加“上传中/传输中/保存中”等文本前缀，避免在移动端窄屏下挤占空间造成截断：

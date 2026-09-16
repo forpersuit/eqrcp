@@ -9,7 +9,7 @@ import (
 
 var (
 	app     = "eqt"
-	version = "v1.36.147"
+	version = "v1.36.148"
 	date    = "n/a"
 )
 

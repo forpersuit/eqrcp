@@ -707,40 +707,56 @@
     clickX = Math.max(bubbleRect.left, Math.min(bubbleRect.right, clickX));
     clickY = Math.max(bubbleRect.top, Math.min(bubbleRect.bottom, clickY));
 
-    // 4. 始终保持左右方向：发送方在左侧(placement-left)，接收方在右侧(placement-right)
-    // 菜单箭头始终位于菜单的左右两侧，垂直精准对齐滑动的坐标 clickY
-    const placement: 'left' | 'right' = mine ? 'left' : 'right';
-    menuPlacement = placement;
+    // 4. 智能选择展开方向：
+    // 在桌面端或气泡较窄、外侧空间充足时，使用水平方向（发送方在左 placement-left，接收方在右 placement-right）；
+    // 在小屏幕或气泡较宽、外侧空间不足时，自动切换为垂直方向（优先气泡上方 placement-top，若上方不足则气泡下方 placement-bottom），
+    // 坚决杜绝菜单横向覆盖在气泡正上方、遮挡气泡内文本与底部操作按钮（如“重新编辑”、“重新发送”、“下载”）的问题！
+    const idealLeftSpace = bubbleRect.left - 8 - vMinLeft;
+    const idealRightSpace = vMaxRight - (bubbleRect.right + 8);
+    const hasHorizontalSpace = mine ? (idealLeftSpace >= menuW) : (idealRightSpace >= menuW);
 
+    let placement: 'left' | 'right' | 'top' | 'bottom';
     let left = 0;
     let top = 0;
 
-    if (placement === 'left') {
-      // 发送方：向左展开，空间足够放外侧，移动端窄屏/气泡占宽时显示在气泡内左侧 (带有视口左安全距离)
-      const idealOuterLeft = bubbleRect.left - 8 - menuW;
-      if (idealOuterLeft >= vMinLeft) {
-        left = idealOuterLeft;
+    if (hasHorizontalSpace) {
+      placement = mine ? 'left' : 'right';
+      if (placement === 'left') {
+        left = bubbleRect.left - 8 - menuW;
       } else {
-        left = Math.max(vMinLeft, Math.min(bubbleRect.right - menuW - 12, bubbleRect.left + 12));
+        left = bubbleRect.right + 8;
       }
+      // 垂直方向以点击/滑动处居中，并限制在视口安全范围内防遮挡
+      const idealTop = clickY - menuH / 2;
+      top = Math.max(vMinTop, Math.min(vMaxBottom - menuH, idealTop));
+
+      const rawArrowY = clickY - top;
+      arrowYPx = Math.max(14, Math.min(menuH - 14, rawArrowY));
+      arrowXPx = menuW / 2;
     } else {
-      // 接收方：向右展开，空间足够放外侧，移动端窄屏/气泡占宽时显示在气泡内右侧 (带有视口右安全距离)
-      const idealOuterLeft = bubbleRect.right + 8;
-      if (idealOuterLeft + menuW <= vMaxRight) {
-        left = idealOuterLeft;
+      // 外侧水平空间不足（移动窄屏设备常见），切换为上下自适应布局
+      const spaceAbove = bubbleRect.top - 8 - vMinTop;
+      const spaceBelow = vMaxBottom - (bubbleRect.bottom + 8);
+
+      if (spaceAbove >= menuH || spaceAbove >= spaceBelow) {
+        placement = 'top';
+        top = Math.max(vMinTop, bubbleRect.top - 8 - menuH);
       } else {
-        left = Math.min(vMaxRight - menuW, Math.max(bubbleRect.left + 12, bubbleRect.right - menuW - 12));
+        placement = 'bottom';
+        top = Math.min(vMaxBottom - menuH, bubbleRect.bottom + 8);
       }
+
+      // 水平方向：尽可能与点击坐标对齐，或居中对齐气泡，并严格限制在视口左右边界内
+      const idealLeft = clickX - menuW / 2;
+      left = Math.max(vMinLeft, Math.min(vMaxRight - menuW, idealLeft));
+
+      // 箭头水平指向点击处（受圆角保护）
+      const rawArrowX = clickX - left;
+      arrowXPx = Math.max(14, Math.min(menuW - 14, rawArrowX));
+      arrowYPx = menuH / 2;
     }
 
-    // 垂直方向以点击/滑动处居中，并限制在视口安全范围内防遮挡
-    const idealTop = clickY - menuH / 2;
-    top = Math.max(vMinTop, Math.min(vMaxBottom - menuH, idealTop));
-
-    // 箭头垂直对齐滑动/点击处（精准指向滑动的垂直高度，带有圆角保护）
-    const rawArrowY = clickY - top;
-    arrowYPx = Math.max(14, Math.min(menuH - 14, rawArrowY));
-
+    menuPlacement = placement;
     menuLeft = left;
     menuTop = top;
     menuEl.style.left = `${left}px`;

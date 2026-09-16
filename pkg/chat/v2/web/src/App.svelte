@@ -1814,6 +1814,12 @@
             </button>
           {/if}
 
+          {#if showDevicePanel || showLicensePanel || showLangPanel}
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div class="panel-backdrop" on:click={closeAllPanels}></div>
+          {/if}
+
           <!-- Panels -->
           <div class="device-panel" class:open={showDevicePanel} on:click|stopPropagation>
             <div class="device-panel-title" style="margin-bottom: 8px;">{t.onlineDevices}</div>
