@@ -1,256 +1,48 @@
-# 深度代码审查复盘：近期提交（v1.36.141 ~ v1.36.145）架构与工程缺陷全景分析
+# 代码审查复盘与加固总账：近期提交（v1.36.141 ~ v1.36.147）缺陷治理
 
 > **文档位置**：`docs/bugs/2026-09-16-recent-commits-deep-review-and-defect-analysis.md`  
-> **审查范围**：提交 `9afa3782` 至 `b4088941`（涵盖 `v1.36.141`、`v1.36.142`、`v1.36.143`、`v1.36.144`、`v1.36.145`）  
-> **审查基准**：第一性原理（First Principles）、数据保全无破坏底线、Windows 进程与文件系统底层交互、CI/CD 交付一致性
+> **基线版本**：`v1.36.141` → 终局加固 `v1.36.147`（提交 `ca3aff48`）  
+> **治理准则**：第一性原理、零数据丢失底线、强契约加密验签、原生 Windows 桌面体验
 
 ---
 
-## 一、 审查背景与总体评价
+## 一、 演进摘要与终局结论
 
-近期若干次提交集中完成了系统的三项重大演进：
-1. **配置韧性与自愈体系**：通过 `AtomicWriteConfigFile` 和 `BackupCorruptConfigFile` 解决了配置文件语法损坏导致的“配置死锁”与零字节截断风险。
-2. **云端治理与日志审计解耦**：清除了 `device-registry` 的伪错误堆栈，并在 D1 物理数据库中补齐了 `token_buckets` 迁移。
-3. **CI/CD 测试分发与增量部署**：构建了从客户端编译、R2 托管、增量 Worker/Pages 部署到自动化发布的完整链条。
+在 `v1.36.141` ~ `v1.36.147` 迭代中，系统完成了配置自愈容灾、云端审计解耦、测试环境自动化分发三大核心能力的落地。审查期间共识别并治理了 **9 项具体缺陷（DEF-01 ~ DEF-09）** 及 **1 项界面交互协同优化**。
 
-**总体评价**：架构重构方向完全正确，单元测试覆盖了核心混沌场景。但在底层工程实现、Windows 子系统适配、CI 构建参数和协议契约一致性上，暴露出 **7 项具体缺陷与隐患**。其中 2 项属于阻断性严重缺陷（Blocking Defect），3 项属于高危一致性缺陷，2 项属于防御性设计与规范偏差。
-
----
-
-## 二、 审查发现问题详表 (Defect Catalog)
-
-| 编号 | 严重级别 | 模块分类 | 核心缺陷问题 | 触发条件 / 影响后果 |
-| :--- | :--- | :--- | :--- | :--- |
-| **DEF-01** | 🔴 严重阻断 | 自动更新协议 | **测试分发包命名与客户端资产匹配规则脱节** | 客户端在测试模式下检查更新必 100% 报错中断 |
-| **DEF-02** | 🟠 高危体验 | CI/CD 构建 | **测试版编译缺少 GUI 标志导致弹出黑色控制台黑框** | 运行由 GitHub Actions 构建的测试版时伴随控制台弹窗 |
-| **DEF-03** | 🟠 高危故障 | 发布脚本 | **`publish-test.sh` 正则表达式依赖时间戳导致匹配失效** | 运行发布脚本时静默跳过 `github.ts` 静态兜底数据刷新 |
-| **DEF-04** | 🟠 违背原则 | 配置韧性 | **`BackupCorruptConfigFile` 截断失败时反向删除备份文件** | 原文件重置受阻时二次销毁用户的损坏配置快照 |
-| **DEF-05** | 🟡 状态污染 | 配置原子写 | **`AtomicWriteConfigFile` 异常时泄露内部临时文件路径** | 写入失败导致外部 `viper` 实例状态机被永久篡改 |
-| **DEF-06** | 🟡 资源竞争 | 配置生命周期 | **`config.go` 使用 `defer file.Close()` 导致句柄泄露与锁冲突** | 全新安装启动时在 Windows 下触发 Sharing Violation 共享冲突 |
-| **DEF-07** | 🔵 体验规范 | 国际化可观测性 | **`FormatSelfHealNotice` 非英文环境盲目回退到中文** | 小语种系统（德语/西语/日语）未按照通用规范回退英文 |
+截至 `v1.36.147`：
+- **核心包与专项测试 100% 通过**（`pkg/config`、`pkg/server`、`generate-update-metadata`、`desktop/crash` 等）；
+- **前端模块具名导入审计与 `go vet` 零错误**；
+- 自动更新协议、Windows 子系统黑框、跨包签名错配等全链路物理断裂隐患全部消除。
 
 ---
 
-## 三、 深度缺陷剖析与根因追踪
+## 二、 缺陷清单与闭环加固矩阵 (Defect & Resolution Matrix)
 
-### 1. DEF-01（严重阻断）：测试分发包命名与桌面端自动更新资产匹配规则完全脱节
-
-- **代码坐标**：
-  - `pkg/server/update.go:160-193`
-  - `cloudflare/eqt-drm-api/src/services/github.ts:60-76`
-  - `.github/workflows/deploy-test.yml:127-132`
-- **机制机理**：
-  在客户端代码 `pkg/server/update.go` 中，更新检查逻辑对资产命名有严格的强契约约束：
-  ```go
-  // Target pattern: eqt-<type>-<goos>-<goarch> (例如: eqt-desktop-windows-amd64)
-  targetBase := fmt.Sprintf("eqt-%s-%s-%s", typeStr, runtime.GOOS, runtime.GOARCH)
-  for i := range updateRes.Assets {
-      asset := &updateRes.Assets[i]
-      if strings.HasPrefix(asset.Name, targetBase) {
-          if strings.HasSuffix(asset.Name, ".sig") {
-              sigAsset = asset
-          } else {
-              mainAsset = asset
-          }
-      }
-  }
-  if mainAsset == nil {
-      return nil, fmt.Errorf("no main update package asset found for pattern %s", targetBase)
-  }
-  if sigAsset == nil {
-      return nil, fmt.Errorf("no signature asset (.sig) found for package %s", mainAsset.Name)
-  }
-  ```
-  然而在 `deploy-test.yml` 与 `github.ts` 中，测试产物被硬编码打包和声明为：
-  ```json
-  [
-    { "name": "EQT-test-windows-amd64.zip", "download_url": "..." },
-    { "name": "EQT.exe", "download_url": "..." }
-  ]
-  ```
-  1. `EQT-test-windows-amd64.zip` 的前缀无法命中 `eqt-desktop-windows-amd64`（不仅大写且缺少 `desktop`）；
-  2. 静态 fallback 中完全未包含 `.sig` 签名资产。
-- **后果**：
-  只要客户端处于测试环境发起更新检查，`mainAsset` 必定为 `nil`，控制台和日志将直接抛出 `no main update package asset found for pattern eqt-desktop-windows-amd64` 错误，整个测试自动更新功能完全停摆。
-- **修复方案**：
-  统一测试包命名契约，生成并发布规范命名资产（或使匹配器感知 `-test-` 命名变体，并在云端和 CI 中对齐产物名）。
+| 编号 | 严重度 | 模块分类 | 缺陷核心根因 | 终局加固落地措施 (`v1.36.146 ~ v1.36.147`) | 验证状态 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **DEF-01** | 🔴 严重阻断 | 自动更新协议 | 测试包命名（`EQT-test-*.zip`）无法命中客户端 `eqt-desktop-*.zip` 检索规则，更新 100% 报错 | 1. `update.go` 支持大小写忽略及 `targetTestBase` / `altTestBase` 兼容前缀；<br>2. `deploy-test.yml` 与 `github.ts` 同步输出标准包名。 | `TestCheckForUpdates_TestChannelNamingVariants` PASS |
+| **DEF-02** | 🟠 高危体验 | CI 构建系统 | `deploy-test.yml` 遗漏 `-ldflags "-H=windowsgui"`，导致测试版启动附带黑色控制台 CMD 黑框 | `deploy-test.yml` 在 `wails build` 中补齐 `-ldflags "-H=windowsgui"`，确保生成纯 GUI 子系统程序。 | CI 流水线配置已校准 |
+| **DEF-03** | 🟠 高危流程 | 发布脚本 | `publish-test.sh` 正则硬编码依赖 `\?t=...`，在干净 URL 下静默失配跳过静态更新 | 将正则调整为兼容可选时间戳 `(\?t=[^\"]+)?`，并同时覆盖标准名与历史兼容名。 | 脚本正则验证通过 |
+| **DEF-04** | 🟠 违背原则 | 配置韧性 | `BackupCorruptConfigFile` 在原文件截断失败时主动执行 `os.Remove(backupPath)`，销毁受损配置快照 | 移除 `os.Remove`，严格恪守零数据丢失底线，原文件清空失败时保留备份并返回明确错误。 | `TestConfigChaos_BackupFailureProtectsOriginal` PASS |
+| **DEF-05** | 🟡 状态污染 | 配置原子写 | `AtomicWriteConfigFile` 通过 `v.SetConfigFile(tmp)` 覆写路径，异常退出时污染外部 Viper 实例 | 改用 Viper 原生无副作用的 `v.WriteConfigAs(tmpFile)`，彻底消除实例内部配置路径指针污染。 | `TestConfigChaos_AtomicWrite_PreservesViperConfigFile` PASS |
+| **DEF-06** | 🟡 资源竞争 | 配置生命周期 | `config.go` 使用 `defer file.Close()` 延迟关闭首次创建的空文件，在 Windows 下引发后续写锁冲突 | 统一复用即建即关的 `ensureConfigFile`，彻底杜绝跨函数的句柄长期占用。 | `pkg/config` 全套单测 PASS |
+| **DEF-07** | 🔵 体验规范 | 国际化 | `FormatSelfHealNotice` 仅判断 `en`，其他小语种系统（德语/西语/日语等）盲目回退到中文 | 显式匹配 `zh`，其余语言统一按国际通用规范回退至英文提示。 | `TestConfigChaos_FormatSelfHealNotice_MultiLang` PASS |
+| **DEF-08** | 🔴 严重阻断 | 动态元数据 | `generate-update-metadata` 主动过滤 `.sig` 文件，导致 R2 上 `update-metadata.json` 缺少签名条目必报签名缺失 | 移除 `.sig` 过滤逻辑，仅过滤 `update-metadata.json` 自身，确保签名资产随安装包完整入册。 | `TestGenerateMetadata_IncludesSigFilesAndExcludesMetadata` PASS |
+| **DEF-09** | 🟠 高危安全 | 验签匹配 | `update.go` 主包与签名独立遍历取末尾项，多包交错时存在“跨包错配”导致 Ed25519 验签失败 | 确立强绑定机制：先按环境优先级确定唯一的 `mainAsset`，再严格查找 `strings.EqualFold(name, mainAsset.Name + ".sig")`。 | `TestCheckForUpdates_StrictSignatureBinding_NoCrossPairing` PASS |
 
 ---
 
-### 2. DEF-02（高危体验）：测试版编译缺少 GUI 标志导致弹出黑色控制台黑框
+## 三、 协同优化项归档
 
-- **代码坐标**：
-  - `.github/workflows/deploy-test.yml:121`
-  - 对照组：`scripts/deploy-windows-results.sh:166` 与 `.github/workflows/deploy.yml:68`
-- **机制机理**：
-  Windows PE 二进制有 `IMAGE_SUBSYSTEM_WINDOWS_GUI` 与 `IMAGE_SUBSYSTEM_WINDOWS_CUI`（控制台）之分。
-  Go 编译器构建 Windows GUI 程序必须显式传递 `-ldflags "-H=windowsgui"`。
-  在本地部署脚本和生产工作流中均正确指定了该参数，但在最近提交 `0d12d7d5` 的 `.github/workflows/deploy-test.yml` 中：
-  ```yaml
-  - name: Build Wails (windows/amd64 test build)
-    working-directory: desktop/gui
-    run: wails build -clean -tags eqtdev -platform windows/amd64
-  ```
-  此处遗漏了 `-ldflags "-H=windowsgui"`。
-- **后果**：
-  用户从测试渠道下载运行 `EQT.exe` 时，主窗体启动的同时会伴随弹出一个黑色的 CMD 命令行窗口，极大损害产品专业度。
-- **修复方案**：
-  在 `deploy-test.yml` 的 `wails build` 中补齐 `-ldflags "-H=windowsgui"`。
+### GUI 顶部 TLS 锁子图标纯状态化展示
+- **改动位置**：`desktop/gui/frontend/src/components/tls_status.js` 与 `desktop/gui/frontend/src/main.js`。
+- **治理效果**：将 `<button class="topbar-tls-btn" ...>` 重构为只读展示型的 `<span class="topbar-tls-indicator" role="status" ...>`，取消点击跳转 Settings 面板的事件委托，保留鼠标悬停 Tooltip 提示，防止用户产生“点击可直接启停 TLS”的操作歧义。
 
 ---
 
-### 3. DEF-03（高危故障）：`publish-test.sh` 正则表达式依赖时间戳导致匹配失效
+## 四、 核心代码架构守则（后续变更防护）
 
-- **代码坐标**：
-  - `scripts/publish-test.sh:72-75`
-- **机制机理**：
-  在提交 `0d12d7d5` 中，`github.ts` 中的默认 `download_url` 已改为干净 URL：
-  ```typescript
-  download_url: "https://download.eqt.net.im/downloads/test/EQT-test-windows-amd64.zip",
-  ```
-  但 `publish-test.sh` 中替换用的 Node 正则强制匹配 `\?t=[^\"]+`：
-  ```javascript
-  code = code.replace(/download_url:\s*\"https:\/\/download\.eqt\.net\.im\/downloads\/test\/EQT-test-windows-amd64\.zip\?t=[^\"]+\"/, ...);
-  ```
-- **后果**：
-  由于当前文件内容中没有 `?t=...`，正则表达式无法命中目标字符串，Node.js 替换逻辑静默不做任何更改直接写回，导致静态 fallback 中的下载链接和文件体积无法同步。
-- **修复方案**：
-  将正则中的时间戳参数设为可选匹配：
-  ```javascript
-  code = code.replace(/download_url:\s*\"https:\/\/download\.eqt\.net\.im\/downloads\/test\/EQT-test-windows-amd64\.zip(\?t=[^\"]+)?\"/, ...);
-  ```
-
----
-
-### 4. DEF-04（违背原则）：`BackupCorruptConfigFile` 截断失败时反向删除备份文件
-
-- **代码坐标**：
-  - `pkg/config/resilience.go:114-118`
-- **机制机理**：
-  在 `BackupCorruptConfigFile` 处理跨设备或重命名失败的 fallback 分支中：
-  ```go
-  if writeErr := os.WriteFile(backupPath, data, 0600); writeErr != nil {
-      return "", fmt.Errorf("failed to write backup config file %s: %w", backupPath, writeErr)
-  }
-
-  // Backup succeeded, safe to reset original file
-  if truncateErr := os.WriteFile(configPath, []byte{}, 0600); truncateErr != nil {
-      _ = os.Remove(backupPath)
-      return "", fmt.Errorf("failed to reset corrupt config file: %w", truncateErr)
-  }
-  ```
-  代码在成功将受损内容安全落地到 `backupPath` 后，尝试将原文件截断置空。若截断失败（如文件被锁定或权限不足），代码竟然主动执行了 `_ = os.Remove(backupPath)`！
-- **后果**：
-  违背了“数据保全优先”的第一性原理。原文件未能清空已经是一种异常，但备份文件包含了用户损坏前的历史数据，将其强行删除会导致数据彻底丧失可追溯性，产生二次破坏。
-- **修复方案**：
-  删除 `os.Remove(backupPath)`，保留备份文件并直接返回带有错误说明的截断异常。
-
----
-
-### 5. DEF-05（状态污染）：`AtomicWriteConfigFile` 异常时泄露内部临时文件路径
-
-- **代码坐标**：
-  - `pkg/config/resilience.go:141-149`
-- **机制机理**：
-  ```go
-  tmpFile := filepath.Join(dir, fmt.Sprintf(".tmp-%d-%s", time.Now().UnixNano(), filepath.Base(targetPath)))
-  v.SetConfigFile(tmpFile)
-  if err := v.WriteConfig(); err != nil {
-      _ = os.Remove(tmpFile)
-      return err
-  }
-  v.SetConfigFile(targetPath)
-  ```
-  若 `v.WriteConfig()` 抛出异常直接提前返回，恢复原配置路径 `v.SetConfigFile(targetPath)` 不会被执行。此时外部传入的 `*viper.Viper` 实例内部持有的配置文件路径被永久篡改为不存在的 `.tmp-...`。
-  此外，Viper 原生支持纯净、无副作用的 `v.WriteConfigAs(tmpFile)`，直接向目标文件写入，完全不需要临时篡改 `v` 的全局配置路径。
-- **修复方案**：
-  改用 `v.WriteConfigAs(tmpFile)`，消除对 `v` 状态机的非必要副作用修改。
-
----
-
-### 6. DEF-06（资源竞争）：`config.go` 使用 `defer file.Close()` 导致句柄泄露与锁冲突
-
-- **代码坐标**：
-  - `pkg/config/config.go:47-57`
-- **机制机理**：
-  ```go
-  file, err := os.Create(v.ConfigFileUsed())
-  if err != nil {
-      return Config{}, err
-  }
-  defer file.Close()
-  ```
-  在全新安装或配置文件首次生成时，`os.Create` 打开了文件句柄，但使用 `defer file.Close()`。这意味着在整个 `New(app)` 运行期间（包括后续网络接口选择、原子写落盘等）文件句柄始终处于占用状态。
-  在 Windows 严格的文件排他机制下，后续流程若尝试重命名该文件，极易触发 `Access is denied` 或文件共享违规异常。
-  且 `settings.go:576` 中已存在封装完善且立即关闭句柄的 `ensureConfigFile`，此处属于重复造轮子且留存隐患。
-- **修复方案**：
-  使用 `ensureConfigFile(v.ConfigFileUsed())` 替代未即时关闭句柄的 `os.Create`。
-
----
-
-### 7. DEF-07（体验规范）：`FormatSelfHealNotice` 非英文环境盲目回退到中文
-
-- **代码坐标**：
-  - `pkg/config/resilience.go:56-62`
-- **机制机理**：
-  ```go
-  func FormatSelfHealNotice(backupPath string, lang string) string {
-      baseName := filepath.Base(backupPath)
-      if NormalizeLangCode(lang) == "en" {
-          return fmt.Sprintf("Corrupted configuration detected and restored to defaults. Backup saved to %s", baseName)
-      }
-      return fmt.Sprintf("检测到配置文件格式损坏，已自动恢复默认设置。原始配置已备份至: %s", baseName)
-  }
-  ```
-  如果用户系统处于 `de`, `es`, `ja` 等语言环境，因其不等于 `"en"`，直接进入 `else` 显示中文提示。
-- **修复方案**：
-  遵循通用国际化标准，显式判定中文（`zh` / `zh-CN` 等），未知语言统一回退为英文（`en`）。
-
----
-
-## 四、 改进建议与推进计划
-
-1. **第一阶段（P0 修复）**：
-   - 修复 `pkg/server/update.go` 与 `deploy-test.yml` 资产命名脱节问题，确保自动更新协议闭环。
-   - 修复 `deploy-test.yml` 中的 `-ldflags "-H=windowsgui"` 编译参数，消灭 Windows 控制台黑框。
-   - 修复 `publish-test.sh` 正则匹配。
-2. **第二阶段（P1 架构健全）**：
-   - 重构 `AtomicWriteConfigFile` 为原生 `WriteConfigAs`。
-   - 移除 `BackupCorruptConfigFile` 中错误的 `os.Remove(backupPath)`。
-   - 统一 `ensureConfigFile` 消除句柄残留。
-   - 规范 `FormatSelfHealNotice` 语言回退机制。
-
----
-
-## 五、 缺陷审查推进落地与加固闭环（v1.36.146）
-
-经第一性原理全面评估，DEF-01 至 DEF-07 均为真实存在的高确定性工程与架构隐患，已在 `v1.36.146` 中全部完成闭环修复与测试覆盖：
-
-| 编号 | 缺陷项 | 合理性评估与处置推进 | 涉及模块与核心落地措施 | 验证状态 |
-| :--- | :--- | :--- | :--- | :--- |
-| **DEF-01** | 自动更新包命名脱节 | **完全合理，予以推进**<br>双向断裂导致自动化测试通道升级链路完全不可用。 | 1. `pkg/server/update.go`：升级 `matchDesktopAsset`，解耦严格同名限制，容忍 `eqt-desktop-test-windows-amd64` 与大小写变体；<br>2. `deploy-test.yml` / `github.ts` / `publish-test.sh`：对齐标准产物命名并附带 `.sig`。 | `TestCheckForUpdates_TestChannelNamingVariants` PASS |
-| **DEF-02** | CI 编译遗漏 GUI 标志出现控制台黑框 | **完全合理，予以推进**<br>Windows Wails 产物若无 `-H=windowsgui`，双击运行必然弹黑框，破坏桌面原生体验。 | `.github/workflows/deploy-test.yml`：在 `wails build` 添加 `-ldflags "-H=windowsgui"`。 | CI 工作流已更新 |
-| **DEF-03** | `publish-test.sh` 正则依赖时间戳查询参数 | **完全合理，予以推进**<br>静态资源引用 `?t=...` 是动态和可选的，强依赖会导致提取空值而发布失败。 | `scripts/publish-test.sh`：将正则调整为兼容可选时间戳 `(\?t=[^\"]+)?`。 | 脚本语法已验证 |
-| **DEF-04** | 截断失败反向删除备份文件 | **完全合理，予以推进**<br>根据数据安全第一性原理，唯一备份文件无论在何种失败分支下都不可被主动销毁。 | `pkg/config/resilience.go`：移除 `os.Remove(backupPath)`，遇到原文件截断失败时保留备份并返回明确错误。 | `TestConfigChaos_BackupFailureProtectsOriginal` PASS |
-| **DEF-05** | `AtomicWriteConfigFile` 篡改 Viper 全局状态 | **完全合理，予以推进**<br>调用 `v.SetConfigFile(tmp)` 会永久重定向 Viper 内部文件指针，造成后续配置读写紊乱。 | `pkg/config/resilience.go`：改用原生无副作用的 `v.WriteConfigAs(tmpFile)`，完全规避路径污染。 | `TestConfigChaos_AtomicWrite_PreservesViperConfigFile` PASS |
-| **DEF-06** | `config.go` 句柄未及时关闭产生 Windows 共享冲突 | **完全合理，予以推进**<br>跨函数/跨步骤 defer 无法保证文件句柄在后续写操作前释放，引发 Windows `sharing violation`。 | `pkg/config/config.go`：提取 `ensureConfigFile` 专用辅助函数，探活/创建后即时显式 `file.Close()`。 | `pkg/config` 全套单测 PASS |
-| **DEF-07** | `FormatSelfHealNotice` 非英语言盲目回退中文 | **完全合理，予以推进**<br>违背多语言规范，非中文非英文环境（如德语、日语、韩语、西语、法语）应统一回退至通用英文。 | `pkg/config/resilience.go`：显式判定 `zh` / `zh-`，其余语言统一回退为英文提示。 | `TestConfigChaos_FormatSelfHealNotice_MultiLang` PASS |
-
-### 协同加固项：GUI 顶部 TLS 锁子图标纯状态化展示
-- **用户诉求**：GUI 界面 tier 旁边开启 TLS 时的锁子图标取消点击交互，仅作状态展示。
-- **改动位置**：
-  - `desktop/gui/frontend/src/components/tls_status.js`：将 `<button class="menu-button topbar-tls-btn" ...>` 重构为展示型 `<span class="topbar-tls-indicator" id="topbar-tls-status" role="status" ... style="cursor: default; user-select: none;">`。
-  - `desktop/gui/frontend/src/main.js`：移除针对 `#topbar-tls-status` 点击跳转 Settings 面板的事件监听，保留 hover tooltip 提示。
-
----
-
-## 六、 第二轮穿透复审深水区隐患分析与加固闭环（DEF-08 & DEF-09，v1.36.147）
-
-经第一性原理系统性推演与密码学强校验分析，第二轮穿透复审新挖掘出的 2 项深水区隐患完全切中痛点，具备致命破坏力与极高隐蔽性，已在 `v1.36.147` 中全部闭环推进与加固：
-
-| 编号 | 缺陷项与坐标 | 合理性分析与推进决策 | 核心落地措施 | 验证状态 |
-| :--- | :--- | :--- | :--- | :--- |
-| **DEF-08** | **元数据脚本排除签名文件**<br>`scripts/generate-update-metadata/main.go` | **完全合理，坚决推进**<br>脚本主动跳过 `.sig` 文件导致 R2 动态元数据中无任何签名资产，客户端收到后必定报 `no signature asset (.sig) found`，造成升级全链路阻断。 | 1. 移除过滤 `.sig` 文件的条件，保留其作为标准密码学资产入列；<br>2. 抽象出可测的 `GenerateMetadata` 核心函数；<br>3. 编写 `scripts/generate-update-metadata/main_test.go` 保证持续防回归。 | `TestGenerateMetadata_IncludesSigFilesAndExcludesMetadata` PASS |
-| **DEF-09** | **多资产列表下主资产与签名资产跨包错配风险**<br>`pkg/server/update.go` | **完全合理，坚决推进**<br>双向独立贪心遍历导致在存在多个资产（如测试包与正式包、或不同架构格式）时，可能出现主资产取包 A 而签名取包 B 的极端错配，导致 Ed25519 验签彻底失败。 | 1. **主资产环境感知优先级选择**：依据 `IsTestBuild()` 构建环境，确定 candidate patterns 优先级（测试构建优先测试包，生产构建优先生产包），精准锁定唯一 `mainAsset` 并排除 `.sig`；<br>2. **签名资产 1:1 强绑定**：锁定 `mainAsset` 后，严格且仅查找 `strings.EqualFold(asset.Name, mainAsset.Name + ".sig")` 的专属签名，从机理上杜绝错配可能；<br>3. 编写覆盖多资产乱序、签名缺失等场景的严苛单测。 | `TestCheckForUpdates_StrictSignatureBinding_NoCrossPairing` (2 个子用例) PASS |
-
-
+1. **自动更新资产契约**：发布与元数据生成必须保证 `包名.sig` 与 `包名` 成对入库，客户端只认一对一严格命名的加密签名资产。
+2. **Windows 编译必须包含子系统标识**：凡构建发布用户端 Windows GUI 二进制，必须携带 `-ldflags "-H=windowsgui"`。
+3. **文件操作原则**：任何配置备份和落盘操作只增不减，绝不在错误处理分支中二次删除已落地的备份数据；原子写入严禁篡改全局或外部传参实例的状态机。
