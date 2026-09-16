@@ -51,8 +51,19 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
   - 在 `.layout` 上使用 `grid-template-columns: minmax(0, 1fr) minmax(230px, 300px);`，使历史侧边栏 (`.side`) 在 230px 至 300px 间弹性缩放，优先保障 `.workspace` 宽度。
   - 设置 `.side` 高度为 `100%; max-height: 100%; min-height: 0;`。历史列表内部滚动 `flex: 1; min-height: 0; overflow-y: auto;`。
   - 单列断点设定为 `@media (max-width: 768px)`。在 `<=768px` 模式下限制历史记录高度 `max-height: 280px; overflow-y: auto;`。
-- **防止移动端输入自动缩放**：
-  - 视口宽度 `<= 820px` 时，所有 input / textarea 字体大小不得小于 `16px`，防止 iOS Safari 等移动浏览器强行放大页面。
+- **防止移动端输入自动缩放与发送后视口复原规范 (iOS Auto-Zoom Defense & Viewport Restoration)**：
+  - **WebKit 16px 字号硬约束 (Strict 16px Font-Size)**：
+    - iOS WebKit 底层 `zoomToRect` 机制规定：任何可输入元素（`input, textarea, select`）计算字号 `< 16px` 时，聚焦瞬间会无条件将整个页面放大至 1.25x~1.3x。
+    - 在全局、`@media (max-width: 820px)` 以及 `@media (hover: none) and (pointer: coarse)` 下必须强制 `font-size: 16px !important;`，且在 `html` 上声明 `-webkit-text-size-adjust: 100%; text-size-adjust: 100%;`，从源头彻底阻断 iOS 触发自动放大。
+  - **Meta Viewport 完整契约约束**：
+    - `index.html` 必须声明 `<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />`。
+  - **移动端与桌面端发送后焦点隔离 (Platform-Isolated Post-Submit Focus)**：
+    - 桌面端（实体键盘）：`handleSubmit` 中保留 `textareaEl.focus()`，支持连续打字。
+    - 移动端（触屏/窄屏）：用户发送消息后，**严禁**重新强行 `textareaEl.focus()`（强行 focus 会导致 iOS 软键盘无法收起、输入框持续激活、视口始终锁死在放大状态）。移动端发送后必须显式调用 `textareaEl.blur()` 并解除 `isComposerActive` 激活态，让出完整屏幕查看已发送消息。
+  - **失焦与发送后多阶视口自愈复位 (Multi-Tick Viewport Self-Healing)**：
+    - 在移动端发送消息后及 `textarea` 的 `on:blur` 事件中，调度多阶复位（0ms / 120ms / 320ms）：
+      1. 执行 `window.scrollTo(0, 0)` 清除 Safari 留下的残余滚动偏移与空白底边；
+      2. 校验 `window.visualViewport.scale`，若偏离 1.0 则重新赋写 `meta[name="viewport"]` 强制 WebKit 视口比例归一化为 1.0。
 - **手势居中弹窗 (Centered Mobile Modals)**：
   - 移动端视口下，二维码分享与退出确认弹窗在水平和垂直方向居中，边缘保留 16px 安全 Padding（宽度 `calc(100% - 32px)`，最大 `340px`），配合 `transform: scale(0.95) -> scale(1)` 微动画。
 - **移动端与 Web 端多选批量下载规范 (Streamlined Batch Download & Manifest UX)**：

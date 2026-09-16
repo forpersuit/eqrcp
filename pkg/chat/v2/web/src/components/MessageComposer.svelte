@@ -2,6 +2,7 @@
   import { createEventDispatcher, onMount, onDestroy, tick } from 'svelte';
   import { getTranslation } from '../lib/i18n';
   import { chatSessionStatus } from '../state/chatStore';
+  import { isTouchOrMobile, scheduleViewportRestore } from '../lib/viewport';
   const dispatch = createEventDispatcher();
   export let text = '';
   export let currentLang = 'zh';
@@ -14,9 +15,19 @@
     if ($chatSessionStatus !== 'active') return;
     if (!text.trim()) return;
     
-    // Focus back synchronously before the browser event loop triggers dismiss animations on mobile keyboard
-    if (textareaEl) {
-      textareaEl.focus();
+    const mobileLayout = isTouchOrMobile();
+    if (mobileLayout) {
+      // On mobile / touch devices, blur textarea so keyboard dismisses cleanly
+      // and visual viewport restores to 1.0 full scale without locking the screen
+      if (textareaEl) {
+        textareaEl.blur();
+      }
+      scheduleViewportRestore();
+    } else {
+      // On desktop, keep focus for seamless continuous keyboard input
+      if (textareaEl) {
+        textareaEl.focus();
+      }
     }
 
     dispatch('sendText', text);
@@ -29,12 +40,22 @@
   /** Desktop: Enter sends, Shift+Enter inserts newline. Mobile keeps Enter as newline. */
   function handleKeydown(e: KeyboardEvent) {
     if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return;
-    const mobileLayout =
-      typeof window !== 'undefined' &&
-      (window.innerWidth <= 820 || window.matchMedia('(pointer: coarse)').matches);
-    if (mobileLayout) return;
+    if (isTouchOrMobile()) return;
     e.preventDefault();
     handleSubmit(e);
+  }
+
+  function handleBlur() {
+    if (isTouchOrMobile()) {
+      scheduleViewportRestore();
+    }
+  }
+
+  function handleSendButtonMouseDown(e: MouseEvent) {
+    // Only prevent default on desktop with fine mouse pointer so mobile touch dismisses cleanly
+    if (!isTouchOrMobile()) {
+      e.preventDefault();
+    }
   }
 
   export let isEmbedded = typeof window !== 'undefined' && (window.parent !== window || document.documentElement.classList.contains('embedded-chat'));
@@ -165,9 +186,10 @@
         rows="1"
         disabled={$chatSessionStatus !== 'active'}
         on:keydown={handleKeydown}
+        on:blur={handleBlur}
       ></textarea>
       <div class="composer-actions-right">
-        <button class="send-button" type="submit" aria-label={getTranslation('send', currentLang)} title={getTranslation('send', currentLang)} disabled={!text.trim() || $chatSessionStatus !== 'active'} on:mousedown|preventDefault>
+        <button class="send-button" type="submit" aria-label={getTranslation('send', currentLang)} title={getTranslation('send', currentLang)} disabled={!text.trim() || $chatSessionStatus !== 'active'} on:mousedown={handleSendButtonMouseDown}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 12 16-8-5 16-3-7-8-1z" fill="currentColor"/></svg>
         </button>
       </div>

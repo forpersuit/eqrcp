@@ -36,6 +36,8 @@ html {
     font-size: var(--font-size-root);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
 }
 body {
     background: var(--bg);
@@ -1499,7 +1501,7 @@ textarea {
     box-sizing: border-box;
     display: block;
     font: inherit;
-    font-size: 15px;
+    font-size: 16px;
     line-height: 20px;
     height: 44px;
     max-height: 124px;
@@ -1809,8 +1811,9 @@ input:focus { border-color: var(--accent); outline: none; }
         grid-template-columns: clamp(32px, 9.5vw, 36px) minmax(0, 1fr) auto;
     }
     input,
-    textarea {
-        font-size: 16px;
+    textarea,
+    select {
+        font-size: 16px !important;
     }
     .send-button,
     .file-label {
@@ -1990,5 +1993,11 @@ input:focus { border-color: var(--accent); outline: none; }
     color: var(--muted);
     cursor: not-allowed;
 }
-
-
+/* Touch device defense against iOS Safari auto-zoom (font-size < 16px triggers zoomToRect) */
+@media (hover: none) and (pointer: coarse) {
+    input,
+    textarea,
+    select {
+        font-size: 16px !important;
+    }
+}
