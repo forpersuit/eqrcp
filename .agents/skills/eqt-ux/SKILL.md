@@ -98,11 +98,18 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
   - **服务端零 CPU 零延迟流式组包**：服务端 `/files/zip` 采用 `zip.Store` 纯组包流式传输，边读边推，毫秒级启动，免去 CPU Deflate 运算与移动设备大文件 OOM 风险。
 - **会话结束控件锁定**：
   - 手动退出会话（`chatSessionStatus !== 'active'`）时，所有输入控件（附件 label、textarea、提交按钮、文件输入框）显式设为 `disabled`（或 `pointer-events: none;`），占位符替换为“会话已结束”。
-- **移动端虚拟键盘视口贴合、零延迟同步与手势收起规范 (Mobile Virtual Keyboard Adaptive Docking & Zero-Lag Sync)**：
-  - **视口四维矩阵同步与绝对顶部锁定 (4D Viewport Matrix & Absolute Top Pinning)**：
-    - 无条件将 `window.visualViewport` 的 `height`、`offsetTop`、`offsetLeft`、`width` 实时同步至 CSS 变量（`--chat-viewport-height`、`--chat-viewport-top`、`--chat-viewport-left`、`--chat-viewport-width`）。
-    - **移动端视口顶边锁定原则**：在移动端媒体查询下，`.chat-viewport` 作为 `position: fixed` 容器必须固定在 `top: 0; left: 0; right: 0; width: 100%; height: var(--chat-viewport-height);`。**严禁**在 CSS 中设置 `top: var(--chat-viewport-top)`，因为移动端 WebKit 在键盘弹出时已将 `position: fixed` 的基准锚定在 Visual Viewport 顶部；若额外加上 `offsetTop` 会导致整个聊天卡片向下二次偏移，将底部输入框（`.composer`）完全压入软键盘下方造成严重遮挡。
+- **移动端虚拟键盘视口贴合、底边抬升与历史消息弹性收缩规范 (Mobile Virtual Keyboard Adaptive Docking & Elastic Shrinkage)**：
+  - **视口双端动态锚定与底边抬升 (Dual-Inset Dynamic Docking)**：
+    - 在 `window.visualViewport` 监听器中精确计算：`topInset = Math.max(0, Math.round(vv.offsetTop))` 与 `bottomInset = Math.max(0, Math.round(window.innerHeight - (vv.height + vv.offsetTop)))`，并同步至 CSS 变量 `--chat-viewport-top` 与 `--chat-viewport-bottom`。
+    - 移动端媒体查询（`@media (max-width: 820px)`）下，`.chat-viewport` 设为 `position: fixed; top: var(--chat-viewport-top, 0px); bottom: var(--chat-viewport-bottom, 0px); height: auto; max-height: none; left: 0; right: 0; width: 100%;`。软键盘拉起时，底部边缘随 `bottomInset` 严格悬浮于软键盘之上，彻底杜绝输入区域被键盘遮挡。
     - 严禁加入任何由于焦点未就位而强制将视口高度撑回全屏（`window.innerHeight`）的反向逻辑，保证物理可见高度严格由 `vv.height` 驱动。
+  - **纯 Flex 列式布局与历史消息弹性折叠 (Flexbox Column Elastic Hierarchy)**：
+    - 规格来源：`pkg/chat/v2/web/src/app.css` 与 `pkg/chat/v2/web/src/components/MessageList.svelte`。
+    - `<main>` 与 `.chat-shell` 均配置为 `display: flex; flex-direction: column; flex: 1 1 0%; min-height: 0; height: 100%; overflow: hidden;`。
+    - 顶栏 `.chat-head` 设为 `flex-shrink: 0; position: sticky; top: 0; z-index: 2;`，键盘拉起时始终固定在顶部不移位。
+    - 底部输入区 `.composer` 设为 `flex-shrink: 0;`，紧贴抬升后的视口底部。
+    - 消息容器 `.message-list-container` 与滚动流 `.messages` 设为 `display: flex; flex-direction: column; flex: 1 1 0%; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;`。
+    - **弹性收缩效果**：键盘弹出抬升底边时，高度缩减全部由消息列表区域吸收，较早的历史消息向上平滑移动并自然隐入顶栏下方，既保全顶栏品牌与状态，又确保输入栏完整悬浮，输入区域与聊天历史无缝协作。
   - **CSS 硬件级零延迟响应 (Disable Transition on Mobile)**：
     - 在移动端媒体查询（如 `@media (max-width: 820px)`）下，必须对 `.chat-viewport` 设置 `transition: none !important;`，彻底杜绝 CSS 属性过渡动画（如 250ms 过渡）与系统级 60fps/120fps 硬件键盘升降动画发生拉扯、滞后或回弹。
   - **键盘展开聊天卡片整体抬起规范 (Whole Chat Card Raised on Keyboard Open)**：

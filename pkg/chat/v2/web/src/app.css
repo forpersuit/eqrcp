@@ -12,6 +12,7 @@
     --chat-viewport-height: 100vh;
     --chat-viewport-width: 100vw;
     --chat-viewport-top: 0px;
+    --chat-viewport-bottom: 0px;
     --chat-viewport-left: 0px;
     --chat-head-height: 62px;
     --message-actions-min-width: 70px;
@@ -1839,24 +1840,26 @@ input:focus { border-color: var(--accent); outline: none; }
         height: 100%;
         min-height: 100%;
         overflow: hidden;
-        position: fixed;
         width: 100%;
     }
     .chat-viewport {
         background: var(--bg);
-        height: var(--chat-viewport-height);
+        bottom: var(--chat-viewport-bottom, 0px);
+        height: auto;
         left: 0;
-        right: 0;
-        max-height: var(--chat-viewport-height);
+        max-height: none;
         overflow: hidden;
         position: fixed;
-        top: 0;
+        right: 0;
+        top: var(--chat-viewport-top, 0px);
         width: 100%;
         z-index: 0;
         transition: none !important;
     }
     main {
-        display: grid;
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 0%;
         gap: 0;
         height: 100%;
         max-height: 100%;
@@ -1873,15 +1876,45 @@ input:focus { border-color: var(--accent); outline: none; }
     }
     .chat-shell {
         border-radius: 14px;
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 0%;
         height: 100%;
+        min-height: 0;
+        overflow: hidden;
+        position: relative;
     }
-    .chat-head { position: sticky; top: 0; z-index: 2; }
+    .chat-head {
+        flex-shrink: 0;
+        position: sticky;
+        top: 0;
+        z-index: 2;
+    }
+    .message-list-container {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 0%;
+        min-height: 0;
+        overflow: hidden;
+        position: relative;
+    }
     .messages {
         --messages-bottom-space: 16px;
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 0%;
         gap: 12px;
+        min-height: 0;
+        overflow-x: hidden;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
         padding: 12px 12px var(--messages-bottom-space);
     }
-    .composer { padding: 9px 10px 11px; padding-bottom: max(11px, env(safe-area-inset-bottom)); }
+    .composer {
+        flex-shrink: 0;
+        padding: 9px 10px 11px;
+        padding-bottom: max(11px, env(safe-area-inset-bottom));
+    }
     .composer-shell { padding: 5px 6px; }
     .compose-row {
         column-gap: clamp(5px, 1.8vw, 8px);

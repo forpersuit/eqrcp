@@ -1080,13 +1080,16 @@
       visualViewportHandler = () => {
         const vv = window.visualViewport;
         if (vv) {
+          const vh = window.innerHeight;
+          const topInset = Math.max(0, Math.round(vv.offsetTop));
+          const bottomInset = Math.max(0, Math.round(vh - (vv.height + vv.offsetTop)));
           const height = Math.round(vv.height);
-          const top = Math.round(vv.offsetTop);
           const left = Math.round(vv.offsetLeft);
           const width = Math.round(vv.width);
 
           document.documentElement.style.setProperty('--chat-viewport-height', `${height}px`);
-          document.documentElement.style.setProperty('--chat-viewport-top', `${top}px`);
+          document.documentElement.style.setProperty('--chat-viewport-top', `${topInset}px`);
+          document.documentElement.style.setProperty('--chat-viewport-bottom', `${bottomInset}px`);
           document.documentElement.style.setProperty('--chat-viewport-left', `${left}px`);
           document.documentElement.style.setProperty('--chat-viewport-width', `${width}px`);
 
@@ -1099,13 +1102,13 @@
             activeEl.tagName === 'TEXTAREA'
           ));
 
-          const isHeightShrunk = vv.height < (window.innerHeight - 60) || vv.height < (baseViewportHeight - 80);
+          const isHeightShrunk = bottomInset > 40 || vv.height < (vh - 60) || vv.height < (baseViewportHeight - 80);
           const isKeyboardOpen = isHeightShrunk || (isComposerActive && (
             typeof window.screen !== 'undefined' && vv.height < (window.screen.availHeight || window.screen.height || 9999) - 100
           ));
 
           if (!isComposerActive && !isHeightShrunk) {
-            baseViewportHeight = window.innerHeight;
+            baseViewportHeight = vh;
           }
 
           document.documentElement.classList.toggle('keyboard-open', isKeyboardOpen);

@@ -895,7 +895,7 @@
 
 <svelte:window on:keydown={(e) => { if (e.key === 'Escape' && selectionMode) exitSelectionMode(); }} />
 
-<div class="message-list-container" style="position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column;">
+<div class="message-list-container" style="position: relative; flex: 1 1 0%; min-height: 0; display: flex; flex-direction: column; overflow: hidden;">
   <div bind:this={messagesEl} class="messages" role="log" aria-label="Messages" on:scroll={handleScroll} on:touchmove={handleMessagesTouchMove}>
     {#if $historyHasMore || $historyLoading}
       <div class="history-pager" role="status">
