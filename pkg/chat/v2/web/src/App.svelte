@@ -51,6 +51,7 @@
   let handleGlobalFocusOut: ((e: FocusEvent) => void) | null = null;
   let handleDocumentPointerDown: ((e: PointerEvent | MouseEvent) => void) | null = null;
   let handleTouchMoveBlocker: ((e: TouchEvent) => void) | null = null;
+  let vvSyncProbeTimer: any = null;
   const activeUploads = new Map<string, XMLHttpRequest>();
 
   interface ActiveBatchRecord {
@@ -1018,36 +1019,49 @@
     let lastProbeLog = '';
     const probeViewport = (trigger: string) => {
       if (typeof window === 'undefined') return;
-      const vv = window.visualViewport;
-      const vh = window.innerHeight;
-      const vvH = vv ? Math.round(vv.height) : vh;
-      const vvTop = vv ? Math.round(vv.offsetTop) : 0;
-      const scrollY = Math.round(window.scrollY);
-      const composerEl = document.querySelector('.composer');
-      let compTop = 0;
-      let compBottom = 0;
-      let compH = 0;
-      if (composerEl) {
-        const rect = composerEl.getBoundingClientRect();
-        compTop = Math.round(rect.top);
-        compBottom = Math.round(rect.bottom);
-        compH = Math.round(rect.height);
-      }
-      const chatHeadEl = document.querySelector('.chat-head');
-      let headTop = 0;
-      if (chatHeadEl) {
-        headTop = Math.round(chatHeadEl.getBoundingClientRect().top);
-      }
-      const kbTop = vvH + vvTop;
-      const overlap = compBottom - kbTop;
-      const status = overlap > 1 ? `BLOCKED overlap=${overlap}px` : `OK gap=${Math.abs(overlap)}px`;
-      const logMsg = `[VIEWPORT-PROBE] trigger=${trigger} vh=${vh} vvH=${vvH} vvTop=${vvTop} scrollY=${scrollY} headTop=${headTop} | composer[top=${compTop}, bottom=${compBottom}, h=${compH}] | status=${status}`;
+      // 仅在桌面端开启 Viewport Debug Box 时上报网络日志，避免生产环境无谓的网络与并发开销
+      if (!viewportDebugEnabled) return;
 
-      if (logMsg !== lastProbeLog) {
-        lastProbeLog = logMsg;
-        if (client) {
-          client.sendLog(logMsg);
+      const runProbe = () => {
+        const vv = window.visualViewport;
+        const vh = window.innerHeight;
+        const vvH = vv ? Math.round(vv.height) : vh;
+        const vvTop = vv ? Math.round(vv.offsetTop) : 0;
+        const scrollY = Math.round(window.scrollY);
+        const composerEl = document.querySelector('.composer');
+        let compTop = 0;
+        let compBottom = 0;
+        let compH = 0;
+        if (composerEl) {
+          const rect = composerEl.getBoundingClientRect();
+          compTop = Math.round(rect.top);
+          compBottom = Math.round(rect.bottom);
+          compH = Math.round(rect.height);
         }
+        const chatHeadEl = document.querySelector('.chat-head');
+        let headTop = 0;
+        if (chatHeadEl) {
+          headTop = Math.round(chatHeadEl.getBoundingClientRect().top);
+        }
+        const kbTop = vvH + vvTop;
+        const overlap = compBottom - kbTop;
+        const status = overlap > 1 ? `BLOCKED overlap=${overlap}px` : `OK gap=${Math.abs(overlap)}px`;
+        const logMsg = `[VIEWPORT-PROBE] trigger=${trigger} vh=${vh} vvH=${vvH} vvTop=${vvTop} scrollY=${scrollY} headTop=${headTop} | composer[top=${compTop}, bottom=${compBottom}, h=${compH}] | status=${status}`;
+
+        if (logMsg !== lastProbeLog) {
+          lastProbeLog = logMsg;
+          if (client) {
+            client.sendLog(logMsg);
+          }
+        }
+      };
+
+      // 对键盘展开高频逐帧触发的 vv-sync 进行 120ms 防抖收敛，只在稳定态上报；focusin/focusout 时序则保持立即触发
+      if (trigger === 'vv-sync') {
+        if (vvSyncProbeTimer) clearTimeout(vvSyncProbeTimer);
+        vvSyncProbeTimer = setTimeout(runProbe, 120);
+      } else {
+        runProbe();
       }
     };
 
@@ -1108,13 +1122,36 @@
     };
     document.addEventListener('pointerdown', handleDocumentPointerDown);
 
+    const isScrollableElement = (el: HTMLElement | null): boolean => {
+      let current: HTMLElement | null = el;
+      while (current && current !== document.body && current !== document.documentElement) {
+        if (current.classList.contains('chat-viewport') || current.id === 'app') {
+          break;
+        }
+        const style = window.getComputedStyle(current);
+        const overflowY = style.overflowY;
+        if ((overflowY === 'auto' || overflowY === 'scroll') && current.scrollHeight > current.clientHeight) {
+          return true;
+        }
+        current = current.parentElement;
+      }
+      return false;
+    };
+
     handleTouchMoveBlocker = (e: TouchEvent) => {
       if (isMobileLayout && !isEmbedded) {
         const target = e.target as HTMLElement | null;
-        if (!target || !target.closest('.message-list-container, .messages, .more-menu-panel, .device-panel, .lang-panel, .license-panel, textarea, input')) {
-          if (e.cancelable) {
-            e.preventDefault();
-          }
+        if (!target) return;
+        // 白名单包含核心组件、浮动面板、弹窗、图片预览、上下文菜单及通用可滚动容器
+        if (target.closest('.message-list-container, .messages, .more-menu-panel, .device-panel, .lang-panel, .license-panel, .modal, .modal-body, .session-backdrop, .bubble-context-menu, .image-preview, .preview-overlay, .media-viewer, .scrollable, [data-scrollable], textarea, input')) {
+          return;
+        }
+        // 基于第一性原理的动态滚动检测：检查祖先元素是否具备真实的纵向局部滚动能力
+        if (isScrollableElement(target)) {
+          return;
+        }
+        if (e.cancelable) {
+          e.preventDefault();
         }
       }
     };
@@ -1244,6 +1281,10 @@
     if (handleTouchMoveBlocker) {
       document.removeEventListener('touchmove', handleTouchMoveBlocker);
       handleTouchMoveBlocker = null;
+    }
+    if (vvSyncProbeTimer) {
+      clearTimeout(vvSyncProbeTimer);
+      vvSyncProbeTimer = null;
     }
     if (client) {
       client.close();

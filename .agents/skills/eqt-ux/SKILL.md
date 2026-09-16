@@ -101,7 +101,7 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
 - **移动端虚拟键盘视口贴合、底边抬升与历史消息弹性收缩规范 (Mobile Virtual Keyboard Adaptive Docking & Elastic Shrinkage)**：
   - **视口物理高度强锁定与跨平台滚动阻断 (Physical Height Locking & Scroll Isolation)**：
     - 规格来源：`pkg/chat/v2/web/src/App.svelte` 与 `pkg/chat/v2/web/src/app.css`。
-    - 移动端媒体查询（`@media (max-width: 820px)`）下，`html, body, #app` 必须维持 `position: fixed; inset: 0; width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none;`，并在非消息列表容器区域阻止 `touchmove` 冒泡，彻底从源头剥夺 iOS WebKit 在输入框获取焦点时触发原生页面上滚（Scroll into View）的作案空间，防止 `vv.offsetTop` 畸变。
+    - 移动端媒体查询（`@media (max-width: 820px)`）下，`html, body, #app` 必须维持 `position: fixed; inset: 0; width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none;`，并结合白名单与动态纵向滚动检测（`isScrollableElement`）阻断非滚动容器区域的 `touchmove` 冒泡，既彻底从源头剥夺 iOS WebKit 原生页面上滚（Scroll into View）的作案空间，又保障所有弹窗、图片预览及局部滚动容器的滑动手感。
     - 移动端下 `.chat-viewport` 必须绝对固定在顶部：`position: fixed; top: 0; bottom: auto; left: 0; right: 0; width: 100%; height: var(--chat-viewport-height, 100%); max-height: var(--chat-viewport-height, 100%); overflow: hidden;`。严禁在 CSS 中依赖可能因页面微小滚动被冲抵为 0 的 `bottom: var(...)` 间接定位，严禁设置 `top: var(--chat-viewport-top)` 导致容器下沉。
     - 无论小屏设备（如 iPhone 7 / SE）还是现代大屏设备，容器物理高度均严格等于 `window.visualViewport.height`，容器底边严格与软键盘顶端无缝贴合。
   - **软键盘遮挡几何度量与日志探针规范 (Keyboard Overlap Metric & Viewport Probe)**：
@@ -110,7 +110,7 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
       - $Y_{keyboard} = \text{visualViewport.height} + \text{visualViewport.offsetTop}$
       - $Y_{composer} = \text{composerEl.getBoundingClientRect().bottom}$
       - $\text{overlap} = Y_{composer} - Y_{keyboard}$：若 $\text{overlap} \le 0$，判定为 `OK (gap: -overlap px)`，输入框完全悬浮在键盘上方；若 $\text{overlap} > 0$，判定为 `BLOCKED (-overlap px)`，输入框被键盘物理遮挡。
-    - **探针日志回传与桌面端开关联动**：聚焦序列（0ms / 100ms / 300ms / 500ms）及视口变动时，自动通过 `client.sendLog` 向服务端发送 `[VIEWPORT-PROBE]` 结构化像素日志；桌面端设置项 `Enable Viewport Debug Box` 实时同步至移动端激活左上角悬浮诊断窗。
+    - **探针日志门控与防抖收敛**：`[VIEWPORT-PROBE]` 结构化像素日志严格门控在桌面端设置项 `Enable Viewport Debug Box`（`viewportDebugEnabled` 为 true）开启时才上报，生产环境下 0 网络吞吐；对键盘展开期间高频触发的 `vv-sync` 进行 120ms 防抖收敛，消除键盘动画过渡期日志风暴，保留动画稳定态与 focusin 时序采样。
   - **纯 Flex 列式布局与历史消息弹性折叠 (Flexbox Column Elastic Hierarchy)**：
     - `<main>` 与 `.chat-shell` 均配置为 `display: flex; flex-direction: column; flex: 1 1 0%; min-height: 0; max-height: 100%; height: 100%; overflow: hidden;`。
     - 顶栏 `.chat-head` 设为 `flex: 0 0 auto; flex-shrink: 0; position: sticky; top: 0; z-index: 2;`，键盘拉起时始终固定在顶部不移位。
