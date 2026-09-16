@@ -55,10 +55,10 @@ func HasPendingSelfHealEvents() bool {
 // FormatSelfHealNotice creates a user-friendly, localized in-app notification message.
 func FormatSelfHealNotice(backupPath string, lang string) string {
 	baseName := filepath.Base(backupPath)
-	if NormalizeLangCode(lang) == "en" {
-		return fmt.Sprintf("Corrupted configuration detected and restored to defaults. Backup saved to %s", baseName)
+	if NormalizeLangCode(lang) == "zh" {
+		return fmt.Sprintf("检测到配置文件格式损坏，已自动恢复默认设置。原始配置已备份至: %s", baseName)
 	}
-	return fmt.Sprintf("检测到配置文件格式损坏，已自动恢复默认设置。原始配置已备份至: %s", baseName)
+	return fmt.Sprintf("Corrupted configuration detected and restored to defaults. Backup saved to %s", baseName)
 }
 
 // IsConfigParseError determines whether an error returned by viper.ReadInConfig is specifically
@@ -113,8 +113,8 @@ func BackupCorruptConfigFile(configPath string) (string, error) {
 
 	// Backup succeeded, safe to reset original file
 	if truncateErr := os.WriteFile(configPath, []byte{}, 0600); truncateErr != nil {
-		_ = os.Remove(backupPath)
-		return "", fmt.Errorf("failed to reset corrupt config file: %w", truncateErr)
+		// Zero tolerance for secondary destruction: preserve backupPath even if original file reset fails
+		return "", fmt.Errorf("failed to reset corrupt config file (backup preserved at %s): %w", backupPath, truncateErr)
 	}
 
 	RecordSelfHealEvent(SelfHealEvent{
@@ -139,13 +139,11 @@ func AtomicWriteConfigFile(v *viper.Viper, targetPath string) error {
 
 	// Temporary file retains the target extension (e.g. .yml), enabling Viper to correctly infer serialization format.
 	tmpFile := filepath.Join(dir, fmt.Sprintf(".tmp-%d-%s", time.Now().UnixNano(), filepath.Base(targetPath)))
-	v.SetConfigFile(tmpFile)
-	if err := v.WriteConfig(); err != nil {
+	// Use WriteConfigAs to directly write without mutating the global state of the viper instance.
+	if err := v.WriteConfigAs(tmpFile); err != nil {
 		_ = os.Remove(tmpFile)
 		return err
 	}
-	// Restore original config path on viper instance
-	v.SetConfigFile(targetPath)
 
 	// Attempt atomic replacement
 	if err := os.Rename(tmpFile, targetPath); err != nil {

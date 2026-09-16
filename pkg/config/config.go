@@ -44,16 +44,8 @@ func New(app application.App) (Config, error) {
 	var err error
 	cfg := Config{}
 
-	_, err = os.Stat(v.ConfigFileUsed())
-	if os.IsNotExist(err) {
-		if err := os.MkdirAll(filepath.Dir(v.ConfigFileUsed()), os.ModeDir|os.ModePerm); err != nil {
-			return Config{}, err
-		}
-		file, err := os.Create(v.ConfigFileUsed())
-		if err != nil {
-			return Config{}, err
-		}
-		defer file.Close()
+	if err := ensureConfigFile(v.ConfigFileUsed()); err != nil {
+		return Config{}, err
 	}
 	if err := v.ReadInConfig(); err != nil {
 		if IsConfigParseError(err) {

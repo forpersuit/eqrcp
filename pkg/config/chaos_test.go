@@ -340,3 +340,53 @@ func TestConfigChaos_PortBounding(t *testing.T) {
 		t.Errorf("expected overflow port 99999 to be clamped to 0, got %d", settings.Port)
 	}
 }
+
+func TestConfigChaos_FormatSelfHealNotice_MultiLang(t *testing.T) {
+	backupPath := "/dummy/path/config.yml.corrupted.20260916-120000"
+
+	// 1. Chinese locale variants
+	zhNotice := FormatSelfHealNotice(backupPath, "zh")
+	if !strings.Contains(zhNotice, "检测到配置文件格式损坏") {
+		t.Errorf("expected Chinese message for 'zh', got %s", zhNotice)
+	}
+	zhCNNotice := FormatSelfHealNotice(backupPath, "zh-CN")
+	if !strings.Contains(zhCNNotice, "检测到配置文件格式损坏") {
+		t.Errorf("expected Chinese message for 'zh-CN', got %s", zhCNNotice)
+	}
+
+	// 2. English locale
+	enNotice := FormatSelfHealNotice(backupPath, "en")
+	if !strings.Contains(enNotice, "Corrupted configuration detected") {
+		t.Errorf("expected English message for 'en', got %s", enNotice)
+	}
+
+	// 3. Other languages (de, es, ja, fr) must fallback to English, NOT Chinese
+	for _, lang := range []string{"de", "es", "ja", "fr", "ko"} {
+		notice := FormatSelfHealNotice(backupPath, lang)
+		if strings.Contains(notice, "检测到配置文件格式损坏") {
+			t.Errorf("language %s should NOT fallback to Chinese, got %s", lang, notice)
+		}
+		if !strings.Contains(notice, "Corrupted configuration detected") {
+			t.Errorf("language %s should fallback to English, got %s", lang, notice)
+		}
+	}
+}
+
+func TestConfigChaos_AtomicWrite_PreservesViperConfigFile(t *testing.T) {
+	tempDir := t.TempDir()
+	originalPath := filepath.Join(tempDir, "original.yml")
+	targetPath := filepath.Join(tempDir, "target.yml")
+
+	v := viper.New()
+	v.SetConfigFile(originalPath)
+	v.Set("test_key", "test_value")
+
+	if err := AtomicWriteConfigFile(v, targetPath); err != nil {
+		t.Fatalf("AtomicWriteConfigFile failed: %v", err)
+	}
+
+	// DEF-05 check: v.ConfigFileUsed() must remain originalPath and NOT be mutated to temporary file
+	if v.ConfigFileUsed() != originalPath {
+		t.Errorf("v.ConfigFileUsed was mutated by AtomicWriteConfigFile! got %s, want %s", v.ConfigFileUsed(), originalPath)
+	}
+}

@@ -3717,10 +3717,6 @@ function bindEvents() {
                 openPanel('redeem');
                 return;
             }
-            if (e.target.closest('#topbar-tls-status')) {
-                openPanel('settings');
-                return;
-            }
             if (e.target.closest('#close-panel') || (e.target.classList && e.target.classList.contains('overlay'))) {
                 closePanel();
                 return;

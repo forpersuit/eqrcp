@@ -55,6 +55,7 @@ echo "=== [2/5] 上传安装包至 Cloudflare R2 远端分发存储桶 (download
 WRANGLER_ENV="env -u http_proxy -u HTTP_PROXY -u https_proxy -u HTTPS_PROXY -u all_proxy -u ALL_PROXY"
 
 cd "${root_dir}/cloudflare/eqt-drm-api"
+$WRANGLER_ENV npx wrangler r2 object put "eqt-downloads/downloads/test/eqt-desktop-test-windows-amd64.zip" -f "$zip_file" --content-type application/zip --remote
 $WRANGLER_ENV npx wrangler r2 object put "eqt-downloads/downloads/test/EQT-test-windows-amd64.zip" -f "$zip_file" --content-type application/zip --remote
 $WRANGLER_ENV npx wrangler r2 object put "eqt-downloads/downloads/test/EQT.exe" -f "$exe_file" --content-type application/octet-stream --remote
 
@@ -69,10 +70,8 @@ const fs = require('fs');
 let code = fs.readFileSync('${github_file}', 'utf8');
 
 code = code.replace(/version:\s*\"v[^\"]+\"/, 'version: \"${current_version}\"');
-code = code.replace(/download_url:\s*\"https:\/\/download\.eqt\.net\.im\/downloads\/test\/EQT-test-windows-amd64\.zip\?t=[^\"]+\"/, 'download_url: \"https://download.eqt.net.im/downloads/test/EQT-test-windows-amd64.zip?t=${timestamp}\"');
-code = code.replace(/size:\s*\d+(?=\s*\}\s*,\s*\{\s*name:\s*\"EQT\.exe\")/, 'size: ${zip_size}');
-code = code.replace(/download_url:\s*\"https:\/\/download\.eqt\.net\.im\/downloads\/test\/EQT\.exe\?t=[^\"]+\"/, 'download_url: \"https://download.eqt.net.im/downloads/test/EQT.exe?t=${timestamp}\"');
-code = code.replace(/size:\s*\d+(?=\s*\}\s*\]\s*\}\s*;)/, 'size: ${exe_size}');
+code = code.replace(/download_url:\s*\"https:\/\/download\.eqt\.net\.im\/downloads\/test\/(eqt-desktop-test-windows-amd64|EQT-test-windows-amd64)\.zip(\?t=[^\"]+)?\"/g, 'download_url: \"https://download.eqt.net.im/downloads/test/\$1.zip?t=${timestamp}\"');
+code = code.replace(/download_url:\s*\"https:\/\/download\.eqt\.net\.im\/downloads\/test\/EQT\.exe(\?t=[^\"]+)?\"/, 'download_url: \"https://download.eqt.net.im/downloads/test/EQT.exe?t=${timestamp}\"');
 
 fs.writeFileSync('${github_file}', code, 'utf8');
 "

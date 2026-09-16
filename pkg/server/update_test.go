@@ -413,3 +413,80 @@ func TestClearPendingOfflineUpdateFiles(t *testing.T) {
 		t.Error("expected meta file to be deleted")
 	}
 }
+
+func TestCheckForUpdates_TestChannelNamingVariants(t *testing.T) {
+	// Test matching standard eqt-desktop-test-windows-amd64 and uppercase EQT-test-windows-amd64
+	testCases := []struct {
+		name        string
+		assetName   string
+		sigName     string
+		expectMatch bool
+	}{
+		{
+			name:        "standard test naming",
+			assetName:   fmt.Sprintf("eqt-desktop-test-%s-%s.zip", runtime.GOOS, runtime.GOARCH),
+			sigName:     fmt.Sprintf("eqt-desktop-test-%s-%s.zip.sig", runtime.GOOS, runtime.GOARCH),
+			expectMatch: true,
+		},
+		{
+			name:        "alt test naming",
+			assetName:   fmt.Sprintf("eqt-test-%s-%s.zip", runtime.GOOS, runtime.GOARCH),
+			sigName:     fmt.Sprintf("eqt-test-%s-%s.zip.sig", runtime.GOOS, runtime.GOARCH),
+			expectMatch: true,
+		},
+		{
+			name:        "uppercase legacy variant",
+			assetName:   fmt.Sprintf("EQT-test-%s-%s.zip", runtime.GOOS, runtime.GOARCH),
+			sigName:     fmt.Sprintf("EQT-test-%s-%s.zip.sig", runtime.GOOS, runtime.GOARCH),
+			expectMatch: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockResponse := UpdateResponse{
+				Version:     "v9.9.9",
+				PublishedAt: "2026-09-16T12:00:00Z",
+				Changelog:   "Test variant update",
+				Assets: []UpdateAsset{
+					{
+						Name:        tc.assetName,
+						DownloadURL: "http://example.com/" + tc.assetName,
+						Size:        1000,
+					},
+					{
+						Name:        tc.sigName,
+						DownloadURL: "http://example.com/" + tc.sigName,
+						Size:        128,
+					},
+				},
+			}
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(mockResponse)
+			}))
+			defer server.Close()
+
+			origEnv := os.Getenv("EQT_UPDATE_URL")
+			_ = os.Setenv("EQT_UPDATE_URL", server.URL+"/update-metadata.json")
+			defer func() {
+				if origEnv == "" {
+					_ = os.Unsetenv("EQT_UPDATE_URL")
+				} else {
+					_ = os.Setenv("EQT_UPDATE_URL", origEnv)
+				}
+			}()
+
+			res, err := CheckForUpdates(true, "v1.0.0")
+			if tc.expectMatch {
+				if err != nil {
+					t.Fatalf("expected match for %s, got err: %v", tc.assetName, err)
+				}
+				if res == nil || res.AssetName != tc.assetName {
+					t.Fatalf("expected asset %s, got: %+v", tc.assetName, res)
+				}
+			}
+		})
+	}
+}

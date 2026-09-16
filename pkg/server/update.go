@@ -157,8 +157,10 @@ func CheckForUpdates(isDesktop bool, currentVersion string) (*CheckResult, error
 		typeStr = "cli"
 	}
 
-	// Target pattern: eqt-<type>-<goos>-<goarch> (e.g. eqt-desktop-windows-amd64)
+	// Target pattern: eqt-<type>-<goos>-<goarch> (e.g. eqt-desktop-windows-amd64) or test variants
 	targetBase := fmt.Sprintf("eqt-%s-%s-%s", typeStr, runtime.GOOS, runtime.GOARCH)
+	targetTestBase := fmt.Sprintf("eqt-%s-test-%s-%s", typeStr, runtime.GOOS, runtime.GOARCH)
+	altTestBase := fmt.Sprintf("eqt-test-%s-%s", runtime.GOOS, runtime.GOARCH)
 	Log.Debugf("CheckForUpdates: filtering assets with base pattern: %s", targetBase)
 
 	var mainAsset *UpdateAsset
@@ -166,8 +168,9 @@ func CheckForUpdates(isDesktop bool, currentVersion string) (*CheckResult, error
 
 	for i := range updateRes.Assets {
 		asset := &updateRes.Assets[i]
-		if strings.HasPrefix(asset.Name, targetBase) {
-			if strings.HasSuffix(asset.Name, ".sig") {
+		lowerName := strings.ToLower(asset.Name)
+		if strings.HasPrefix(lowerName, targetBase) || strings.HasPrefix(lowerName, targetTestBase) || strings.HasPrefix(lowerName, altTestBase) {
+			if strings.HasSuffix(lowerName, ".sig") {
 				sigAsset = asset
 			} else {
 				mainAsset = asset

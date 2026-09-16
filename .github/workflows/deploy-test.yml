@@ -117,8 +117,8 @@ jobs:
 
       - name: Build Wails (windows/amd64 test build)
         working-directory: desktop/gui
-        # ⚠️ 测试环境专用:注入 -tags eqtdev,确保客户端连向测试后端,隔离生产
-        run: wails build -clean -tags eqtdev -platform windows/amd64
+        # ⚠️ 测试环境专用:注入 -tags eqtdev,确保客户端连向测试后端,隔离生产;-ldflags -H=windowsgui 消除黑框
+        run: wails build -clean -tags eqtdev -ldflags "-H=windowsgui" -platform windows/amd64
 
       - name: Stage test artifacts
         shell: bash
@@ -127,6 +127,10 @@ jobs:
           cp desktop/gui/build/bin/eqt-desktop.exe out/EQT.exe
           python -c "
           import zipfile
+          # Standard contract pattern: eqt-desktop-test-windows-amd64.zip
+          with zipfile.ZipFile('out/eqt-desktop-test-windows-amd64.zip', 'w', zipfile.ZIP_DEFLATED) as z:
+              z.write('desktop/gui/build/bin/eqt-desktop.exe', 'EQT.exe')
+          # Legacy compatibility mirror
           with zipfile.ZipFile('out/EQT-test-windows-amd64.zip', 'w', zipfile.ZIP_DEFLATED) as z:
               z.write('desktop/gui/build/bin/eqt-desktop.exe', 'EQT.exe')
           "
@@ -136,6 +140,7 @@ jobs:
         run: |
           if [ -n "$UPDATE_SIGNING_PRIVATE_KEY" ]; then
             go run scripts/generate-update-sig/main.go out/EQT.exe || true
+            go run scripts/generate-update-sig/main.go out/eqt-desktop-test-windows-amd64.zip || true
             go run scripts/generate-update-sig/main.go out/EQT-test-windows-amd64.zip || true
           else
             echo "UPDATE_SIGNING_PRIVATE_KEY is not set, skipping signatures."
@@ -156,9 +161,13 @@ jobs:
           if [ -n "$CLOUDFLARE_API_TOKEN" ]; then
             BUCKET="${R2_BUCKET_NAME:-eqt-downloads}"
             echo "Uploading test artifacts to Cloudflare R2 bucket: $BUCKET"
+            npx wrangler r2 object put "$BUCKET/downloads/test/eqt-desktop-test-windows-amd64.zip" --file "out/eqt-desktop-test-windows-amd64.zip" --content-type application/zip --remote
             npx wrangler r2 object put "$BUCKET/downloads/test/EQT-test-windows-amd64.zip" --file "out/EQT-test-windows-amd64.zip" --content-type application/zip --remote
             npx wrangler r2 object put "$BUCKET/downloads/test/EQT.exe" --file "out/EQT.exe" --content-type application/octet-stream --remote
             npx wrangler r2 object put "$BUCKET/downloads/test/update-metadata.json" --file "out/update-metadata.json" --content-type application/json --remote
+            if [ -f "out/eqt-desktop-test-windows-amd64.zip.sig" ]; then
+              npx wrangler r2 object put "$BUCKET/downloads/test/eqt-desktop-test-windows-amd64.zip.sig" --file "out/eqt-desktop-test-windows-amd64.zip.sig" --content-type text/plain --remote
+            fi
             if [ -f "out/EQT-test-windows-amd64.zip.sig" ]; then
               npx wrangler r2 object put "$BUCKET/downloads/test/EQT-test-windows-amd64.zip.sig" --file "out/EQT-test-windows-amd64.zip.sig" --content-type text/plain --remote
             fi

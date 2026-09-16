@@ -219,3 +219,26 @@
    - 移除 `BackupCorruptConfigFile` 中错误的 `os.Remove(backupPath)`。
    - 统一 `ensureConfigFile` 消除句柄残留。
    - 规范 `FormatSelfHealNotice` 语言回退机制。
+
+---
+
+## 五、 缺陷审查推进落地与加固闭环（v1.36.146）
+
+经第一性原理全面评估，DEF-01 至 DEF-07 均为真实存在的高确定性工程与架构隐患，已在 `v1.36.146` 中全部完成闭环修复与测试覆盖：
+
+| 编号 | 缺陷项 | 合理性评估与处置推进 | 涉及模块与核心落地措施 | 验证状态 |
+| :--- | :--- | :--- | :--- | :--- |
+| **DEF-01** | 自动更新包命名脱节 | **完全合理，予以推进**<br>双向断裂导致自动化测试通道升级链路完全不可用。 | 1. `pkg/server/update.go`：升级 `matchDesktopAsset`，解耦严格同名限制，容忍 `eqt-desktop-test-windows-amd64` 与大小写变体；<br>2. `deploy-test.yml` / `github.ts` / `publish-test.sh`：对齐标准产物命名并附带 `.sig`。 | `TestCheckForUpdates_TestChannelNamingVariants` PASS |
+| **DEF-02** | CI 编译遗漏 GUI 标志出现控制台黑框 | **完全合理，予以推进**<br>Windows Wails 产物若无 `-H=windowsgui`，双击运行必然弹黑框，破坏桌面原生体验。 | `.github/workflows/deploy-test.yml`：在 `wails build` 添加 `-ldflags "-H=windowsgui"`。 | CI 工作流已更新 |
+| **DEF-03** | `publish-test.sh` 正则依赖时间戳查询参数 | **完全合理，予以推进**<br>静态资源引用 `?t=...` 是动态和可选的，强依赖会导致提取空值而发布失败。 | `scripts/publish-test.sh`：将正则调整为兼容可选时间戳 `(\?t=[^\"]+)?`。 | 脚本语法已验证 |
+| **DEF-04** | 截断失败反向删除备份文件 | **完全合理，予以推进**<br>根据数据安全第一性原理，唯一备份文件无论在何种失败分支下都不可被主动销毁。 | `pkg/config/resilience.go`：移除 `os.Remove(backupPath)`，遇到原文件截断失败时保留备份并返回明确错误。 | `TestConfigChaos_BackupFailureProtectsOriginal` PASS |
+| **DEF-05** | `AtomicWriteConfigFile` 篡改 Viper 全局状态 | **完全合理，予以推进**<br>调用 `v.SetConfigFile(tmp)` 会永久重定向 Viper 内部文件指针，造成后续配置读写紊乱。 | `pkg/config/resilience.go`：改用原生无副作用的 `v.WriteConfigAs(tmpFile)`，完全规避路径污染。 | `TestConfigChaos_AtomicWrite_PreservesViperConfigFile` PASS |
+| **DEF-06** | `config.go` 句柄未及时关闭产生 Windows 共享冲突 | **完全合理，予以推进**<br>跨函数/跨步骤 defer 无法保证文件句柄在后续写操作前释放，引发 Windows `sharing violation`。 | `pkg/config/config.go`：提取 `ensureConfigFile` 专用辅助函数，探活/创建后即时显式 `file.Close()`。 | `pkg/config` 全套单测 PASS |
+| **DEF-07** | `FormatSelfHealNotice` 非英语言盲目回退中文 | **完全合理，予以推进**<br>违背多语言规范，非中文非英文环境（如德语、日语、韩语、西语、法语）应统一回退至通用英文。 | `pkg/config/resilience.go`：显式判定 `zh` / `zh-`，其余语言统一回退为英文提示。 | `TestConfigChaos_FormatSelfHealNotice_MultiLang` PASS |
+
+### 协同加固项：GUI 顶部 TLS 锁子图标纯状态化展示
+- **用户诉求**：GUI 界面 tier 旁边开启 TLS 时的锁子图标取消点击交互，仅作状态展示。
+- **改动位置**：
+  - `desktop/gui/frontend/src/components/tls_status.js`：将 `<button class="menu-button topbar-tls-btn" ...>` 重构为展示型 `<span class="topbar-tls-indicator" id="topbar-tls-status" role="status" ... style="cursor: default; user-select: none;">`。
+  - `desktop/gui/frontend/src/main.js`：移除针对 `#topbar-tls-status` 点击跳转 Settings 面板的事件监听，保留 hover tooltip 提示。
+
