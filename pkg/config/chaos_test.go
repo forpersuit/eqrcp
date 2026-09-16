@@ -1,13 +1,100 @@
 package config
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"eqt/pkg/application"
+	"github.com/spf13/viper"
 )
+
+func TestConfigChaos_IsConfigParseError(t *testing.T) {
+	// 1. Nil error
+	if IsConfigParseError(nil) {
+		t.Errorf("expected false for nil error")
+	}
+
+	// 2. Pure I/O or PathError (permission denied)
+	pathErr := &fs.PathError{Op: "open", Path: "/dev/null", Err: os.ErrPermission}
+	if IsConfigParseError(pathErr) {
+		t.Errorf("expected false for PathError / permission denied")
+	}
+
+	// 3. Generic error
+	if IsConfigParseError(errors.New("disk I/O error")) {
+		t.Errorf("expected false for generic error")
+	}
+
+	// 4. Actual viper.ConfigParseError
+	tempDir := t.TempDir()
+	badYAML := filepath.Join(tempDir, "bad.yml")
+	_ = os.WriteFile(badYAML, []byte("port: [unclosed\n\tinvalid: {{{\n:::"), 0644)
+	v := viper.New()
+	v.SetConfigFile(badYAML)
+	err := v.ReadInConfig()
+	if err == nil {
+		t.Fatalf("expected ReadInConfig to fail on bad YAML")
+	}
+	if !IsConfigParseError(err) {
+		t.Errorf("expected true for ConfigParseError, got err: %T => %v", err, err)
+	}
+}
+
+func TestConfigChaos_PermissionDeniedNotDestroyed(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config.yml")
+
+	// Write valid config
+	validContent := []byte("port: 18000\ninterface: eth0\n")
+	if err := os.WriteFile(configPath, validContent, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Make file completely unreadable (0000)
+	if err := os.Chmod(configPath, 0000); err != nil {
+		t.Skip("chmod not supported in this test environment")
+	}
+	defer func() {
+		_ = os.Chmod(configPath, 0644)
+	}()
+
+	app := application.New()
+	app.Flags.Config = configPath
+
+	// 1. ReadDesktopSettings must fail and MUST NOT trigger self-healing (must NOT destroy original file)
+	_, err := ReadDesktopSettings(app)
+	if err == nil {
+		t.Fatalf("expected ReadDesktopSettings to return error for unreadable file")
+	}
+
+	// 2. config.New must fail and MUST NOT destroy original file
+	_, err = New(app)
+	if err == nil {
+		t.Fatalf("expected New to return error for unreadable file")
+	}
+
+	// 3. Verify no .corrupted.* backup was created
+	files, _ := os.ReadDir(tempDir)
+	for _, f := range files {
+		if strings.Contains(f.Name(), ".corrupted.") {
+			t.Fatalf("unexpected self-healing triggered on permission denied error! Found backup: %s", f.Name())
+		}
+	}
+
+	// Restore permission and check that original content is completely intact
+	_ = os.Chmod(configPath, 0644)
+	readBack, readErr := os.ReadFile(configPath)
+	if readErr != nil {
+		t.Fatalf("failed to read back config: %v", readErr)
+	}
+	if string(readBack) != string(validContent) {
+		t.Fatalf("original file content was corrupted/truncated! got %q, want %q", string(readBack), string(validContent))
+	}
+}
 
 func TestConfigChaos_CorruptedYAML_SelfHealing(t *testing.T) {
 	tempDir := t.TempDir()
@@ -22,7 +109,7 @@ func TestConfigChaos_CorruptedYAML_SelfHealing(t *testing.T) {
 	app := application.New()
 	app.Flags.Config = configPath
 
-	// 1. Test ReadDesktopSettings self-healing
+	// 1. Test ReadDesktopSettings self-healing & notice generation
 	settings, err := ReadDesktopSettings(app)
 	if err != nil {
 		t.Fatalf("expected ReadDesktopSettings to self-heal on corrupted YAML, got error: %v", err)
@@ -30,8 +117,11 @@ func TestConfigChaos_CorruptedYAML_SelfHealing(t *testing.T) {
 	if settings.Port != 0 {
 		t.Errorf("expected default port 0, got %d", settings.Port)
 	}
+	if settings.SelfHealNotice == "" {
+		t.Errorf("expected SelfHealNotice to be populated, got empty string")
+	}
 
-	// Verify that a backup file was created
+	// Verify that a backup file was created with exact corrupted bytes
 	files, _ := os.ReadDir(tempDir)
 	foundBackup := false
 	for _, f := range files {
@@ -85,6 +175,58 @@ func TestConfigChaos_CorruptedYAML_SelfHealing(t *testing.T) {
 	}
 	if !strings.Contains(string(data), "port: 18000") {
 		t.Errorf("expected config to contain port: 18000, got: %s", string(data))
+	}
+}
+
+func TestConfigChaos_BackupFailureProtectsOriginal(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config.yml")
+
+	originalContent := []byte("broken: [syntax")
+	if err := os.WriteFile(configPath, originalContent, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Non-existent or empty file should return empty string without error
+	nonExistent := filepath.Join(tempDir, "does_not_exist.yml")
+	path, err := BackupCorruptConfigFile(nonExistent)
+	if err != nil || path != "" {
+		t.Errorf("expected empty string and nil error for non-existent file, got (%q, %v)", path, err)
+	}
+}
+
+func TestConfigChaos_AtomicWriteZeroDataLoss(t *testing.T) {
+	tempDir := t.TempDir()
+	targetPath := filepath.Join(tempDir, "config.yml")
+
+	v := viper.New()
+	v.Set("port", 12345)
+	v.Set("interface", "lo0")
+
+	if err := AtomicWriteConfigFile(v, targetPath); err != nil {
+		t.Fatalf("AtomicWriteConfigFile failed: %v", err)
+	}
+
+	data, err := os.ReadFile(targetPath)
+	if err != nil {
+		t.Fatalf("failed to read written file: %v", err)
+	}
+	if !strings.Contains(string(data), "port: 12345") {
+		t.Errorf("expected target file to contain port: 12345, got %s", string(data))
+	}
+
+	// Overwrite atomically with new values
+	v.Set("port", 54321)
+	if err := AtomicWriteConfigFile(v, targetPath); err != nil {
+		t.Fatalf("second AtomicWriteConfigFile failed: %v", err)
+	}
+
+	data2, err := os.ReadFile(targetPath)
+	if err != nil {
+		t.Fatalf("failed to read overwritten file: %v", err)
+	}
+	if !strings.Contains(string(data2), "port: 54321") {
+		t.Errorf("expected target file to contain updated port: 54321, got %s", string(data2))
 	}
 }
 

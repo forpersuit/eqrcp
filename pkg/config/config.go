@@ -56,9 +56,15 @@ func New(app application.App) (Config, error) {
 		defer file.Close()
 	}
 	if err := v.ReadInConfig(); err != nil {
-		BackupCorruptConfigFile(v.ConfigFileUsed())
-		v = GetViperInstance(app)
-		_ = v.ReadInConfig()
+		if IsConfigParseError(err) {
+			if _, backupErr := BackupCorruptConfigFile(v.ConfigFileUsed()); backupErr != nil {
+				return Config{}, backupErr
+			}
+			v = GetViperInstance(app)
+			_ = v.ReadInConfig()
+		} else {
+			return Config{}, err
+		}
 	}
 	// Load file
 	cfg.Interface = v.GetString("interface")

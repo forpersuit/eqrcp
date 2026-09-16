@@ -436,6 +436,7 @@ func convertConfigSettings(s config.DesktopSettings) DesktopSettings {
 		BlockProxy:               s.BlockProxy,
 		ChatDownloadDir:          s.ChatDownloadDir,
 		LogDir:                   s.LogDir,
+		SelfHealNotice:           s.SelfHealNotice,
 	}
 }
 
@@ -477,6 +478,7 @@ func convertAppSettings(s DesktopSettings) config.DesktopSettings {
 		BlockProxy:               s.BlockProxy,
 		ChatDownloadDir:          s.ChatDownloadDir,
 		LogDir:                   s.LogDir,
+		SelfHealNotice:           s.SelfHealNotice,
 	}
 }
 

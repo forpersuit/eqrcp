@@ -167,6 +167,7 @@ type DesktopSettings struct {
 	BlockProxy               bool              `json:"blockProxy"`
 	ChatDownloadDir          string            `json:"chatDownloadDir"`
 	LogDir                   string            `json:"logDir"`
+	SelfHealNotice           string            `json:"selfHealNotice,omitempty"`
 }
 
 type InterfaceOption struct {
@@ -1214,6 +1215,9 @@ func (a *App) ReadSettings() (DesktopSettings, error) {
 	settings, err := a.agent.readSettings()
 	if err != nil {
 		return DesktopSettings{}, err
+	}
+	if settings.SelfHealNotice != "" {
+		a.logWarning(fmt.Sprintf("[ConfigSelfHeal] %s", settings.SelfHealNotice))
 	}
 	a.setCloseBehavior(settings.CloseBehavior)
 	return settings, nil

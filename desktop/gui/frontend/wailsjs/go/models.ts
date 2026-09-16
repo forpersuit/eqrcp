@@ -323,6 +323,7 @@ export namespace main {
 	    blockProxy: boolean;
 	    chatDownloadDir: string;
 	    logDir: string;
+	    selfHealNotice?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new DesktopSettings(source);

@@ -406,4 +406,3 @@ func TestGUIAgentObserveTransferStatusDownloadedItems(t *testing.T) {
 		t.Fatal("cloneTaskRecord did not perform deep copy of DownloadedItems")
 	}
 }
-

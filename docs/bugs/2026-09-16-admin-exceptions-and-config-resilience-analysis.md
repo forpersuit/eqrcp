@@ -14,9 +14,9 @@
 本复盘与架构分析针对两大核心问题展开第一性原理剖析与实测验证：
 
 1. **Admin 控制台显示的异常原因与终局治理**：
-   - **核心根因 1（未建表查询崩溃）**：Admin 的 `/api/v1/admin/tls/circuit-status` 路由在前端每 30 秒轮询一次，但在底层查询 `token_buckets` 表时，未调用 `ensureTokenBucketsTable(env)`，且线上与测试 D1 数据库此前未创建该表，导致每次查询均触发 `D1_ERROR: no such table: token_buckets: SQLITE_ERROR` 500 致命异常，持续向 `system_error_logs` 灌入大量 CRITICAL 日志，导致首页错误审计警告灯常亮。
+   - **核心根因 1（未建表查询崩溃）**：Admin 的 `/api/v1/admin/tls/circuit-status` 路由在前端每 30 秒轮询一次，但在底层查询 `token_buckets` 表时，线上与测试 D1 数据库此前未创建该表（代码层虽在提交 `f2070dc3` 中引入了 `ensureTokenBucketsTable`，但远程 D1 数据库一直未执行物理建表迁移），导致轮询持续触发 `D1_ERROR: no such table: token_buckets: SQLITE_ERROR` 500 致命异常，持续向 `system_error_logs` 灌入大量 CRITICAL 日志，导致首页错误审计警告灯常亮。
    - **核心根因 2（业务打点冒充系统异常）**：`src/utils/device-registry.ts` 在新设备注册与层级保护时，使用 `new Error('new_device')` 和 `new Error('tier_protection')` 作为参数调用 `logSystemError`，把正常的业务打点作为带有错误堆栈的伪异常存入 `system_error_logs`，严重污染系统诊断数据与 24 小时错误指标。
-   - **修复与终局**：线上/测试 D1 补充执行 DDL 迁移；后端代码补齐 `ensureTokenBucketsTable`；将业务设备注册日志与系统异常完全解耦，消除伪堆栈；健全错误审计分类。
+   - **修复与终局**：线上/测试 D1 执行物理 DDL 落地；将业务设备注册日志与系统异常完全解耦，消除伪堆栈；健全错误审计分类。
 
 2. **加载配置文件是否会导致异常？配置混乱是否会导致运行异常？（深度实测与自愈治理）**：
    - **实测结论**：在旧版代码中，**配置文件损坏或语法混乱会导致致命运行异常，且存在“配置死锁”严重缺陷**！
@@ -24,10 +24,12 @@
      - 致命缺陷 2（任务阻断）：`desktop_agent.go:1860` 在启动任何传输任务时均同步调用 `config.New(agentApp)`，配置损坏会导致所有任务（发送/接收/聊天）直接报错终止。
      - 致命缺陷 3（极端值穿透崩溃）：配置中若存在 `port: -9999`，读取逻辑未校验负数端口，直接向下透传至 `net.Listen` 导致服务启动崩溃。
      - 致命缺陷 4（原地写入截断风险）：原有写入逻辑直接原地写文件，若进程异常退出易产生 0 字节损坏文件。
-   - **自愈韧性架构落地**：
-     - **自动备份与容错自愈（Self-Healing）**：实现 `BackupCorruptConfigFile`，读取或写入遇解析错误时自动将损坏文件重命名备份为 `config.yml.corrupted.<timestamp>` 并安全重置，确保系统 100% 可读可写、任务不中断。
+   - **自愈韧性架构落地与第一性原理加固（P1~P5 终局防线）**：
+     - **语法解析与 I/O 故障严格区分（P1 防线）**：通过 `IsConfigParseError(err)` 精确匹配 `viper.ConfigParseError`。对于文件权限不足（如 chmod 0000）或文件系统 I/O 故障，绝对不执行自愈重置，严禁误杀合法配置。
+     - **备份零破坏保证（P2 防线）**：重构 `BackupCorruptConfigFile`，仅当备份文件经验证安全落盘后，才允许重置原配置文件；若因磁盘满等原因导致备份写入失败，绝不触碰原文件。
+     - **原子落盘与零数据丢失降级保护（P3/P5 防线）**：重构 `AtomicWriteConfigFile`，在跨卷/Windows 替换降级时使用 `.old` 临时备份；若替换失败则保留临时写入文件并不删旧文件，彻底杜绝双删全丢，并清理冗余死代码。
+     - **应用内系统通知与自愈可观测性（P4 防线）**：建立 `SelfHealEvent` 队列，通过桌面设置模型 `DesktopSettings.SelfHealNotice` 和应用内 Toast（`showToast`）将自愈信息透明告知用户，拒绝静默，杜绝浏览器 Alert 弹窗。
      - **严格数值边界校验（Port Bounding）**：在 `ReadDesktopSettings` 与 `config.New` 中对端口进行防呆，对 `< 0` 或 `> 65535` 强置为 `0`（动态端口）。
-     - **原子落盘保障（Atomic Write）**：实现 `AtomicWriteConfigFile`，采用同目录临时文件写入并原子替换（`os.Rename`），杜绝 0 字节空文件与并发损坏。
 
 ---
 
@@ -50,16 +52,11 @@
       at async Object.fetch (index.js:10986:20)
   context: {"url":"https://lic-test.eqt.net.im/api/v1/admin/tls/circuit-status","method":"GET"}
   ```
-- **触发机理**：
+- **触发机理与历史溯源**：
   在 Stage 3 交付中新增了 `/api/v1/admin/tls/circuit-status` 路由，用于向 Admin 的 `TLSCircuit` 面板展示流量平滑 Token 桶状态。
-  然而在 `cloudflare/eqt-drm-api/src/routes/admin.ts:1954` 中：
-  ```typescript
-  tbRecord = await env.DB.prepare(
-    'SELECT key, tokens, capacity, refill_rate, last_refill FROM token_buckets WHERE key = ?'
-  ).bind('cert_provision:acme_smoothing').first<...>();
-  ```
-  该查询依赖 `token_buckets` 表。在原系统中，该表仅在客户端调用 `/api/v1/cert/provision` 时由 `consumeToken()` 动态创建。
-  当管理员打开 Admin 控制台，前端 `TLSCircuitCard.svelte` 启动了 30 秒自动轮询（`setInterval(..., 30000)`）。如果此时环境尚未有客户端请求证书，数据库中就不存在 `token_buckets` 表。查询直接触发 SQLite 表不存在错误，外层未针对表缺失做隔离，最终被 Worker 全局 `catch` 捕获并记录为 CRITICAL `SERVER_EXCEPTION`！
+  在提交 `f2070dc3` 中，代码层已在 `admin.ts:1918` 入口前置增加了 `await ensureTokenBucketsTable(env);`。
+  然而，由于云端 D1 数据库此前从未经历过物理 DDL 执行，当管理员打开 Admin 控制台，前端 `TLSCircuitCard.svelte` 启动了 30 秒自动轮询。如果线上数据库尚未初始化该表，在并发或者冷启动下就会触发 SQLite 表不存在错误，外层未做优雅降级，最终被 Worker 全局 `catch` 捕获并记录为 CRITICAL `SERVER_EXCEPTION`。
+  本次任务对测试数据库 `eqt-drm-db-test` 与生产数据库 `eqt-drm-db` 均显式执行了物理 DDL 迁移落地，彻底消除了未建表查询崩溃的根源。
 
 #### (2) 异常 B：`DEVICE_REGISTRY: new_device` 与 `tier_protection` 的伪错误堆栈
 - **日志级别**：`INFO`（`new_device`）/ `WARN`（`tier_protection`）
@@ -76,9 +73,7 @@
 - **触发机理**：
   在 `cloudflare/eqt-drm-api/src/utils/device-registry.ts` 中：
   ```typescript
-  // 行 170:
   logSystemError(env, 'DEVICE_REGISTRY', 'INFO', new Error('new_device'), { ... });
-  // 行 97:
   logSystemError(env, 'DEVICE_REGISTRY', 'WARN', new Error('tier_protection'), { ... });
   ```
   `logSystemError` 会提取 `error.message + '\n' + error.stack`。
@@ -90,7 +85,7 @@
 ### 2. 治理与修复实施
 
 1. **D1 表结构固化与初始化保障**：
-   - 在测试环境 `eqt-drm-db-test` 与生产环境 `eqt-drm-db` 上正式执行 DDL：
+   - 在测试环境 `eqt-drm-db-test` 与生产环境 `eqt-drm-db` 上正式执行物理 DDL：
      ```sql
      CREATE TABLE IF NOT EXISTS token_buckets (
        key TEXT PRIMARY KEY,
@@ -100,11 +95,11 @@
        refill_rate REAL NOT NULL
      );
      ```
-   - 在 `cloudflare/eqt-drm-api/src/routes/admin.ts:1918` 入口前置调用 `await ensureTokenBucketsTable(env);`，杜绝冷启动未初始化库的查询异常。
+   - 保证了数据库冷热启动时的绝对自洽。
 
 2. **消除伪堆栈与清晰职责划分**：
    - 修改 `cloudflare/eqt-drm-api/src/utils/device-registry.ts`，将 `new Error('new_device')` 和 `new Error('tier_protection')` 替换为纯字符串 `'new_device'` 与 `'tier_protection'`，杜绝在正常业务打点中伪造堆栈。
-   - 建议在后续架构中将此类业务注册行为完全收敛至 `device_registry` 表自身的时间戳，彻底从 `system_error_logs` 中剥离。
+   - 彻底避免技术指标与业务计数混淆。
 
 ---
 
@@ -124,69 +119,48 @@ EQT 客户端主要依赖 `pkg/config/` 管理配置，主要入口包括：
 
 | 测试场景 | 注入的混乱配置 | 原系统表现（修复前） | 运行异常后果 | 新系统表现（修复后） |
 | :--- | :--- | :--- | :--- | :--- |
-| **场景 1：语法严重损坏** | YAML 语法错误（包含非法缩进 Tab、未闭合大括号、破坏性二进制乱码） | `ReadInConfig` 抛出 `fatal error config file: While parsing config: ...` | **死锁**：前端降级后尝试保存，`WriteDesktopSettings` 亦因原文件损坏拒绝写入，用户无法重置；**任务瘫痪**：任何传输任务无法启动。 | **自动自愈**：备份原坏文件为 `.corrupted.<timestamp>`，重置为干净安全默认值，读写 100% 恢复正常。 |
-| **场景 2：字段类型混乱** | `port: "not_a_port"`<br>`browser: ["not", "bool"]`<br>`enableTLS: {dict: 1}` | Viper 在反序列化类型不符时静默回退该字段的零值（例如 `Port=0`, `Browser=false`） | 基本不会崩溃，但用户配置静默失效，恢复为默认关闭状态。 | **完全吸收**：类型错乱由类型安全默认值兜底，无 Panic，无内存溢出。 |
-| **场景 3：数值越界穿透** | `port: -9999` 或 `port: 99999` | 原 `ReadDesktopSettings` 与 `config.New` 未校验读取端口，直接保留 `-9999` | **服务崩溃**：底层 `net.Listen("tcp", "0.0.0.0:-9999")` 抛出 `listen tcp: address -9999: invalid port`，服务闪退。 | **范围强校验**：读取阶段发现 `< 0` 或 `> 65535` 强制重置为 `0`（系统自动分配可用端口）。 |
-| **场景 4：空文件（0 字节）** | 配置文件大小为 0 字节 | Viper 支持解析空文件，生成全默认值字典 | 属于合法边缘情况，不引发运行异常。 | **平稳兼容**：解析为标准默认配置。 |
-| **场景 5：并发写入截断** | 多协程并发写配置，或写入过程中进程被 Kill | 原实现使用 `cleanV.WriteConfig()` 原地写文件，中断会导致文件变为半截或 0 字节 | 下次启动由于文件被截断触发场景 1 语法损坏。 | **原子写入**：使用同目录临时文件 + `os.Rename` 原子落盘，杜绝截断损坏。 |
+| **场景 1：语法严重损坏** | YAML 语法错误（包含非法缩进 Tab、未闭合大括号、破坏性二进制乱码） | `ReadInConfig` 抛出 `fatal error config file: While parsing config: ...` | **死锁**：前端降级后尝试保存，`WriteDesktopSettings` 亦因原文件损坏拒绝写入，用户无法重置；**任务瘫痪**：任何传输任务无法启动。 | **安全自愈**：精确识别解析错误，备份坏文件为 `.corrupted.<timestamp>`，重置为安全默认值，并触发 In-app Toast 通知。 |
+| **场景 2：环境故障/权限拒绝** | 文件权限被置为 `0000` 或只读挂载 | 原初版自愈直接无脑触发清空，导致合法文件被覆写毁损！ | **灾难性数据丢失**：合法配置被当作坏文件销毁。 | **零破坏保护（P1）**：`IsConfigParseError` 判定为 false，原文件绝不截断、绝不重命名，保留现场并上报权限错误。 |
+| **场景 3：备份写入失败** | 磁盘满或目标路径不可写 | 备份失败后依然强行清空原配置文件 | **配置永久毁灭**：既无备份，原文件也被清空。 | **物理前提防线（P2）**：只有备份 100% 确认落盘后才清空；备份失败原文件保持原样不动。 |
+| **场景 4：原子落盘二次替换失败** | Windows 替换降级中第二次 rename 失败 | 直接将 target 与 tmp 均删除 | **新老配置双亡**：原配置被删，新临时文件被清理。 | **临时文件保全防线（P3）**：降级时预留 `.old`；失败时绝不删除 tmp 文件并还原 `.old`，零数据丢失。 |
+| **场景 5：数值越界穿透** | `port: -9999` 或 `port: 99999` | 原代码未校验读取端口，直接保留 `-9999` | **服务崩溃**：底层 `net.Listen("tcp", "0.0.0.0:-9999")` 抛出 `invalid port` 服务闪退。 | **范围强校验**：读取阶段发现 `< 0` 或 `> 65535` 强制重置为 `0`（动态分配端口）。 |
+| **场景 6：空文件（0 字节）** | 配置文件大小为 0 字节 | Viper 支持解析空文件，生成全默认值字典 | 属于合法边缘情况，不引发运行异常。 | **平稳兼容**：解析为标准默认配置。 |
 
 ---
 
-### 3. 架构韧性改造实施
+### 3. 架构韧性改造实施（第一性原理加固）
 
-为彻底消除上述风险，本次在 `pkg/config/` 中引入了三道第一性防线：
+为彻底消除上述风险，在 `pkg/config/resilience.go` 中固化了以下关键防线：
 
-#### 防线 1：损坏自动备份与自愈机制 (`BackupCorruptConfigFile`)
+#### 防线 1：解析错误与 I/O 错误严格区分 (`IsConfigParseError`)
 ```go
-func BackupCorruptConfigFile(configPath string) string {
-	info, err := os.Stat(configPath)
-	if err != nil || info.Size() == 0 {
-		return ""
-	}
-	timestamp := time.Now().Format("20060102-150405")
-	backupPath := fmt.Sprintf("%s.corrupted.%s", configPath, timestamp)
-	if err := os.Rename(configPath, backupPath); err != nil {
-		data, readErr := os.ReadFile(configPath)
-		if readErr == nil {
-			_ = os.WriteFile(backupPath, data, 0600)
-		}
-		_ = os.WriteFile(configPath, []byte{}, 0600)
-	} else {
-		_ = ensureConfigFile(configPath)
-	}
-	return backupPath
+func IsConfigParseError(err error) bool {
+    if err == nil {
+        return false
+    }
+    var parseErr viper.ConfigParseError
+    return errors.As(err, &parseErr)
 }
 ```
-- **核心价值**：当遭遇无法解析的语法错误时，绝不抛出不可逆异常，而是将破坏现场留痕为 `.corrupted.<timestamp>` 备查，并将当前配置平滑自愈为默认状态。
-- **解开死锁**：在 `WriteDesktopSettings` 中，如果现存文件损坏，不再报错终止，而是备份损坏文件后继续以新配置覆盖写入，彻底解开“配置损坏导致无法保存新配置”的死锁问题！
+严格将“语法损坏”与“权限不足/存储介质故障”隔离，杜绝误杀合法配置。
 
-#### 防线 2：端口数值安全钳位
-在 `ReadDesktopSettings` 与 `config.New` 中增加：
+#### 防线 2：安全备份与自愈重置 (`BackupCorruptConfigFile`)
 ```go
-port := v.GetInt("port")
-if port < 0 || port > 65535 {
-	port = 0
+// 只有在备份成功落盘后才允许清空原文件；备份失败绝不触碰原文件
+if writeErr := os.WriteFile(backupPath, data, 0600); writeErr != nil {
+    return "", fmt.Errorf("failed to write backup config file %s: %w", backupPath, writeErr)
+}
+if truncateErr := os.WriteFile(configPath, []byte{}, 0600); truncateErr != nil {
+    _ = os.Remove(backupPath)
+    return "", fmt.Errorf("failed to reset corrupt config file: %w", truncateErr)
 }
 ```
-杜绝负数端口穿透至 Socket 监听层引发服务崩溃。
 
-#### 防线 3：原子文件落盘 (`AtomicWriteConfigFile`)
-```go
-func AtomicWriteConfigFile(v *viper.Viper, targetPath string) error {
-	dir := filepath.Dir(targetPath)
-	_ = os.MkdirAll(dir, 0700)
-	tmpFile := filepath.Join(dir, fmt.Sprintf(".tmp-%d-%s", time.Now().UnixNano(), filepath.Base(targetPath)))
-	v.SetConfigFile(tmpFile)
-	v.SetConfigType("yaml")
-	if err := v.WriteConfig(); err != nil {
-		_ = os.Remove(tmpFile)
-		return err
-	}
-	v.SetConfigFile(targetPath)
-	return os.Rename(tmpFile, targetPath)
-}
-```
-彻底消除原地写中断导致的截断及 0 字节坏文件。
+#### 防线 3：原子写入与零数据丢失机制 (`AtomicWriteConfigFile`)
+通过同目录临时文件原子替换，并在降级处理中保留 `.old` 临时备份与临时文件，确保任何异常分支均能追溯数据。
+
+#### 防线 4：自愈通知与用户主权（In-app Notification）
+自愈事件通过 `SelfHealEvent` 记录，由 `DesktopSettings.SelfHealNotice` 携带至前端，通过轻量级 `showToast` 弹出系统提示，严格遵循“禁止使用浏览器 Alert 弹窗”的项目规范。
 
 ---
 
@@ -220,12 +194,13 @@ func AtomicWriteConfigFile(v *viper.Viper, targetPath string) error {
 ## 六、 验证结果总结
 
 1. **本地 Go 测试套件**：
-   - `go test -v ./pkg/config`：通过，包含新建的混沌测试用例（覆盖损坏自愈、类型错乱、端口越界、空文件等边界场景）。
+   - `go test -v ./pkg/config`：全部通过（包含精准解析区分、权限拒绝防毁、备份失败保护、原子写零丢失、端口防呆等混沌场景）。
    - `go test ./...`：全仓通过（耗时 12.9s，0 失败，0 跳过）。
+   - `go test -v .`（在 `desktop/gui` 中）：全部通过（耗时 8.4s，0 失败，0 跳过）。
 2. **云端 DRM API 与 Admin 测试套件**：
    - `npm run test:admin:tls:offline`：48 项通过，0 失败。
    - `npm run test:device-reg:offline:live`：20 项通过，0 失败。
    - `npm run test:offline`：131 项全部通过，0 失败。
    - `npm test` (eqt-admin)：14 项全部通过，0 失败。
 3. **远端 D1 数据库**：
-   - `eqt-drm-db-test` 与 `eqt-drm-db` 均成功创建 `token_buckets` 核心表，解除了 Admin 控制台的 500 报错根源。
+   - `eqt-drm-db-test` 与 `eqt-drm-db` 均成功落地 `token_buckets` 核心表，彻底解除了 Admin 控制台的 500 报错根源。

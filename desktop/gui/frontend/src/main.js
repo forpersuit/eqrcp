@@ -5913,6 +5913,9 @@ async function loadSettings() {
         state.license = loadLicense();
         state.appInfo = await AppInfo();
         state.settings = await ReadSettings();
+        if (state.settings && state.settings.selfHealNotice) {
+            showToast(state.settings.selfHealNotice);
+        }
         if (!state.settings.lang) {
             state.settings.lang = getSystemLocale();
             saveSettingsData().catch(() => {});

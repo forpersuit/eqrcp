@@ -45,6 +45,7 @@ type DesktopSettings struct {
 	BlockProxy               bool                     `json:"blockProxy"`
 	ChatDownloadDir          string                   `json:"chatDownloadDir"`
 	LogDir                   string                   `json:"logDir"`
+	SelfHealNotice           string                   `json:"selfHealNotice,omitempty"`
 }
 
 const (
@@ -93,10 +94,19 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 	if err := ensureConfigFile(v.ConfigFileUsed()); err != nil {
 		return DesktopSettings{}, err
 	}
+	var healedBackupPath string
 	if err := v.ReadInConfig(); err != nil {
-		BackupCorruptConfigFile(v.ConfigFileUsed())
-		v = GetViperInstance(app)
-		_ = v.ReadInConfig()
+		if IsConfigParseError(err) {
+			backupPath, backupErr := BackupCorruptConfigFile(v.ConfigFileUsed())
+			if backupErr != nil {
+				return DesktopSettings{}, backupErr
+			}
+			healedBackupPath = backupPath
+			v = GetViperInstance(app)
+			_ = v.ReadInConfig()
+		} else {
+			return DesktopSettings{}, err
+		}
 	}
 	options, err := desktopInterfaceOptions(app.Flags.ListAllInterfaces)
 	if err != nil {
@@ -198,6 +208,15 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 	if port < 0 || port > 65535 {
 		port = 0
 	}
+	selfHealNotice := ""
+	if healedBackupPath != "" {
+		selfHealNotice = FormatSelfHealNotice(healedBackupPath, lang)
+	} else if HasPendingSelfHealEvents() {
+		events := ConsumeSelfHealEvents()
+		if len(events) > 0 {
+			selfHealNotice = FormatSelfHealNotice(events[len(events)-1].BackupPath, lang)
+		}
+	}
 	return DesktopSettings{
 		ConfigPath:               v.ConfigFileUsed(),
 		Interface:                selectedInterface,
@@ -227,6 +246,7 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 		BlockProxy:               blockProxy,
 		ChatDownloadDir:          chatDownloadDir,
 		LogDir:                   logDir,
+		SelfHealNotice:           selfHealNotice,
 	}, nil
 }
 
@@ -355,7 +375,13 @@ func WriteDesktopSettings(app application.App, settings DesktopSettings) (Deskto
 		return DesktopSettings{}, err
 	}
 	if err := v.ReadInConfig(); err != nil {
-		BackupCorruptConfigFile(v.ConfigFileUsed())
+		if IsConfigParseError(err) {
+			if _, backupErr := BackupCorruptConfigFile(v.ConfigFileUsed()); backupErr != nil {
+				return DesktopSettings{}, backupErr
+			}
+		} else {
+			return DesktopSettings{}, err
+		}
 	}
 	cleanV := viper.New()
 	cleanV.SetConfigFile(v.ConfigFileUsed())
