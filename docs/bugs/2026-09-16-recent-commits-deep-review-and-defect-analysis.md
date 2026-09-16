@@ -242,3 +242,15 @@
   - `desktop/gui/frontend/src/components/tls_status.js`：将 `<button class="menu-button topbar-tls-btn" ...>` 重构为展示型 `<span class="topbar-tls-indicator" id="topbar-tls-status" role="status" ... style="cursor: default; user-select: none;">`。
   - `desktop/gui/frontend/src/main.js`：移除针对 `#topbar-tls-status` 点击跳转 Settings 面板的事件监听，保留 hover tooltip 提示。
 
+---
+
+## 六、 第二轮穿透复审深水区隐患分析与加固闭环（DEF-08 & DEF-09，v1.36.147）
+
+经第一性原理系统性推演与密码学强校验分析，第二轮穿透复审新挖掘出的 2 项深水区隐患完全切中痛点，具备致命破坏力与极高隐蔽性，已在 `v1.36.147` 中全部闭环推进与加固：
+
+| 编号 | 缺陷项与坐标 | 合理性分析与推进决策 | 核心落地措施 | 验证状态 |
+| :--- | :--- | :--- | :--- | :--- |
+| **DEF-08** | **元数据脚本排除签名文件**<br>`scripts/generate-update-metadata/main.go` | **完全合理，坚决推进**<br>脚本主动跳过 `.sig` 文件导致 R2 动态元数据中无任何签名资产，客户端收到后必定报 `no signature asset (.sig) found`，造成升级全链路阻断。 | 1. 移除过滤 `.sig` 文件的条件，保留其作为标准密码学资产入列；<br>2. 抽象出可测的 `GenerateMetadata` 核心函数；<br>3. 编写 `scripts/generate-update-metadata/main_test.go` 保证持续防回归。 | `TestGenerateMetadata_IncludesSigFilesAndExcludesMetadata` PASS |
+| **DEF-09** | **多资产列表下主资产与签名资产跨包错配风险**<br>`pkg/server/update.go` | **完全合理，坚决推进**<br>双向独立贪心遍历导致在存在多个资产（如测试包与正式包、或不同架构格式）时，可能出现主资产取包 A 而签名取包 B 的极端错配，导致 Ed25519 验签彻底失败。 | 1. **主资产环境感知优先级选择**：依据 `IsTestBuild()` 构建环境，确定 candidate patterns 优先级（测试构建优先测试包，生产构建优先生产包），精准锁定唯一 `mainAsset` 并排除 `.sig`；<br>2. **签名资产 1:1 强绑定**：锁定 `mainAsset` 后，严格且仅查找 `strings.EqualFold(asset.Name, mainAsset.Name + ".sig")` 的专属签名，从机理上杜绝错配可能；<br>3. 编写覆盖多资产乱序、签名缺失等场景的严苛单测。 | `TestCheckForUpdates_StrictSignatureBinding_NoCrossPairing` (2 个子用例) PASS |
+
+

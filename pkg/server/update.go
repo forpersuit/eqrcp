@@ -163,17 +163,41 @@ func CheckForUpdates(isDesktop bool, currentVersion string) (*CheckResult, error
 	altTestBase := fmt.Sprintf("eqt-test-%s-%s", runtime.GOOS, runtime.GOARCH)
 	Log.Debugf("CheckForUpdates: filtering assets with base pattern: %s", targetBase)
 
-	var mainAsset *UpdateAsset
-	var sigAsset *UpdateAsset
+	var patterns []string
+	if IsTestBuild() {
+		patterns = []string{targetTestBase, altTestBase, targetBase}
+	} else {
+		patterns = []string{targetBase, targetTestBase, altTestBase}
+	}
 
-	for i := range updateRes.Assets {
-		asset := &updateRes.Assets[i]
-		lowerName := strings.ToLower(asset.Name)
-		if strings.HasPrefix(lowerName, targetBase) || strings.HasPrefix(lowerName, targetTestBase) || strings.HasPrefix(lowerName, altTestBase) {
+	var mainAsset *UpdateAsset
+	// 1. Primary candidate selection: strictly exclude .sig files and match best priority pattern
+	for _, pattern := range patterns {
+		for i := range updateRes.Assets {
+			asset := &updateRes.Assets[i]
+			lowerName := strings.ToLower(asset.Name)
 			if strings.HasSuffix(lowerName, ".sig") {
-				sigAsset = asset
-			} else {
+				continue
+			}
+			if strings.HasPrefix(lowerName, pattern) {
 				mainAsset = asset
+				break
+			}
+		}
+		if mainAsset != nil {
+			break
+		}
+	}
+
+	// 2. Strict 1:1 signature binding: find signature matching specifically mainAsset.Name + ".sig"
+	var sigAsset *UpdateAsset
+	if mainAsset != nil {
+		expectedSigName := mainAsset.Name + ".sig"
+		for i := range updateRes.Assets {
+			asset := &updateRes.Assets[i]
+			if strings.EqualFold(asset.Name, expectedSigName) {
+				sigAsset = asset
+				break
 			}
 		}
 	}

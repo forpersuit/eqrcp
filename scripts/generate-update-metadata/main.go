@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 )
 
@@ -24,7 +23,7 @@ type UpdateResponse struct {
 
 func main() {
 	if len(os.Args) < 4 {
-		fmt.Println("Usage: go run scripts/generate-update-metadata/main.go <version> <out_dir> <output_metadata_path>")
+		fmt.Println("Usage: go run scripts/generate-update-metadata/main.go <version> <out_dir> <output_metadata_path> [channel]")
 		os.Exit(1)
 	}
 
@@ -32,17 +31,27 @@ func main() {
 	outDir := os.Args[2]
 	outputPath := os.Args[3]
 
-	files, err := os.ReadDir(outDir)
-	if err != nil {
-		fmt.Printf("Error reading output directory %s: %v\n", outDir, err)
-		os.Exit(1)
-	}
-
 	channel := ""
 	if len(os.Args) >= 5 {
 		channel = os.Args[4]
 	} else if envChan := os.Getenv("UPDATE_CHANNEL"); envChan != "" {
 		channel = envChan
+	}
+
+	resp, err := GenerateMetadata(version, outDir, outputPath, channel)
+	if err != nil {
+		fmt.Printf("Error generating update-metadata: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Successfully generated update-metadata.json at %s with %d assets.\n", outputPath, len(resp.Assets))
+}
+
+// GenerateMetadata builds the update metadata json file containing all package and signature assets.
+func GenerateMetadata(version, outDir, outputPath, channel string) (*UpdateResponse, error) {
+	files, err := os.ReadDir(outDir)
+	if err != nil {
+		return nil, fmt.Errorf("reading output directory %s: %w", outDir, err)
 	}
 
 	timestamp := time.Now().UTC().Format("200601021504")
@@ -52,8 +61,8 @@ func main() {
 		if file.IsDir() {
 			continue
 		}
-		// Skip metadata file itself and signature files from download asset list
-		if file.Name() == "update-metadata.json" || strings.HasSuffix(file.Name(), ".sig") {
+		// Skip metadata file itself from download asset list (keep .sig files as valid cryptographic assets)
+		if file.Name() == "update-metadata.json" {
 			continue
 		}
 		info, err := file.Info()
@@ -91,21 +100,18 @@ func main() {
 
 	jsonData, err := json.MarshalIndent(response, "", "  ")
 	if err != nil {
-		fmt.Printf("Error marshalling json: %v\n", err)
-		os.Exit(1)
+		return nil, fmt.Errorf("marshalling json: %w", err)
 	}
 
 	// Ensure output directory exists
 	if err := os.MkdirAll(filepath.Dir(outputPath), 0755); err != nil {
-		fmt.Printf("Error creating output directories: %v\n", err)
-		os.Exit(1)
+		return nil, fmt.Errorf("creating output directories: %w", err)
 	}
 
 	err = os.WriteFile(outputPath, jsonData, 0644)
 	if err != nil {
-		fmt.Printf("Error writing update-metadata.json to %s: %v\n", outputPath, err)
-		os.Exit(1)
+		return nil, fmt.Errorf("writing update-metadata.json to %s: %w", outputPath, err)
 	}
 
-	fmt.Printf("Successfully generated update-metadata.json at %s with %d assets.\n", outputPath, len(assets))
+	return &response, nil
 }

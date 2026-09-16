@@ -490,3 +490,115 @@ func TestCheckForUpdates_TestChannelNamingVariants(t *testing.T) {
 		})
 	}
 }
+
+func TestCheckForUpdates_StrictSignatureBinding_NoCrossPairing(t *testing.T) {
+	pkgNameA := fmt.Sprintf("eqt-desktop-%s-%s.zip", runtime.GOOS, runtime.GOARCH)
+	sigNameA := pkgNameA + ".sig"
+	pkgNameB := fmt.Sprintf("eqt-desktop-test-%s-%s.zip", runtime.GOOS, runtime.GOARCH)
+	sigNameB := pkgNameB + ".sig"
+
+	t.Run("multi asset shuffled order matches 1:1 signature", func(t *testing.T) {
+		// Shuffled asset order: sigNameB comes before pkgNameA, sigNameA comes last
+		mockResponse := UpdateResponse{
+			Version:     "v9.9.9",
+			PublishedAt: "2026-09-16T12:00:00Z",
+			Changelog:   "Strict pairing test",
+			Assets: []UpdateAsset{
+				{
+					Name:        sigNameB,
+					DownloadURL: "http://example.com/" + sigNameB,
+					Size:        128,
+				},
+				{
+					Name:        pkgNameA,
+					DownloadURL: "http://example.com/" + pkgNameA,
+					Size:        2048,
+				},
+				{
+					Name:        pkgNameB,
+					DownloadURL: "http://example.com/" + pkgNameB,
+					Size:        1024,
+				},
+				{
+					Name:        sigNameA,
+					DownloadURL: "http://example.com/" + sigNameA,
+					Size:        128,
+				},
+			},
+		}
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(mockResponse)
+		}))
+		defer server.Close()
+
+		origEnv := os.Getenv("EQT_UPDATE_URL")
+		_ = os.Setenv("EQT_UPDATE_URL", server.URL+"/update-metadata.json")
+		defer func() {
+			if origEnv == "" {
+				_ = os.Unsetenv("EQT_UPDATE_URL")
+			} else {
+				_ = os.Setenv("EQT_UPDATE_URL", origEnv)
+			}
+		}()
+
+		res, err := CheckForUpdates(true, "v1.0.0")
+		if err != nil {
+			t.Fatalf("expected successful update check: %v", err)
+		}
+		if res.AssetName != pkgNameA {
+			t.Errorf("expected main asset %s, got %s", pkgNameA, res.AssetName)
+		}
+		expectedSigURL := "http://example.com/" + sigNameA
+		if res.SignatureURL != expectedSigURL {
+			t.Errorf("DEF-09 regression: signature cross-pairing detected! Expected %s, got %s", expectedSigURL, res.SignatureURL)
+		}
+	})
+
+	t.Run("missing own signature rejects other package signatures", func(t *testing.T) {
+		// Package A exists, but only Package B's signature exists in assets
+		mockResponse := UpdateResponse{
+			Version:     "v9.9.9",
+			PublishedAt: "2026-09-16T12:00:00Z",
+			Changelog:   "Rejection test",
+			Assets: []UpdateAsset{
+				{
+					Name:        pkgNameA,
+					DownloadURL: "http://example.com/" + pkgNameA,
+					Size:        2048,
+				},
+				{
+					Name:        sigNameB, // Not matching pkgNameA
+					DownloadURL: "http://example.com/" + sigNameB,
+					Size:        128,
+				},
+			},
+		}
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(mockResponse)
+		}))
+		defer server.Close()
+
+		origEnv := os.Getenv("EQT_UPDATE_URL")
+		_ = os.Setenv("EQT_UPDATE_URL", server.URL+"/update-metadata.json")
+		defer func() {
+			if origEnv == "" {
+				_ = os.Unsetenv("EQT_UPDATE_URL")
+			} else {
+				_ = os.Setenv("EQT_UPDATE_URL", origEnv)
+			}
+		}()
+
+		res, err := CheckForUpdates(true, "v1.0.0")
+		if err == nil {
+			t.Fatalf("expected error due to missing own signature, but got result: %+v", res)
+		}
+		expectedErrMsg := fmt.Sprintf("no signature asset (.sig) found for package %s", pkgNameA)
+		if !strings.Contains(err.Error(), expectedErrMsg) {
+			t.Errorf("expected error message containing %q, got: %v", expectedErrMsg, err)
+		}
+	})
+}
