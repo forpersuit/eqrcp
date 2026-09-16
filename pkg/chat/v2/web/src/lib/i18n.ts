@@ -488,6 +488,24 @@ export const translations: Record<string, Record<Lang, string>> = {
     de: 'Beenden',
     fr: 'Quitter'
   },
+  moreOptions: {
+    zh: '更多选项',
+    en: 'More Options',
+    ja: 'その他のオプション',
+    ko: '더 많은 옵션',
+    es: 'Más opciones',
+    de: 'Weitere Optionen',
+    fr: "Plus d'options"
+  },
+  stopChat: {
+    zh: '停止聊天',
+    en: 'Stop Chat',
+    ja: 'チャットを停止',
+    ko: '채팅 중지',
+    es: 'Detener chat',
+    de: 'Chat anhalten',
+    fr: 'Arrêter le chat'
+  },
   queued: {
     zh: '排队等待中...',
     en: 'Queued...',

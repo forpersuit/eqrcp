@@ -166,6 +166,7 @@
   let showDevicePanel = false;
   let showLicensePanel = false;
   let showLangPanel = false;
+  let showMoreMenu = false;
   let showShareModal = false;
   let showLeaveConfirm = false;
   let showUrl = false;
@@ -252,7 +253,10 @@
     copied: getTranslation('copied', currentLang),
     copy: getTranslation('copy', currentLang),
     hideLink: getTranslation('hideLink', currentLang),
-    showLink: getTranslation('showLink', currentLang)
+    showLink: getTranslation('showLink', currentLang),
+    moreOptions: getTranslation('moreOptions', currentLang),
+    exitSession: getTranslation('exitSession', currentLang),
+    stopChat: getTranslation('stopChat', currentLang)
   };
 
   function formatQuotaClock(totalSec: number): string {
@@ -1694,6 +1698,7 @@
     showDevicePanel = false;
     showLicensePanel = false;
     showLangPanel = false;
+    showMoreMenu = false;
     showLeaveConfirm = false;
   }
 
@@ -1788,37 +1793,115 @@
           {/if}
 
           {#if $chatSessionStatus === 'active'}
-            <button class="device-pill" type="button" on:click|stopPropagation={() => { showDevicePanel = !showDevicePanel; showLangPanel = false; showLicensePanel = false; }} title="Show connected devices">
+            <button class="device-pill" type="button" on:click|stopPropagation={() => { showDevicePanel = !showDevicePanel; showLangPanel = false; showLicensePanel = false; showMoreMenu = false; }} title="Show connected devices">
               <svg viewBox="0 0 24 24" aria-hidden="true" stroke="currentColor" stroke-width="2" fill="none"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8"></path><path d="M12 16v4"></path></svg>
               <span id="device-count">{$peers.length}</span>
             </button>
-
-            <button class="icon-button qr-btn" class:qr-breathe={isQRPulsing} type="button" on:click|stopPropagation={() => { showShareModal = true; stopQRPulse(); closeAllPanels(); }} title="Show session QR">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4z"></path><path d="M14 4h6v6h-6z"></path><path d="M4 14h6v6H4z"></path><path d="M14 14h2v2h-2z"></path><path d="M18 14h2v6h-4v-2h2z"></path><path d="M14 18h2v2h-2z"></path></svg>
-            </button>
           {/if}
 
-          {#if isEmbedded}
-            <button class="icon-button danger" type="button" on:click={handleClose} title="Stop chat">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>
+          {#if isMobileLayout}
+            <!-- Mobile: only device pill and more menu button (...) -->
+            <button
+              class="icon-button more-btn"
+              class:qr-breathe={isQRPulsing}
+              type="button"
+              on:click|stopPropagation={() => { showMoreMenu = !showMoreMenu; showDevicePanel = false; showLangPanel = false; showLicensePanel = false; }}
+              title={getTranslation('moreOptions', currentLang)}
+              aria-label={getTranslation('moreOptions', currentLang)}
+              aria-expanded={showMoreMenu}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><circle cx="5" cy="12" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="19" cy="12" r="2"></circle></svg>
             </button>
-          {:else if $chatSessionStatus === 'active'}
-            <button class="icon-button danger" type="button" on:click|stopPropagation={() => { closeAllPanels(); showLeaveConfirm = true; }} title="Exit chat">
-              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-            </button>
+          {:else}
+            <!-- Desktop: keep flat buttons -->
+            {#if $chatSessionStatus === 'active'}
+              <button class="icon-button qr-btn" class:qr-breathe={isQRPulsing} type="button" on:click|stopPropagation={() => { showShareModal = true; stopQRPulse(); closeAllPanels(); }} title="Show session QR">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4z"></path><path d="M14 4h6v6h-6z"></path><path d="M4 14h6v6H4z"></path><path d="M14 14h2v2h-2z"></path><path d="M18 14h2v6h-4v-2h2z"></path><path d="M14 18h2v2h-2z"></path></svg>
+              </button>
+            {/if}
+
+            {#if isEmbedded}
+              <button class="icon-button danger" type="button" on:click={handleClose} title="Stop chat">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>
+              </button>
+            {:else if $chatSessionStatus === 'active'}
+              <button class="icon-button danger" type="button" on:click|stopPropagation={() => { closeAllPanels(); showLeaveConfirm = true; }} title="Exit chat">
+                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+              </button>
+            {/if}
+
+            {#if !isEmbedded}
+              <button class="icon-button lang-btn" type="button" on:click|stopPropagation={() => { showLangPanel = !showLangPanel; showDevicePanel = false; showLicensePanel = false; }} title="Switch language">
+                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+              </button>
+            {/if}
           {/if}
 
-          {#if !isEmbedded}
-            <button class="icon-button lang-btn" type="button" on:click|stopPropagation={() => { showLangPanel = !showLangPanel; showDevicePanel = false; showLicensePanel = false; }} title="Switch language">
-              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
-            </button>
-          {/if}
-
-          {#if showDevicePanel || showLicensePanel || showLangPanel}
+          {#if showDevicePanel || showLicensePanel || showLangPanel || showMoreMenu}
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <div class="panel-backdrop" on:click={closeAllPanels}></div>
           {/if}
+
+          <!-- More Options Panel for Mobile -->
+          <div class="more-menu-panel" class:open={showMoreMenu} on:click|stopPropagation>
+            <div class="more-menu-list">
+              {#if $chatSessionStatus === 'active'}
+                <button
+                  type="button"
+                  class="more-menu-item"
+                  on:click={() => {
+                    showMoreMenu = false;
+                    showShareModal = true;
+                    stopQRPulse();
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h6v6H4z"></path><path d="M14 4h6v6h-6z"></path><path d="M4 14h6v6H4z"></path><path d="M14 14h2v2h-2z"></path><path d="M18 14h2v6h-4v-2h2z"></path><path d="M14 18h2v2h-2z"></path></svg>
+                  <span>{t.sessionQR}</span>
+                </button>
+              {/if}
+
+              {#if !isEmbedded}
+                <button
+                  type="button"
+                  class="more-menu-item"
+                  on:click={() => {
+                    showMoreMenu = false;
+                    showLangPanel = true;
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+                  <span>{t.selectLanguage}</span>
+                </button>
+              {/if}
+
+              {#if isEmbedded}
+                <button
+                  type="button"
+                  class="more-menu-item danger"
+                  on:click={() => {
+                    showMoreMenu = false;
+                    handleClose();
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>
+                  <span>{t.stopChat}</span>
+                </button>
+              {:else if $chatSessionStatus === 'active'}
+                <button
+                  type="button"
+                  class="more-menu-item danger"
+                  on:click={() => {
+                    showMoreMenu = false;
+                    showLeaveConfirm = true;
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                  <span>{t.exitSession}</span>
+                </button>
+              {/if}
+            </div>
+          </div>
 
           <!-- Panels -->
           <div class="device-panel" class:open={showDevicePanel} on:click|stopPropagation>

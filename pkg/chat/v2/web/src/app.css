@@ -375,6 +375,73 @@ h1 {
     font-weight: 600;
 }
 
+/* ── More Options Menu ── */
+.more-btn svg {
+    fill: currentColor;
+    stroke: none;
+}
+.more-menu-panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: 0 18px 36px rgba(24, 33, 31, 0.16);
+    display: none;
+    flex-direction: column;
+    min-width: 160px;
+    padding: 6px;
+    position: absolute;
+    right: 0;
+    top: 44px;
+    z-index: 1000;
+}
+.more-menu-panel.open {
+    display: flex;
+}
+.more-menu-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.more-menu-item {
+    align-items: center;
+    background: none;
+    border: none;
+    border-radius: 8px;
+    color: var(--ink);
+    cursor: pointer;
+    display: flex;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    gap: 10px;
+    padding: 8px 12px;
+    text-align: left;
+    transition: background 0.15s ease, color 0.15s ease;
+    width: 100%;
+}
+.more-menu-item svg {
+    fill: none;
+    flex-shrink: 0;
+    height: 16px;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+    width: 16px;
+}
+.more-menu-item:hover {
+    background: var(--wash);
+    color: var(--accent-strong);
+}
+.more-menu-item.danger {
+    color: var(--danger);
+}
+.more-menu-item.danger:hover {
+    background: #fdf2f2;
+    color: var(--danger);
+}
+
+
 /* ── License Panel ── */
 .license-panel {
     background: var(--panel);
@@ -1718,6 +1785,16 @@ input:focus { border-color: var(--accent); outline: none; }
         z-index: 1000;
         box-shadow: 0 10px 25px rgba(0, 0, 0, 0.18);
     }
+    .more-menu-panel {
+        position: fixed;
+        top: calc(52px + env(safe-area-inset-top));
+        right: 8px;
+        left: auto;
+        min-width: 160px;
+        width: min(200px, calc(100vw - 16px));
+        z-index: 1000;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.18);
+    }
     .device-rename-form {
         display: flex;
         flex-direction: column;
@@ -1818,6 +1895,14 @@ input:focus { border-color: var(--accent); outline: none; }
     }
     .message {
         max-width: min(680px, 88%);
+        grid-template-columns: clamp(28px, 8.5vw, 32px) minmax(0, 1fr);
+        column-gap: clamp(6px, 1.8vw, 8px);
+    }
+    .message.mine {
+        grid-template-columns: minmax(0, 1fr) clamp(28px, 8.5vw, 32px);
+    }
+    .avatar-stack {
+        width: clamp(28px, 8.5vw, 32px);
     }
     .message-avatar {
         height: clamp(28px, 8.5vw, 32px);

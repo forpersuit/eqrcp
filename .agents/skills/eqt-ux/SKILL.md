@@ -117,8 +117,11 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
     - **移动端触控滑动收起**：在消息列表（`.messages`）上监听 `touchmove`，移动端手势滑动浏览历史记录时自动调用 `document.activeElement.blur()` 收起软键盘。
   - **屏幕旋转与基准视口自适应 (Orientation & Base Viewport Sync)**：
     - 监听 `resize` 与 `orientationchange`。在非编辑态（`!isComposerActive`）下，无条件将 `baseViewportHeight` 实时更新为当前 `window.innerHeight`，防止手机横竖屏翻转时基准高度陈旧而导致键盘展开态误判。
-  - **防止 Safari/Android 页面位移漂移**：
-    - 注册全局 `scroll` 监听，检测到滚动时重置 `window.scrollY` 为 `0`。对输入控件注册 `focusin`，高频运行纠正逻辑，防止移动浏览器在弹出键盘时错误将 `fixed` 视口顶出屏幕外。
+  - **移动端窄屏顶栏操作折叠与左右元素黄金比例对称规范 (Mobile Header Action Collapse & Symmetrical Layout)**：
+    - **顶部右侧按钮收敛折叠**：移动端视口（`isMobileLayout` / `<= 820px`）下，顶部右侧操作区禁止平铺展示多个按钮，仅保留「在线设备数胶囊」（`device-pill`）与「更多选项省略号按钮」（`...`，`.more-btn`），其余次要操作（会话二维码、切换语言、退出会话）收进下拉面板（`.more-menu-panel`）。桌面端/内嵌大屏环境保持扁平展示，互不干扰。
+    - **左右元素间距严密对称**：
+      - 顶栏左右视觉重心由原来的 80px vs 155px 不平衡收敛为 80px vs 86px，达到视觉平衡。
+      - 消息流中，移动端头像从 32px 缩放至 `clamp(28px, 8.5vw, 32px)` 时，`.message` 栅格列宽与 `.avatar-stack` 容器宽度必须同步流体缩放，彻底消除原 40px 容器内部产生的 6px 残余留白，保证对方消息左外边距与己方消息右外边距均严格为 12px 绝对对称。
 
 ---
 
