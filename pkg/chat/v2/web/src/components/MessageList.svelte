@@ -216,6 +216,10 @@
     if (window.visualViewport) {
       window.visualViewport.removeEventListener('resize', handleVisualViewportResize);
     }
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('pointerdown', handleGlobalPointerDown, true);
+    }
+    closeMenu();
     if (confirmTimer) clearTimeout(confirmTimer);
     if (copiedTimer) clearTimeout(copiedTimer);
     if (programmaticScrollTimer) clearTimeout(programmaticScrollTimer);
@@ -594,6 +598,9 @@
     if (confirmTimeout) {
       clearTimeout(confirmTimeout);
       confirmTimeout = null;
+    }
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('pointerdown', handleGlobalPointerDown, true);
     }
   }
 
