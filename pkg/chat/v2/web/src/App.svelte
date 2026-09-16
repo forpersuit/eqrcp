@@ -42,6 +42,7 @@
   let client: ChatWebSocketClient;
   let token = '';
   let isEmbedded = false;
+  let viewportDebugEnabled = false;
   let observer: MutationObserver | null = null;
   let visualViewportHandler: (() => void) | null = null;
   let windowScrollHandler: (() => void) | null = null;
@@ -49,6 +50,7 @@
   let handleGlobalFocusIn: ((e: FocusEvent) => void) | null = null;
   let handleGlobalFocusOut: ((e: FocusEvent) => void) | null = null;
   let handleDocumentPointerDown: ((e: PointerEvent | MouseEvent) => void) | null = null;
+  let handleTouchMoveBlocker: ((e: TouchEvent) => void) | null = null;
   const activeUploads = new Map<string, XMLHttpRequest>();
 
   interface ActiveBatchRecord {
@@ -296,6 +298,9 @@
     }
     if (typeof data.clockDrift === 'boolean') {
       clockDrift = data.clockDrift;
+    }
+    if (typeof data.viewportDebug === 'boolean') {
+      viewportDebugEnabled = data.viewportDebug;
     }
   }
 
@@ -1010,6 +1015,42 @@
       localStorage.setItem('chat_host_token', hostToken);
     }
 
+    let lastProbeLog = '';
+    const probeViewport = (trigger: string) => {
+      if (typeof window === 'undefined') return;
+      const vv = window.visualViewport;
+      const vh = window.innerHeight;
+      const vvH = vv ? Math.round(vv.height) : vh;
+      const vvTop = vv ? Math.round(vv.offsetTop) : 0;
+      const scrollY = Math.round(window.scrollY);
+      const composerEl = document.querySelector('.composer');
+      let compTop = 0;
+      let compBottom = 0;
+      let compH = 0;
+      if (composerEl) {
+        const rect = composerEl.getBoundingClientRect();
+        compTop = Math.round(rect.top);
+        compBottom = Math.round(rect.bottom);
+        compH = Math.round(rect.height);
+      }
+      const chatHeadEl = document.querySelector('.chat-head');
+      let headTop = 0;
+      if (chatHeadEl) {
+        headTop = Math.round(chatHeadEl.getBoundingClientRect().top);
+      }
+      const kbTop = vvH + vvTop;
+      const overlap = compBottom - kbTop;
+      const status = overlap > 1 ? `BLOCKED overlap=${overlap}px` : `OK gap=${Math.abs(overlap)}px`;
+      const logMsg = `[VIEWPORT-PROBE] trigger=${trigger} vh=${vh} vvH=${vvH} vvTop=${vvTop} scrollY=${scrollY} headTop=${headTop} | composer[top=${compTop}, bottom=${compBottom}, h=${compH}] | status=${status}`;
+
+      if (logMsg !== lastProbeLog) {
+        lastProbeLog = logMsg;
+        if (client) {
+          client.sendLog(logMsg);
+        }
+      }
+    };
+
     const runAggressiveScrollCorrection = () => {
       let count = 0;
       if (aggressiveScrollTimer) clearInterval(aggressiveScrollTimer);
@@ -1033,10 +1074,10 @@
           if (visualViewportHandler) visualViewportHandler();
         };
         sync();
-        setTimeout(sync, 80);
-        setTimeout(sync, 200);
-        setTimeout(sync, 350);
-        setTimeout(sync, 500);
+        probeViewport('focusin-0ms');
+        setTimeout(() => { sync(); probeViewport('focusin-100ms'); }, 100);
+        setTimeout(() => { sync(); probeViewport('focusin-300ms'); }, 300);
+        setTimeout(() => { sync(); probeViewport('focusin-500ms'); }, 500);
       }
     };
     document.addEventListener('focusin', handleGlobalFocusIn);
@@ -1046,8 +1087,8 @@
         if (visualViewportHandler) visualViewportHandler();
       };
       sync();
-      setTimeout(sync, 100);
-      setTimeout(sync, 300);
+      probeViewport('focusout-0ms');
+      setTimeout(() => { sync(); probeViewport('focusout-200ms'); }, 200);
     };
     document.addEventListener('focusout', handleGlobalFocusOut);
 
@@ -1066,6 +1107,18 @@
       }
     };
     document.addEventListener('pointerdown', handleDocumentPointerDown);
+
+    handleTouchMoveBlocker = (e: TouchEvent) => {
+      if (isMobileLayout && !isEmbedded) {
+        const target = e.target as HTMLElement | null;
+        if (!target || !target.closest('.message-list-container, .messages, .more-menu-panel, .device-panel, .lang-panel, .license-panel, textarea, input')) {
+          if (e.cancelable) {
+            e.preventDefault();
+          }
+        }
+      }
+    };
+    document.addEventListener('touchmove', handleTouchMoveBlocker, { passive: false });
 
     if (typeof window !== 'undefined') {
       windowScrollHandler = () => {
@@ -1116,6 +1169,8 @@
           if (window.scrollY !== 0) {
             window.scrollTo(0, 0);
           }
+
+          probeViewport('vv-sync');
 
           if (isComposerActive || isKeyboardOpen) {
             const messagesEl = document.querySelector('.messages');
@@ -1185,6 +1240,10 @@
     if (quotaPollTimer) {
       clearInterval(quotaPollTimer);
       quotaPollTimer = null;
+    }
+    if (handleTouchMoveBlocker) {
+      document.removeEventListener('touchmove', handleTouchMoveBlocker);
+      handleTouchMoveBlocker = null;
     }
     if (client) {
       client.close();
@@ -2155,7 +2214,7 @@
     </div>
 
   </main>
-  <ViewportDebugOverlay />
+  <ViewportDebugOverlay enabled={viewportDebugEnabled} />
 </div>
 
 <style>

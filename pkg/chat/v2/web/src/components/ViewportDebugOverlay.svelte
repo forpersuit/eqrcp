@@ -7,6 +7,12 @@
   let innerHeight = 0;
   let visualWidth = 0;
   let visualHeight = 0;
+  let vvTop = 0;
+  let scrollY = 0;
+  let composerTop = 0;
+  let composerBottom = 0;
+  let overlap = 0;
+  let statusText = 'OK';
   let dpr = 1;
   let orientation = '';
   let userAgent = '';
@@ -15,6 +21,7 @@
     if (typeof window === 'undefined') return;
     innerWidth = window.innerWidth;
     innerHeight = window.innerHeight;
+    scrollY = Math.round(window.scrollY);
     dpr = window.devicePixelRatio || 1;
     orientation = screen.orientation ? screen.orientation.type : (window.orientation !== undefined ? String(window.orientation) : 'N/A');
     userAgent = navigator.userAgent;
@@ -22,10 +29,22 @@
     if (window.visualViewport) {
       visualWidth = Math.round(window.visualViewport.width);
       visualHeight = Math.round(window.visualViewport.height);
+      vvTop = Math.round(window.visualViewport.offsetTop);
     } else {
       visualWidth = innerWidth;
       visualHeight = innerHeight;
+      vvTop = 0;
     }
+
+    const composerEl = document.querySelector('.composer');
+    if (composerEl) {
+      const rect = composerEl.getBoundingClientRect();
+      composerTop = Math.round(rect.top);
+      composerBottom = Math.round(rect.bottom);
+    }
+    const keyboardTop = visualHeight + vvTop;
+    overlap = composerBottom - keyboardTop;
+    statusText = overlap > 1 ? `BLOCKED (-${overlap}px)` : `OK (gap: ${Math.abs(overlap)}px)`;
   }
 
   function handleMessage(e: MessageEvent) {
@@ -43,6 +62,7 @@
     updateMetrics();
     window.addEventListener('resize', updateMetrics);
     window.addEventListener('orientationchange', updateMetrics);
+    window.addEventListener('scroll', updateMetrics);
     window.addEventListener('message', handleMessage);
 
     if (window.visualViewport) {
@@ -55,6 +75,7 @@
     if (typeof window === 'undefined') return;
     window.removeEventListener('resize', updateMetrics);
     window.removeEventListener('orientationchange', updateMetrics);
+    window.removeEventListener('scroll', updateMetrics);
     window.removeEventListener('message', handleMessage);
 
     if (window.visualViewport) {
@@ -68,8 +89,10 @@
   <div class="viewport-debug-overlay">
     <div class="viewport-badge">
       <div class="title">📐 Viewport Debug Box</div>
-      <div class="metric">Inner: <strong>{innerWidth} x {innerHeight}</strong></div>
-      <div class="metric">Visual: <strong>{visualWidth} x {visualHeight}</strong></div>
+      <div class="metric">Inner: <strong>{innerWidth}x{innerHeight}</strong> (sY: {scrollY})</div>
+      <div class="metric">Visual: <strong>{visualWidth}x{visualHeight}</strong> (top: {vvTop})</div>
+      <div class="metric">Composer: <strong>{composerTop}~{composerBottom}</strong></div>
+      <div class="metric">Status: <strong class:error-text={overlap > 1} class:success-text={overlap <= 1}>{statusText}</strong></div>
       <div class="metric">DPR: <strong>{dpr}</strong> | {orientation}</div>
     </div>
     <div class="viewport-grid"></div>
@@ -114,6 +137,14 @@
 
   .viewport-badge strong {
     color: #facc15;
+  }
+
+  .viewport-badge strong.error-text {
+    color: #ef4444 !important;
+  }
+
+  .viewport-badge strong.success-text {
+    color: #10b981 !important;
   }
 
   .viewport-grid {

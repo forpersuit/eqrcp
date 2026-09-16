@@ -1836,16 +1836,19 @@ input:focus { border-color: var(--accent); outline: none; }
         font-size: 16px;
     }
     html,
-    body {
+    body,
+    #app {
         height: 100%;
         min-height: 100%;
         overflow: hidden;
         position: fixed;
+        inset: 0;
         width: 100%;
+        overscroll-behavior: none;
     }
     .chat-viewport {
         background: var(--bg);
-        bottom: 0;
+        bottom: auto;
         height: var(--chat-viewport-height, 100%);
         left: 0;
         max-height: var(--chat-viewport-height, 100%);
@@ -1856,6 +1859,7 @@ input:focus { border-color: var(--accent); outline: none; }
         width: 100%;
         z-index: 0;
         transition: none !important;
+        overscroll-behavior: none;
     }
     main {
         display: flex;
@@ -1887,6 +1891,7 @@ input:focus { border-color: var(--accent); outline: none; }
         position: relative;
     }
     .chat-head {
+        flex: 0 0 auto;
         flex-shrink: 0;
         position: sticky;
         top: 0;
@@ -1895,7 +1900,7 @@ input:focus { border-color: var(--accent); outline: none; }
     .message-list-container {
         display: flex;
         flex-direction: column;
-        flex: 1 1 0%;
+        flex: 1 1 auto;
         max-height: 100%;
         min-height: 0;
         overflow: hidden;
@@ -1915,6 +1920,7 @@ input:focus { border-color: var(--accent); outline: none; }
         padding: 12px 12px var(--messages-bottom-space);
     }
     .composer {
+        flex: 0 0 auto;
         flex-shrink: 0;
         margin-top: auto;
         padding: 9px 10px 11px;

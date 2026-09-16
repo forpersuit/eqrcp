@@ -101,14 +101,21 @@ description: Guidelines for EQT user interface, DOM rendering optimization, noti
 - **移动端虚拟键盘视口贴合、底边抬升与历史消息弹性收缩规范 (Mobile Virtual Keyboard Adaptive Docking & Elastic Shrinkage)**：
   - **视口物理高度强锁定与跨平台滚动阻断 (Physical Height Locking & Scroll Isolation)**：
     - 规格来源：`pkg/chat/v2/web/src/App.svelte` 与 `pkg/chat/v2/web/src/app.css`。
-    - 移动端媒体查询（`@media (max-width: 820px)`）下，`html, body` 必须维持 `position: fixed; width: 100%; height: 100%; overflow: hidden;`，彻底从源头阻断 iOS WebKit 在输入框获取焦点时触发原生页面上滚（Scroll into View），防止 `vv.offsetTop` 畸变。
-    - 移动端下 `.chat-viewport` 必须绝对固定在顶部：`position: fixed; top: 0; bottom: 0; left: 0; right: 0; width: 100%; height: var(--chat-viewport-height, 100%); max-height: var(--chat-viewport-height, 100%); overflow: hidden;`。严禁在 CSS 中依赖可能因页面微小滚动被冲抵为 0 的 `bottom: var(...)` 间接定位，严禁设置 `top: var(--chat-viewport-top)` 导致容器下沉。
+    - 移动端媒体查询（`@media (max-width: 820px)`）下，`html, body, #app` 必须维持 `position: fixed; inset: 0; width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none;`，并在非消息列表容器区域阻止 `touchmove` 冒泡，彻底从源头剥夺 iOS WebKit 在输入框获取焦点时触发原生页面上滚（Scroll into View）的作案空间，防止 `vv.offsetTop` 畸变。
+    - 移动端下 `.chat-viewport` 必须绝对固定在顶部：`position: fixed; top: 0; bottom: auto; left: 0; right: 0; width: 100%; height: var(--chat-viewport-height, 100%); max-height: var(--chat-viewport-height, 100%); overflow: hidden;`。严禁在 CSS 中依赖可能因页面微小滚动被冲抵为 0 的 `bottom: var(...)` 间接定位，严禁设置 `top: var(--chat-viewport-top)` 导致容器下沉。
     - 无论小屏设备（如 iPhone 7 / SE）还是现代大屏设备，容器物理高度均严格等于 `window.visualViewport.height`，容器底边严格与软键盘顶端无缝贴合。
+  - **软键盘遮挡几何度量与日志探针规范 (Keyboard Overlap Metric & Viewport Probe)**：
+    - 规格来源：`pkg/chat/v2/web/src/components/ViewportDebugOverlay.svelte` 与 `pkg/chat/v2/web/src/App.svelte`。
+    - **几何度量判定标准**：
+      - $Y_{keyboard} = \text{visualViewport.height} + \text{visualViewport.offsetTop}$
+      - $Y_{composer} = \text{composerEl.getBoundingClientRect().bottom}$
+      - $\text{overlap} = Y_{composer} - Y_{keyboard}$：若 $\text{overlap} \le 0$，判定为 `OK (gap: -overlap px)`，输入框完全悬浮在键盘上方；若 $\text{overlap} > 0$，判定为 `BLOCKED (-overlap px)`，输入框被键盘物理遮挡。
+    - **探针日志回传与桌面端开关联动**：聚焦序列（0ms / 100ms / 300ms / 500ms）及视口变动时，自动通过 `client.sendLog` 向服务端发送 `[VIEWPORT-PROBE]` 结构化像素日志；桌面端设置项 `Enable Viewport Debug Box` 实时同步至移动端激活左上角悬浮诊断窗。
   - **纯 Flex 列式布局与历史消息弹性折叠 (Flexbox Column Elastic Hierarchy)**：
     - `<main>` 与 `.chat-shell` 均配置为 `display: flex; flex-direction: column; flex: 1 1 0%; min-height: 0; max-height: 100%; height: 100%; overflow: hidden;`。
-    - 顶栏 `.chat-head` 设为 `flex-shrink: 0; position: sticky; top: 0; z-index: 2;`，键盘拉起时始终固定在顶部不移位。
-    - 底部输入区 `.composer` 设为 `flex-shrink: 0; margin-top: auto;`，紧贴抬升后的视口最底部，绝不被键盘遮挡。
-    - 消息容器 `.message-list-container` 与滚动流 `.messages` 设为 `display: flex; flex-direction: column; flex: 1 1 0%; min-height: 0; max-height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch;`。
+    - 顶栏 `.chat-head` 设为 `flex: 0 0 auto; flex-shrink: 0; position: sticky; top: 0; z-index: 2;`，键盘拉起时始终固定在顶部不移位。
+    - 底部输入区 `.composer` 设为 `flex: 0 0 auto; flex-shrink: 0; margin-top: auto;`，紧贴抬升后的视口最底部，绝不被键盘遮挡。
+    - 消息容器 `.message-list-container` 设为 `display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; max-height: 100%; overflow: hidden;`；滚动流 `.messages` 设为 `flex: 1 1 0%; min-height: 0; max-height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch;`。
     - **弹性收缩效果**：键盘弹出抬升底边时，高度缩减全部由消息列表区域吸收，较早的历史消息向上平滑移动并自然隐入顶栏下方，既保全顶栏品牌与状态，又确保输入栏完整悬浮，输入区域与聊天历史无缝协作。
   - **CSS 硬件级零延迟响应 (Disable Transition on Mobile)**：
     - 在移动端媒体查询（如 `@media (max-width: 820px)`）下，必须对 `.chat-viewport` 设置 `transition: none !important;`，彻底杜绝 CSS 属性过渡动画（如 250ms 过渡）与系统级 60fps/120fps 硬件键盘升降动画发生拉扯、滞后或回弹。
