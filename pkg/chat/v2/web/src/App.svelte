@@ -1081,14 +1081,13 @@
         const vv = window.visualViewport;
         if (vv) {
           const vh = window.innerHeight;
-          const topInset = Math.max(0, Math.round(vv.offsetTop));
-          const bottomInset = Math.max(0, Math.round(vh - (vv.height + vv.offsetTop)));
           const height = Math.round(vv.height);
           const left = Math.round(vv.offsetLeft);
           const width = Math.round(vv.width);
+          const bottomInset = Math.max(0, Math.round((baseViewportHeight || vh) - height));
 
           document.documentElement.style.setProperty('--chat-viewport-height', `${height}px`);
-          document.documentElement.style.setProperty('--chat-viewport-top', `${topInset}px`);
+          document.documentElement.style.setProperty('--chat-viewport-top', '0px');
           document.documentElement.style.setProperty('--chat-viewport-bottom', `${bottomInset}px`);
           document.documentElement.style.setProperty('--chat-viewport-left', `${left}px`);
           document.documentElement.style.setProperty('--chat-viewport-width', `${width}px`);

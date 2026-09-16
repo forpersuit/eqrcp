@@ -1840,18 +1840,19 @@ input:focus { border-color: var(--accent); outline: none; }
         height: 100%;
         min-height: 100%;
         overflow: hidden;
+        position: fixed;
         width: 100%;
     }
     .chat-viewport {
         background: var(--bg);
-        bottom: var(--chat-viewport-bottom, 0px);
-        height: auto;
+        bottom: 0;
+        height: var(--chat-viewport-height, 100%);
         left: 0;
-        max-height: none;
+        max-height: var(--chat-viewport-height, 100%);
         overflow: hidden;
         position: fixed;
         right: 0;
-        top: var(--chat-viewport-top, 0px);
+        top: 0;
         width: 100%;
         z-index: 0;
         transition: none !important;
@@ -1880,6 +1881,7 @@ input:focus { border-color: var(--accent); outline: none; }
         flex-direction: column;
         flex: 1 1 0%;
         height: 100%;
+        max-height: 100%;
         min-height: 0;
         overflow: hidden;
         position: relative;
@@ -1894,6 +1896,7 @@ input:focus { border-color: var(--accent); outline: none; }
         display: flex;
         flex-direction: column;
         flex: 1 1 0%;
+        max-height: 100%;
         min-height: 0;
         overflow: hidden;
         position: relative;
@@ -1904,6 +1907,7 @@ input:focus { border-color: var(--accent); outline: none; }
         flex-direction: column;
         flex: 1 1 0%;
         gap: 12px;
+        max-height: 100%;
         min-height: 0;
         overflow-x: hidden;
         overflow-y: auto;
@@ -1912,6 +1916,7 @@ input:focus { border-color: var(--accent); outline: none; }
     }
     .composer {
         flex-shrink: 0;
+        margin-top: auto;
         padding: 9px 10px 11px;
         padding-bottom: max(11px, env(safe-area-inset-bottom));
     }
