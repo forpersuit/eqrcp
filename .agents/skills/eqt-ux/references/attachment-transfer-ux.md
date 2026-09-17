@@ -67,13 +67,16 @@
 
 ---
 
-## 5. 移动端 WebSocket 生命周期与后台轻量保活
+## 5. 移动端 WebSocket 生命周期与后台休眠/唤醒机制
 
-- **规格来源**: `pkg/chat/v2/web/src/App.svelte`
-- **选文件与轻量切换绝不主动断开**:
-  - 移动端调起系统文件管理器、相册选择器，或用户下拉通知栏时，页面会触发 `visibilityState === 'hidden'`。
-  - **红线规则**: `shouldCloseSocketOnHidden` 必须恒返回 `false`，严禁在 `hidden` 时主动调用 `ws.close(1000)`。杜绝用户每次发文件、选图片都会向聊天室广播“已断开连接”。
-- **息屏断网自愈探针**: 手机在深度休眠被 OS 切断连接后，用户唤醒返回前台（`visible`）时：若处于 `OPEN` 态立即发送 `hb-probe` 验证对端存活；若已被切断，`shouldReconnectOnVisible` 立即触发自愈重连。
+- **规格来源**: `pkg/chat/v2/web/src/services/websocket.ts` 与 `src/services/visibilityPolicy.ts`
+- **选文件保护与真息屏优雅休眠 (File Picking Lock & Graceful Sleep)**:
+  - **选文件保护锁**: 移动端调起系统文件管理器、相册选择器时，页面会触发 `visibilityState === 'hidden'`。点击附件按钮即标记 `isFilePicking = true`（附带 60s 超时防呆），此状态下绝不断开 WebSocket。
+  - **3 秒息屏延时休眠 (Grace Period)**: 非选文件状态下切换后台或真锁屏，启动 3 秒延时定时器。若 3 秒后仍处于 `hidden`，主动发起 `ws.close(1000, "page_hidden")` 优雅挂断并转入休眠态（`isSuspended = true`），避免移动端系统冻结网络导致半开僵尸连接（Zombie Connection）与长达数分钟的掉线脱节。
+  - **后台挂起重连保护**: 处于后台隐藏且非选文件时，若连接中断，暂停触发递增重试，避免在用户口袋中无谓耗尽 10 次重连计数。
+- **亮屏瞬间第 0ms 无缝唤醒**:
+  - 用户唤醒屏幕或返回前台（`visible` / `focus`）时，清除延时定时器与选文件锁，重置重连计数；
+  - 若处于休眠或已断开态，立即触发 `this.connect()` 重新拉取差量数据；若仍处于 `OPEN` 态，发送 `hb-probe` 心跳探针秒级校验对端存活。
 
 ---
 

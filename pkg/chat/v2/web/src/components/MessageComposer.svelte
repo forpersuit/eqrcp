@@ -90,13 +90,16 @@
       e.preventDefault();
       const requestId = 'select-' + Math.random().toString(36).substring(2, 11);
       window.parent.postMessage({ type: 'select-files', requestId }, '*');
+      return;
     }
+    dispatch('filePickerOpen');
     // In mobile and regular web browsers (!isEmbedded):
     // Do NOT call e.preventDefault()!
     // The native HTML <label for="chat-file-input"> will natively and securely activate the file picker.
   }
 
   function handleFileChange(e: Event) {
+    dispatch('filePickerClose');
     const files = fileInput.files;
     if (!files || files.length === 0) return;
     for (let i = 0; i < files.length; i++) {
@@ -221,6 +224,7 @@
   <input
     id="chat-file-input"
     bind:this={fileInput}
+    on:click={() => dispatch('filePickerOpen')}
     on:change={handleFileChange}
     class="composer-file-input"
     type="file"

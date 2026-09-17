@@ -1047,17 +1047,17 @@
         }
         const activeEl = document.activeElement;
         const isComp = !!(activeEl && (
-          activeEl.closest('.composer') ||
-          activeEl.closest('form.composer') ||
+          activeEl.closest?.('.composer') ||
+          activeEl.closest?.('form.composer') ||
           activeEl.id === 'message-textarea'
         ));
         const isPanel = !!(activeEl && !isComp && (
-          activeEl.closest('.device-panel') ||
-          activeEl.closest('.license-panel') ||
-          activeEl.closest('.lang-panel') ||
-          activeEl.closest('.more-menu-panel') ||
-          activeEl.closest('.modal') ||
-          activeEl.classList.contains('device-rename-input') ||
+          activeEl.closest?.('.device-panel') ||
+          activeEl.closest?.('.license-panel') ||
+          activeEl.closest?.('.lang-panel') ||
+          activeEl.closest?.('.more-menu-panel') ||
+          activeEl.closest?.('.modal') ||
+          activeEl.classList?.contains('device-rename-input') ||
           activeEl.tagName === 'INPUT' ||
           activeEl.tagName === 'TEXTAREA'
         ));
@@ -1185,18 +1185,22 @@
       window.addEventListener('scroll', windowScrollHandler);
 
       documentScrollCaptureHandler = (e: Event) => {
-        const target = e.target as HTMLElement | null;
-        if (target && (
-          target.classList.contains('messages') ||
-          target.closest('.messages') ||
-          target.closest('.device-panel') ||
-          target.closest('.lang-panel') ||
-          target.closest('.license-panel') ||
-          target.closest('.more-menu-panel') ||
-          target.closest('.modal-body') ||
-          target.closest('.scrollable') ||
-          target.hasAttribute('data-scrollable')
-        )) {
+        const target = (e.target instanceof Element) ? e.target : null;
+        if (!target) {
+          pinLayoutScroll();
+          return;
+        }
+        if (
+          target.classList?.contains('messages') ||
+          target.closest?.('.messages') ||
+          target.closest?.('.device-panel') ||
+          target.closest?.('.lang-panel') ||
+          target.closest?.('.license-panel') ||
+          target.closest?.('.more-menu-panel') ||
+          target.closest?.('.modal-body') ||
+          target.closest?.('.scrollable') ||
+          target.hasAttribute?.('data-scrollable')
+        ) {
           return; // 放行消息列表及弹窗面板合法局部滚动
         }
         pinLayoutScroll();
@@ -1225,17 +1229,17 @@
 
           const activeEl = document.activeElement;
           const isComposerActive = !!(activeEl && (
-            activeEl.closest('.composer') ||
-            activeEl.closest('form.composer') ||
+            activeEl.closest?.('.composer') ||
+            activeEl.closest?.('form.composer') ||
             activeEl.id === 'message-textarea'
           ));
           const isPanelInputActive = !!(activeEl && !isComposerActive && (
-            activeEl.closest('.device-panel') ||
-            activeEl.closest('.license-panel') ||
-            activeEl.closest('.lang-panel') ||
-            activeEl.closest('.more-menu-panel') ||
-            activeEl.closest('.modal') ||
-            activeEl.classList.contains('device-rename-input') ||
+            activeEl.closest?.('.device-panel') ||
+            activeEl.closest?.('.license-panel') ||
+            activeEl.closest?.('.lang-panel') ||
+            activeEl.closest?.('.more-menu-panel') ||
+            activeEl.closest?.('.modal') ||
+            activeEl.classList?.contains('device-rename-input') ||
             activeEl.tagName === 'INPUT' ||
             activeEl.tagName === 'TEXTAREA'
           ));
@@ -1806,6 +1810,7 @@
       window.parent.postMessage({ type: 'select-files', requestId }, '*');
       return;
     }
+    client?.setFilePicking(true);
     const input = document.querySelector('.composer input[type="file"]') as HTMLInputElement | null;
     if (input) {
       input.click();
@@ -2231,6 +2236,8 @@
         isEmbedded={isEmbedded}
         on:sendText={handleSendText}
         on:sendFile={handleSendFile}
+        on:filePickerOpen={() => client?.setFilePicking(true)}
+        on:filePickerClose={() => client?.setFilePicking(false)}
       />
     </section>
 

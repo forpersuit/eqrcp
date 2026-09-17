@@ -7,11 +7,32 @@ export function isDesktopPeer(peer?: string | null): boolean {
   return (peer || '').trim().toLowerCase() === 'desktop';
 }
 
-/** When page becomes hidden: all clients (desktop, mobile, web) remain connected without actively closing WebSocket,
- * preventing accidental disconnects during file selection, photo album pickers, notification shade pull-downs, or brief app switching.
+/** When page becomes hidden:
+ * - Desktop host: never actively closes WebSocket (maintains active room session).
+ * - Mobile / Web clients:
+ *   - While picking files/photos (isFilePicking = true): keep connection open to prevent disruption.
+ *   - Normal background/screen-off (isFilePicking = false): close after grace period to prevent zombie half-open connections.
  */
-export function shouldCloseSocketOnHidden(_peer?: string | null): boolean {
-  return false;
+export function shouldCloseSocketOnHidden(peer?: string | null, isFilePicking = false): boolean {
+  if (isDesktopPeer(peer)) {
+    return false;
+  }
+  if (isFilePicking) {
+    return false;
+  }
+  return true;
+}
+
+/** Check whether connection should be suspended after the hidden grace period expires. */
+export function shouldSuspendOnHiddenTimeout(opts: {
+  peer?: string | null;
+  isFilePicking?: boolean;
+  visibilityState?: string;
+}): boolean {
+  if (opts.visibilityState && opts.visibilityState !== 'hidden') {
+    return false;
+  }
+  return shouldCloseSocketOnHidden(opts.peer, opts.isFilePicking);
 }
 
 /** When page becomes visible again, determine whether to trigger automatic reconnect.

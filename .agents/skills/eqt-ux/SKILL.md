@@ -64,6 +64,7 @@ scripts/deploy-windows-results.sh
 - **息屏唤醒防假完成**: iOS Safari 弹窗或息屏唤醒时对并发请求返回 `status: 0`；严禁在网络错误分支中触发完成渲染，唯有服务端确凿返回 `state === 'completed'` 方可判定完成。
 - **海报占位图 Base64 编码**: 占位二维码必须采用 `data:image/svg+xml;base64,...` 编码；严禁在 `src` 中内联含双引号的 UTF-8 SVG，避免属性截断破坏关闭按钮点击区域。
 - **流式服务分块推送**: 包装 `http.ResponseWriter` 进度监听时切忌直接委托 `io.ReaderFrom`，必须采用定长分块（256KB）循环写入，确保每写入一个 chunk 实时更新瞬时速率。
+- **全局滚动捕获与节点类型防护**: 在 `document.addEventListener('scroll', handler, { capture: true })` 捕获滚动事件时，顶层 `e.target` 为 `HTMLDocument`（非 `Element`），无 `classList` 与 `closest` 属性；必须首先判断 `e.target instanceof Element` 或进行可选链保护，杜绝抛出 `TypeError` 阻断事件循环。
 - **动态纵向滚动放行**: `touchmove` 拦截必须结合 `isScrollableElement` 动态检测；若祖先容器计算样式 `overflowY` 为 `'auto'/'scroll'` 且存在溢出，直接放行，杜绝弹窗无法滑动。
 
 ---

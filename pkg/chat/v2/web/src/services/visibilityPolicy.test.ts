@@ -6,6 +6,7 @@
 import {
   isDesktopPeer,
   shouldCloseSocketOnHidden,
+  shouldSuspendOnHiddenTimeout,
   shouldReconnectOnVisible,
   shouldDiscardSupersededSocketEvent,
   evaluateHeartbeatTick
@@ -15,15 +16,41 @@ function assert(cond: boolean, msg: string): void {
   if (!cond) throw new Error(msg);
 }
 
-// 1. Peer-specific visibility hidden tests (all peers keep socket connected on hidden)
+// 1. Peer-specific visibility hidden tests
 assert(isDesktopPeer('desktop') === true, 'desktop peer matches');
 assert(isDesktopPeer(' Desktop ') === true, 'desktop peer case-insensitive and trimmed');
 assert(isDesktopPeer('mobile') === false, 'mobile peer is not desktop');
-assert(shouldCloseSocketOnHidden('desktop') === false, 'desktop host must NOT actively close WS on hidden');
-assert(shouldCloseSocketOnHidden('Desktop') === false, 'desktop host case-insensitive check');
-assert(shouldCloseSocketOnHidden('mobile') === false, 'mobile client keeps WS connected on hidden (e.g. file picker)');
-assert(shouldCloseSocketOnHidden('web') === false, 'web browser client keeps WS connected on hidden');
-assert(shouldCloseSocketOnHidden(null) === false, 'null peer keeps WS connected on hidden');
+
+// Desktop host never suspends on hidden
+assert(shouldCloseSocketOnHidden('desktop', false) === false, 'desktop host must NOT close WS on hidden');
+assert(shouldCloseSocketOnHidden('Desktop', false) === false, 'desktop host case-insensitive check');
+assert(shouldCloseSocketOnHidden('desktop', true) === false, 'desktop host with file picking keeps open');
+
+// Mobile and web clients: keep open during file picking, suspend on true background
+assert(shouldCloseSocketOnHidden('mobile', true) === false, 'mobile client keeps WS connected while picking files');
+assert(shouldCloseSocketOnHidden('mobile', false) === true, 'mobile client suspends WS on true background/sleep');
+assert(shouldCloseSocketOnHidden('web', true) === false, 'web browser client keeps WS connected while picking files');
+assert(shouldCloseSocketOnHidden('web', false) === true, 'web browser client suspends WS on true background');
+assert(shouldCloseSocketOnHidden(null, true) === false, 'null peer keeps connected while picking files');
+assert(shouldCloseSocketOnHidden(null, false) === true, 'null peer suspends WS on true background');
+
+// Hidden timeout evaluation helper tests
+assert(
+  shouldSuspendOnHiddenTimeout({ peer: 'mobile', isFilePicking: false, visibilityState: 'hidden' }) === true,
+  'mobile timeout while hidden suspends socket'
+);
+assert(
+  shouldSuspendOnHiddenTimeout({ peer: 'mobile', isFilePicking: true, visibilityState: 'hidden' }) === false,
+  'mobile timeout while file picking does NOT suspend socket'
+);
+assert(
+  shouldSuspendOnHiddenTimeout({ peer: 'mobile', isFilePicking: false, visibilityState: 'visible' }) === false,
+  'mobile timeout when visible does NOT suspend socket'
+);
+assert(
+  shouldSuspendOnHiddenTimeout({ peer: 'desktop', isFilePicking: false, visibilityState: 'hidden' }) === false,
+  'desktop timeout never suspends socket'
+);
 
 // 2. Visible foreground reconnect tests
 assert(

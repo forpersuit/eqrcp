@@ -6,6 +6,7 @@ import { sendTelemetry } from './telemetry';
 import {
   isDesktopPeer,
   shouldCloseSocketOnHidden,
+  shouldSuspendOnHiddenTimeout,
   shouldReconnectOnVisible,
   shouldDiscardSupersededSocketEvent,
   evaluateHeartbeatTick
@@ -29,6 +30,9 @@ export class ChatWebSocketClient {
   private pendingHeartbeatSince = 0;
   private isManualClosed = false;
   private isSuspended = false;
+  private isFilePicking = false;
+  private hiddenGraceTimer: any = null;
+  private filePickingTimer: any = null;
   private clientToken = '';
   private pendingLogs: string[] = [];
 
@@ -118,33 +122,90 @@ export class ChatWebSocketClient {
     this.clientToken = savedToken;
     localStorage.setItem('chat_token', savedToken);
 
-    // Page visibility: Desktop and mobile clients remain connected continuously on page hidden
-    // (preventing disconnect interruptions when picking files, browsing photos, or switching apps briefly).
-    // On foreground visible, we probe socket liveness or reconnect if the connection was dropped by the OS.
+    // Page visibility: Desktop stays connected continuously on page hidden.
+    // Mobile/web:
+    // - If picking files/photos (isFilePicking = true): keeps connection open to prevent selection drop.
+    // - Otherwise: 3s grace period timer. If still hidden after 3s, suspends socket cleanly (page_hidden)
+    //   to prevent half-open zombie connections while screen is off.
+    // On foreground visible / window focus: cancels grace timer and reconnects or probes liveness instantly.
     if (typeof document !== 'undefined') {
+      // Global click listener to detect file picking triggers
+      document.addEventListener('click', (e) => {
+        const target = (e.target instanceof Element ? e.target : (e.target as Node)?.parentElement) as HTMLElement | null;
+        if (target && (
+          target.matches('input[type="file"], label[for="chat-file-input"], .add-attachment-btn') ||
+          target.closest('input[type="file"], label[for="chat-file-input"], .add-attachment-btn')
+        )) {
+          this.setFilePicking(true);
+        }
+      }, { capture: true, passive: true });
+
+      // File input change indicates file selection completed
+      document.addEventListener('change', (e) => {
+        const target = (e.target instanceof Element ? e.target : (e.target as Node)?.parentElement) as HTMLElement | null;
+        if (target && target.matches('input[type="file"]')) {
+          this.setFilePicking(false);
+        }
+      }, { capture: true, passive: true });
+
+      // Window focus indicates returning to the browser window
+      window.addEventListener('focus', () => {
+        this.setFilePicking(false);
+        if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+          if (this.hiddenGraceTimer) {
+            clearTimeout(this.hiddenGraceTimer);
+            this.hiddenGraceTimer = null;
+          }
+          if (this.isSuspended || (!this.isManualClosed && (!this.ws || this.ws.readyState === WebSocket.CLOSED || this.ws.readyState === WebSocket.CLOSING))) {
+            this.isSuspended = false;
+            this.reconnectAttempts = 0;
+            this.reconnectDelay = 1000;
+            chatActions.setReconnectExhausted(false);
+            this.connect();
+          }
+        }
+      });
+
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
-          // Never close connection actively on page hidden unless policy dictates.
-          if (!shouldCloseSocketOnHidden(this.clientPeer)) {
+          if (!shouldCloseSocketOnHidden(this.clientPeer, this.isFilePicking)) {
             return;
           }
-          this.isSuspended = true;
-          if (this.ws) {
-            this.sendLog(`[SYSTEM] Page hidden/suspended, closing WebSocket client actively.`);
-            this.ws.close(1000, "page_hidden");
-          }
+          if (this.hiddenGraceTimer) clearTimeout(this.hiddenGraceTimer);
+          this.hiddenGraceTimer = setTimeout(() => {
+            if (shouldSuspendOnHiddenTimeout({
+              peer: this.clientPeer,
+              isFilePicking: this.isFilePicking,
+              visibilityState: document.visibilityState
+            })) {
+              this.isSuspended = true;
+              if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+                this.sendLog(`[SYSTEM] Page hidden for >3s, suspending WebSocket cleanly.`);
+                this.ws.close(1000, "page_hidden");
+              }
+            }
+          }, 3000);
         } else if (document.visibilityState === 'visible') {
+          if (this.hiddenGraceTimer) {
+            clearTimeout(this.hiddenGraceTimer);
+            this.hiddenGraceTimer = null;
+          }
+          this.setFilePicking(false);
+
+          const wasSuspended = this.isSuspended;
           this.isSuspended = false;
           this.pendingHeartbeatSince = 0;
-          if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+
+          if (!wasSuspended && this.ws && this.ws.readyState === WebSocket.OPEN) {
             this.pendingHeartbeatSince = Date.now();
             this.sendCommand({
               type: 'heartbeat',
               commandId: `hb-probe-${Date.now()}`
             });
-          } else if (shouldReconnectOnVisible({ isManualClosed: this.isManualClosed, readyState: this.ws?.readyState })) {
+          } else if (!this.isManualClosed) {
             this.reconnectAttempts = 0;
             this.reconnectDelay = 1000;
+            chatActions.setReconnectExhausted(false);
             this.connect();
           }
         }
@@ -506,6 +567,13 @@ export class ChatWebSocketClient {
   }
 
   private handleReconnect(): void {
+    // If page is hidden in background/screen-off (and not picking files), postpone reconnect until visible to save battery and avoid exhausting retries
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden' && !this.isFilePicking && !isDesktopPeer(this.clientPeer)) {
+      this.isSuspended = true;
+      this.sendLog('[SYSTEM] Connection lost while hidden, postponing reconnect until visible.');
+      return;
+    }
+
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       chatActions.setReconnectExhausted(true);
       const currentLang = localStorage.getItem('eqt_lang') || 'zh';
@@ -766,8 +834,35 @@ export class ChatWebSocketClient {
     this.connect();
   }
 
+  public setFilePicking(active: boolean): void {
+    this.isFilePicking = active;
+    if (active) {
+      if (this.hiddenGraceTimer) {
+        clearTimeout(this.hiddenGraceTimer);
+        this.hiddenGraceTimer = null;
+      }
+      if (this.filePickingTimer) clearTimeout(this.filePickingTimer);
+      this.filePickingTimer = setTimeout(() => {
+        this.isFilePicking = false;
+      }, 60000);
+    } else {
+      if (this.filePickingTimer) {
+        clearTimeout(this.filePickingTimer);
+        this.filePickingTimer = null;
+      }
+    }
+  }
+
   public close(): void {
     this.isManualClosed = true;
+    if (this.hiddenGraceTimer) {
+      clearTimeout(this.hiddenGraceTimer);
+      this.hiddenGraceTimer = null;
+    }
+    if (this.filePickingTimer) {
+      clearTimeout(this.filePickingTimer);
+      this.filePickingTimer = null;
+    }
     this.stopHeartbeat();
     if (this.ws) {
       const oldWs = this.ws;
