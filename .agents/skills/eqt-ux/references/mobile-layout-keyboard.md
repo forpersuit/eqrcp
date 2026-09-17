@@ -10,6 +10,7 @@
 - [7. 移动端窄屏顶栏操作折叠与横向纯图标菜单](#7-移动端窄屏顶栏操作折叠与横向纯图标菜单)
 - [8. 触控高亮消除与精确触控边界约束](#8-触控高亮消除与精确触控边界约束)
 - [9. 输入焦点、输入区域与键盘的排他性对应](#9-输入焦点输入区域与键盘的排他性对应)
+- [10. 移动端卡片容器防溢出与底边圆角保护规范](#10-移动端卡片容器防溢出与底边圆角保护规范)
 
 ---
 
@@ -114,7 +115,7 @@
 ## 7. 移动端窄屏顶栏操作折叠与横向纯图标菜单
 
 - **规格来源**: `pkg/chat/v2/web/src/app.css:1788-1805` 与 `pkg/chat/v2/web/src/App.svelte`
-- **顶栏按钮收敛**: 移动端视口（`<= 820px`）下，顶部右侧仅保留「在线设备数胶囊」（`device-pill`）与「更多选项按钮」（`...`），其余操作（二维码、多语言切换、退出）收进下拉面板（`.more-menu-panel`）。
+- **顶栏按钮收敛**: 移动端视口（`<= 820px`）下，顶部右侧仅保留「在线设备数胶囊」（`device-pill`）与「更多选项按钮」（`...`），其余操作（二维码、多语言切换、退出）收进下拉面板（`.more-menu-panel`）。左侧标题徽标 `licenseTier` 必须严格门控于 `isMobileLayout`；大屏环境（>820px）下标题栏恢复纯粹品牌 `EQT`，避免与桌面端右侧已有的配额/等级药丸造成视觉冗余。
 - **纯图标横向浮动胶囊**: 更多选项下拉面板采用横向布局（`.more-menu-list { flex-direction: row; gap: 6px; }`），各选项以 32px 统一尺寸的方形纯图标陈列，去除非必要文字标签，保留 `title` 与 `aria-label`。
 - **严密视觉对称**: 消息流头像缩放至 `clamp(28px, 8.5vw, 32px)` 时，`.message` 栅格与 `.avatar-stack` 容器同步流体缩放，保证对方消息左边距与己方消息右边距均严格为 12px 绝对对称。
 
@@ -152,4 +153,10 @@
 - **不可见定位表单元素撑大父级防呆**:
   - 用于调起原生文件选择的隐藏 `<input type="file" class="composer-file-input">` 必须显式声明 `top: 0; left: 0;`。
   - 若仅写 `position: absolute; width: 0.1px; height: 0.1px;` 而省略 `top/left`，浏览器会保留其在文档流尾部的静态位置，使其跌出父容器内部 padding，撑大容器 `scrollHeight` 导致出现幽灵滚动区并截断卡片底边。
+- **WebKit 复合层 border-radius 穿透与底边直角遮挡 (Stacking Context & Bottom Radius Shield)**:
+  - 在 WebKit/Blink 渲染引擎中，若父容器 `.chat-shell` 声明 `overflow: hidden; border-radius: 14px;`，而子元素 `.composer` 包含独立的堆叠上下文（如 `position: sticky; z-index: 4;`），WebKit 硬件加速合成层极易突破父级 `border-radius` 裁切边界；
+  - 同时，若底部子元素自身未声明底部圆角，其不透明浅灰底色（`#f3f7f2`）会以矩形直角压盖在父容器底边框（`1px solid var(--line)`）和弧线像素之上，视觉上造成圆角弧度线消失（呈现直角硬切）；
+  - **防线**:
+    1. **子元素圆角同步**: 为底部贴边子容器 `.composer` 显式声明 `border-bottom-left-radius: 13px; border-bottom-right-radius: 13px;`（桌面端为 `11px`），确保底色与外框圆角同心收紧；
+    2. **物理遮罩双保险**: 为父容器 `.chat-shell` 叠加 `-webkit-mask-image: -webkit-radial-gradient(white, black); mask-image: radial-gradient(white, black);`，借助合成层 mask 通道彻底抹除子元素图层穿透溢出。
 
