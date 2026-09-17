@@ -43,8 +43,8 @@
     ```
   - **双轴独立防御机制 (Two-Axis Independent Defense)**:
     1. **视觉视口平移轴 (Visual Viewport Axis)**: iOS Safari 软键盘弹出时会将整个 Layout Viewport 向上平移 `visualViewport.offsetTop` 个像素，导致顶栏被推出物理屏幕。通过监听 `visualViewport` 的 `resize` 与 `scroll` 事件，动态将 `--chat-viewport-offset` 设为 `${vv.offsetTop}px`，通过合成层向下的位移实时抵消系统平移，将顶栏牢牢固定在物理屏幕顶部。
-    2. **文档与祖先容器滚动轴 (Document & Container Scroll Axis)**: 输入框聚焦时光标的底层原生 `scroll-into-view` 会强行篡改 `window.scrollY` 及祖先容器（`html, body, #app, .chat-viewport, main, .chat-shell`）的 `scrollTop`，即使声明了 `overflow: hidden` 也会导致顶栏被向上移出屏幕。必须采用三层联合防御：
-       - **只读假聚焦防抢跑 (`focusWithoutNativeScroll`)**: 触摸聚焦瞬间设置 `readonly` 并调度 `focus({ preventScroll: true })`，下一帧移除 `readonly`，从源头剥夺原生光标滚动的触发条件；
+    2. **文档与祖先容器滚动轴 (Document & Container Scroll Axis)**: 输入框聚焦时光标的底层原生 `scroll-into-view` 会强行篡改 `window.scrollY` 及祖先容器（`html, body, #app, .chat-viewport, main, .chat-shell`）的 `scrollTop`，即使声明了 `overflow: hidden` 也会导致顶栏被向上移出屏幕。必须采用分层防御：
+       - **焦点防滚动透传 (`focus({ preventScroll: true })`)**: 输入聚焦及连续打字时显式声明 `preventScroll: true`；**严禁在聚焦时添加 `readonly` 遮罩**（移动端操作系统对只读控件直接压制软键盘呼出，会导致虚拟键盘完全无法拉起）；
        - **布局容器零位锁定 (`pinLayoutScroll`)**: 监听捕获阶段的 `scroll` 事件，将祖先非滚动容器的 `scrollTop` 及 `window.scrollY` 瞬时重置归零，放行 `.messages` 合法滚动；
        - **极限小屏弹性放行**: 仅当可视高度极小（`visualViewport.height < 240px`，如横屏键盘占满）时放行顶栏上推，常规竖屏下顶栏岿然不动，由中间消息流弹性吸收全部收缩。
 

@@ -80,24 +80,11 @@ export function pinLayoutScroll(minHeightThreshold: number = 240): void {
 }
 
 /**
- * Focus an element without triggering mobile browser aggressive native caret scroll-into-view.
+ * Focus an element with preventScroll to prevent mobile browser aggressive native caret scroll-into-view.
  */
 export function focusWithoutNativeScroll(el: HTMLElement | null): void {
   if (!el) return;
-  if (!isTouchOrMobile()) {
-    el.focus();
-    return;
-  }
-  const wasReadonly = el.hasAttribute('readonly');
-  if (!wasReadonly) {
-    el.setAttribute('readonly', 'readonly');
-  }
   el.focus({ preventScroll: true });
-  requestAnimationFrame(() => {
-    if (!wasReadonly) {
-      el.removeAttribute('readonly');
-    }
-  });
 }
 
 /**

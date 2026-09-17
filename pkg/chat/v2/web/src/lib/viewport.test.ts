@@ -111,22 +111,16 @@ const testState = {
   focused: false,
   preventScrollVal: undefined as boolean | undefined
 };
-const attrs: Record<string, string> = {};
 const mockTextarea = {
-  hasAttribute(name: string) { return name in attrs; },
-  setAttribute(name: string, val: string) { attrs[name] = val; },
-  removeAttribute(name: string) { delete attrs[name]; },
   focus(opts?: { preventScroll?: boolean }) {
     testState.focused = true;
     testState.preventScrollVal = opts?.preventScroll;
-    assert(this.hasAttribute('readonly') === true, 'focus should be called while readonly is active to prevent scroll-into-view');
   }
 } as any;
 
 focusWithoutNativeScroll(mockTextarea);
 assert(testState.focused === true, 'mockTextarea should be focused');
 assert(testState.preventScrollVal === true, 'focus should pass preventScroll: true');
-assert(mockTextarea.hasAttribute('readonly') === false, 'readonly should be cleared on next frame');
 
 console.log('viewport.test.ts: all assertions passed');
 

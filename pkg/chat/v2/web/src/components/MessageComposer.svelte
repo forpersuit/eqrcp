@@ -2,7 +2,7 @@
   import { createEventDispatcher, onMount, onDestroy, tick } from 'svelte';
   import { getTranslation } from '../lib/i18n';
   import { chatSessionStatus } from '../state/chatStore';
-  import { isTouchOrMobile, scheduleViewportRestore, focusWithoutNativeScroll, pinLayoutScroll } from '../lib/viewport';
+  import { isTouchOrMobile, scheduleViewportRestore, pinLayoutScroll } from '../lib/viewport';
   const dispatch = createEventDispatcher();
   export let text = '';
   export let currentLang = 'zh';
@@ -25,7 +25,7 @@
     // Maintain focus for continuous typing without dismissing virtual keyboard or scrolling window
     requestAnimationFrame(() => {
       if (textareaEl) {
-        focusWithoutNativeScroll(textareaEl);
+        textareaEl.focus({ preventScroll: true });
       }
     });
 
@@ -61,12 +61,6 @@
     if (isTouchOrMobile() && !isSending) {
       scheduleViewportRestore();
     }
-  }
-
-  function handleTextareaPointerDown() {
-    if (!isTouchOrMobile()) return;
-    if (document.activeElement === textareaEl) return;
-    focusWithoutNativeScroll(textareaEl);
   }
 
   function handleFocus() {
@@ -213,7 +207,6 @@
         autocomplete="off" 
         rows="1"
         disabled={$chatSessionStatus !== 'active'}
-        on:pointerdown={handleTextareaPointerDown}
         on:keydown={handleKeydown}
         on:focus={handleFocus}
         on:blur={handleBlur}
