@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, tick } from 'svelte';
   import MessageList from './components/MessageList.svelte';
   import MessageComposer from './components/MessageComposer.svelte';
   import ViewportDebugOverlay from './components/ViewportDebugOverlay.svelte';
@@ -46,7 +46,6 @@
   let observer: MutationObserver | null = null;
   let visualViewportHandler: (() => void) | null = null;
   let windowScrollHandler: (() => void) | null = null;
-  let aggressiveScrollTimer: any = null;
   let handleGlobalFocusIn: ((e: FocusEvent) => void) | null = null;
   let handleGlobalFocusOut: ((e: FocusEvent) => void) | null = null;
   let handleDocumentPointerDown: ((e: PointerEvent | MouseEvent) => void) | null = null;
@@ -1043,10 +1042,28 @@
         if (chatHeadEl) {
           headTop = Math.round(chatHeadEl.getBoundingClientRect().top);
         }
+        const activeEl = document.activeElement;
+        const isComp = !!(activeEl && (
+          activeEl.closest('.composer') ||
+          activeEl.closest('form.composer') ||
+          activeEl.id === 'message-textarea'
+        ));
+        const isPanel = !!(activeEl && !isComp && (
+          activeEl.closest('.device-panel') ||
+          activeEl.closest('.license-panel') ||
+          activeEl.closest('.lang-panel') ||
+          activeEl.closest('.more-menu-panel') ||
+          activeEl.closest('.modal') ||
+          activeEl.classList.contains('device-rename-input') ||
+          activeEl.tagName === 'INPUT' ||
+          activeEl.tagName === 'TEXTAREA'
+        ));
+        const activeArea = isComp ? 'composer' : (isPanel ? 'panel-input' : 'none');
+
         const kbTop = vvH + vvTop;
         const overlap = compBottom - kbTop;
         const status = overlap > 1 ? `BLOCKED overlap=${overlap}px` : `OK gap=${Math.abs(overlap)}px`;
-        const logMsg = `[VIEWPORT-PROBE] trigger=${trigger} vh=${vh} vvH=${vvH} vvTop=${vvTop} scrollY=${scrollY} headTop=${headTop} | composer[top=${compTop}, bottom=${compBottom}, h=${compH}] | status=${status}`;
+        const logMsg = `[VIEWPORT-PROBE] trigger=${trigger} vh=${vh} vvH=${vvH} vvTop=${vvTop} scrollY=${scrollY} headTop=${headTop} activeArea=${activeArea} | composer[top=${compTop}, bottom=${compBottom}, h=${compH}] | status=${status}`;
 
         if (logMsg !== lastProbeLog) {
           lastProbeLog = logMsg;
@@ -1065,25 +1082,20 @@
       }
     };
 
-    const runAggressiveScrollCorrection = () => {
-      let count = 0;
-      if (aggressiveScrollTimer) clearInterval(aggressiveScrollTimer);
-      aggressiveScrollTimer = setInterval(() => {
-        if (window.scrollY !== 0) {
-          window.scrollTo(0, 0);
-        }
-        count++;
-        if (count > 12) {
-          clearInterval(aggressiveScrollTimer);
-          aggressiveScrollTimer = null;
-        }
-      }, 50);
-    };
-
     handleGlobalFocusIn = (e: FocusEvent) => {
       const activeEl = e.target as HTMLElement;
-      if (activeEl && (activeEl.closest('.composer') || activeEl.closest('form.composer') || activeEl.id === 'message-textarea' || activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
-        runAggressiveScrollCorrection();
+      if (activeEl && (
+        activeEl.closest('.composer') ||
+        activeEl.closest('form.composer') ||
+        activeEl.id === 'message-textarea' ||
+        activeEl.closest('.device-panel') ||
+        activeEl.closest('.license-panel') ||
+        activeEl.closest('.lang-panel') ||
+        activeEl.closest('.more-menu-panel') ||
+        activeEl.closest('.modal') ||
+        activeEl.tagName === 'INPUT' ||
+        activeEl.tagName === 'TEXTAREA'
+      )) {
         const sync = () => {
           if (visualViewportHandler) visualViewportHandler();
         };
@@ -1159,8 +1171,8 @@
 
     if (typeof window !== 'undefined') {
       windowScrollHandler = () => {
-        if (window.scrollY !== 0) {
-          window.scrollTo(0, 0);
+        if (visualViewportHandler) {
+          visualViewportHandler();
         }
       };
       window.addEventListener('scroll', windowScrollHandler);
@@ -1174,9 +1186,11 @@
           const height = Math.round(vv.height);
           const left = Math.round(vv.offsetLeft);
           const width = Math.round(vv.width);
+          const offsetTop = Math.round(vv.offsetTop);
           const bottomInset = Math.max(0, Math.round((baseViewportHeight || vh) - height));
 
           document.documentElement.style.setProperty('--chat-viewport-height', `${height}px`);
+          document.documentElement.style.setProperty('--chat-viewport-offset', `${offsetTop}px`);
           document.documentElement.style.setProperty('--chat-viewport-top', '0px');
           document.documentElement.style.setProperty('--chat-viewport-bottom', `${bottomInset}px`);
           document.documentElement.style.setProperty('--chat-viewport-left', `${left}px`);
@@ -1186,30 +1200,35 @@
           const isComposerActive = !!(activeEl && (
             activeEl.closest('.composer') ||
             activeEl.closest('form.composer') ||
-            activeEl.id === 'message-textarea' ||
+            activeEl.id === 'message-textarea'
+          ));
+          const isPanelInputActive = !!(activeEl && !isComposerActive && (
+            activeEl.closest('.device-panel') ||
+            activeEl.closest('.license-panel') ||
+            activeEl.closest('.lang-panel') ||
+            activeEl.closest('.more-menu-panel') ||
+            activeEl.closest('.modal') ||
+            activeEl.classList.contains('device-rename-input') ||
             activeEl.tagName === 'INPUT' ||
             activeEl.tagName === 'TEXTAREA'
           ));
 
           const isHeightShrunk = bottomInset > 40 || vv.height < (vh - 60) || vv.height < (baseViewportHeight - 80);
-          const isKeyboardOpen = isHeightShrunk || (isComposerActive && (
+          const isKeyboardOpen = isHeightShrunk || ((isComposerActive || isPanelInputActive) && (
             typeof window.screen !== 'undefined' && vv.height < (window.screen.availHeight || window.screen.height || 9999) - 100
           ));
 
-          if (!isComposerActive && !isHeightShrunk) {
+          if (!isComposerActive && !isPanelInputActive && !isHeightShrunk) {
             baseViewportHeight = vh;
           }
 
           document.documentElement.classList.toggle('keyboard-open', isKeyboardOpen);
-
-          // Prevent mobile keyboard from scrolling the entire fixed body out of viewport
-          if (window.scrollY !== 0) {
-            window.scrollTo(0, 0);
-          }
+          document.documentElement.classList.toggle('composer-active', isComposerActive && isKeyboardOpen);
+          document.documentElement.classList.toggle('panel-input-active', isPanelInputActive && isKeyboardOpen);
 
           probeViewport('vv-sync');
 
-          if (isComposerActive || isKeyboardOpen) {
+          if (isComposerActive) {
             const messagesEl = document.querySelector('.messages');
             if (messagesEl) {
               messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -1267,9 +1286,6 @@
     }
     if (handleDocumentPointerDown) {
       document.removeEventListener('pointerdown', handleDocumentPointerDown);
-    }
-    if (aggressiveScrollTimer) {
-      clearInterval(aggressiveScrollTimer);
     }
     if (qrPulseTimer) {
       clearTimeout(qrPulseTimer);
@@ -2067,7 +2083,7 @@
                           </div>
                         {:else}
                           <strong style="font-size: 11px; color: #333; overflow-x: auto; white-space: nowrap; max-width: 100%; scrollbar-width: none; -ms-overflow-style: none;">{dev.label} ({t.self})</strong>
-                          <button class="icon-button" style="padding: 2px; width: 22px; height: 22px; flex-shrink: 0;" on:click={() => isEditingName = true} title={t.renameDevice}>
+                          <button class="icon-button" style="padding: 2px; width: 22px; height: 22px; flex-shrink: 0;" on:click={() => { isEditingName = true; tick().then(() => { const input = document.querySelector('.device-rename-input') as HTMLInputElement; if (input) { input.focus(); input.select(); input.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } }); }} title={t.renameDevice}>
                             <svg viewBox="0 0 24 24" aria-hidden="true" stroke="currentColor" stroke-width="2" fill="none"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
                           </button>
                         {/if}

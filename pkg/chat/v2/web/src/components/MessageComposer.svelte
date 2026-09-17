@@ -10,31 +10,42 @@
   let textareaEl: HTMLTextAreaElement;
   let composerEl: HTMLFormElement;
 
-  function handleSubmit(e: Event) {
-    e.preventDefault();
+  let isSending = false;
+
+  function doSend() {
+    if (isSending) return;
     if ($chatSessionStatus !== 'active') return;
     if (!text.trim()) return;
-    
-    const mobileLayout = isTouchOrMobile();
-    if (mobileLayout) {
-      // On mobile / touch devices, blur textarea so keyboard dismisses cleanly
-      // and visual viewport restores to 1.0 full scale without locking the screen
-      if (textareaEl) {
-        textareaEl.blur();
-      }
-      scheduleViewportRestore();
-    } else {
-      // On desktop, keep focus for seamless continuous keyboard input
+
+    isSending = true;
+    const sentText = text;
+    text = '';
+    dispatch('sendText', sentText);
+
+    // Maintain focus for continuous typing without dismissing virtual keyboard
+    requestAnimationFrame(() => {
       if (textareaEl) {
         textareaEl.focus();
       }
-    }
+    });
 
-    dispatch('sendText', text);
-    text = '';
-    
+    setTimeout(() => {
+      isSending = false;
+    }, 200);
+
     // Reset height asynchronously
     setTimeout(resizeComposer, 0);
+  }
+
+  function handleSubmit(e: Event) {
+    e.preventDefault();
+    doSend();
+  }
+
+  function handleSendPointerDown(e: PointerEvent) {
+    // Prevent default focus shift so textarea doesn't blur and keyboard doesn't dismiss
+    e.preventDefault();
+    doSend();
   }
 
   /** Desktop: Enter sends, Shift+Enter inserts newline. Mobile keeps Enter as newline. */
@@ -42,11 +53,12 @@
     if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return;
     if (isTouchOrMobile()) return;
     e.preventDefault();
-    handleSubmit(e);
+    doSend();
   }
 
   function handleBlur() {
-    if (isTouchOrMobile()) {
+    // Only schedule restore when focus is legitimately lost (e.g. user tapped background)
+    if (isTouchOrMobile() && !isSending) {
       scheduleViewportRestore();
     }
   }
@@ -63,13 +75,6 @@
           messagesEl.scrollTop = messagesEl.scrollHeight;
         }, 250);
       }
-    }
-  }
-
-  function handleSendButtonMouseDown(e: MouseEvent) {
-    // Only prevent default on desktop with fine mouse pointer so mobile touch dismisses cleanly
-    if (!isTouchOrMobile()) {
-      e.preventDefault();
     }
   }
 
@@ -206,7 +211,7 @@
         on:blur={handleBlur}
       ></textarea>
       <div class="composer-actions-right">
-        <button class="send-button" type="submit" aria-label={getTranslation('send', currentLang)} title={getTranslation('send', currentLang)} disabled={!text.trim() || $chatSessionStatus !== 'active'} on:mousedown={handleSendButtonMouseDown}>
+        <button class="send-button" type="submit" aria-label={getTranslation('send', currentLang)} title={getTranslation('send', currentLang)} disabled={!text.trim() || $chatSessionStatus !== 'active'} on:pointerdown={handleSendPointerDown}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 12 16-8-5 16-3-7-8-1z" fill="currentColor"/></svg>
         </button>
       </div>

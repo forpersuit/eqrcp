@@ -11,6 +11,7 @@
     --bg: #f4f7f4;
     --chat-viewport-height: 100vh;
     --chat-viewport-width: 100vw;
+    --chat-viewport-offset: 0px;
     --chat-viewport-top: 0px;
     --chat-viewport-bottom: 0px;
     --chat-viewport-left: 0px;
@@ -1763,6 +1764,9 @@ input:focus { border-color: var(--accent); outline: none; }
         left: auto;
         min-width: 0;
         width: min(280px, calc(100vw - 16px));
+        max-height: calc(var(--chat-viewport-height, 100%) - 60px);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
         z-index: 1000;
         box-shadow: 0 10px 25px rgba(0, 0, 0, 0.18);
     }
@@ -1772,6 +1776,9 @@ input:focus { border-color: var(--accent); outline: none; }
         right: 8px;
         left: auto;
         min-width: 120px;
+        max-height: calc(var(--chat-viewport-height, 100%) - 60px);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
         z-index: 1000;
         box-shadow: 0 10px 25px rgba(0, 0, 0, 0.18);
     }
@@ -1782,8 +1789,14 @@ input:focus { border-color: var(--accent); outline: none; }
         left: auto;
         min-width: 0;
         width: min(300px, calc(100vw - 16px));
+        max-height: calc(var(--chat-viewport-height, 100%) - 60px);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
         z-index: 1000;
         box-shadow: 0 10px 25px rgba(0, 0, 0, 0.18);
+    }
+    html.panel-input-active .composer {
+        display: none !important;
     }
     .more-menu-panel {
         position: fixed;
@@ -1858,6 +1871,8 @@ input:focus { border-color: var(--accent); outline: none; }
         top: 0;
         width: 100%;
         z-index: 0;
+        transform: translateY(var(--chat-viewport-offset, 0px));
+        will-change: transform;
         transition: none !important;
         overscroll-behavior: none;
     }

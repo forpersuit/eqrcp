@@ -71,6 +71,17 @@ close_eqt_processes() {
   pkill -f 'eqt-desktop(\.exe)?$' >/dev/null 2>&1 || true
 }
 
+atomic_copy_exe() {
+  local src="$1"
+  local dst="$2"
+  if ! cp "$src" "$dst" 2>/dev/null; then
+    # When locked by a running Windows process, NTFS permits renaming but prohibits in-place overwriting
+    rm -f "${dst}.bak" 2>/dev/null || true
+    mv "$dst" "${dst}.bak" 2>/dev/null || true
+    cp "$src" "$dst"
+  fi
+}
+
 find_wails() {
   local wails_cmd
   if wails_cmd="$(command -v wails 2>/dev/null)"; then
@@ -159,13 +170,13 @@ if [[ "$build_gui" -eq 1 ]]; then
     (cd "$root_dir/desktop/gui" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" "$wails_cmd" build -clean -ldflags "-H=windowsgui" -o eqt-desktop.exe -platform windows/amd64)
     rm -f /tmp/wailsbindings "$root_dir/desktop/gui/eqt-desktop-res.syso" || true
     # The Wails GUI binary is the consolidated 3-in-1 tool (CLI + Launcher + GUI). Copy directly as customer executable.
-    cp "$root_dir/desktop/gui/build/bin/eqt-desktop.exe" "$results_dir/eqt.exe"
+    atomic_copy_exe "$root_dir/desktop/gui/build/bin/eqt-desktop.exe" "$results_dir/eqt.exe"
 
     echo "Building Windows test executable (eqt-test.exe) with -tags eqtdev..."
     rm -f /tmp/wailsbindings "$root_dir/desktop/gui/eqt-desktop-res.syso" || true
     (cd "$root_dir/desktop/gui" && env GOCACHE="${GOCACHE:-/tmp/eqt-go-build}" "$wails_cmd" build -clean -tags eqtdev -ldflags "-H=windowsgui" -o eqt-test.exe -platform windows/amd64)
     rm -f /tmp/wailsbindings "$root_dir/desktop/gui/eqt-desktop-res.syso" || true
-    cp "$root_dir/desktop/gui/build/bin/eqt-test.exe" "$results_dir/eqt-test.exe"
+    atomic_copy_exe "$root_dir/desktop/gui/build/bin/eqt-test.exe" "$results_dir/eqt-test.exe"
   else
     echo "error: wails CLI not found in PATH or GOPATH/bin" >&2
     exit 1

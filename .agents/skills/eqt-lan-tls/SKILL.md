@@ -1,6 +1,6 @@
 ---
 name: eqt-lan-tls
-description: Architectural guidelines, disaster recovery, authoritative DNS operation, and ACME DNS-01 wildcard TLS provisioning for EQT LAN-TLS Loopback. Use when you need to: (1) Configure, debug, or deploy authoritative DNS nodes (ns1/ns2) and systemd services, (2) Manage ACME wildcard certificates (*.direct.eqt.net.im) and GTS/Let's Encrypt multi-account failover, (3) Maintain Cloudflare Worker DRM/provisioning APIs (D1 rate limits, SingleFlight, 3-state circuit breaker), (4) Audit TLS crypto signatures, hardware fingerprint binding, or CSR verification, or (5) Run offline automated test suites and verify quality gates.
+description: "Architectural guidelines, disaster recovery, authoritative DNS operation, and ACME DNS-01 wildcard TLS provisioning for EQT LAN-TLS Loopback. Use when you need to: (1) Configure, debug, or deploy authoritative DNS nodes (ns1/ns2) and systemd services, (2) Manage ACME wildcard certificates (*.direct.eqt.net.im) and GTS/Let's Encrypt multi-account failover, (3) Maintain Cloudflare Worker DRM/provisioning APIs (D1 rate limits, SingleFlight, 3-state circuit breaker), (4) Audit TLS crypto signatures, hardware fingerprint binding, or CSR verification, or (5) Run offline automated test suites and verify quality gates."
 ---
 
 # EQT LAN-TLS 回环架构与安全运维主控指南 (LAN-TLS Master Guide)

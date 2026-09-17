@@ -330,8 +330,9 @@ func (h *WebSocketHandler) ServeWS(w http.ResponseWriter, r *http.Request, token
 
 		case protocol.CommandLog:
 			if cl != nil {
-				h.writeClientLog(token, cl.Peer, cmd.Text)
-				if h.debugLog() {
+				isProbe := strings.Contains(cmd.Text, "[VIEWPORT-PROBE]")
+				h.writeClientLog(token, cl.Peer, cmd.Text, isProbe)
+				if isProbe || h.debugLog() {
 					diag.Emit(ctx, h.logger, diag.LevelInfo, fmt.Sprintf("[MOBILE:%s] %s", cl.Peer, cmd.Text), nil, fields...)
 				}
 			}
@@ -410,8 +411,8 @@ func extractToken(path string) string {
 	return "test-token"
 }
 
-func (h *WebSocketHandler) writeClientLog(token string, peer string, text string) {
-	if !h.debugLog() {
+func (h *WebSocketHandler) writeClientLog(token string, peer string, text string, isProbe bool) {
+	if !isProbe && !h.debugLog() {
 		return
 	}
 	if peer == "" {

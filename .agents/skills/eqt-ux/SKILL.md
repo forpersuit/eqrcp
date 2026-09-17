@@ -1,445 +1,80 @@
 ---
 name: eqt-ux
-description: Guidelines for EQT user interface, DOM rendering optimization, notification styles, mobile responsive layouts, and Chrome DevTools MCP E2E simulation testing. Use when you need to: (1) modify browser templates (`chat.tmpl.html`, `upload.tmpl.html`) or the desktop GUI frontend (`main.js`, `app.css`), (2) change how warnings/errors/size limits are surfaced to the user, (3) verify mobile responsive layout or run the Chrome DevTools MCP E2E simulation.
+description: "Architectural guidelines, layout constraints, notification styles, mobile responsive viewports, and E2E verification for EQT user interfaces. Use when you need to: (1) Modify browser templates (`chat.tmpl.html`, `download.tmpl.html`), desktop GUI frontend (`main.js`), or Chat v2 Svelte components, (2) Debug mobile responsive layouts, iOS Safari virtual keyboard docking, or touch scrolling blockers, (3) Surface in-app notifications, progress bars, or error states without alert dialogs, (4) Manage attachment transfer states, batch zip downloads, or WebSocket lifecycle, or (5) Run Chrome DevTools MCP E2E simulation tests."
 ---
 
-# EQT UI & Notification Guidelines
+# EQT 界面交互、视口适配与前端工程主控指南 (EQT UX Master Guide)
 
-本技能指南归纳 EQT 在桌面端 (Wails) 与移动端 (H5/Svelte) 中的界面渲染、状态同步、无感更新、多语言 (i18n) 及 E2E 仿真测试规范。
-
----
-
-## 1. 全量重绘下的不稳定 UI 状态维护 (Volatile UI State & DOM Diff)
-
-- **全局 State 与 DOM 分离**：
-  - 将易变状态（更新检测/下载阶段、警告消息、按钮内容等）保存在全局 `state` 存储中，而非纯依赖 DOM 结构。
-  - 构造面板（如 `renderSettingsPanel()`）时动态读取全局 `state`。设置控件绑定 input/change 事件，实时同步 DOM 最新值回内存（`syncSettingsFromDOM()`）。
-  - **就地增量更新 (In-place Node Updates)**：高频或局部状态变更（如更新检测状态、按钮禁用）优先通过 `textContent` 或 `disabled` 就地更新目标 DOM，避免调用全量重绘 (`syncPanelSurface`) 导致滚动条弹跳（`scrollTop` 归零）或焦点丢失。
-- **滚动条恢复与焦点保持**：
-  - 必须替换容器时，在替换前保存滚动容器（如 `.overlay .modal`, `.workspace`, `.path-list`, `.sidebar-history`）的 `scrollTop`，在渲染后立即及延迟 Tick（如 `setTimeout(..., 0)` 与 `50`）中恢复。
-  - **搜索焦点项定位**：用户点击搜索结果后，列表由过滤视图恢复为全量视图时，将焦点项 ID 存入全局变量（如 `lastFocusedTaskId`），全量渲染后通过 `targetLi.scrollIntoView({ behavior: 'auto', block: 'nearest' })` 滚动定位。
-- **`morphdom` 增量 DOM Diff 与事件防重复绑定**：
-  - 使用零依赖 DOM Diff 库 `morphdom` 替代 `innerHTML` 的直接覆写，避免 DOM 闪烁（如 Tooltip 闪烁、二维码重载）和输入框失焦。
-  - 前端重写 `EventTarget.prototype.addEventListener` 与 `removeEventListener` 的拦截包装器。检测到同一类型绑定相同语义的回调函数（比较 `listener.toString()`）时，先移除旧回调，确保同一元素只挂载单一监听器，并安全捕获最新状态闭包。
-- **局部渲染 vs 全量渲染 (Partial vs Full Rerender)**：
-  - `openPanel()`/`closePanel()` 只通过 `syncPanelSurface()` 就地 patch `.overlay` 面板区域，**不会**重渲染顶栏等外层 DOM。
-  - 因此通过顶层事件委托（如顶栏 `...` 下拉菜单）打开面板时，须在委托处理器内显式调用 `render()` 全量重渲染，否则依赖 `state` 的下拉菜单/按钮角标等外层 UI 无法随 `state` 恢复关闭。
-- **高频重绘点击丢包与节流 (Throttle & Pointer events)**：
-  - 后台高频推送状态导致 DOM 频繁重建时，由于 `mousedown` 与 `mouseup` 落在不同周期的 DOM 节点上，浏览器无法触发 `click` 事件。
-  - **避坑规范**：易频繁刷新的交互面板上，使用 `pointerdown` 替代 `click` 监听；前台接收后台状态更新（如 `agent-status`）的分发处实施 250ms 渲染节流限制。
-- **骨架与数值分离就地更新 (Skeleton-Value Separation)**：
-  - **骨架重构**：仅在设备连接状态变化（`clientID` 集合增减）或文件条目数等结构化元数据改变时，才执行一次性 `innerHTML` 骨架重写。
-  - **就地更新**：结构未改变时，通过预埋带唯一标识（如 `clientID`）的 HTML `id`，使用 `document.getElementById` 直接定位节点，更新其 `textContent` 或 `style.cssText`。
-- **活动输入框焦点保护 (Active Input Protection)**：
-  - 收到后台推送（`agent-status`）、心跳同步（`applyStatusData`）时，即便是包含付费/篡改状态变更（`paidChanged`），若 `shouldProtectActiveInput()` 判定当前 `document.activeElement` 为正在编辑的输入框/文本域，必须挂起全屏 DOM 重绘，保护输入焦点与光标。
-  - 所有带有未提交暂存状态的输入框（如 `#redeem-code`）必须绑定 `input` 事件实时同步当前输入至全局 `state` 内存（如 `state.tempRedeemCode`），形成 DOM 与 Memory 的双保险。
-- **输入框失焦 (Blur) 与按钮点击事件防吞 (Click Event Swallowing Prevention)**：
-  - 当用户在输入框聚焦输入完毕并直接点击操作按钮时，浏览器的底层触发顺序为：`mousedown`（目标为按钮子节点如 `<span>`）-> 输入框 `blur` -> `mouseup` -> `click`。
-  - **规则**：严禁在输入框的 `blur` / `input` 事件处理器中无差别全量重写相关按钮的 `innerHTML`（如 `btn.innerHTML = '<span>...'`）。这会导致 `mousedown` 命中的子节点在 `blur` 时被销毁，浏览器无法判定同一节点闭合而**直接丢弃 `click` 事件**（导致用户必须点第二次才触发）。
-  - **实践**：状态更新时优先判断并更新 `textContent`、`disabled` 或 `classList`，保持按钮内层 DOM 树的稳定性；同时为输入框配备 `keydown` (Enter) 快捷触发。
-- **红点与阶段文本就地补丁 (Incremental Badges)**：
-  - 自动更新检测阶段变化（后台完成下载变为 `ready`）时，不触发全屏重绘，直接通过 `updateSettingsBadgeUI()` 为 `#open-settings` 增量 append/remove `.badge-dot` 节点。
-- **多语言切换与动态 DOM 状态即时同步 (i18n Dynamic Sync)**：
-  - 在 `applyLanguage()` 中，除了替换带有 `[data-i18n]` 静态属性的节点外，必须显式调用动态渲染函数（如 `updateLimitUI`、`renderFiles`）。
-  - **避坑原则**：严禁让动态生成的提示（如免费配额 Banner、文件超限 Badge）依赖下一次心跳轮询才被动更新语言，避免用户感知到数秒的多语言刷新延迟；若存在倒计时中的浮层/胶囊，切换语种时应就地替换文本，保持倒计时动画与秒数平滑连续。
+本指南为 EQT 客户端界面（桌面端 Wails GUI、移动端 Safari/Chrome H5、Chat v2 Svelte、Web 管理后台）的交互规范、视口适配、状态流转与 E2E 验证的总领主控导航。
 
 ---
 
-## 2. 响应式布局、移动端适配与标题栏规范
+## 1. 核心交互第一性原理 (Core UX Principles & Philosophy)
 
-- **GUI 侧边栏与 Workspace 弹性布局**：
-  - 在 `.layout` 上使用 `grid-template-columns: minmax(0, 1fr) minmax(230px, 300px);`，使历史侧边栏 (`.side`) 在 230px 至 300px 间弹性缩放，优先保障 `.workspace` 宽度。
-  - 设置 `.side` 高度为 `100%; max-height: 100%; min-height: 0;`。历史列表内部滚动 `flex: 1; min-height: 0; overflow-y: auto;`。
-  - 单列断点设定为 `@media (max-width: 768px)`。在 `<=768px` 模式下限制历史记录高度 `max-height: 280px; overflow-y: auto;`。
-- **防止移动端输入自动缩放与发送后视口复原规范 (iOS Auto-Zoom Defense & Viewport Restoration)**：
-  - **WebKit 16px 字号硬约束 (Strict 16px Font-Size)**：
-    - iOS WebKit 底层 `zoomToRect` 机制规定：任何可输入元素（`input, textarea, select`）计算字号 `< 16px` 时，聚焦瞬间会无条件将整个页面放大至 1.25x~1.3x。
-    - 在全局、`@media (max-width: 820px)` 以及 `@media (hover: none) and (pointer: coarse)` 下必须强制 `font-size: 16px !important;`，且在 `html` 上声明 `-webkit-text-size-adjust: 100%; text-size-adjust: 100%;`，从源头彻底阻断 iOS 触发自动放大。
-  - **Meta Viewport 完整契约约束**：
-    - `index.html` 必须声明 `<meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content, viewport-fit=cover" />`，严禁加入 `user-scalable=no`（避免诱发移动端软键盘进入 Overlay 遮挡模式）。
-  - **移动端与桌面端发送后焦点隔离 (Platform-Isolated Post-Submit Focus)**：
-    - 桌面端（实体键盘）：`handleSubmit` 中保留 `textareaEl.focus()`，支持连续打字。
-    - 移动端（触屏/窄屏）：用户发送消息后，**严禁**重新强行 `textareaEl.focus()`（强行 focus 会导致 iOS 软键盘无法收起、输入框持续激活、视口始终锁死在放大状态）。移动端发送后必须显式调用 `textareaEl.blur()` 并解除 `isComposerActive` 激活态，让出完整屏幕查看已发送消息。
-  - **失焦与发送后多阶视口自愈复位 (Multi-Tick Viewport Self-Healing)**：
-    - 在移动端发送消息后及 `textarea` 的 `on:blur` 事件中，调度多阶复位（0ms / 120ms / 320ms）：
-      1. 执行 `window.scrollTo(0, 0)` 清除 Safari 留下的残余滚动偏移与空白底边；
-      2. 校验 `window.visualViewport.scale`，若偏离 1.0 则重新赋写 `meta[name="viewport"]` 强制 WebKit 视口比例归一化为 1.0。
-- **手势居中弹窗 (Centered Mobile Modals)**：
-  - 移动端视口下，二维码分享与退出确认弹窗在水平和垂直方向居中，边缘保留 16px 安全 Padding（宽度 `calc(100% - 32px)`，最大 `340px`），配合 `transform: scale(0.95) -> scale(1)` 微动画。
-- **移动端与 Web 端多选批量下载规范 (Streamlined Batch Download & Manifest UX)**：
-  - **跨平台体验统一 (Platform Alignment)**：桌面内嵌环境（`isEmbedded`）通过原生宿主 Bridge（`postMessage: download-batch`）调起宿主原生目录选择并直接批量落盘；Web 浏览器与移动端环境（`!isEmbedded`）统一采用流式组包（`zip.Store` 存储模式，无压缩 CPU 开销）单文件传输。
-  - **语义化压缩包命名与 RFC 5987 编码 (Semantic Naming & Standard Disposition)**：
-    - 打包名称必须清晰反映所包含文件的关系：单文件为 `<name>.zip`，多文件格式为 `<首文件名>_等N个文件.zip`（英文环境为 `<first>_and_N_more.zip`），截断基名以防超出文件名限制。
-    - 服务端必须严格使用 RFC 5987 / RFC 6266 标准响应头：`Content-Disposition: attachment; filename="<ascii>"; filename*=UTF-8''<percent-encoded>`，确保移动端系统下载弹窗、Safari、Chrome 均可无乱码完整呈现中文文件名。
-  - **直达系统下载与免冗余确认 (Direct System Download & Zero Modal Interference)**：
-    - 移动端多选后点击底栏“批量下载”即为明确的用户下载指令，直接发起流式组包单文件下载，严禁在中间横插易导致误触取消的应用内二次确认弹窗。
-    - 严禁在 `<a>.click()` 后重复调用 `window.location.href = zipURL`，彻底杜绝多重导航导致移动端浏览器网络栈自我 Abort 并触发假取消。
-    - 所选文件与压缩包的关系由语义化包名清晰呈现在系统级下载弹窗（如 Safari/Chrome 的原生下载确认窗）中。
-    - ⚠️ **第 37 轮审查意见（对 `35f12325` 改写本条的独立复核，详见 `docs/mechanism/lan-tls-security-protocol-technical-report.md` §8.7 / R37-16）**：
-      1. **改写需留痕**：本条由上一轮的「应用内打包关系弹窗与系统弹窗**协同**」反向改写为「**严禁**中间二次确认」，同一技能文件在两轮内给出相反要求，而被撤销的要求**未记录理由与证据**——使上一轮的验收结论失去可追溯性。今后**撤销既有规范时，必须写明「原要求作废 + 理由 + 证据」**，不得原文改写成新实现的样子（Rule 13：结构性冲突应先停下上报）。
-      2. **UX 变更须有证据或显式标注**：「双导航 ⇒ 移动端网络栈自我 Abort ⇒ 假取消」这条因果链在仓库中**无任何测量归档**（无 E2E 日志 / 缺陷单 / 前后对照）；而 `pkg/chat/v2/http/routes_test.go:1488-1535` 恰恰证明客户端中断会让服务端把**全部** job 真置为 `TransferCancelled`（「假取消」在服务端有真实副作用）。删除兜底后移动端唯一入口是 `<a download>.click()`（`pkg/chat/v2/web/src/App.svelte:1444-1453`），iOS Safari 对 `<a download>` 的处理与桌面 Chromium 不同，**必须补移动端 E2E**（多选 → 批量下载 → 系统下载启动、无假取消、无重复导航）；在拿到证据前，该路径只能表述为「**未实测的推定路径**」并保留回退预案。
-      3. **打包清单呈现面**：模态内的清单（哪些文件 / 合计大小）已无承载面，现仅系统弹窗显示包名 + 聊天流一条「数量 + 大小」概要；若产品上仍需让用户知道打包了哪些文件，须明确新的承载面（如系统消息中列出条目）。
-      4. **实测证据闭环与规范定稿（基线 v1.36.121）**：
-         - 经 Chrome DevTools MCP（9222 端口）针对移动端触摸视口（375x667）单步仿真测试证实：原应用内模态弹窗在手机上被原生下载弹窗层叠，触摸系统弹窗边缘时触发 WebKit Touch 事件穿透至下方全屏遮罩，直接触发了 `handleCancelBatchModal`，向服务端发送 `download-batch-cancelled`，从而将服务端已就绪任务全部标记为 `TransferCancelled`（引发用户可见的“批量下载变成取消动作”缺陷）。
-         - 原规范中的“应用内二次确认模态与系统弹窗协同”正式声明作废（原因为移动端 WebKit 事件穿透造成系统弹窗与遮罩层自相踩踏）。
-         - 新规范确立为：移动端多选后点击批量下载，直接由系统顶部 Toast 提示打包信息，由单个 `<a download>` 调起原生系统下载，不再展示应用内模态遮罩。经 9222 MCP 真实全链路回放，验证无重复导航、无事件穿透假取消，顺利完成流式下载，E7⁵ 证据闭环。
-  - **结构化批量下载清单卡片与纯图标就地流转规范 (Structured Batch Card & Icon-only Status Transitions)**：
-    - **结构化卡片承载完整清单**：系统消息不再局限于纯文本摘要，通过包含 `batchInfo` 的 `.system-batch-card` 完整渲染压缩包名称（`zipFilename`）、总大小、文件总数，以及可自适应纵向滚动的嵌入式文件清单（含每个文件的文件名与文件大小），彻底解决移动端在去除全屏遮罩后失去文件清单承载面的痛点。
-    - **纯图标状态徽标 (Icon-only Status Badges)**：
-      - 卡片右上角徽标（`.batch-status-badge`）严禁使用冗长的文字描述（如“批量下载已完成”、“批量下载已取消”），全面采用精简纯图标标识，保持极简跨语言体验：
-        - 打包中（`packaging`）：纯呼吸圆点（`.pulse-dot`）；
-        - 已完成（`completed`）：绿色勾选图标（SVG Checkmark）；
-        - 已取消（`cancelled`）：中性灰叉号图标（SVG Cross）；
-        - 失败（`failed`）：浅红感叹号图标（SVG Alert Circle）。
-      - 纯图标节点保留 `title` 与 `aria-label` 供无障碍读屏及鼠标 Hover 提示。
-    - **杜绝冗余系统消息 (Zero Redundant Stream Notices)**：
-      - ⚠️ **规范修订记录（作废原“双重反馈机制”）**：上一版中“就地更新卡片 + 聊天流尾部追加一条系统提示”的双重机制已被正式作废。原因是在聊天流中追加文本（如“批量下载已完成/已取消/失败”）造成严重的信息冗余与消息流割裂，用户已在批量卡片上直接感知最新状态。
-      - **现行规范**：批量下载在完成（`completed`）、取消（`cancelled`）或失败（`failed`）时，**仅且严格通过历史卡片右上角的徽标就地流转**，严禁向聊天流尾部重复追加任何二次系统通知（`chatActions.addSystemMessage` / `addSystemNotice`）。
-  - **服务端零 CPU 零延迟流式组包**：服务端 `/files/zip` 采用 `zip.Store` 纯组包流式传输，边读边推，毫秒级启动，免去 CPU Deflate 运算与移动设备大文件 OOM 风险。
-- **会话结束控件锁定**：
-  - 手动退出会话（`chatSessionStatus !== 'active'`）时，所有输入控件（附件 label、textarea、提交按钮、文件输入框）显式设为 `disabled`（或 `pointer-events: none;`），占位符替换为“会话已结束”。
-- **移动端虚拟键盘视口贴合、底边抬升与历史消息弹性收缩规范 (Mobile Virtual Keyboard Adaptive Docking & Elastic Shrinkage)**：
-  - **视口物理高度强锁定与跨平台滚动阻断 (Physical Height Locking & Scroll Isolation)**：
-    - 规格来源：`pkg/chat/v2/web/src/App.svelte` 与 `pkg/chat/v2/web/src/app.css`。
-    - 移动端媒体查询（`@media (max-width: 820px)`）下，`html, body, #app` 必须维持 `position: fixed; inset: 0; width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none;`，并结合白名单与动态纵向滚动检测（`isScrollableElement`）阻断非滚动容器区域的 `touchmove` 冒泡，既彻底从源头剥夺 iOS WebKit 原生页面上滚（Scroll into View）的作案空间，又保障所有弹窗、图片预览及局部滚动容器的滑动手感。
-    - 移动端下 `.chat-viewport` 必须绝对固定在顶部：`position: fixed; top: 0; bottom: auto; left: 0; right: 0; width: 100%; height: var(--chat-viewport-height, 100%); max-height: var(--chat-viewport-height, 100%); overflow: hidden;`。严禁在 CSS 中依赖可能因页面微小滚动被冲抵为 0 的 `bottom: var(...)` 间接定位，严禁设置 `top: var(--chat-viewport-top)` 导致容器下沉。
-    - 无论小屏设备（如 iPhone 7 / SE）还是现代大屏设备，容器物理高度均严格等于 `window.visualViewport.height`，容器底边严格与软键盘顶端无缝贴合。
-  - **软键盘遮挡几何度量与日志探针规范 (Keyboard Overlap Metric & Viewport Probe)**：
-    - 规格来源：`pkg/chat/v2/web/src/components/ViewportDebugOverlay.svelte` 与 `pkg/chat/v2/web/src/App.svelte`。
-    - **几何度量判定标准**：
-      - $Y_{keyboard} = \text{visualViewport.height} + \text{visualViewport.offsetTop}$
-      - $Y_{composer} = \text{composerEl.getBoundingClientRect().bottom}$
-      - $\text{overlap} = Y_{composer} - Y_{keyboard}$：若 $\text{overlap} \le 0$，判定为 `OK (gap: -overlap px)`，输入框完全悬浮在键盘上方；若 $\text{overlap} > 0$，判定为 `BLOCKED (-overlap px)`，输入框被键盘物理遮挡。
-    - **探针日志门控与防抖收敛**：`[VIEWPORT-PROBE]` 结构化像素日志严格门控在桌面端设置项 `Enable Viewport Debug Box`（`viewportDebugEnabled` 为 true）开启时才上报，生产环境下 0 网络吞吐；对键盘展开期间高频触发的 `vv-sync` 进行 120ms 防抖收敛，消除键盘动画过渡期日志风暴，保留动画稳定态与 focusin 时序采样。
-  - **纯 Flex 列式布局与历史消息弹性折叠 (Flexbox Column Elastic Hierarchy)**：
-    - `<main>` 与 `.chat-shell` 均配置为 `display: flex; flex-direction: column; flex: 1 1 0%; min-height: 0; max-height: 100%; height: 100%; overflow: hidden;`。
-    - 顶栏 `.chat-head` 设为 `flex: 0 0 auto; flex-shrink: 0; position: sticky; top: 0; z-index: 2;`，键盘拉起时始终固定在顶部不移位。
-    - 底部输入区 `.composer` 设为 `flex: 0 0 auto; flex-shrink: 0; margin-top: auto;`，紧贴抬升后的视口最底部，绝不被键盘遮挡。
-    - 消息容器 `.message-list-container` 设为 `display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; max-height: 100%; overflow: hidden;`；滚动流 `.messages` 设为 `flex: 1 1 0%; min-height: 0; max-height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch;`。
-    - **弹性收缩效果**：键盘弹出抬升底边时，高度缩减全部由消息列表区域吸收，较早的历史消息向上平滑移动并自然隐入顶栏下方，既保全顶栏品牌与状态，又确保输入栏完整悬浮，输入区域与聊天历史无缝协作。
-  - **CSS 硬件级零延迟响应 (Disable Transition on Mobile)**：
-    - 在移动端媒体查询（如 `@media (max-width: 820px)`）下，必须对 `.chat-viewport` 设置 `transition: none !important;`，彻底杜绝 CSS 属性过渡动画（如 250ms 过渡）与系统级 60fps/120fps 硬件键盘升降动画发生拉扯、滞后或回弹。
-  - **键盘展开聊天卡片整体抬起规范 (Whole Chat Card Raised on Keyboard Open)**：
-    - **严禁切断卡片底边框**：聊天界面是完整的实体卡片容器（`.chat-shell`），软键盘弹出时严禁通过 `border-bottom: none` 或去除底部圆角粗暴抹平底边，否则会导致左右两条纵向边框延伸到底部突兀截断。
-    - **随视口整体抬起与呼吸边距**：视口由 `window.visualViewport` 压缩时，整个 `.chat-shell` 作为一个完整封闭的 UI 实体悬浮在软键盘之上，完整保留 4 边 1px 细边框与 14px 全圆角；外层容器维持与四周协调的底部安全呼吸边距（`main { padding-bottom: 8px !important; }`），内部 `.composer` 底部设为紧凑内边距（`padding-bottom: 8px !important;`）。
-    - **键盘收起平滑复原**：键盘收起时恢复物理 Home 条安全边距（`max(11px, env(safe-area-inset-bottom))`）。
-  - **附件按钮曲别针图标几何与光学双重居中 (Attachment Button Paperclip Centering)**：
-    - 36px 圆形附件按钮内部的曲别针图形必须使用完整的三回转轮廓线，避免残缺单边路径造成的重心偏离。
-    - 结合光学与几何中心校准，通过 `viewBox="0.6 -0.6 24 24"` 消除对角线 45° 旋转产生的微小重心右移，使曲别针交叉与回转中心精准对齐圆形按钮的物理正中心。
-  - **自然手势收起键盘与桌面/内嵌模式隔离 (Gesture Dismissal & Desktop Isolation)**：
-    - **平台隔离门控**：点击失焦逻辑仅在移动端独立页面（`isMobileLayout && !isEmbedded`）生效；严禁在桌面浏览器或 Wails 内嵌 GUI 中生效，防止打断桌面用户“点开消息查看后继续输入”的常规交互。
-    - **统一入口与完整排除名单**：收敛至 Document 级单点监听，合并排除所有可交互元素（`.composer, form.composer, #message-textarea, button, a, select, [role="button"], .interactive, .modal, .menu-dropdown, .file-card, .bubble-actions, .bubble-action-btn, .action-btn`），彻底避免多层监听器导致文件卡片/气泡操作按钮点击被意外失焦或架空。
-    - **移动端触控滑动收起**：在消息列表（`.messages`）上监听 `touchmove`，移动端手势滑动浏览历史记录时自动调用 `document.activeElement.blur()` 收起软键盘。
-  - **屏幕旋转与基准视口自适应 (Orientation & Base Viewport Sync)**：
-    - 监听 `resize` 与 `orientationchange`。在非编辑态且视口高度未被软键盘压缩（`!isComposerActive && !isHeightShrunk`）下，才允许将 `baseViewportHeight` 更新为当前 `window.innerHeight`，杜绝因软键盘展开触发的 `resize` 事件误将压缩高度存入基准值。
-  - **移动端窄屏顶栏操作折叠与纯图标横向胶囊菜单规范 (Mobile Header Action Collapse & Pure-Icon Menu Strip)**：
-    - **顶部右侧按钮收敛折叠**：移动端视口（`isMobileLayout` / `<= 820px`）下，顶部右侧操作区禁止平铺展示多个按钮，仅保留「在线设备数胶囊」（`device-pill`）与「更多选项省略号按钮」（`...`，`.more-btn`），其余次要操作（会话二维码、切换语言、退出会话）收进下拉面板（`.more-menu-panel`）。桌面端/内嵌大屏环境保持扁平展示，互不干扰。
-    - **纯图标横向浮动胶囊条**：更多选项下拉面板采用纯图标横向排列（`.more-menu-list { flex-direction: row; gap: 6px; }`），去除冗余文字描述标签，各选项以 32px 统一尺寸的方形图标按钮并排陈列，保留 `title` 与 `aria-label`。在移动端下以极小面积紧凑浮动于省略号按钮下方，兼顾视觉纯粹性与单手触控便捷性。
-    - **左右元素间距严密对称**：
-      - 顶栏左右视觉重心由原来的 80px vs 155px 不平衡收敛为 80px vs 86px，达到视觉平衡。
-      - 消息流中，移动端头像从 32px 缩放至 `clamp(28px, 8.5vw, 32px)` 时，`.message` 栅格列宽与 `.avatar-stack` 容器宽度必须同步流体缩放，彻底消除原 40px 容器内部产生的 6px 残余留白，保证对方消息左外边距与己方消息右外边距均严格为 12px 绝对对称。
+- **零系统弹窗原则 (Zero Alerts)**: 严禁调用浏览器阻塞式 `alert()` 或确认弹窗。所有警示、超限、进度与错误提示统一通过应用内通知（Toast）、气泡状态或行内副标题呈现。
+- **状态与渲染单向流 (State-Template Separation)**: 渲染模板函数仅充当 `Data -> DOM` 纯映射，禁止在模板中直接突变全局 `state`；严禁在 HTML 字符串中拼装内联 `onclick="..."`。
+- **平台体验隔离 (Platform Isolation)**: 移动端视口逻辑（手势失焦、`touchmove` 拦截、顶栏折叠）严格通过 `isMobileLayout && !isEmbedded` 门控，严禁干扰桌面端（>820px）与 Wails 内嵌 GUI 原有交互。
+- **气泡实体强驻留性 (Bubble Retention Guarantee)**: 文件与图片气泡一旦投递，具有强驻留性；接收端本地单向的下载任务取消/失败（`dlTx`），绝不影响文件气泡本体展示。
 
 ---
 
-- **Web 管理后台 (Cloudflare Pages / Svelte 5)**：
-  - **全站 i18n 接线与零硬编码**：所有业务卡片（如 3D 地球 `LicenseGlobeCard`、探针监控 `SystemHealth`、审计表格 `OpsAudit`）、模态框 `aria-label`、Tooltip、图表文字等必须全面接入 `$t()`。新增键时必须在 `zh.ts` 和 `en.ts` 中双向同步。
-  - **Modal 焦点生命周期完整闭环**：当父组件采用条件销毁模式（`{#if showModal}<Modal open={true} ...>{/if}`）挂载弹窗时，`open` 属性恒为 `true` 且组件关闭是通过 DOM 卸载完成的。因此必须在 Svelte 5 `$effect` 的 cleanup 返回函数以及 `onDestroy` 钩子中执行 `previouslyFocused?.focus()`，确保弹窗销毁后焦点平稳归还给触发元素，防止焦点回落到 `<body>` 破坏无障碍体验。
-  - **前后端审计动作枚举严密对齐**：前端动作筛选下拉菜单与 `AdminAuditAction` 类型必须与后端 Worker 实际写入的全部 9 种审计动作（`GENERATE`, `REVOKE`, `UNBIND`, `CLEAR_LOGS`, `QUERY_ACTIVATION_LOCATIONS`, `QUERY_LIVE_DEVICES`, `PRUNE`, `BLACKLIST_ADD`, `BLACKLIST_REMOVE`）严格 1:1 对齐，并通过 `$t` 支持本地化展示。
-  - **审计摘要提取字段健壮性**：黑名单添加/解封等操作的 `details_json` 字段提取应防呆兼顾多重字段名（如 `d.email || d.device_id || d.target || row.target_id`），避免后端字段名微调导致摘要退化为兜底文案。
+## 2. 核心架构不变式与布局规范摘要 (Active UX Invariants & Layout Summary)
+
+### 2.1 移动端顶层画布锁定与三段式 Flex 结构
+- **机制**: `@media (max-width: 820px)` 下，`html, body, #app` 声明 `position: fixed; inset: 0; width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none;`，彻底从源头剥夺 WebKit 原生 `scrollIntoView` 抢跑的滚动作案空间。
+- **三段式布局**: 顶栏 `.chat-head`（`flex: 0 0 auto`，固定置顶）、底部输入栏 `.composer`（`flex: 0 0 auto`，随视口抬升）、中间消息流 `.message-list-container`（`flex: 1 1 auto; min-height: 0;`，自适应吸收全部视口高度缩减）。
+- **规格来源**: `pkg/chat/v2/web/src/app.css` 与 `src/App.svelte`。
+
+### 2.2 软键盘遮挡几何度量与日志探针
+- **判定标准**: $Y_{\text{keyboard}} = \text{visualViewport.height} + \text{visualViewport.offsetTop}$，$Y_{\text{composer}} = \text{composerEl.bottom}$。$\text{overlap} = Y_{\text{composer}} - Y_{\text{keyboard}}$。若 $\text{overlap} \le 1\text{px}$ 判定为 `OK`，反之判定为 `BLOCKED`。
+- **日志门控**: `[VIEWPORT-PROBE]` 像素日志由桌面端 `Enable Viewport Debug Box` 严格门控（生产环境 0 吞吐）；`vv-sync` 采用 120ms 防抖收敛，消除键盘动画过渡期的逐帧日志风暴。
+- **规格来源**: `pkg/chat/v2/web/src/components/ViewportDebugOverlay.svelte` 与 `src/App.svelte`。
+
+### 2.3 WebKit 16px 字号硬约束与视口自愈复位
+- **机制**: `input, textarea, select` 必须声明 `font-size: 16px !important;`，阻断 iOS 聚焦时自动放大 1.25x。移动端发送消息后显式调用 `blur()` 并调度多阶（0ms/120ms/320ms）`window.scrollTo(0, 0)` 自愈复位。
+- **规格来源**: `pkg/chat/v2/web/src/app.css` 与 `src/App.svelte`。
+
+### 2.4 状态指示矢量化与具名导入静态防线
+- **机制**: 状态指示（TLS 加密、连接、开关）严禁使用系统彩色 Emoji（🔒、⚠️），统一采用内联矢量 SVG；通过 `scripts/audit-frontend-imports.mjs` 在部署主链上静态校验全部具名导入，阻断未导出符号逃逸。
+- **规格来源**: `desktop/gui/frontend/src/main.js` 与 `scripts/audit-frontend-imports.mjs`。
 
 ---
 
-## 4. 移动端限额拦截与动态解锁规范
+## 3. 质量门禁与自动化验证 SOP (Verification & Quality Gate SOP)
 
-- **就地拦截与心跳保活**：
-  - 探测到 `limit_exceeded` 状态时，就地切换 UI（展示警告徽章，隐藏下载按钮，列表设为 `pointer-events: none; opacity: 0.5;`），不得使用 `window.location.href` 重定向独立错误页。
-  - **心跳放行**：心跳轮询（`?ping=true`）不能被 `clearInterval` 杀死，后端也**绝不能**在超限时对心跳拦截 403。心跳需保持可达，以便 GUI 重置限额或激活后，移动端能自动恢复 UI (`restoreNormalUI()`)。
+在修改任何前端界面、CSS 样式、模板或传输状态逻辑后，必须执行以下验收流程：
 
----
+### 3.1 前端单元测试与打包检查
+```bash
+npm --prefix pkg/chat/v2/web test && npm --prefix pkg/chat/v2/web run build
+```
+- **通过标准**: 全部测试套件 100% 通过（断言数与套件数以实测为准，不硬编码复述），Svelte check 0 错误，Vite 构建产物顺利生成。
 
-## 5. Chat V2 与 Receive 模式进度与传输 UX
-
-- **Wails 嵌入式 Iframe 静默下载 Bridge**：
-  - 内嵌 Svelte 页面中点击下载时，发送 `postMessage` (`{ type: 'download-file', url, messageId, name }`) 到父窗口。宿主调用 Wails 绑定 `DownloadChatAttachment(url, name)` 执行后台静默下载，避免弹出 WebView2 默认下载管理器。
-  - 用户点击取消时，发送 `{ type: 'cancel-download', messageId }` 派发 Go 端取消信号，立即中断物理 HTTP 传输流。
-- **物理上行上传物理取消 (Physical Upload Active Abort)**：
-  - 客户端取消上传时，除了向 WebSocket 发送取消消息外，必须物理调用 `xhr.abort()` 强行终止 TCP 上行流量，并在 `onabort` / `onerror` 中设置 `isAborted` 哨兵屏蔽无意义错误提示。
-- **传输完成状态自愈 (WebSocket 重连修复)**：
-  - 移动端锁屏重连时，后端重放历史事件需对 `Transfer` 事件放行（`e.Message != nil || e.Transfer != nil`）。
-  - 前端计算下载完结状态时，结合 `msg.downloaded` 与 `completedMap[msg.id]`。若物理传输早已成功结束，主动将 UI 从悬空的“传输中”纠正为“已就绪”状态。
-- **长文本气泡上下文菜单自适应展开与手势规范 (Bubble Context Menu Placement & Gesture Guidelines)**：
-  - **手势触发规范**：移动端仅通过向左/右滑动气泡（`swipeable`）唤起操作菜单，禁用长按触发，防止与系统选词和页面手势冲突；桌面端支持右键直接触发。
-  - **自适应避让展开 (Adaptive Avoidance Placement)**：
-    - 外侧水平空间充足时（桌面端/短气泡）：发送方向左展开（`placement-left`），接收方向右展开（`placement-right`），箭头在侧边对齐触控点。
-    - 外侧水平空间不足时（小屏幕设备/宽气泡）：禁止横向覆盖在气泡内部遮挡消息文本和操作按钮；自动切换为在气泡上方（`placement-top`）或下方（`placement-bottom`）展开，并自适应箭头指向触控点，确保气泡内文本与底部交互按钮（重发/重新编辑/下载）100% 不被遮挡。
-  - **全局失焦即时关闭**：用户点击屏幕任何非菜单区域（包括气泡、消息空白区等）时，立即在 `pointerdown` 时触发 `closeMenu()` 干净关闭。
-  - **移动端 Full-bleed 全贴边与 Safe-Area 单点吸收**：在移动端小屏设备下，外层 `main` padding 设为 `0`，`.chat-shell` 取消多余外圈边框与圆角，释放完整水平视口；安全区由顶部 `.chat-head` 与底部 `.composer` 单点吸收，彻底杜绝双重安全区下巴空白与键盘断层；图标与控制胶囊采用 `clamp()` 流体等比缩放；回到底部悬浮球（`.scroll-arrow`）置于右下角避开消息底部交互按钮。
-- **无蒙版纯净文件卡片与行内进度显示规范 (Mask-Free File Card & Inline Progress UX)**：
-  - **彻底移除全覆盖蒙版与 Spinner 动画**：严禁在文件/图片卡片上层覆盖半透明或模糊遮罩（如 `.upload-mask`）及大尺寸旋转加载图标。文件卡片在上传/下载的整个生命周期中，文件类型图标与文件名必须 100% 清晰可见，不阻挡用户的视觉识别与常态浏览。
-  - **行内极简状态与纯百分比展示 (Inline Subtitle Feedback)**：统一在卡片副标题区域（`.file-subtitle`）收敛所有阶段状态与进度。基于第一性原理，传输过程中动态递增的百分比本身已明确表达“传输中”，无需重复添加“上传中/传输中/保存中”等文本前缀，避免在移动端窄屏下挤占空间造成截断：
-    - **发送方上传**：上传过程中仅显示 `大小 · xx%`（落盘校验处理中保持 `· 99%`），上传完成后切换为 `大小 · 已分享`。
-    - **接收方下载**：初始接收时仅显示纯净的文件大小（如 `27 Bytes`），杜绝提前虚假标记；下载过程中动态显示 `大小 · xx%`；下载完成后切换为 `大小 · 已下载`。
-    - **异常与取消**：分别显示 `· 传输失败 ⚠️`（红色点状下划线提示悬停错误详情）或 `· 已取消`。
-  - **接收端状态解耦 (Decoupled Client Download State)**：Go 后端 `msg.Downloaded` 语义表示服务端附件缓存已就绪，严禁前端直接将其作为接收端的“已下载到本机”依据。接收端状态必须且仅能由客户端本地的 `dlTx` 传输任务或内嵌环境真实落盘路径（`isEmbedded && msg.filePath`）驱动，避免新收到的文件被虚假标记为“已下载”而短路实际下载进度显示。
-- **移动端原生文件选择器与 Label-Input 绑定防呆规范 (Mobile File Picker & Native Label Association)**：
-  - **杜绝 `display: none` 隐藏 `<input type="file">`**：iOS Safari 与 WebKit 针对文件输入框实施严格的沙箱与渲染树保护，任何 `display: none` 的文件输入框被通过 JS `.click()` 调用时会被静默拦截拒绝弹窗。隐藏输入框必须使用屏幕外微尺寸与透明度隐藏（`position: absolute; width: 0.1px; height: 0.1px; opacity: 0; overflow: hidden; z-index: -1; pointer-events: none;`）。
-  - **原生 `<label for="...">` 绑定与免 `preventDefault()`**：移动端与 Web 端必须为 `<label>` 显式指定 `for="chat-file-input"`，对应 `<input id="chat-file-input">`。严禁在非嵌入式环境的点击事件中调用 `e.preventDefault()` 或手动 `fileInput.click()`，交由浏览器内核原生处理手势激活（User Activation），彻底防止 WebKit 判定手势被取消而拦截文件选择对话框。
-  - **图标子节点 `pointer-events: none`**：确保 `<label>` 内的 `<svg>` 与图标节点均带有 `pointer-events: none`，防止触控点落在子节点时事件捕获异常。
-  - **嵌入式环境条件代理 (Conditional Bridge)**：仅在桌面 Wails 嵌入式宿主（`isEmbedded`）下，动态移除 `for` 属性并在点击时调用 `e.preventDefault()`，代理发送 `select-files` 桥接消息调起宿主原生对话框。
+### 3.2 桌面端构建与 Windows 产物物理验证
+```bash
+scripts/deploy-windows-results.sh
+```
+- **通过标准**: 产出生产版 `EQT.exe` 与测试版 `eqt-test.exe`，并成功打包至 `/mnt/e/developer/results/eqt-desktop-windows-amd64.zip`。
 
 ---
 
-## 6. Chrome DevTools MCP E2E 仿真测试模板
+## 4. 核心排坑与工程红线摘要 (Key Engineering Traps)
 
-### E2E Chat v2 仿真测试步骤 (3-Device Verification)
-1. **启动本地服务**：后台启动 `go run ./cmd/eqt/ chat --port 18081 --bind 127.0.0.1 --keep-alive` 并解析随机 URL Token。
-2. **在 Chrome (9222) 打开 3 个 Tab**：
-   - **Device 1 (GUI Side)**: `http://127.0.0.1:18081/chat-v2/<token>?peer=desktop`
-   - **Device 2 (Mobile A)**: `http://127.0.0.1:18081/chat-v2/<token>?peer=peer-A`
-   - **Device 3 (Mobile B)**: `http://127.0.0.1:18081/chat-v2/<token>?peer=peer-B`
-3. **关闭 QR 弹窗蒙版**：定位 `button[title="Close"]` 并调用点击。
-4. **发送与接收对齐测试**：
-   - 在 Mobile A 页面输入 "Hello from A"，校验 Mobile A 画面居右（`.message.mine`），Mobile B 与 GUI 画面居左。
-   - 在 GUI 页面输入 "Reply from GUI"，校验 GUI 画面居右，Mobile A 与 Mobile B 画面居左。
-5. **清理环境**：终止后台 Go 进程。
-
-### E2E Receive 模式仿真测试步骤
-1. **启动本地服务**：`go run . receive --bind 0.0.0.0 --port 18080 --keep-alive` 并提取 Token。
-2. **初始化发送页面**：`new_page` 导航至 `http://127.0.0.1:18080/receive/<token>`。
-3. **交互与提交**：通过 `evaluate_script` 给 `#plaintext-text` 赋值并点击 `#submit`。
-4. **验证 Done 成功卡片**：数据提交完成后，验证重定向至 `?done=true`，截取 Viewport 图像确认绿色成功卡片。
-
-### E2E 移动端遥测与下载上报仿真测试步骤 (Telemetry & Download Verification)
-1. **启动本地服务**：`go run . send <file> --bind 127.0.0.1 --port 18096 --keep-alive` 并提取 Token。
-2. **浏览器页面导航**：通过 Chrome DevTools MCP `navigate_page` 访问 `http://127.0.0.1:18096/send/<token>`。
-3. **页面加载与上报校验**：
-   - 验证 `GET /assets/telemetry.js` 成功返回 200。
-   - 调用 `list_network_requests` 检查首个 `POST /client-log` 上报，验证 Payload 包含 `PAGE_LOAD` 事件且返回 204。
-4. **下载交互与上报校验**：
-   - 通过 `click` 触发下载按钮，验证连续触发包含 `DOWNLOAD_CLICK` 与 `TRANSFER` 的 `POST /client-log` 上报。
-5. **视觉截屏归档**：调用 `take_screenshot` 抓取已下载完成的 UI 视图并保存归档。
+- **移动端文件输入框沙箱**: 严禁使用 `display: none` 隐藏 `<input type="file">`（iOS Safari 会拦截其 `.click()`）；必须使用微尺寸透明隐藏（`0.1px`）并由原生 `<label for="...">` 驱动。
+- **息屏唤醒防假完成**: iOS Safari 弹窗或息屏唤醒时对并发请求返回 `status: 0`；严禁在网络错误分支中触发完成渲染，唯有服务端确凿返回 `state === 'completed'` 方可判定完成。
+- **海报占位图 Base64 编码**: 占位二维码必须采用 `data:image/svg+xml;base64,...` 编码；严禁在 `src` 中内联含双引号的 UTF-8 SVG，避免属性截断破坏关闭按钮点击区域。
+- **流式服务分块推送**: 包装 `http.ResponseWriter` 进度监听时切忌直接委托 `io.ReaderFrom`，必须采用定长分块（256KB）循环写入，确保每写入一个 chunk 实时更新瞬时速率。
+- **动态纵向滚动放行**: `touchmove` 拦截必须结合 `isScrollableElement` 动态检测；若祖先容器计算样式 `overflowY` 为 `'auto'/'scroll'` 且存在溢出，直接放行，杜绝弹窗无法滑动。
 
 ---
 
-## 7. 推广分享海报卡 (Share Poster Card) 布局与下载一致性
+## 5. 深度技术与参考导航 (References Navigation)
 
-- **box-sizing 陷阱**：`.share-poster-card` 必须设 `box-sizing: border-box`（本项目其他组件均单独设置，唯独此卡曾遗漏）。若漏设，`min-height: 340px` 只约束内容盒，实际渲染高度 = 340 + 上下 padding + 边框 ≈ 412px，导致 logo 与底部边框间距空出 130px+。排查"卡片比预期高"类问题时优先用 `getComputedStyle(el).boxSizing` 验证。
-- **垂直居中**：内容块（二维码 175px + 20px 间距 + logo 48px ≈ 243px）在 340px 卡内用 `justify-content: center` 垂直居中，实测节奏 ≈ 48/20/50。固定高度卡片务必居中，否则内容被 flex-start 钉在顶部、底部空出一大块。
-- **二维码网址与离线生成 (100% Offline QR Generation)**：
-  - 推广海报与官网链接统一为 `www.eqt.net.im`。
-  - 二维码生成优先调用 Wails 原生绑定的 Go 端 `GenerateQRCodePNG(content, size)`（基于 `github.com/skip2/go-qrcode` 高容错 `qrcode.Highest` 算法），直接返回 Base64 Data URL。
-  - **零外部网络依赖**：即使在完全断网/离线机房环境下，也能毫秒级本地合成带 Logo 徽章的高清海报二维码并保存，杜绝依赖第三方外部 QR API。
-  - **占位图 Base64 化 (Placeholder SVG Must Be Base64-Encoded)**：面板占位二维码必须使用 `data:image/svg+xml;base64,<...>` 编码（内容与 `components/share.js` 的 `placeholderQRSvg` 一致），**严禁**在 HTML `src` 属性中内联 UTF-8 SVG——SVG 内含双引号会提前截断 `src` 属性值，浏览器会把 SVG 内 `<rect>` 等解析为散落 DOM 元素，并在二维码与横向 logo 之间渲染出 `alt="EQT Website QR Code" />` 裸文本；此损坏 DOM 会干扰分享卡片布局与关闭按钮命中区域（表现为"首次打开显示字符、二次打开关闭无响应"）。排查时用 `document.querySelector('.share-qr-wrapper').querySelectorAll('rect').length` 应恒为 0。
-  - **失败降级约定**：
-    - 图片一律经 `loadImageElement(src)` 加载，失败返回 `null` 而非让 `ctx.drawImage(broken)` 抛 `InvalidStateError`（离线时第三方 QR API 加载失败必然 broken，直接 drawImage 会让整个合成/下载失败）。
-    - 本地 `GenerateQRCodePNG` 不可用（返回非 string）且离线时，`getMergedQRCodeDataURL` **不 fallback 外部 API**（必然失败），返回 `null`。
-    - `prepareMergedQRCode` 收到 `null` 置 `qrPrepareFailed=true` 并渲染失败提示（`qr_generate_failed_tip`，已在 7 语种 i18n），`renderSharePanel` 据 `!qrPrepareFailed` 防止重复触发。
-    - `online` 事件重置 `qrPrepareFailed=false` 并 `render()`，面板自动重新生成二维码。
-- **单权威模块与散落图标稳定性**：
-  - `desktop/gui/frontend/src/components/share.js` 为推广海报与分享弹窗的单一权威实现，严禁在 `main.js` 中复制或残留旧 Share 实现。
-  - 散落图标采用模块级变量 `cachedScatteredHtml` 缓存首次随机排布结果，杜绝在 `prepareMergedQRCode` 完成或状态重绘时因反复 `Math.random` 产生图标瞬移跳变。
-
----
-
-## 8. 离线状态 UI 门控 (Offline UI Gating)
-
-- **联网判定约定**: 统一使用 `navigator.onLine`（主 GUI `main.js` 的 `isOnline()` 与 chat v2 `App.svelte` 的 `isOnlineNow`）。离线时免费额度倒计时/消耗 pill 隐藏。
-- **主 GUI (Wails)**:
-  - `isOnline()` 辅助函数 + `window.addEventListener('online'/'offline', () => render())` 全量重绘。
-  - 离线时隐藏: 顶栏兑换按钮 `#open-redeem`、设置面板 `#open-redeem-inline`、授权面板刷新 `#refresh-license-btn`、购买/管理 `#buy-license-btn`/`#manage-license-portal-btn`、套餐对比 `#plan-go-redeem`、反馈菜单项。
-  - 保留: 套餐对比入口 `#toggle-plan-info`（静态内容，无需联网）。
-- **Chat v2 (Svelte)**:
-  - 离线时额度倒计时隐藏，标题栏 badge 内容直接改为展示当前生效的 **Tier 级别**（`FREE` / `PLUS` / `PRO`），点击后打开套餐详情面板，呈现**当前套餐在 Chat 模式下的具体限制与权益内容**；在断网/离线状态下，每日免费额度、剩余时间与下方描述区域（`freeQuotaHint`）及外链全部隐藏，仅保留基础状态徽章。
-
----
-
-## 9. 官网与客户门户静态资源缓存与共享脚本加载规范 (Website & Portal Script Versioning & Ordering)
-
-- **共享脚本修改同步 bump `?v=` 版本号 (Cache Busting Guarantee)**：
-  - 当修改 `cloudflare/eqt-website/js/` 下的共享公共脚本（如 `email-otp.js`, `checkout-verify.js`, `api-base.js`）时，**必须**同步更新所有引入该脚本的 HTML 页面（如 `pricing.html`, `portal.html`）中的 `?v=X.Y.Z` 版本号。
-  - **合理性**：Cloudflare Pages 与主流浏览器对静态 JS 采用强缓存策略；若漏改 `?v=`，存量用户与 CDN 命中旧版本缓存，会导致前端 Bug 修复或安全调整对线上用户完全不生效。
-- **严格按照依赖拓扑顺序加载脚本 (Strict Script Load Ordering)**：
-  - 静态页面引入脚本必须遵循自底向上的依赖顺序：
-    1. `js/api-base.js`（统一环境与 Host 解析）
-    2. `js/email-otp.js`（通用 OTP 发码、验码、冷却倒计时控制器）
-    3. `js/checkout-verify.js`（依赖 `window.EmailOtp` 的支付前邮箱验证组件）
-    4. 页面主体 `<script>`
-- **显式模块可用性检查与本地化降级提示 (Explicit Module Availability Check)**：
-  - 任何依赖外部共享模块的组件或页面逻辑，严禁使用虚假的 `: Object` 表达式隐式伪装降级。
-  - 必须显式检测 `window.EmailOtp && window.EmailOtp.Controller`；若未加载（网络拦截或加载异常），记录明确 console 告警，并在用户触发交互时通过多语言字典（`module_load_err`）向用户展示友好的重试提示，杜绝抛出裸 `TypeError`。
-
----
-
-## 10. 桌面端应用内日志查看与排查诊断弹窗规范 (In-App Log Viewer & Diagnostics Modal)
-
-- **独立组件化与状态渲染分离 (Component & State Isolation)**：
-  - 日志查看器业务逻辑必须剥离至独立模块（如 `desktop/gui/frontend/src/components/log_viewer.js`），严禁向 `main.js` 堆砌状态与模板。
-  - 纯渲染函数（`renderLogViewerOverlay()`）仅做 `Data -> HTML` 单向映射；状态修改统一由控制器方法调度（`openLogViewer`, `closeLogViewer`, `setLogFilter`, `setLogSearch`, `toggleAutoRefresh`）。
-- **`morphdom` 增量 Diff 焦点与值保护**：
-  - 全量重绘触发时，必须在 `onBeforeElUpdated` 中对日志搜索框（`#log-viewer-search`）进行聚焦与内容保护（`toEl.value = fromEl.value; return true;`），防止用户在连续输入检索时因后台轮询刷新丢失焦点与已输入内容。
-- **标准事件代理与零内联 `onclick`**：
-  - 弹窗内的筛选 Chip、刷新、一键复制、导出诊断包及关闭按钮，统一在 `main.js` 的 `addEventListener('click')`、`'input'`、`'change'` 及 `'keydown'`（Escape 快捷键关闭）中代理分发，严禁拼装 HTML 内联 `onclick`。
-- **轻量反馈与剪贴板多重兜底 (Zero Alerts & Clipboard Fallback)**：
-  - 日志复制与排查包导出反馈统一通过应用内通知（`showToast`）呈现，杜绝调用阻塞式的浏览器级 `alert()` 弹窗。
-  - 复制日志内容时优先走现代 `navigator.clipboard.writeText`，若遭遇权限拒绝或 API 缺失则降级到隐藏 `textarea` + `document.execCommand('copy')` 方案，并在任何异常时弹出 Toast 提示，杜绝任何静默失败。
-- **终端滚动保持与智能吸附 (Smart Stick-to-Bottom)**：
-  - 终端容器（`#log-viewer-terminal`）须注册到主渲染器的滚动选择器列表（`scrollableSelectors`）。
-  - 拉取最新日志后实施智能吸附：刷新前判定当前视口是否处于底部附近（距底 ≤40px）；仅在显式强制（初次打开或手动点击刷新）或原先就在底部附近时执行滚底（`scrollTop = scrollHeight`）。若用户正在向上翻阅排查历史日志，则保持阅读位置，杜绝 3s 自动轮询强行打断阅读。
-
----
-
-## 11. 文件流式传输与 GUI 进度条零延迟更新规范 (Streaming Progress & GUI Feedback)
-
-- **底层 HTTP 流式分块与 `io.ReaderFrom` 陷阱防范**：
-  - `http.ServeFile` 或类似流式服务中，封装的 `progressResponseWriter` 切忌将 `ReadFrom(r io.Reader)` 直接委托给底层的 `rf.ReadFrom(r)`。Go 标准库底层驱动会一次性阻塞读取整段文件直至 EOF，导致传输期间包装层的 `onWrite` 进度监听完全失活（仅在 100% 结束时回调一次）。
-  - **规则**：必须在 `ReadFrom` 中采用定长分块（如 256KB）循环读取并通过 `w.Write()` 递增推送，确保每写入一个 chunk 立即触发 `onWrite`，实时更新瞬时速率与已完成字节。
-- **GUI 初始传输状态防御性展示 (Zero-percent Bar vs Dashed Line)**：
-  - 前端渲染设备传输列表（`renderDeviceProgressHtml`）时，只要设备处于 `transferring` 状态且具备有效的 `bytesTotal > 0`，必须立即渲染 0% 起步的平滑进度条。
-  - **避坑规范**：严禁加入 `(client.bytesDone || 0) > 0` 这一严苛前置条件，否则在传输初态或微小数据段传输时，进度条会被误判并呈现为虚线占位（直到下载完成才突然跳 100%）。
-- **快照与克隆链路中传输速率字段完整性 (Speed Metadata Preservation)**：
-  - 在 Server（`cloneTransferStatus`, `snapshotTransferStatus`）及桌面端 Agent（`cloneTaskRecord`, `observeTransferStatus`）的结构体克隆链路中，必须显式拷贝 `Speed` 与 `SpeedFormatted`。
-  - 在传输中断、失败或完成（`completed`/`failed`/`waiting`）的生命周期切换点，必须显式重置速率（`Speed = 0`, `SpeedFormatted = ""`），避免传输完成后速率徽章残留。
-
----
-
-## 12. 移动端息屏恢复状态同步与安全文件落盘规范 (Screen Wake-up Sync & Robust Mobile Download)
-
-- **移动端息屏冻结与前台唤醒主动同步**：
-  - 移动浏览器（iOS Safari、Android Chrome、Edge）在手机息屏或退至后台时，会强制挂起或降频 JS 定时器（`setInterval`/`setTimeout`）。
-  - **规则**：严禁仅依赖 `setInterval` 被动等待状态轮询。页面必须注册 `visibilitychange`、`pageshow` 与 `focus` 事件；在 `document.visibilityState === 'visible'` 唤醒恢复的第 0 毫秒，立即主动触发一次 `pollStatus(true)` 状态同步。
-  - **完成态渲染闭环**：`showCompletedUI` 必须同步更新 `download-progress-bytes` 为 `total / total` 并将状态文字更新为完成态，杜绝仅拉满进度条宽度而下方字节数与状态仍然残留息屏前数值的瑕疵。
-- **杜绝隐藏 Iframe 3 秒销毁陷阱**：
-  - 严禁通过动态生成隐藏 `<iframe>` 并在 `setTimeout(..., 3000)` 销毁它的方式触发文件下载。在 Chromium/Edge 移动端上，宿主 frame 销毁会直接向网络栈发送 Abort 信号，中途掐断下载请求，导致文件无法落盘保存。
-  - 必须使用顶级 DOM 模拟带 `download` 属性的 `<a>` 标签点击手势（或直接顶级导航），结合服务端 `Content-Disposition: attachment` 与 `X-Content-Type-Options: nosniff`，确保移动端浏览器系统级下载管理器接管并完整保存文件。
-- **RFC 6266 / RFC 5987 纯 ASCII 回退与 UTF-8 编码**：
-  - HTTP `Content-Disposition` 标头中，`filename="..."` 必须进行纯 ASCII 防护（过滤非 ASCII 字符），完整的 Unicode 文件名由 `filename*=UTF-8''<percent-encoded>` 提供，防止 Edge 移动版等严苛客户端由于 HTTP 标头非 ASCII 字节而丢弃响应或损坏文件名。
-
----
-
-## 13. 移动端 Safari 下载生命周期与假完成防护规范 (Mobile Safari Download Lifecycle & False-Completion Prevention)
-
-- **网络异常与失焦唤醒绝不视作传输完成**：
-  - 在 iOS Safari 下，触发下载会立即弹起原生系统确认弹窗（“您要下载 xxx 吗？”），导致网页失焦挂起；用户点击“下载”后页面恢复焦点并密集触发 `visibilitychange`、`pageshow` 与 `focus`。
-  - Safari 底层网络栈在开启大文件数据流时，对并发的 `/status` XHR 可能返回 `status: 0`、挂起或中断。
-  - **红线规则**：**严禁**在 `xhr.onerror`、连续错误计数（`consecutiveErrors >= 2`）或唤醒时网络错误的分支中调用 `showCompletedUI()`！网络瞬断或错误只能提示重连等待（`waiting_status`），唯有服务端确凿返回 `state === 'completed'` 或 `bytesDone >= bytesTotal > 0` 时方可判定完成。
-- **唤醒事件防抖归一 (Wakeup Debounce)**：
-  - `visibilitychange`、`pageshow` 与 `focus` 事件在系统弹窗交替或息屏唤醒时可能在数十毫秒内连续触发多次。
-  - 必须设立 200~250ms 的定时器防抖（`wakeupTimer`），规整为单次平滑的状态拉取，避免在 Safari 刚刚唤醒网络连接时连续发起多个并发请求导致连接重置。
-- **多文件 ZIP 打包下载进度与单项完结判定隔离 (Dual-Channel Isolation for ZIP vs Item Downloads)**：
-  - 客户端通过 ZIP (`-1`) 批量下载时，服务端仅比对 `progress[-1] >= expectedBytes[-1]` 作为 ZIP 是否完成的判据，且 ZIP 写入流严禁污染单项的 `progress[idx]` 与 `expectedBytes[idx]`。
-  - 完结判定与已下载清单支持双通道独立判定（完整下载 ZIP 归档 OR 逐项全部完成单文件下载）；客户端从 ZIP 切换为单文件逐项下载时，自动清理未完成的 partial ZIP 标记，单项判定支持物理文件尺寸 `os.Stat` 兜底，杜绝混用模式下的完结死锁。
-- **断点等待态进度记忆与零跳变 (Zero Progress Jump on Waiting State)**：
-  - 移动浏览器断流重连或 Range 握手期间（`state == 'waiting'`），服务端 `/status` 必须持续下发已接收到的最新 `cState.BytesDone` 与 `cState.Percent`，严禁在 `waiting` 分支将其暴力清零，防止前端进度条在重连瞬间闪退到 0%。
-- **410 Gone 会话终结处理与轮询终止 (410 Handling & Polling Teardown)**：
-  - 收到 HTTP 410 时必须立即清理轮询定时器（`clearInterval`），避免页面无限发起死轮询。
-  - 通过服务端响应头 `X-EQT-Transfer-State` 与本地进度双重判定：若服务端确凿标记已完成或本地进度已达标，收敛至完成对勾态（保障息屏唤醒错过 15s grace window 的观察端）；若为停止态，展示停止提示并恢复操作按钮（`actionBtnRow`）。
-- **日志与崩溃转储 7 天留存自清理 (7-Day Log & Crash Dump Retention)**:
-  - `file_logger.go` 在启动、切换目录和每 12 小时自检时，依据 7 天 cutoff 清理过期历史轮转日志与 `.dump` 文件；活跃 `desktop.log` 仅在闲置超期时 `Truncate(0)`；同时对齐真实崩溃转储文件 `config.DefaultConfigDir()/crash.dump`，对已上报/已忽略或超期转储执行清理。
-
----
-
-## 14. 移动端最终文件快捷复制与工程全链路直连规范 (Mobile File Copy & Direct Connection Standard)
-
-- **最终文件卡片快捷复制 (Mobile Card Copy Interaction)**:
-  - 移动端 Share 模式界面（`download.tmpl.html`）中的接收文件名/包名卡片（`.package-name-card`）右侧集成轻量级复制按钮（`.btn-copy-filename`）；
-  - 采用无阻塞事件绑定与剪贴板回退策略：优先使用 `navigator.clipboard.writeText`，在未授权或非安全上下文环境下安全降级为 `textarea` + `document.execCommand('copy')`；
-  - 交互反馈严格遵守无系统弹窗规范：点击后原复制图标即时切换为绿色对勾与反馈微文案，持续 2 秒后平滑复原；
-  - 纳入 `EqtI18n` 契约体系（`copy_filename` 与 `copied`），支持 7 国语言即时切换与动态绑定。
-- **系统代理可控屏蔽与局域网分流准则 (Configurable Proxy Policy & LAN Bypass)**:
-  - 默认开启“屏蔽系统代理 (仅限直连)”（`blockProxy: true`）：
-    - 局域网传输场景下，必须避免外部代理软件（如 Clash、v2ray、系统全局代理）拦截私有 IP 与 `*.lan.eqt.im` 局域网 TLS 回环请求而引发 502 Bad Gateway 或超时；
-    - 开启时，WebView2 注入 `--no-proxy-server`，Go 运行时清空代理环境变量并将 `http.DefaultTransport.Proxy` 设为 `nil`；
-  - 允许在高级设置中切换关闭：
-    - 关闭后，Go 网络客户端恢复 `http.ProxyFromEnvironment`，WebView2 注入 `--proxy-bypass-list=<local>;127.0.0.1;localhost;*.lan.eqt.im;*.direct.eqt.net.im;10.*;192.168.*;172.16-31.*`，允许外部公网访问（如 DRM 激活、更新检查）走系统代理，同时严格保证局域网点对点流量免代理直连。
-  - WSL 开发环境自动化推送脚本 `scripts/git-push-smart.sh` 默认仅探测并使用 direct-22 / direct-443 直连 SSH 路由，杜绝意外接入本地代理。
-
----
-
-## 15. 移动端触控阴影范围精准约束规范 (Touch Feedback Boundary Constraint for Mobile Buttons)
-
-- **全局禁用移动端浏览器默认高亮遮罩**：
-  - 移动端 WebKit / Blink（iOS Safari、Android Chrome、Edge）在点击具有 `cursor: pointer` 或 `<label>` 元素时，会默认绘制半透明高亮方框（`-webkit-tap-highlight-color`）；
-  - 全局基础样式必须声明 `* { -webkit-tap-highlight-color: transparent; }`，并在按钮类显式声明，杜绝系统高亮产生“大范围阴影”的假象。
-- **点击目标与视觉按钮边界 1:1 贴合 (Exact Hit-Target Alignment)**：
-  - 严禁使用全宽父级 `<label>`（如 `width: 100%` 的 `.dropzone-label`）去包裹居中的小尺寸按钮 `<span>`，否则任何点击都会导致浏览器以全宽父级为范围触发触控高亮与伪类；
-  - 必须直接使 `<label for="files" class="btn-add-files">` 充当视觉按钮自身（`display: inline-flex`、`border-radius: 8px`），使交互区域与视觉按钮完全重合。
-- **触控端 `:hover` 污染隔离 (`@media (hover: hover)`)**：
-  - 移动端触摸屏无鼠标 Hover 状态，点击会瞬间触发并持久滞留容器的 `:hover` 样式；
-  - 若外层卡片（如 `.dropzone-box:hover`）定义了背景变深或位移，轻触按钮会导致整个大卡片变色上浮，产生“阴影效果超出按钮”的严重失真；
-  - 包含位移与背景色的 `:hover` 样式必须统一封装在 `@media (hover: hover) and (pointer: fine)` 媒体查询中，触控端仅保留按钮自身的 `:active { transform: translateY(1px) scale(0.98); box-shadow: ...; }` 精准微动反馈。
-
----
-
-## 16. 移动端 Chat WebSocket 生命周期与轻量切后台保活规范 (Mobile Chat WebSocket Lifecycle & Background Keep-Alive)
-
-- **选文件与轻量切换绝不主动断开 WebSocket**：
-  - 移动端在调起系统文件管理器、相册选择器（`<input type="file">`），或用户下拉通知栏、多任务手势切出数秒时，浏览器均会触发 `visibilitychange` (`document.visibilityState === 'hidden'`)。
-  - **红线规则**：`shouldCloseSocketOnHidden` 必须对所有终端（desktop, mobile, web）恒返回 `false`，严禁在 `hidden` 时主动调用 `ws.close(1000, "page_hidden")`。否则用户每次发文件、选图片都会触发 socket 断开，向聊天室广播“已断开连接”，破坏正常会话心智。
-- **息屏断网被动恢复与探针自愈机制**：
-  - 在手机深度息屏、系统休眠或底层网络被 OS 掐断后，连接在系统级被动断开；
-  - 当用户唤醒手机返回前台时（`document.visibilityState === 'visible'`）：
-    - 若现有 Socket 处于 `OPEN` 状态，立即发出毫秒级探针 `hb-probe-${timestamp}` 验证对端存活性；
-    - 若 Socket 已被 OS 切断（`CLOSED` / `CLOSING`），`shouldReconnectOnVisible` 立即触发自愈重连，兼顾后台选文件保活体验与深度休眠后的稳定恢复。
-
----
-
-## 17. Chat 模式流式传输状态感知与桌面端轻量任务托盘规范 (Chat Active Transfers & Desktop Task Tray)
-
-- **消除桌面端附件传输“静默黑盒”**：
-  - 移动端通过 Tus 断点续传或分块上传大附件时，服务端在流式更新消息进度（`updateUploadProgressMessage` / `updateDownloadProgressMessage`）时，必须通过 150ms 节流触发 `notifyChatStatusHook`，使桌面端 GUI 主线程能够实时感知进行中的传输。
-  - 后端在 `statusSnapshotLocked` 中通过遍历只读扫描带有未完成进度的消息，提取并生成 `ChatActiveTransfer[]` 结构体切片，微秒级注入 `ChatStatusSnapshot`。
-- **UI 任务托盘（Active Transfers Tray）设计规范**：
-  - **模块化剥离**：遵循前端工程规范，将托盘渲染逻辑封装在独立文件 `desktop/gui/frontend/src/components/chat_tray.js` 中，严禁在 `main.js` 中直接拼装大块 HTML。
-  - **抗并发与无竞态覆盖**：采用独立任务列表（List）展示所有在传附件（文件名、上传者、格式化尺寸、百分比、平滑进度条），彻底避免单行副标题在多文件并发时的相互覆盖与抢占。
-  - **自适应收起与极简心智**：在无活跃传输时，托盘组件返回空字符串，DOM 节点平滑隐藏，不侵占聊天消息主区域的空间。
-  - **合规标准**：自包含纯函数转义（`escapeHTML`/`escapeAttr`），严禁内联 `onclick`，多语言在 `i18n.js` 中统一注册。
-
----
-
-## 18. 聊天文件气泡生命周期与接收端下载状态解耦原则 (Chat Bubble Retention & Receiver Decoupling Principle)
-
-- **第一性原则（Bubble Retention Guarantee）**：
-  - 在 Chat 消息流中，一旦文件或图片消息由发送方成功投递（或处于会话历史中），该文件气泡及其核心实体信息（文件名、格式化大小、图片缩略图/图标、操作菜单）**具有强驻留性**。
-  - **唯一合法移除/变更内容的前置条件**：
-    1. 发送方主动发起了消息撤回（`recall_message` / `msg.recalled`）；
-    2. 发送方在自身文件上传尚未完成时取消了上传（`ulTx.state === 'cancelled' && msg.uploading`）；
-    3. 用户在本地手动执行了气泡删除操作。
-- **接收端下载状态（`dlTx`）与文件气泡本体彻底解耦**：
-  - 接收方点击下载附件后，无论发生何种本地端行为（包括但不限于：关闭系统保存对话框、点击取消下载、下载网络中断、超时失败、批量保存文件夹取消），**均仅属于该客户端当前单向的下载任务状态变化**。
-  - **红线规则**：严禁将接收方的下载取消（`dlTx.state === 'cancelled'`）或下载失败误判为“文件取消发送”（`isCancelledFile`），严禁自动抹除、替换或隐藏收到的文件卡片。
-  - **正确行为规范**：
-    - 下载取消或失败时，文件气泡卡片必须 100% 完整保留，副标题仅作状态文本标注（如 `· 已取消`、`· 下载失败`）；
-    - 气泡交互菜单中提供“下载文件”或“重新下载”入口，允许用户随时再次发起下载，杜绝因关闭保存窗口而导致气泡凭空消失的异常体验。
-
----
-
-## 19. 前端单测门禁接线红线 (Frontend Unit-Test Gate Wiring)
-
-- **事实（2026-09-11 更新）**：`pkg/chat/v2/web/package.json` 的 `test` 脚本以链式 `node --experimental-strip-types …` 运行 8 个 `*.test.ts`；该脚本**已接入自动化门禁**——`ci.yml` 三处 web 作业均执行 `npm ci && npm test && npm run check && npm run build`（`:25-30`、`:59-64`、`:101-106`），`scripts/deploy-windows-results.sh:139`（pre-commit 路径）执行 `npm test && npm run build`。经独立探针验证：破坏生产逻辑（`return !!msg.uploading` → `return false`；契约前缀 `dl-` → `dlx-`）均使 `npm test` 转红（`EXIT=1`）。
-- **红线**：新增 `*.test.ts` 时，**不得**以“已加入 `npm test` 脚本链”宣称获得回归防护。必须确认存在**真实调用 `npm test` 的自动化门禁**（CI 作业或 pre-commit 脚本）；否则该测试仅在开发者手动执行时生效，防护力为零。
-- **覆盖边界（勿过度承诺）**：
-  - 门禁**仅覆盖 `pkg/chat/v2/web`**；`desktop/gui/frontend`（`main.js` 桥接宿主）**无任何 test 脚本**（package.json 仅有 dev/build/preview），其 `postMessage` 发送端零覆盖——桥接测试只能落在 iframe 契约层。
-  - 断言必须触达真实分支：仅对纯函数传入 `undefined` 再断言 `===false` 属**恒真式**（同义反复，Rule 9），无法锁定任何 UI 行为。**正解是抽取生产函数并由测试直接驱动**（`attachmentPolicy.ts` 的 `applyDownloadCancelled` / `applyBatchDownloadCancelled` 即范例），使测试桩化 side-effect 回调并断言其载荷；改变生产函数任一字段即转红。
-  - 抽取“契约函数”后须**全量收敛调用点**：`resolveDownloadTransferId` 已于 `8d8bce11` 达 **13/13**，全仓手写 `'dl-' + …` 归零。**装配层**另由 `attachmentPolicy.test.ts` Case 10 锁定——读取 `App.svelte` 源码强断言“必须调用 `applyDownloadCancelled(` / `applyBatchDownloadCancelled(`、严禁手写 `id: 'dl-` 拼接”。经双探针实测（还原为内联拼接 / 重命名函数）均 `EXIT=1`（Rule 9 真闭环）。
-  - **⚠️ 装配锁的两个已知弱点（勿过度承诺）**：① Case 10 以 `if (fs.existsSync(appSveltePath))` 包裹断言，`App.svelte` 路径失配时**静默跳过**（Rule 12 违例，应改 `assert(false)` fail-loud）；② 断言为 `includes()` 子串匹配——注释/死代码中出现 `id: 'dl-` 即假阳，`'dl-' + msgId` 变体则假阴。它是”防漂移提示锁“，非形式化保证。
-  - 适配器**不得用 `as any` 越过新契约**：`App.svelte` 已（`954dfa6e`）以 `TransferUpdatePayload = TransferEvent` 对齐桥接签名并彻底剔除 `as any`，`npm run check` 0 error 佐证其参与编译期校验。**注意**：`attachmentPolicy.test.ts` 首三行仍有 3× `// @ts-ignore`（`node --experimental-strip-types` 无类型环境的既有手段），故测试侧**非**零类型逃逸，仅生产侧为零。
-- **环境依赖**：`.git/hooks/pre-commit` 为**本地不受版本控制**的文件，仅由 `scripts/install-hooks.sh` 生成。凡改动该脚本，**必须重跑 `scripts/install-hooks.sh`**，否则新逻辑在其他环境静默失效。（`954dfa6e` 起 `wails.json` 自暂存逻辑已从构建脚本 `deploy-windows-results.sh` 迁入钩子模板——该变量 `EQT_PRE_COMMIT_CONTEXT` 目前仅写无读，属可清理死变量。）
-- **文档单一事实源**：钩子/部署说明同时存在于 `AGENTS.md`、`GEMINI.md`、`CLAUDE.md`。`954dfa6e` 仅更新前两者，`CLAUDE.md` 的 “Manual Windows acceptance deployment” 仍误指 `install-hooks.sh`（应为 `deploy-windows-results.sh`）。**改动此类说明时须三处同改**，否则即漂移。
-- **通用判据**（与 `eqt-lan-tls` 审查红线 ⑧ 同源）：任何“门禁 / 校验”声明，须锚定到**会真实运行的流水线调用点（文件:行）**，而非脚本定义处。
-
----
-
-## 20. 状态指示矢量化与前端具名导入静态防线 (Vector Status & Import Audit)
-
-- **状态指示矢量化与色彩规范 (Vector Status vs Emoji)**：
-  - **规则**：严禁在系统状态指示（如 TLS 加密状态、连接状态、设置面板开关指示）中使用系统彩色 Emoji（如 🔒、🔓、⚠️）。不同操作系统（Windows/macOS/Linux/Android）对 Emoji 的渲染差异极大，极易造成视觉偏色与失真。
-  - **标准实现**：统一使用内联矢量 SVG 图标：
-    - **Ready / 就绪态**：使用品牌主题色（`var(--accent, #156f5a)`）闭锁 SVG；
-    - **Disabled / 未启用态**：使用精致灰色（`var(--text-muted, #94a3b8)`）开锁或闭锁 SVG；
-    - **Preparing / 置备中**：使用轻量旋转 SVG 动画（配合 `@keyframes spin`）；
-    - **Failed / 警告态**：使用标准三角告警 SVG 图标。
-  - **文案规范**：提示文字严禁带“绿锁”等颜色描述词，应优化为“官方公信 TLS 已就绪 (单机专属安全认证)”等严谨专业表达。
-- **具名导入静态审计防线 (Named Import Static Audit)**：
-  - **规则**：ES 模块化重构时，ESLint `no-undef` 只能防范全局域未定义，无法拦截具名导入指向目标模块不存在导出符号（`import { missing } from './target.js'`）。
-  - **标准落地**：通过 `scripts/audit-frontend-imports.mjs` 解析全部前端源码的具名导入与目标文件的真实导出集合进行强匹配校验；
-  - **构建接线**：审计脚本必须挂载在 `scripts/deploy-windows-results.sh` 与提交检查主链上，阻断任何未导出符号逃逸至生产包。
+- **移动端视口、键盘贴合、动态滚动与几何度量**: 参阅 [mobile-layout-keyboard.md](references/mobile-layout-keyboard.md)
+  * *何时加载: 修改移动端媒体查询、软键盘弹出抬升、touchmove 拦截与动态滚动放行、视口几何探针时。*
+- **桌面端 GUI 界面、DOM Diff、状态同步与独立组件**: 参阅 [desktop-gui-interaction.md](references/desktop-gui-interaction.md)
+  * *何时加载: 修改 Wails 桌面端、`morphdom` 增量 Diff、日志查看器、任务托盘、离线门控时。*
+- **附件传输、流式进度反馈与气泡生命周期**: 参阅 [attachment-transfer-ux.md](references/attachment-transfer-ux.md)
+  * *何时加载: 修改文件上传/下载进度展示、气泡生命周期、批量下载、WebSocket 切后台保活时。*
+- **Chrome DevTools MCP E2E 仿真测试实战指南**: 参阅 [e2e-simulation-guide.md](references/e2e-simulation-guide.md)
+  * *何时加载: 执行基于 9222 端口的 E2E 多端仿真对齐测试、Receive 模式与遥测校验时。*

@@ -196,6 +196,75 @@ func TestWebSocketCommandLog(t *testing.T) {
 	}
 }
 
+func TestWebSocketViewportProbeLoggingWhenDebugLogDisabled(t *testing.T) {
+	logger := &diag.MemoryLogger{}
+	handler := NewWebSocketHandler(WebSocketConfig{
+		Logger:                logger,
+		DebugLog:              func() bool { return false }, // explicitly disabled
+		DisableSystemMessages: true,
+	})
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	conn, _, err := websocket.Dial(ctx, wsURL(server.URL)+"/probe-token/ws", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(websocket.StatusNormalClosure, "done")
+
+	var hello protocol.EventEnvelope
+	if err := wsjson.Read(ctx, conn, &hello); err != nil {
+		t.Fatal(err)
+	}
+
+	err = wsjson.Write(ctx, conn, protocol.CommandEnvelope{
+		Type:      protocol.CommandConnect,
+		CommandID: "conn-probe-test",
+		Client: protocol.ClientInfo{
+			Label: "ProbeTester",
+			Peer:  "iphone-7-safari",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var helloConn protocol.EventEnvelope
+	if err := wsjson.Read(ctx, conn, &helloConn); err != nil {
+		t.Fatal(err)
+	}
+
+	probeMsg := "[VIEWPORT-PROBE] trigger=focusin-100ms vh=667 vvH=350 vvTop=100 scrollY=0"
+	err = wsjson.Write(ctx, conn, protocol.CommandEnvelope{
+		Type:      protocol.CommandLog,
+		CommandID: "log-probe",
+		Text:      probeMsg,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	time.Sleep(50 * time.Millisecond)
+
+	logFilePath := filepath.Join(config.DefaultLogsDir(), "session-probe-token", "device-iphone-7-safari.log")
+	defer func() {
+		_ = os.Remove(logFilePath)
+		_ = os.Remove(filepath.Dir(logFilePath))
+	}()
+
+	content, err := os.ReadFile(logFilePath)
+	if err != nil {
+		t.Fatalf("Failed to read probe log file: %v", err)
+	}
+
+	if !strings.Contains(string(content), probeMsg) {
+		t.Fatalf("Expected log file to contain %q, but got %q", probeMsg, string(content))
+	}
+}
+
 func TestWebSocketTwoClientsExchangeText(t *testing.T) {
 	logger := &diag.MemoryLogger{}
 	handler := NewWebSocketHandler(WebSocketConfig{Logger: logger, DisableSystemMessages: true})
