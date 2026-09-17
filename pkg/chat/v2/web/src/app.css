@@ -122,6 +122,8 @@ html.embedded-chat .chat-head-title h1 {
     position: relative;
     touch-action: none;
     height: 100%;
+    -webkit-mask-image: -webkit-radial-gradient(white, black);
+    mask-image: radial-gradient(white, black);
 }
 /* ── Header ── */
 .chat-head {
@@ -1531,6 +1533,8 @@ button.file-card:hover {
 .composer {
     background: linear-gradient(180deg, rgba(255,255,255,0.98), #f3f7f2);
     border-top: 1px solid rgba(215, 222, 215, 0.92);
+    border-bottom-left-radius: 11px;
+    border-bottom-right-radius: 11px;
     box-shadow: 0 -10px 30px rgba(24, 33, 31, 0.06);
     bottom: 0;
     padding: 12px 14px 14px;
@@ -1897,6 +1901,7 @@ input:focus { border-color: var(--accent); outline: none; }
         padding-bottom: 8px !important;
     }
     .chat-shell {
+        border: 1px solid var(--line);
         border-radius: 14px;
         display: flex;
         flex-direction: column;
@@ -1904,6 +1909,8 @@ input:focus { border-color: var(--accent); outline: none; }
         min-height: 0;
         overflow: hidden;
         position: relative;
+        -webkit-mask-image: -webkit-radial-gradient(white, black);
+        mask-image: radial-gradient(white, black);
     }
     .chat-head {
         flex: 0 0 auto;
@@ -1939,7 +1946,8 @@ input:focus { border-color: var(--accent); outline: none; }
         flex-shrink: 0;
         margin-top: auto;
         padding: 9px 10px 11px;
-        padding-bottom: max(11px, env(safe-area-inset-bottom));
+        border-bottom-left-radius: 13px;
+        border-bottom-right-radius: 13px;
     }
     .composer-shell { padding: 5px 6px; }
     .compose-row {

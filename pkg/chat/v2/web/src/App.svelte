@@ -1905,7 +1905,7 @@
           <div class="chat-title-container">
             <h1 id="chat-title-text">
               <span class="chat-title-brand">EQT</span>
-              {#if licenseTier}
+              {#if licenseTier && isMobileLayout}
                 <button
                   type="button"
                   class="license-badge-btn"
