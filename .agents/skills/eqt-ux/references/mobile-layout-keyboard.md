@@ -135,3 +135,17 @@
   - 标记 `html.panel-input-active` 类名，声明 `html.panel-input-active .composer { display: none !important; }`，**彻底移除底部聊天输入栏占位**，严禁将聊天输入栏拉起至键盘上方误导用户。
   - 浮层面板声明 `max-height: calc(var(--chat-viewport-height, 100%) - 60px); overflow-y: auto;`，确保软键盘升起压缩视口时面板自适应保持全可见并在内部局部滚动。
   - 在激活重命名等操作时，主动调用 `input.focus()` 与 `input.scrollIntoView({ block: 'nearest' })`，确保编辑区域与键盘精准对应。
+
+---
+
+## 10. 移动端卡片容器防溢出与底边圆角保护规范
+
+- **规格来源**: `pkg/chat/v2/web/src/app.css:1735-1744, 1897-1907`
+- **Flex 容器内百分比高度陷阱 (Flex Item Height Trap)**:
+  - 当父容器 `main` 为 `display: flex; flex-direction: column;` 且具有 `padding` 时，其直接子元素（如 `.chat-shell` 卡片）**严禁设置 `height: 100%` 或 `max-height: 100%`**。
+  - 在 CSS 盒模型规范中，子元素写 `height: 100%` 会按父容器的整体计算高度（含上下 padding）解析，叠加 `main` 的安全区顶部 padding 后，导致子元素整体向底端偏移并超出父容器 `main`，被 `overflow: hidden` 强制截断，直接导致卡片底边框与两侧圆角丢失（呈现直角切边假象）。
+  - **规范**: 统一声明 `flex: 1 1 0%; min-height: 0;` 让 flex 算法自动扣减上下 padding 并精确填充内容区，保障底部边框与左右圆角（`border-radius: 14px`）完整露出。
+- **不可见定位表单元素撑大父级防呆**:
+  - 用于调起原生文件选择的隐藏 `<input type="file" class="composer-file-input">` 必须显式声明 `top: 0; left: 0;`。
+  - 若仅写 `position: absolute; width: 0.1px; height: 0.1px;` 而省略 `top/left`，浏览器会保留其在文档流尾部的静态位置，使其跌出父容器内部 padding，撑大容器 `scrollHeight` 导致出现幽灵滚动区并截断卡片底边。
+

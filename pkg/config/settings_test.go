@@ -314,3 +314,60 @@ func TestApplyProxyPolicy(t *testing.T) {
 	// Test unblocking proxy
 	ApplyProxyPolicy(false)
 }
+
+func TestConfigDirectoryIsolationBetweenTestAndProduction(t *testing.T) {
+	// Clear any overriding EQT_CONFIG_DIR for this test
+	t.Setenv("EQT_CONFIG_DIR", "")
+
+	// 1. Production mode (default)
+	t.Setenv("EQT_ENV", "")
+	t.Setenv("EQT_TESTING", "")
+	prodDir := DefaultConfigDir()
+	if filepath.Base(prodDir) != "eqt" {
+		t.Fatalf("expected production config dir base to be 'eqt', got: %s", prodDir)
+	}
+	if filepath.Base(DefaultConfigFile()) != "config.yml" || filepath.Base(filepath.Dir(DefaultConfigFile())) != "eqt" {
+		t.Fatalf("expected production config file in 'eqt/config.yml', got: %s", DefaultConfigFile())
+	}
+	if filepath.Base(filepath.Dir(DefaultLogsDir())) != "eqt" {
+		t.Fatalf("expected production logs dir in 'eqt/logs', got: %s", DefaultLogsDir())
+	}
+	if filepath.Base(filepath.Dir(DefaultCertsDir())) != "eqt" {
+		t.Fatalf("expected production certs dir in 'eqt/certs', got: %s", DefaultCertsDir())
+	}
+
+	// 2. Test mode via EQT_ENV=test
+	t.Setenv("EQT_ENV", "test")
+	if !IsTestEnvironment() {
+		t.Fatalf("expected IsTestEnvironment() to be true when EQT_ENV=test")
+	}
+	testDir := DefaultConfigDir()
+	if filepath.Base(testDir) != "eqt-test" {
+		t.Fatalf("expected test config dir base to be 'eqt-test', got: %s", testDir)
+	}
+	if filepath.Base(filepath.Dir(DefaultConfigFile())) != "eqt-test" {
+		t.Fatalf("expected test config file in 'eqt-test/config.yml', got: %s", DefaultConfigFile())
+	}
+	if filepath.Base(filepath.Dir(DefaultLogsDir())) != "eqt-test" {
+		t.Fatalf("expected test logs dir in 'eqt-test/logs', got: %s", DefaultLogsDir())
+	}
+	if filepath.Base(filepath.Dir(DefaultCertsDir())) != "eqt-test" {
+		t.Fatalf("expected test certs dir in 'eqt-test/certs', got: %s", DefaultCertsDir())
+	}
+
+	// 3. Test mode via EQT_TESTING=1
+	t.Setenv("EQT_ENV", "")
+	t.Setenv("EQT_TESTING", "1")
+	if !IsTestEnvironment() {
+		t.Fatalf("expected IsTestEnvironment() to be true when EQT_TESTING=1")
+	}
+	testingDir := DefaultConfigDir()
+	if filepath.Base(testingDir) != "eqt-test" {
+		t.Fatalf("expected testing config dir base to be 'eqt-test', got: %s", testingDir)
+	}
+
+	// 4. Verification of physical separation
+	if prodDir == testDir {
+		t.Fatalf("production and test directories must be strictly physically isolated, but both are: %s", prodDir)
+	}
+}

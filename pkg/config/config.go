@@ -249,32 +249,64 @@ func maybeMigrateLegacyConfig(targetDir string) {
 	})
 }
 
+// IsTestEnvironment reports whether the current process is running in a test/dev environment.
+// It checks:
+// 1. Build tag -tags eqtdev (compile-time test build)
+// 2. Runtime environment variables: EQT_ENV=test, EQT_TESTING=1, or EQT_TESTING=true
+// 3. Executable binary filename containing "test"
+func IsTestEnvironment() bool {
+	if isTestBuild {
+		return true
+	}
+	if os.Getenv("EQT_ENV") == "test" || os.Getenv("EQT_TESTING") == "1" || os.Getenv("EQT_TESTING") == "true" {
+		return true
+	}
+	if exePath, err := os.Executable(); err == nil {
+		base := strings.ToLower(filepath.Base(exePath))
+		// Exclude Go test binaries (e.g. "config.test", "config.test.exe")
+		if strings.HasSuffix(base, ".test") || strings.HasSuffix(base, ".test.exe") {
+			return false
+		}
+		if strings.Contains(base, "test") {
+			return true
+		}
+	}
+	return false
+}
+
 // DefaultConfigDir returns the unified base application data and configuration directory.
 // Priority order:
 // 1. EQT_CONFIG_DIR env var (primarily for test isolation and custom directory overrides; bypasses legacy migration)
 // 2. Standard user config directory via os.UserConfigDir():
-//   - Windows: %APPDATA%\eqt (e.g. C:\Users\<user>\AppData\Roaming\eqt)
-//   - Linux/POSIX: ~/.config/eqt (or $XDG_CONFIG_HOME/eqt)
-//   - macOS: ~/Library/Application Support/eqt
+//   - Production: %APPDATA%\eqt (e.g. C:\Users\<user>\AppData\Roaming\eqt)
+//   - Test:       %APPDATA%\eqt-test (strictly physically isolated from production)
+//   - Linux/POSIX: ~/.config/eqt (or ~/.config/eqt-test)
+//   - macOS: ~/Library/Application Support/eqt (or eqt-test)
 //
-// 3. User home directory fallback (~/.config/eqt)
-// 4. Current directory fallback (./eqt)
+// 3. User home directory fallback (~/.config/eqt or ~/.config/eqt-test)
+// 4. Current directory fallback (./eqt or ./eqt-test)
 // Note: EQT_CONFIG_DIR is intended for testing or explicit custom deployment overrides.
 func DefaultConfigDir() string {
 	if envDir := os.Getenv("EQT_CONFIG_DIR"); envDir != "" {
 		return envDir
 	}
+	dirName := "eqt"
+	if IsTestEnvironment() {
+		dirName = "eqt-test"
+	}
 	var target string
 	if dir, err := os.UserConfigDir(); err == nil && dir != "" {
-		target = filepath.Join(dir, "eqt")
+		target = filepath.Join(dir, dirName)
 	} else if home, err := os.UserHomeDir(); err == nil && home != "" {
-		target = filepath.Join(home, ".config", "eqt")
+		target = filepath.Join(home, ".config", dirName)
 	} else if current, err := user.Current(); err == nil && current.HomeDir != "" {
-		target = filepath.Join(current.HomeDir, ".config", "eqt")
+		target = filepath.Join(current.HomeDir, ".config", dirName)
 	} else {
-		target = filepath.Join(".", "eqt")
+		target = filepath.Join(".", dirName)
 	}
-	maybeMigrateLegacyConfig(target)
+	if !IsTestEnvironment() {
+		maybeMigrateLegacyConfig(target)
+	}
 	return target
 }
 

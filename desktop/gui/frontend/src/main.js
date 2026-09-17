@@ -183,6 +183,9 @@ initLogViewerDrag();
 const chatDailyFreeSeconds = 300;
 const chatDailyFreeMs = chatDailyFreeSeconds * 1000;
 const licenseStorageKey = 'eqt.license.activation';
+function getLicenseStorageKey() {
+    return isTestEnvironment() ? 'eqt.license.activation.test' : 'eqt.license.activation';
+}
 const licenseTiers = {
     PLUS: 'EQT Plus',
     PRO: 'EQT Pro',
@@ -6449,7 +6452,7 @@ function syncLicenseFromStatus(status) {
         // Online demotion (unbind/revoke/lease) must clear UI cache immediately only after status is confirmed ready.
         state.license = null;
         try {
-            window.localStorage.removeItem(licenseStorageKey);
+            window.localStorage.removeItem(getLicenseStorageKey());
         } catch (e) {}
     }
 }
@@ -6469,22 +6472,15 @@ function hasPaidLicense() {
 }
 
 function isTestEnvironment() {
+    // 1. If backend AppInfo has reported isTest, it is the authoritative ground truth.
     if (state.appInfo && typeof state.appInfo.isTest === 'boolean') {
-        if (state.appInfo.isTest) return true;
+        return state.appInfo.isTest;
     }
-    if (state.settings && state.settings.devMode) {
-        return true;
-    }
-    if (state.status && state.status.isServerDev) {
-        return true;
-    }
+    // 2. Early-startup fallback before AppInfo is resolved
     if (state.license) {
         const lic = state.license;
         if (lic.source === 'test' || lic.tier === 'TEST') return true;
         if (lic.code && String(lic.code).toUpperCase().startsWith('TEST-')) return true;
-    }
-    if (state.status && state.status.buyerEmail && String(state.status.buyerEmail).toLowerCase().includes('test')) {
-        return true;
     }
     return false;
 }
@@ -6492,7 +6488,8 @@ function isTestEnvironment() {
 
 function loadLicense() {
     try {
-        const saved = JSON.parse(window.localStorage.getItem(licenseStorageKey) || '{}');
+        const key = getLicenseStorageKey();
+        const saved = JSON.parse(window.localStorage.getItem(key) || '{}');
         if (saved && saved.tier && licenseTiers[saved.tier]) {
             state.license = saved;
             return saved;
@@ -6507,7 +6504,8 @@ function loadLicense() {
 function saveLicense(license) {
     state.license = license;
     try {
-        window.localStorage.setItem(licenseStorageKey, JSON.stringify(license));
+        const key = getLicenseStorageKey();
+        window.localStorage.setItem(key, JSON.stringify(license));
     } catch (err) {
         console.warn('[Storage] Failed to save license to localStorage:', err);
     }
@@ -6576,7 +6574,7 @@ function resetLicense() {
 
     ResetLicense().then(async function() {
         try {
-            window.localStorage.removeItem(licenseStorageKey);
+            window.localStorage.removeItem(getLicenseStorageKey());
         } catch (err) {
             console.warn('[Storage] Failed to remove license from localStorage:', err);
         }
