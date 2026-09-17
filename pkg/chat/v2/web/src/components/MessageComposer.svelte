@@ -2,7 +2,7 @@
   import { createEventDispatcher, onMount, onDestroy, tick } from 'svelte';
   import { getTranslation } from '../lib/i18n';
   import { chatSessionStatus } from '../state/chatStore';
-  import { isTouchOrMobile, scheduleViewportRestore } from '../lib/viewport';
+  import { isTouchOrMobile, scheduleViewportRestore, focusWithoutNativeScroll, pinLayoutScroll } from '../lib/viewport';
   const dispatch = createEventDispatcher();
   export let text = '';
   export let currentLang = 'zh';
@@ -22,10 +22,10 @@
     text = '';
     dispatch('sendText', sentText);
 
-    // Maintain focus for continuous typing without dismissing virtual keyboard
+    // Maintain focus for continuous typing without dismissing virtual keyboard or scrolling window
     requestAnimationFrame(() => {
       if (textareaEl) {
-        textareaEl.focus();
+        focusWithoutNativeScroll(textareaEl);
       }
     });
 
@@ -63,8 +63,15 @@
     }
   }
 
+  function handleTextareaPointerDown() {
+    if (!isTouchOrMobile()) return;
+    if (document.activeElement === textareaEl) return;
+    focusWithoutNativeScroll(textareaEl);
+  }
+
   function handleFocus() {
     if (isTouchOrMobile()) {
+      pinLayoutScroll();
       const messagesEl = document.querySelector('.messages');
       if (messagesEl) {
         messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -206,6 +213,7 @@
         autocomplete="off" 
         rows="1"
         disabled={$chatSessionStatus !== 'active'}
+        on:pointerdown={handleTextareaPointerDown}
         on:keydown={handleKeydown}
         on:focus={handleFocus}
         on:blur={handleBlur}

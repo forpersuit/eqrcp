@@ -10,6 +10,7 @@
   import type { Message, BatchDownloadInfo, TransferEvent } from './services/types';
   import { DEFAULT_FREE_MAX_ATTACHMENT_BYTES } from './services/quotaConfig';
   import { resolveDownloadTransferId, applyDownloadCancelled, applyBatchDownloadCancelled } from './services/attachmentPolicy';
+  import { pinLayoutScroll } from './lib/viewport';
 
   if (typeof window !== 'undefined') {
     window.addEventListener('error', (e) => {
@@ -46,6 +47,7 @@
   let observer: MutationObserver | null = null;
   let visualViewportHandler: (() => void) | null = null;
   let windowScrollHandler: (() => void) | null = null;
+  let documentScrollCaptureHandler: ((e: Event) => void) | null = null;
   let handleGlobalFocusIn: ((e: FocusEvent) => void) | null = null;
   let handleGlobalFocusOut: ((e: FocusEvent) => void) | null = null;
   let handleDocumentPointerDown: ((e: PointerEvent | MouseEvent) => void) | null = null;
@@ -1096,7 +1098,9 @@
         activeEl.tagName === 'INPUT' ||
         activeEl.tagName === 'TEXTAREA'
       )) {
+        pinLayoutScroll();
         const sync = () => {
+          pinLayoutScroll();
           if (visualViewportHandler) visualViewportHandler();
         };
         sync();
@@ -1110,6 +1114,7 @@
 
     handleGlobalFocusOut = () => {
       const sync = () => {
+        pinLayoutScroll();
         if (visualViewportHandler) visualViewportHandler();
       };
       sync();
@@ -1171,15 +1176,26 @@
 
     if (typeof window !== 'undefined') {
       windowScrollHandler = () => {
+        pinLayoutScroll();
         if (visualViewportHandler) {
           visualViewportHandler();
         }
       };
       window.addEventListener('scroll', windowScrollHandler);
+
+      documentScrollCaptureHandler = (e: Event) => {
+        const target = e.target as HTMLElement | null;
+        if (target && target.classList && target.classList.contains('messages')) {
+          return; // 放行消息列表合法滚动
+        }
+        pinLayoutScroll();
+      };
+      document.addEventListener('scroll', documentScrollCaptureHandler, { capture: true, passive: true });
     }
 
     if (typeof window !== 'undefined' && window.visualViewport) {
       visualViewportHandler = () => {
+        pinLayoutScroll();
         const vv = window.visualViewport;
         if (vv) {
           const vh = window.innerHeight;
@@ -1277,6 +1293,9 @@
     }
     if (windowScrollHandler && typeof window !== 'undefined') {
       window.removeEventListener('scroll', windowScrollHandler);
+    }
+    if (documentScrollCaptureHandler) {
+      document.removeEventListener('scroll', documentScrollCaptureHandler, { capture: true });
     }
     if (handleGlobalFocusIn) {
       document.removeEventListener('focusin', handleGlobalFocusIn);

@@ -22,7 +22,7 @@ description: "Architectural guidelines, layout constraints, notification styles,
 
 ### 2.1 移动端顶层画布锁定与三段式 Flex 结构
 - **机制**: `@media (max-width: 820px)` 下，`html, body, #app` 声明 `position: fixed; inset: 0; width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none;`，彻底从源头剥夺 WebKit 原生 `scrollIntoView` 抢跑的滚动作案空间。
-- **三段式布局**: 顶栏 `.chat-head`（`flex: 0 0 auto`，固定置顶）、底部输入栏 `.composer`（`flex: 0 0 auto`，随视口抬升）、中间消息流 `.message-list-container`（`flex: 1 1 auto; min-height: 0;`，自适应吸收全部视口高度缩减）。
+- **三段式布局**: 顶栏 `.chat-head`（`flex: 0 0 auto`，固定置顶）、底部输入栏 `.composer`（`flex: 0 0 auto`，随视口抬升）、中间消息流 `.message-list-container`（`flex: 1 1 auto; min-height: 0;`，自适应吸收全部视口高度缩减）。常规视口下通过只读假聚焦（`focusWithoutNativeScroll`）与布局容器零位锁定（`pinLayoutScroll`）确保顶栏固定不动，仅收缩消息流。
 - **规格来源**: `pkg/chat/v2/web/src/app.css` 与 `src/App.svelte`。
 
 ### 2.2 软键盘遮挡几何度量与日志探针

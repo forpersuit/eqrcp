@@ -41,8 +41,12 @@
         will-change: transform;
     }
     ```
-  - **WebKit 平移补偿机制**: iOS Safari 软键盘弹出时会将整个 Layout Viewport 向上平移 `visualViewport.offsetTop` 个像素，导致顶栏被推出物理屏幕。通过监听 `visualViewport` 的 `resize` 与 `scroll` 事件，动态将 `--chat-viewport-offset` 设为 `${vv.offsetTop}px`，通过合成层向下的位移实时抵消系统平移，将顶栏牢牢固定在物理屏幕顶部。
-  - **严禁强行 `window.scrollTo(0, 0)`**: 键盘平移走的是独立的系统平移轴而非文档滚动轴，动画期调用 `scrollTo` 会与 WebKit 原生平移动画激烈打架并产生下沉弹回抖动。全权交由 `visualViewport.offsetTop` 单向驱动对冲。
+  - **双轴独立防御机制 (Two-Axis Independent Defense)**:
+    1. **视觉视口平移轴 (Visual Viewport Axis)**: iOS Safari 软键盘弹出时会将整个 Layout Viewport 向上平移 `visualViewport.offsetTop` 个像素，导致顶栏被推出物理屏幕。通过监听 `visualViewport` 的 `resize` 与 `scroll` 事件，动态将 `--chat-viewport-offset` 设为 `${vv.offsetTop}px`，通过合成层向下的位移实时抵消系统平移，将顶栏牢牢固定在物理屏幕顶部。
+    2. **文档与祖先容器滚动轴 (Document & Container Scroll Axis)**: 输入框聚焦时光标的底层原生 `scroll-into-view` 会强行篡改 `window.scrollY` 及祖先容器（`html, body, #app, .chat-viewport, main, .chat-shell`）的 `scrollTop`，即使声明了 `overflow: hidden` 也会导致顶栏被向上移出屏幕。必须采用三层联合防御：
+       - **只读假聚焦防抢跑 (`focusWithoutNativeScroll`)**: 触摸聚焦瞬间设置 `readonly` 并调度 `focus({ preventScroll: true })`，下一帧移除 `readonly`，从源头剥夺原生光标滚动的触发条件；
+       - **布局容器零位锁定 (`pinLayoutScroll`)**: 监听捕获阶段的 `scroll` 事件，将祖先非滚动容器的 `scrollTop` 及 `window.scrollY` 瞬时重置归零，放行 `.messages` 合法滚动；
+       - **极限小屏弹性放行**: 仅当可视高度极小（`visualViewport.height < 240px`，如横屏键盘占满）时放行顶栏上推，常规竖屏下顶栏岿然不动，由中间消息流弹性吸收全部收缩。
 
 ---
 
