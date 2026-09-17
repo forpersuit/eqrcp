@@ -197,6 +197,7 @@
   let currentLang = rawLang.toLowerCase().split('-')[0];
 
   let isMobileLayout = false;
+  let chatViewportEl: HTMLElement | null = null;
   let baseViewportHeight = typeof window !== 'undefined' ? window.innerHeight : 0;
   function checkScreenSize() {
     isMobileLayout = typeof window !== 'undefined' && window.innerWidth <= 820;
@@ -1185,8 +1186,18 @@
 
       documentScrollCaptureHandler = (e: Event) => {
         const target = e.target as HTMLElement | null;
-        if (target && target.classList && target.classList.contains('messages')) {
-          return; // 放行消息列表合法滚动
+        if (target && (
+          target.classList.contains('messages') ||
+          target.closest('.messages') ||
+          target.closest('.device-panel') ||
+          target.closest('.lang-panel') ||
+          target.closest('.license-panel') ||
+          target.closest('.more-menu-panel') ||
+          target.closest('.modal-body') ||
+          target.closest('.scrollable') ||
+          target.hasAttribute('data-scrollable')
+        )) {
+          return; // 放行消息列表及弹窗面板合法局部滚动
         }
         pinLayoutScroll();
       };
@@ -1241,6 +1252,19 @@
           document.documentElement.classList.toggle('keyboard-open', isKeyboardOpen);
           document.documentElement.classList.toggle('composer-active', isComposerActive && isKeyboardOpen);
           document.documentElement.classList.toggle('panel-input-active', isPanelInputActive && isKeyboardOpen);
+
+          // 核心修复：直接设置 chatViewportEl 的 inline style，获得最高优先级渲染保证，确保键盘升起时输入框与底边框紧贴键盘上沿抬起，中间消息区域自适应收窄
+          if (chatViewportEl) {
+            if (isKeyboardOpen || isComposerActive || isPanelInputActive) {
+              chatViewportEl.style.height = `${height}px`;
+              chatViewportEl.style.maxHeight = `${height}px`;
+              chatViewportEl.style.transform = offsetTop ? `translateY(${offsetTop}px)` : 'none';
+            } else {
+              chatViewportEl.style.height = '';
+              chatViewportEl.style.maxHeight = '';
+              chatViewportEl.style.transform = '';
+            }
+          }
 
           probeViewport('vv-sync');
 
@@ -1867,7 +1891,7 @@
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <!-- svelte-ignore a11y_click_events_have_key_events -->
-<div class="chat-viewport" on:click={closeAllPanels}
+<div class="chat-viewport" bind:this={chatViewportEl} on:click={closeAllPanels}
   on:dragenter={handleDragEnter}
   on:dragover={handleDragOver}
   on:dragleave={handleDragLeave}
