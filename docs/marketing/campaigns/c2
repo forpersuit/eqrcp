@@ -1,22 +1,22 @@
-# EQT X (Twitter) 官方推广全案 — 核心特点矩阵与促销码传播策略 (Campaign C2 增强版)
+# EQT X (Twitter) 官方推广全案 — 核心特点矩阵与促销码传播策略 (大众与普通用户版)
 
-本文档系统整理了针对 **X.com (欧美技术与创作者受众 / Tech Twitter)** 的 EQT 核心特点推广推文矩阵（中英双语对照、配图/短动图分镜脚本），并从第一性原理出发，系统解决了**算法加权、跨端转化流失断层、私信风控（Anti-Spam）与闭源免费增值心智 (Closed-Source Freemium)** 等关键难题。
+本文档系统整理了针对 **X.com 欧美广大普通用户（iPhone + Windows 办公族、创作者、家庭与学生受众）** 的 EQT 核心特点推广推文矩阵。全面剔除编程语言（如 Go）、命令行（CLI / Terminal）与技术黑话，以“零门槛、免装 App、拖拽秒传、无广告、纯离线”等最直白的用户语言呈现，并提供 5~7 秒极简演示动图分镜与全链路防风控履约 SOP。
 
 ---
 
 ## 目录
-1. [传播优化与第一性原理设计考量 (Design Rationale)](#1-传播优化与第一性原理设计考量-design-rationale)
+1. [传播优化与大众心理学考量 (Design Rationale)](#1-传播优化与大众心理学考量-design-rationale)
    - 1.1 X.com 推荐算法与曝光加权飞轮
    - 1.2 跨端转化断层消除机制 (Mobile-to-Desktop Gap)
-   - 1.3 行为心理学、价值锚定与闭源免费增值心智 (Freemium Model)
-   - 1.4 欧美真实工作流场景穿透与严谨性
+   - 1.3 面向普通大众的价值锚定与零心理负担 (Consumer Freemium)
+   - 1.4 抛弃极客黑话，击穿普通用户的真实生活痛点
 2. [6 大核心特点推文矩阵与动态演示分镜 (中英双语 + 视觉脚本)](#2-6-大核心特点推文矩阵与动态演示分镜-中英双语--视觉脚本)
    - [特点 1：打破跨平台生态围墙 (AirDrop for Any Device)](#特点-1打破跨平台生态围墙-airdrop-for-any-device)
    - [特点 2：接收端 0 安装、0 注册 (Zero App / Camera-to-Download)](#特点-2接收端-0-安装0-注册-zero-app--camera-to-download)
-   - [特点 3：局域网私密即时聊 (Anti-Audit Ephemeral Chat)](#特点-3局域网私密即时聊-anti-audit-ephemeral-chat)
-   - [特点 4：手机反向回传电脑 (Phone-to-PC Receive Mode)](#特点-4手机反向回传电脑-phone-to-pc-receive-mode)
-   - [特点 5：一码多分发，现场并发传输 (One-to-Many Asset Distribution)](#特点-5一码多分发现场并发传输-one-to-many-asset-distribution)
-   - [特点 6：无公网连接也能用，纯局域网脱机互联 (Offline LAN Resilience)](#特点-6无公网连接也能用纯局域网脱机互联-offline-lan-resilience)
+   - [特点 3：电脑手机私密便签与文字秒传 (Zero-Trace Instant Clipboard & Chat)](#特点-3电脑手机私密便签与文字秒传-zero-trace-instant-clipboard--chat)
+   - [特点 4：手机照片视频批量倒回电脑 (Phone-to-PC Receive Mode)](#特点-4手机照片视频批量倒回电脑-phone-to-pc-receive-mode)
+   - [特点 5：一码多分发，现场多人同时下载 (One-to-Many Asset Distribution)](#特点-5一码多分发现场多人同时下载-one-to-many-asset-distribution)
+   - [特点 6：无外网也能用，纯局域网脱机互联 (Offline LAN Resilience)](#特点-6无外网也能用纯局域网脱机互联-offline-lan-resilience)
 3. [促销码（Promo Code）履约全链路与防风控 SOP](#3-促销码promo-code履约全链路与防风控-sop)
    - 3.1 评论区第 1 条跟帖规范 (First Reply Template)
    - 3.2 私信派送模板矩阵 (Anti-Spam DM Templates)
@@ -25,120 +25,110 @@
 
 ---
 
-## 1. 传播优化与第一性原理设计考量 (Design Rationale)
+## 1. 传播优化与大众心理学考量 (Design Rationale)
 
-在对原版文案的重构中，我们立足于全转化漏斗的每一个摩擦点，系统融入了以下关键优化：
+普通用户不是程序员，他们**不在乎软件是用什么语言写的**，也**极度排斥敲命令行**。他们只在乎：“好不好用？麻烦不麻烦？要不要花钱？安不安全？”
 
 ### 1.1 X.com 推荐算法与曝光加权飞轮
 1. **零外链降权防范 (Zero-Link In Main Tweet)**：
    - X 平台对正文包含外部链接（HTTP/HTTPS）的推文施加重度限流（曝光减少 50%~80%）。
-   - **执行**：主推文 100% 不带链接，官方唯一下载与文档地址统一在发出推文后的**评论区第 1 条 (First Reply)** 呈现。
+   - **执行**：主推文 100% 不带任何外链，官方网站唯一下载地址统一在发出推文后的**评论区第 1 条 (First Reply)** 呈现。
 2. **算法加权飞轮（Bookmark > Reply > Repost > Like）**：
    - X 算法中，**Bookmark（书签/收藏）** 权重最高（约 30x~50x），**Reply（两方多轮互动）** 权重极高。
-   - **执行**：文案强化引导用户在评论区留下指定触发词（如 `KEY` / `EQT` / `OFFLINE`），并加上 `Bookmark this` 心理暗示。每一条回复都由作者/工具跟进发码，使单条推文迅速被算法识别为高热度讨论帖推入 “For You” 流。
+   - **执行**：推文以“送激活码”为 Hook，引导用户在评论区留下指定词（如 `KEY` / `EQT` / `OFFLINE`），并明示 `Bookmark this` 收藏备用，迅速拉升推文热度，推入更多普通用户的 “For You” 信息流。
 
 ### 1.2 跨端转化断层消除机制 (Mobile-to-Desktop Gap)
-1. **现状与矛盾**：
-   - 超过 80% 的 Tech Twitter 用户在**移动端（手机）**刷推文并参与评论互动。
-   - EQT 的核心产品形态是**桌面端客户端 (Windows / macOS / Linux)**。
-   - 传统模式下，用户在手机私信中收到一个 PC 激活码和下载链接，由于不在电脑前，离开推文后瞬间遗忘，实际电脑端激活率通常不足 20%。
-2. **消除断层的设计**：
-   - **评论区第 1 条植入提醒**：明确提示移动端用户先点击 **Bookmark 收藏**，或将链接直接发送给自己，以便在电脑前快速装机。
-   - **私信（DM）提供“一键跨端保存”建议**：在私信模版中增加清晰指引：“当前在手机上？请长按此私信添加收藏，或一键转发到您的备忘录/工作邮箱”。
+1. **现状与痛点**：
+   - 超过 80% 的用户是在**手机上**刷推文并评论领码。
+   - EQT 是电脑端软件，用户在手机上收到私信时往往不在电脑前，过后极易遗忘。
+2. **平滑承接设计**：
+   - 评论区首条与私信模版中明确提示：“现在正用手机刷推？长按收藏本私信或一键转发给自己，回家开电脑 1 分钟搞定”。
 
-### 1.3 行为心理学、价值锚定与闭源免费增值心智 (Freemium Model)
-1. **价值锚定与特权赋能 (Anchoring & Social Currency)**：
-   - 将赠送包装为 **“Early Adopter Pass / Founding Member License”**（早期支持者专属年度授权，价值 $11.99），将“索求用户反馈”转变为“赋予早期极客特权”。
-2. **闭源免费增值模式 (Freemium) 的商业与道德自洽**：
-   - EQT 作为独立开发者用 Go 打造的高性能原生桌面工具，采用纯正的“免费增值模式 (Freemium)”：
-   - **基础版 (Free Tier)**：核心局域网传输能力**永久 100% 免费使用**，无广告插播、无云端限速、零遥测上传、不收集用户隐私。
-   - **Plus 专属特权 (Plus Tier)**：赠送的 1 年期授权码用于进阶生产力特权（如多设备无限制并发分发、自动化归档与高级会话特权）。
-   - **独立开发者信任优势**：不必附会“开源”名义。对于私有工具，欧美 Tech 受众对“独立黑客（Indie Hacker）用心打造的无广告原生轻量工具”极其推崇，且基础功能免费无套路。实事求是反而彻底消除了“假开源真收费”的道德风险。
-3. **稀缺性与紧迫感 (Scarcity & FOMO)**：
-   - 维持“限量 50 个名额（50 free keys）”，制造合理的即时抢占心理。
+### 1.3 面向普通大众的价值锚定与零心理负担 (Consumer Freemium)
+1. **价值感知**：
+   - 赠送价值 **$11.99 的 1 年期 Plus 会员特权**，给普通用户“白捞实惠”的明确价值锚定。
+2. **彻底打消顾虑**：
+   - 明确传达：**核心功能永久免费、无广告、不需要注册手机号或邮箱、绝不上云泄露隐私**。
+   - 消除任何商业戒心，让大众用户觉得这是一个良心、纯净的日常必备小工具。
 
-### 1.4 欧美真实工作流场景穿透与严谨性
-1. **真实工作流痛点切入**：
-   - 痛点 1：Windows 电脑搭配 iPhone 无法享受 AirDrop 的割裂感。
-   - 痛点 2：上班时用 Slack / Teams 互发敏感配置或密码被公司 IT 审计与留痕。
-   - 痛点 3：线下会议给多位跨系统同事分发资料时必须人人装特定 App。
-2. **第一性原理与严谨性（拒绝虚夸）**：
-   - 局域网速率受 Wi-Fi 频段、路由器物理距离与天线规格制约，严禁承诺“80MB/s 极速”。统一改用“Full gigabit speed of your local Wi-Fi”（局域网全速千兆传输）。
-   - 突出“100% 离线脱机”：市面多数同类工具依赖公网信令服务器，而 EQT 物理断网仍可稳定工作。
+### 1.4 抛弃极客黑话，击穿普通用户的真实生活痛点
+* ❌ 彻底摒弃：“Go 语言开发”、“单二进制 Single Binary”、“CLI 敲命令”、“API Key / VS Code 代码片段”、“遥测 Telemetry”。
+* ✅ 全面换成：“拖拽文件”、“手机自带相机扫码”、“4K 原画不压缩”、“不用找数据线”、“不开云盘”、“防偷窥私密便签”。
 
 ---
 
 ## 2. 6 大核心特点推文矩阵与动态演示分镜 (中英双语 + 视觉脚本)
 
-> 💡 **发推黄金法则**：文字推文的点击率（CTR）通常只有附带高质量动图/短视频推文的 1/4。**强烈建议每条推文必须附带 5~8 秒的无声极简演示视频或高清 WebP 动图**。
+> 💡 **发推黄金法则**：普通用户对文字极其不敏感，但对**画面丝滑感**极度上头。**每条推文必须附带 5~7 秒的高清实拍演示视频或动图**。
 
 ---
 
 ### 特点 1：打破跨平台生态围墙 (AirDrop for Any Device)
-* **核心切入点**：专治 Windows + iPhone 用户的跨生态传输痛点，无需线缆，比 AirDrop 覆盖更广。
+* **核心切入点**：Windows 电脑配 iPhone，传照片传视频再也不用找数据线或忍受慢速云盘。
 
 #### 🎬 视觉演示脚本 (5~7 秒无声动图 / 视频)
-* **画面构图**：分屏对比或第一人称实拍。左侧为 Windows 11 桌面，右侧手持 iPhone 15/16 Pro。
+* **画面构图**：第一人称办公桌实拍。左边是 Windows 笔记本，右边手持 iPhone。
 * **分镜流程**：
-  1. `00:00 - 00:02`：Windows 电脑右键点击 4K 视频文件，启动 EQT 弹出清晰二维码。
-  2. `00:02 - 00:04`：右侧手机仅打开**系统原生相机**对准屏幕二维码，黄色扫码弹窗秒出并自动在 Safari 打开。
-  3. `00:04 - 00:06`：文件以满带宽下载到 iPhone 胶卷中，画面打出绿色文字蒙层：“Zero Cables • No iCloud • Full Wi-Fi Speed”。
+  1. `00:00 - 00:02`：电脑上随手把一个 4K 视频拖进 EQT 界面，屏幕立刻弹出一个清爽的二维码。
+  2. `00:02 - 00:04`：拿起 iPhone 打开**系统自带相机**一扫，屏幕上方瞬间弹出 Safari 下载提示。
+  3. `00:04 - 00:06`：视频满速保存到手机相册，画面打上显眼绿标：“No Cables • No iCloud • AirDrop Speed on PC”。
 
 #### 🇺🇸 英文版 (直接发 X)
 ```text
 Using a Windows PC with an iPhone in 2026 is still unnecessarily painful:
-• AirDrop is locked inside Apple's walled garden
-• Cloud drives take twice as long to upload & download
-• Chat apps compress your original 4K photos
+• AirDrop doesn't work on Windows
+• Cloud drives are slow and eat up your storage
+• Chat apps heavily compress your 4K photos & videos
 
-I built EQT in Go:
-Scan the desktop QR code with your iPhone camera, and transfer files directly over your local Wi-Fi. Zero mobile app required.
+That's why I built EQT:
+AirDrop for literally any device. 
+Drop a file on your PC screen, scan the QR code with your iPhone camera, and download directly over Wi-Fi. Zero mobile apps needed.
 
 👇 Watch the 6s demo below!
 
-Giving away 50 free 1-Year Plus passes ($11.99 value) to celebrate the launch.
-Drop a "KEY" below & RT, and I’ll DM your license key!
+Giving away 50 free 1-Year Plus passes ($11.99 value).
+Drop a "KEY" below & RT, and I’ll DM your free pass!
 ```
 
 #### 🇨🇳 中文版 (打底与参考)
 ```text
-在 2026 年，Windows 电脑配 iPhone 传文件依然充满折磨：
-• AirDrop 锁死在苹果生态，不支持 Windows
-• 网盘上传再下载，双倍耗时还吞带宽
+在 2026 年，Windows 电脑配 iPhone 传文件依然折磨人：
+• AirDrop 锁死在苹果生态，根本不支持 Windows
+• 云盘上传再下载，又慢又吞存储空间
 • 聊天软件会狠狠压缩你的原图和 4K 视频
 
-我用 Go 语言写了 EQT：
-电脑端生成二维码，iPhone 自带相机扫码，局域网全速直传。手机端无需安装任何 App。
+所以我做了 EQT 这个极简小工具：
+电脑上把文件一拖，手机拿出自带相机一扫，连线缆都不用插，局域网全速秒传。手机端完全不用装任何 App。
 
 👇 6秒实拍演示见下方动图！
 
-为庆祝上线，送出 50 个 1 年期 Plus 专属激活码（价值 11.99 美元）！
-在下方转发并回复【KEY】，我会在私信中发送兑换码！
+送出 50 个 1 年期 Plus 专属激活码（价值 11.99 美元）！
+在下方转发并回复【KEY】，我私信送你激活码！
 ```
 
 ---
 
 ### 特点 2：接收端 0 安装、0 注册 (Zero App / Camera-to-Download)
-* **核心切入点**：打击 LocalSend 等竞品“两端都必须下载同款 App”的麻烦，接收方原生相机扫码浏览器秒下。
+* **核心切入点**：借朋友或同事传文件，最讨厌“必须先逼对方下载注册同一个 App”。
 
 #### 🎬 视觉演示脚本 (5~7 秒无声动图 / 视频)
-* **画面构图**：实拍办公桌面，展示一名同事给另一位同事临时发送 2GB 设计资产。
+* **画面构图**：同事工位日常。A 正在给 B 传一份超大设计原图或相册打包。
 * **分镜流程**：
-  1. `00:00 - 00:02`：发送方终端敲下 `eqt design-assets.zip` 亮出二维码。
-  2. `00:02 - 00:04`：接收方拿起未经任何配置的新手机（Android / iPhone），打开相机直接扫码。
-  3. `00:04 - 00:06`：手机浏览器立即开始高速下载，镜头聚焦接收方屏幕，画面浮现文字：“Receiver Installs 0 Apps • 0 Sign-ups”。
+  1. `00:00 - 00:02`：电脑端直接右键文件点击“Share with EQT”，屏幕亮出二维码。
+  2. `00:02 - 00:04`：同事随手拿出自己的手机，未下载任何软件，打开自带相机直接扫。
+  3. `00:04 - 00:06`：手机浏览器立即开始高速下载，镜头特写手机屏幕，浮现大字：“Your Friends Install 0 Apps • 0 Sign-ups”。
 
 #### 🇺🇸 英文版 (直接发 X)
 ```text
-The biggest friction of cross-device transfer tools:
-Both sender and receiver MUST install the same app.
+The most annoying part of sharing files with friends:
+Forcing them to install an app or create an account first.
 
-With EQT, the receiver installs NOTHING:
-1. Run `eqt myfile.zip` on your computer (or use GUI)
-2. Your friend scans the QR code with their default camera
-3. Download starts instantly in their mobile browser
+With EQT, your friends install NOTHING:
+1. Drop any file into EQT on your computer
+2. Your friend points their phone camera at the screen
+3. The file downloads directly in their browser
 
-No apps, no signups, zero friction. (Watch demo 👇)
+No apps, no accounts, zero friction. (Watch 6s demo 👇)
 
 Want a free 1-Year Plus Pass ($11.99 value)?
 RT & comment "EQT" — dropping 50 keys in DMs today!
@@ -146,15 +136,15 @@ RT & comment "EQT" — dropping 50 keys in DMs today!
 
 #### 🇨🇳 中文版 (打底与参考)
 ```text
-多数跨设备传输工具最烦人的一点：
-发送方和接收方必须安装同一个 App，甚至还要注册账号。
+给朋友或同事传文件最烦人的事：
+非要逼着对方也去应用商店下载同一个 App，甚至还要注册账号。
 
-而用 EQT，接收端完全不需要安装任何东西：
-1. 电脑端敲一行 `eqt myfile.zip` 或使用桌面 GUI
-2. 朋友或同事用手机自带相机扫码
-3. 手机浏览器瞬间直接开始下载
+用 EQT，接收方手机什么都不用装：
+1. 电脑上把文件往 EQT 一拖（或者右键直接分享）
+2. 朋友拿出手机，打开自带相机扫一下
+3. 手机浏览器直接高速开始下载
 
-不用下载应用、不用注册、零心理负担（演示见下方动图 👇）。
+不用下载软件、不用注册账号、零打扰（6秒演示看下方 👇）。
 
 想要 1 年期 Plus 专属特权（价值 11.99 美元）？
 转发并在评论区回复【EQT】—— 今天私信派送 50 个激活码！
@@ -162,116 +152,119 @@ RT & comment "EQT" — dropping 50 keys in DMs today!
 
 ---
 
-### 特点 3：局域网私密即时聊 (Anti-Audit Ephemeral Chat)
-* **核心切入点**：抗企业 IT 审计与云端监控，电脑与手机互甩 Token、密码、临时文本，关闭终端即焚。
+### 特点 3：电脑手机私密便签与文字秒传 (Zero-Trace Instant Clipboard & Chat)
+* **核心切入点**：电脑手机互甩临时密码、地址、长网址或私人便签，不想在工作聊天软件留痕。
 
 #### 🎬 视觉演示脚本 (5~7 秒无声动图 / 视频)
-* **画面构图**：深色模式终端 + 手机端 Web 聊天界面左右并排。
+* **画面构图**：电脑浏览器界面与手机屏幕并排。
 * **分镜流程**：
-  1. `00:00 - 00:02`：电脑端运行 `eqt chat`。左侧 VS Code 中高亮复制一段敏感的 OpenAI API Key。
-  2. `00:02 - 00:04`：右侧手机扫码进入极简 Chat 房间，刚才复制的 Key 实时双向呈现，带一键“Copy”按钮。
-  3. `00:04 - 00:06`：电脑按下 `Ctrl+C` 退出终端，手机页面立即提示“Session Terminated”，所有内存数据即刻物理销毁，浮现盾牌动画：“100% Off-the-Record • No IT Logs”。
+  1. `00:00 - 00:02`：电脑端点开 EQT 临时文字房间，在电脑上复制粘贴一段长网址和私密便签。
+  2. `00:02 - 00:04`：手机扫码进入房间，便签实时出现，点击一键“复制”按钮。
+  3. `00:04 - 00:06`：电脑随手关掉窗口，手机端提示连接结束，所有文字记录瞬间彻底清空，浮现无痕盾牌：“100% Private • No Chat Logs • Leaves Zero Trace”。
 
 #### 🇺🇸 英文版 (直接发 X)
 ```text
-Still sending API keys, passwords, or snippets to your phone via Slack or Teams?
+Still emailing yourself links, passwords, or notes just to get them onto your phone?
 
-⚠️ Corporate chats are logged, retained & audited by IT.
-☁️ Cloud clipboard sync tools keep your secrets on 3rd-party servers.
+• Work chat apps log and monitor your personal messages
+• Emailing yourself clutters your inbox
+• Cloud clipboards store your private text on remote servers
 
-Try EQT Ephemeral Chat:
-One click creates a private, encrypted room on your local Wi-Fi.
-Bidirectional clipboard & file sync. When you close it, everything is permanently wiped.
+Try EQT Private Local Room:
+One click creates a private room between your PC & phone over Wi-Fi.
+Instantly sync text, links, and clipboard both ways. 
+Close the window, and every word is permanently wiped.
 
-👇 5-sec demo below!
+👇 5s demo below!
 Giving away 50 free 1-Year Plus keys ($11.99).
-RT & reply "SECURE", and I'll DM your key!
+RT & reply "PRIVATE", and I'll DM your key!
 ```
 
 #### 🇨🇳 中文版 (打底与参考)
 ```text
-平时电脑手机互传 API 密钥、临时密码或代码，还在用 Slack 或企业微信？
+想把电脑上的长网址、临时密码或备忘笔记随手甩到手机上，还在给自己发微信或发邮件？
 
-⚠️ 公司工作聊天全量留痕，受企业 IT 审计监控
-☁️ 云端剪贴板同步工具会将你的敏感数据传到第三方服务器
+• 聊天软件发私人文字容易留下监控记录
+• 发邮件步骤繁琐还塞满收件箱
+• 云端剪贴板会把你的私人文字存到别人服务器上
 
-试试 EQT 局域网阅后即焚 Chat：
-一键在本地 Wi-Fi 生成加密临时房间。电脑手机文字、剪贴板、文件双向秒同步。
-关闭终端，一切痕迹立刻销毁，100% 局域网离线私密。
+试试 EQT 局域网即时便签：
+一键在电脑与手机间建一个私密房间。长文字、网址、剪贴板双向秒同步。
+随用随开，窗口一关所有记录即刻彻底清空，无痕又省心。
 
 👇 5秒操作演示见下方动图！
-送出 50 个 1 年期 Plus 极客激活码（价值 11.99 美元）。
-转发并在下方回复【SECURE】，我私信送你激活码！
+送出 50 个 1 年期 Plus 专属激活码（价值 11.99 美元）。
+转发并在下方回复【PRIVATE】，我私信送你激活码！
 ```
 
 ---
 
-### 特点 4：手机反向回传电脑 (Phone-to-PC Receive Mode)
-* **核心切入点**：手机批量拍了几十张高清照片/大视频，一键倾倒回电脑，同样手机免装 App。
+### 特点 4：手机照片视频批量倒回电脑 (Phone-to-PC Receive Mode)
+* **核心切入点**：手机外出拍了几十张高清照片或大视频，回家一键倒回电脑硬盘，免插线。
 
 #### 🎬 视觉演示脚本 (5~7 秒无声动图 / 视频)
-* **画面构图**：第一人称手持 iPhone 批量选择相册素材回传到 PC。
+* **画面构图**：特写手持 iPhone 批量勾选照片，电脑桌面 Downloads 文件夹并列。
 * **分镜流程**：
-  1. `00:00 - 00:02`：PC 端打开 EQT 点击“Receive”，显示接收二维码。
-  2. `00:02 - 00:04`：手机相机扫码打开清爽 Web 上传页，勾选 20 张高清相片与 1 个视频点击“Upload”。
-  3. `00:04 - 00:06`：PC 端指定文件夹（Downloads）中实时刷出照片文件，传输进度条瞬间拉满，字幕：“Zero Phone App • No Cables Needed”。
+  1. `00:00 - 00:02`：电脑打开 EQT 点一下“接收文件”，屏幕出现专属二维码。
+  2. `00:02 - 00:04`：手机扫码进入极简网页，相册一口气多选 30 张原图与 1 个视频，点“开始上传”。
+  3. `00:04 - 00:06`：电脑文件夹瞬间哗啦啦全部存入原图，速度拉满，字幕：“Zero Phone Apps • No Cables • Full Wi-Fi Speed”。
 
 #### 🇺🇸 英文版 (直接发 X)
 ```text
-Need to dump 50 photos or 4K videos from your phone to your PC?
+Need to dump 50 photos or a vacation video from your phone to your PC?
 
-Stop emailing files to yourself or plugging in glitchy cables:
+Stop emailing files to yourself or digging around for USB cables:
 1. Click "Receive" on EQT Desktop to show the QR code
-2. Scan with your phone to open a clean web uploader
-3. Select your photos — they stream directly to your PC's folder
+2. Scan with your phone to open a clean web page
+3. Select your photos — they transfer straight to your PC's folder
 
-Zero phone apps. Zero cloud uploads. Full Wi-Fi bandwidth.
+Zero phone apps. Zero cloud uploads. Full Wi-Fi speed.
 
-👇 Watch the 6s workflow below!
-Giving away 50 free 1-Year Plus licenses ($11.99 value).
-Repost & reply "RECEIVE" below, and I'll DM your code!
+👇 Watch the 6s transfer below!
+Giving away 50 free 1-Year Plus passes ($11.99 value).
+RT & reply "RECEIVE" below, and I'll DM your free key!
 ```
 
 #### 🇨🇳 中文版 (打底与参考)
 ```text
-想把手机里的几十张高清照片或 4K 视频一次性转到电脑里？
+想把手机里几十张高清旅游照或大视频一次性转到电脑里？
 
-别再给自己发邮件，也别再到处找数据线了：
-1. 电脑 EQT 界面点击“接收”，弹出专属二维码
-2. 手机相机一扫，在极简网页中直接批量选择照片
-3. 文件直接全速流式传进电脑指定文件夹
+别再辛辛苦苦给自己发邮件，也别到处翻找数据线了：
+1. 电脑打开 EQT 点“接收”，弹出专属二维码
+2. 手机相机一扫，在网页中直接批量勾选照片
+3. 文件直接全速流式存入你的电脑文件夹
 
-手机端不用装任何 App，不消耗任何外网流量。
+手机端同样不用装任何软件，不消耗任何外网流量。
 
-👇 6秒回传演示见下方动图！
-赠送 50 个 1 年期 Plus 兑换码（价值 11.99 美元）。
+👇 6秒传相册演示见下方动图！
+赠送 50 个 1 年期 Plus 激活码（价值 11.99 美元）。
 转发并在下方回复【RECEIVE】，我来私信发送！
 ```
 
 ---
 
-### 特点 5：一码多分发，现场并发传输 (One-to-Many Asset Distribution)
-* **核心切入点**：线下会议、培训、现场活动，同一份资料多台跨系统设备同时扫码并发下载。
+### 特点 5：一码多分发，现场多人同时下载 (One-to-Many Asset Distribution)
+* **核心切入点**：聚会、开会、课后分发资料，亮出一个码，全场不同手机同时扫码下载。
 
 #### 🎬 视觉演示脚本 (5~7 秒无声动图 / 视频)
-* **画面构图**：会议室大投影幕布 / 演讲现场镜头。
+* **画面构图**：会议室大电视/投影仪，或者笔记本电脑屏幕。
 * **分镜流程**：
-  1. `00:00 - 00:02`：投影仪亮出 EQT 分享的演讲 PDF 与源码压缩包二维码。
-  2. `00:02 - 00:05`：画面中同时出现 3 只手拿着不同的设备（iPhone、Android 旗舰、MacBook），同时扫向大屏幕上的同一个二维码。
-  3. `00:05 - 00:07`：3 台设备同时完成本地下载，大屏字幕：“1 QR Code • Multiple Devices • Instant Concurrent Transfer”。
+  1. `00:00 - 00:02`：屏幕上亮出 EQT 分享的课件或合影相册二维码。
+  2. `00:02 - 00:05`：画面中同时出现 3 只手拿着不同的设备（iPhone、Android、笔记本），同时对准大屏幕扫码。
+  3. `00:05 - 00:07`：所有人的手机同时高速下载完成，屏幕打出标语：“1 Code • Everyone Downloads Together • No Group Chats”。
 
 #### 🇺🇸 英文版 (直接发 X)
 ```text
-Sharing slides or large project assets with teammates in a meeting?
+Sharing slides, family photos, or project files with a group in the room?
 
-• AirDrop: You must send files one-by-one (and PC/Android users are left out)
-• Cloud links: Require logins, wifi passwords, or annoying access requests
+• AirDrop: Forces you to send one-by-one (and excludes Android/PC users)
+• Cloud drives: Require logins, permissions, or slow uploads
 
 With EQT:
 Show the QR code on your laptop screen or projector.
-Everyone in the room scans the SAME code and downloads directly at the same time over LAN.
+Everyone in the room scans the SAME code and downloads directly at the same time over Wi-Fi.
 
-One code. Multiple receivers. Zero friction. (See demo 👇)
+One code. Multiple people. No group chats needed. (See demo 👇)
 
 50 full 1-Year Passes ($11.99 value) ready to drop.
 RT & drop a reply below, and I’ll DM you one!
@@ -279,62 +272,62 @@ RT & drop a reply below, and I’ll DM you one!
 
 #### 🇨🇳 中文版 (打底与参考)
 ```text
-团队开会或现场演讲，需要给在场所有人分发课件或项目素材：
+朋友聚会分发高清合影，或者开会给在场所有人发资料：
 
-• AirDrop：只能逐个设备单发，还把安卓和 Windows 用户直接排除在外
-• 网盘链接：需要外网信号、经常需要登录权限或提取码
+• AirDrop：只能一个个挨着单发，还把安卓手机彻底排除在外
+• 发网盘：需要外网、往往要登录注册或提取码，麻烦透顶
 
 用 EQT：
-电脑或投影仪亮出二维码。全场所有人不论用 iPhone、安卓还是电脑，同时扫同一个码，全速并发下载。
+电脑或投影仪亮出二维码。全场所有人不论用苹果、安卓还是电脑，同时扫同一个码，同时全速直接下载。
 
-一个码，多设备并发，不建临时群，不加好友。
+一个码，全场并发，不建临时群，不加好友。
 
 👇 现场实拍演示见下方动图！
-社区专属赠送 50 个 1 年期 Plus 兑换码（价值 11.99 美元）。
+赠送 50 个 1 年期 Plus 兑换码（价值 11.99 美元）。
 转发并留下评论，我将在私信中逐一送出！
 ```
 
 ---
 
-### 特点 6：无公网连接也能用，纯局域网脱机互联 (Offline LAN Resilience)
-* **核心切入点**：宽带断网、飞行模式、户外手机热点、机房物理隔离，完全脱机无阻互传。
+### 特点 6：无外网也能用，纯局域网脱机互联 (Offline LAN Resilience)
+* **核心切入点**：家里断网、户外露营没信号，只要连同一个 Wi-Fi 或手机热点，照样随便传。
 
 #### 🎬 视觉演示脚本 (5~7 秒无声动图 / 视频)
-* **画面构图**：特写拔掉网线/关闭外网光猫，或在户外无信号场景。
+* **画面构图**：特写拔掉外网光纤/断开宽带，或者在户外场景。
 * **分镜流程**：
-  1. `00:00 - 00:02`：电脑屏幕右下角网络图标显示“No Internet Access”（物理断网状态）。
-  2. `00:02 - 00:04`：电脑与手机连接到同一个离线便携 Wi-Fi 路由器（或手机热点）。
-  3. `00:04 - 00:06`：EQT 正常生成二维码，扫码秒传 1GB 大文件，画面高亮提示：“100% Zero Internet Required • 0 Cloud Signaling”。
+  1. `00:00 - 00:02`：电脑屏幕右下角网络图标显示“No Internet Access”（完全断网状态）。
+  2. `00:02 - 00:04`：电脑与手机连接到同一个离线路由器（或者手机开的热点）。
+  3. `00:04 - 00:06`：EQT 正常生成二维码，扫码秒传 1GB 大文件，高亮提示：“100% Offline • Works Without Internet • Never Leaves Your Room”。
 
 #### 🇺🇸 英文版 (直接发 X)
 ```text
-What if your internet goes completely down, but you need to transfer files between devices?
+What if your home internet is completely down, but you need to transfer files between devices?
 
-Most "smart" tools instantly fail because they secretly rely on cloud signaling servers.
+Most "smart" tools instantly stop working because they rely on cloud servers.
 
-EQT requires ZERO internet access:
-• 100% offline — works over local Wi-Fi or even a phone hotspot
-• No cloud signaling, no telemetry, no tracking
-• Your bytes physically never leave your local space
+EQT needs ZERO internet:
+• 100% offline — works over home Wi-Fi or even a phone hotspot
+• No cloud servers, no account tracking, no data usage
+• Your files physically never leave your room
 
 👇 Watch the offline test demo below!
-50 early-adopter 1-Year Plus passes ($11.99) ready to drop.
+50 early-adopter 1-Year Plus passes ($11.99 value) ready to drop.
 Bookmark this, RT & reply "OFFLINE" for your code!
 ```
 
 #### 🇨🇳 中文版 (打底与参考)
 ```text
-如果外网完全断了，你该怎么在多台设备间传重要文件？
+如果家里宽带突然断网了，你该怎么在多台设备间传重要文件？
 
-市面上多数“智能”传输工具会瞬间失效，因为它们底层依赖公网信令服务器来握手。
+市面上多数所谓的“智能”工具会瞬间瘫痪，因为它们离不开云端服务器。
 
 EQT 完全不需要外网连接：
-• 只要设备处于同一局域网（家庭 Wi-Fi、甚至手机开的热点），即可 100% 离线互通
-• 零云端依赖、零第三方数据回传、零遥测
-• 你的数据在物理层面从未离开过你的房间
+• 只要设备在同一个 Wi-Fi 下（甚至手机开个热点），100% 离线顺畅互联
+• 零外网依赖、不走任何云端服务器、不消耗手机流量
+• 文件只在你的房间内传输，绝不上云
 
 👇 纯断网离线实测见下方动图！
-送出 50 个早期支持者 1 年期 Plus 激活码（价值 11.99 美元）。
+送出 50 个早期 1 年期 Plus 激活码（价值 11.99 美元）。
 建议收藏备用，转发并在下方回复【OFFLINE】，私信领码！
 ```
 
@@ -342,15 +335,13 @@ EQT 完全不需要外网连接：
 
 ## 3. 促销码（Promo Code）履约全链路与防风控 SOP
 
-为彻底解决人工私信被 X 平台风控（Rate Limit / Spam Flag）以及移动端用户收到码后流失的问题，严格按以下标准化 SOP 推进：
-
 ### 3.1 评论区第 1 条跟帖规范 (First Reply Template)
-> 发出主推文后，**在 30 秒内立即**在自己的推文下发第一条评论（严禁主帖带链接）。同时植入移动端用户的“跨端收藏提醒”：
+> 发出主推文后，**30 秒内立即**在推文下发第一条评论（主贴绝对不带任何链接）。
 
 ```text
-🔗 Official Site & Docs: https://eqt.net.im
-⚡ Lightweight native single binary • 100% Free & No Ads
-🔒 Privacy-first: Direct local LAN transfer, zero cloud telemetry
+🔗 Official Site: https://eqt.net.im
+⚡ 100% Free & No Ads • Zero Mobile Apps • No Sign-up
+🔒 Fast & Private: Direct local Wi-Fi transfer, zero cloud upload
 
 Works on Windows, macOS & Linux.
 📱 On mobile? Click the 🔖 Bookmark button so you can download EQT when you're at your PC!
@@ -360,58 +351,55 @@ Works on Windows, macOS & Linux.
 ---
 
 ### 3.2 私信派送模板矩阵 (Anti-Spam DM Templates)
-> **⚠️ 防风控警告**：X 平台严禁向不同用户连续发送完全相同的私信文本。如果使用自动化私信工具（如 TweetHunter / Typefully 的 Auto-DM）或半自动回复，**必须配置随机变量插值（Spintax）**。
->
-> 履约节奏：新账号每小时主动私信建议不超过 **20~30 封**，每封私信间隔 **30~60 秒**。
+> **⚠️ 防风控警告**：X 平台严禁向陌生人高频发送完全相同的文本。使用自动化工具或手动发送时，**必须交替使用不同变体**。节奏保持在每小时 **20~30 封**，间隔 **30~60 秒**。
 
-#### 动态模版 A (侧重独立开发者与极客支持 / Indie Hacker Tone)
+#### 动态模版 A (亲和、真诚与极简)
 ```text
-Hey {name}! Thanks a lot for supporting EQT. Here is your 1-Year Plus License ($11.99 value):
+Hey {name}! Thanks a lot for supporting EQT. Here is your 1-Year Plus Pass ($11.99 value):
 
 🔑 License Key: {LICENSE_KEY}
-📥 Download Desktop Client: https://eqt.net.im
+📥 Download for PC/Mac: https://eqt.net.im
 
-Quick 3-step activation:
-1. Open EQT on your PC/Mac
-2. Go to Settings -> License -> Paste Key
-3. Enjoy unrestricted transfers!
+Quick 30-second setup:
+1. Open EQT on your computer
+2. Click Settings -> License -> Paste Key
+3. Enjoy unrestricted local transfers!
 
-💡 On your phone right now? Bookmark this message or forward it to your work email so you don't lose it.
+💡 On your phone right now? Bookmark this message or forward it to your email so you don't lose it!
 
-As an indie developer, feedback from early users means everything to me. If you find it helpful, a quick shoutout on X or sharing it with your team would be super appreciated! 🚀
+As the creator, honest feedback from real users means the world. If you find it helpful, a quick shoutout on X or sharing it with your friends would be super appreciated! 🚀
 ```
 
-#### 动态模版 B (侧重极简高效)
+#### 动态模版 B (极简直入主题)
 ```text
-Hi {name}, thrilled to have you as an early adopter! Here is your 1-Year Plus Pass:
+Hi {name}, thrilled to have you try EQT! Here is your free 1-Year Plus Pass:
 
 🔑 Code: {LICENSE_KEY}
-📥 Official Site: https://eqt.net.im
+📥 Official Download: https://eqt.net.im
 
-How to use:
-• Launch EQT Desktop -> Settings -> License
-• Paste the code above to activate your Plus perks.
+How to activate:
+• Launch EQT on your PC -> Settings -> License
+• Paste the code above to activate your perks.
 
-📌 Tip: If you're on mobile, bookmark this DM to activate next time you're at your desk!
+📌 Quick Tip: If you're on mobile, bookmark this DM to activate next time you're at your computer!
 
-Have fun transferring, and feel free to share your thoughts or ping me anytime. Cheers!
+Have fun transferring, and feel free to ping me anytime if you have any questions. Cheers!
 ```
 
 ---
 
 ### 3.3 未开私信（DMs Closed）快速挽回兜底 SOP
-欧美很多 X 用户默认关闭陌生人私信。当尝试发送 DM 失败时，**切勿直接跳过**，应立即在其评论下方回复引导（此举同时能增加推文互动权重）：
+当尝试发送私信失败（提示用户未开私信）时，在对方留言下方公开回复：
 
 ```text
-Hey @{username}! I tried to send your license code, but your DMs seem to be locked 🔒
+Hey @{username}! I tried to send your license pass, but your DMs seem to be locked 🔒
 Could you send me a quick DM or open your messages so I can deliver your key?
 ```
 
 ---
 
 ### 3.4 手机到电脑端激活防流失引导 (Mobile-to-PC Bridge)
-为了弥补“用户在手机上收到 DM，但在电脑端使用 EQT”的认知断层，在产品官网与履约链路中提供以下两层防流失保障：
-1. **官网即刻轻量体验**：
-   - 官网首页 `https://eqt.net.im` 顶部提供移动端提示：“Browsing on mobile? Enter your email to receive your download link & setup instructions on your PC.”（允许输入邮箱直接把下载链接与指南发送到桌面邮箱）。
-2. **私信卡片心理强化**：
-   - 私信文案明确加入 `💡 On your phone right now? Star/bookmark this message`，极大降低“领了码却未转化成桌面活跃用户”的漏斗损耗。
+1. **官网移动端轻量提醒**：
+   - 官网首页 `https://eqt.net.im` 对手机访客弹出顶部轻提示：“现在在用手机？输入您的邮箱，一键把电脑版下载链接与激活指南发到邮箱”。
+2. **私信防遗忘标记**：
+   - 私信文案醒目加入 `💡 On your phone right now? Bookmark this message`，把手机互动转化为实实在在的电脑桌面端安装激活。
