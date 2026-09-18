@@ -321,6 +321,7 @@ export namespace main {
 	    enableNotification: boolean;
 	    enableTLS: boolean;
 	    blockProxy: boolean;
+	    preferStandardPort: boolean;
 	    chatDownloadDir: string;
 	    logDir: string;
 	    selfHealNotice?: string;
@@ -356,6 +357,7 @@ export namespace main {
 	        this.enableNotification = source["enableNotification"];
 	        this.enableTLS = source["enableTLS"];
 	        this.blockProxy = source["blockProxy"];
+	        this.preferStandardPort = source["preferStandardPort"];
 	        this.chatDownloadDir = source["chatDownloadDir"];
 	        this.logDir = source["logDir"];
 	        this.selfHealNotice = source["selfHealNotice"];
