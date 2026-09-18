@@ -11,7 +11,7 @@
    - 1.3 面向普通大众的价值锚定与零心理负担 (Consumer Freemium)
    - 1.4 抛弃极客黑话，击穿普通用户的真实生活痛点
 2. [6 大核心特点推文矩阵与动态演示分镜 (中英双语 + 视觉脚本)](#2-6-大核心特点推文矩阵与动态演示分镜-中英双语--视觉脚本)
-   - [特点 1：打破跨平台生态围墙 (AirDrop for Any Device)](#特点-1打破跨平台生态围墙-airdrop-for-any-device)
+   - [特点 1：打破跨平台生态围墙 (AirDrop for Any Device: iOS & Android)](#特点-1打破跨平台生态围墙-airdrop-for-any-device-ios--android)
    - [特点 2：接收端 0 安装、0 注册 (Zero App / Camera-to-Download)](#特点-2接收端-0-安装0-注册-zero-app--camera-to-download)
    - [特点 3：电脑手机私密便签与文字秒传 (Zero-Trace Instant Clipboard & Chat)](#特点-3电脑手机私密便签与文字秒传-zero-trace-instant-clipboard--chat)
    - [特点 4：手机照片视频批量倒回电脑 (Phone-to-PC Receive Mode)](#特点-4手机照片视频批量倒回电脑-phone-to-pc-receive-mode)
@@ -63,26 +63,26 @@
 
 ---
 
-### 特点 1：打破跨平台生态围墙 (AirDrop for Any Device)
-* **核心切入点**：Windows 电脑配 iPhone，传照片传视频再也不用找数据线或忍受慢速云盘。
+### 特点 1：打破跨平台生态围墙 (AirDrop for Any Device: iOS & Android)
+* **核心切入点**：不仅专治 Windows + iPhone 痛点，同时完美覆盖 Android 与 Mac。跨越苹果与安卓两大阵营，无需线缆，比 AirDrop 和 Quick Share 覆盖更广。
 
 #### 🎬 视觉演示脚本 (5~7 秒无声动图 / 视频)
-* **画面构图**：第一人称办公桌实拍。左边是 Windows 笔记本，右边手持 iPhone。
+* **画面构图**：第一人称办公桌实拍。左边是笔记本电脑，右边并排放着 iPhone 与 Android 手机。
 * **分镜流程**：
   1. `00:00 - 00:02`：电脑上随手把一个 4K 视频拖进 EQT 界面，屏幕立刻弹出一个清爽的二维码。
-  2. `00:02 - 00:04`：拿起 iPhone 打开**系统自带相机**一扫，屏幕上方瞬间弹出 Safari 下载提示。
-  3. `00:04 - 00:06`：视频满速保存到手机相册，画面打上显眼绿标：“No Cables • No iCloud • AirDrop Speed on PC”。
+  2. `00:02 - 00:04`：拿起 iPhone 或 Android 手机打开**系统自带相机**一扫，屏幕上方瞬间弹出下载提示。
+  3. `00:04 - 00:06`：视频满速保存到手机相册，画面打上显眼绿标：“No Cables • iOS & Android • Full Wi-Fi Speed”。
 
 #### 🇺🇸 英文版 (直接发 X)
 ```text
-Using a Windows PC with an iPhone in 2026 is still unnecessarily painful:
-• AirDrop doesn't work on Windows
-• Cloud drives are slow and eat up your storage
-• Chat apps heavily compress your 4K photos & videos
+Moving files between PC, iPhone, and Android in 2026 is still unnecessarily painful:
+• AirDrop is trapped inside Apple's ecosystem
+• Quick Share doesn't play nicely with Mac or iOS
+• Cloud drives are slow and chat apps heavily compress your 4K media
 
 That's why I built EQT:
-AirDrop for literally any device. 
-Drop a file on your PC screen, scan the QR code with your iPhone camera, and download directly over Wi-Fi. Zero mobile apps needed.
+Real AirDrop for literally ANY device. 
+Drop a file on your PC/Mac, scan the QR code with your iPhone or Android camera, and download directly over Wi-Fi. Zero mobile apps needed.
 
 👇 Watch the 6s demo below!
 
@@ -92,13 +92,13 @@ Drop a "KEY" below & RT, and I’ll DM your free pass!
 
 #### 🇨🇳 中文版 (打底与参考)
 ```text
-在 2026 年，Windows 电脑配 iPhone 传文件依然折磨人：
-• AirDrop 锁死在苹果生态，根本不支持 Windows
-• 云盘上传再下载，又慢又吞存储空间
-• 聊天软件会狠狠压缩你的原图和 4K 视频
+在 2026 年，电脑、iPhone 与安卓手机之间传文件依然折磨人：
+• AirDrop 锁死在苹果生态，Windows 和安卓根本用不了
+• 各种互传工具两边互不兼容，总要到处找数据线
+• 云盘上传又慢又吞空间，聊天软件还会狠狠压缩 4K 视频
 
 所以我做了 EQT 这个极简小工具：
-电脑上把文件一拖，手机拿出自带相机一扫，连线缆都不用插，局域网全速秒传。手机端完全不用装任何 App。
+打破所有生态墙！电脑上把文件一拖，不论 iPhone 还是安卓手机拿出自带相机一扫，局域网全速秒传。手机端完全不用装任何 App。
 
 👇 6秒实拍演示见下方动图！
 
