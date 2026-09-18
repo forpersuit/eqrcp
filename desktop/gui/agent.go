@@ -434,6 +434,7 @@ func convertConfigSettings(s config.DesktopSettings) DesktopSettings {
 		EnableNotification:       s.EnableNotification,
 		EnableTLS:                s.EnableTLS,
 		BlockProxy:               s.BlockProxy,
+		PreferStandardPort:       s.PreferStandardPort,
 		ChatDownloadDir:          s.ChatDownloadDir,
 		LogDir:                   s.LogDir,
 		SelfHealNotice:           s.SelfHealNotice,
@@ -476,6 +477,7 @@ func convertAppSettings(s DesktopSettings) config.DesktopSettings {
 		EnableNotification:       s.EnableNotification,
 		EnableTLS:                s.EnableTLS,
 		BlockProxy:               s.BlockProxy,
+		PreferStandardPort:       s.PreferStandardPort,
 		ChatDownloadDir:          s.ChatDownloadDir,
 		LogDir:                   s.LogDir,
 		SelfHealNotice:           s.SelfHealNotice,
@@ -1145,6 +1147,7 @@ func (agent *desktopAgent) runTask(task AgentTask) error {
 	cfg.Lang = desktopSettings.Lang
 	cfg.KeepAlive = true
 	cfg.Secure = desktopSettings.EnableTLS
+	cfg.PreferStandardPort = desktopSettings.PreferStandardPort
 	if cfg.Secure && !server.GetPaidStatus() && os.Getenv("EQT_TESTING") != "true" {
 		agent.log.Infof("runTask: LAN-TLS is a PLUS exclusive feature. Current license is free tier, falling back to plain HTTP.")
 		cfg.Secure = false

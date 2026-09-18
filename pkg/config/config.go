@@ -19,21 +19,22 @@ import (
 )
 
 type Config struct {
-	Interface       string `yaml:",omitempty"`
-	Port            int    `yaml:",omitempty"`
-	Bind            string `yaml:",omitempty"`
-	Mode            string `yaml:",omitempty"`
-	KeepAlive       bool   `yaml:",omitempty"`
-	Path            string `yaml:",omitempty"`
-	Secure          bool   `yaml:",omitempty"`
-	TlsKey          string `yaml:",omitempty"`
-	TlsCert         string `yaml:",omitempty"`
-	FQDN            string `yaml:",omitempty"`
-	Output          string `yaml:",omitempty"`
-	Reversed        bool   `yaml:",omitempty"`
-	Lang            string `yaml:",omitempty"`
-	EnableChatV2    bool   `yaml:"enableChatV2,omitempty"`
-	EnableTelemetry bool   `yaml:"enableTelemetry,omitempty"`
+	Interface          string `yaml:",omitempty"`
+	Port               int    `yaml:",omitempty"`
+	Bind               string `yaml:",omitempty"`
+	Mode               string `yaml:",omitempty"`
+	KeepAlive          bool   `yaml:",omitempty"`
+	Path               string `yaml:",omitempty"`
+	Secure             bool   `yaml:",omitempty"`
+	TlsKey             string `yaml:",omitempty"`
+	TlsCert            string `yaml:",omitempty"`
+	FQDN               string `yaml:",omitempty"`
+	Output             string `yaml:",omitempty"`
+	Reversed           bool   `yaml:",omitempty"`
+	Lang               string `yaml:",omitempty"`
+	EnableChatV2       bool   `yaml:"enableChatV2,omitempty"`
+	EnableTelemetry    bool   `yaml:"enableTelemetry,omitempty"`
+	PreferStandardPort bool   `yaml:"preferStandardPort,omitempty"`
 }
 
 var interactive bool = false
@@ -75,6 +76,12 @@ func New(app application.App) (Config, error) {
 	cfg.Output = v.GetString("output")
 	cfg.Reversed = v.GetBool("reversed")
 	cfg.EnableChatV2 = v.GetBool("enableChatV2")
+	cfg.PreferStandardPort = true
+	if v.IsSet("preferStandardPort") {
+		cfg.PreferStandardPort = v.GetBool("preferStandardPort")
+	} else if v.IsSet("preferStandardPorts") {
+		cfg.PreferStandardPort = v.GetBool("preferStandardPorts")
+	}
 
 	// Override
 	if app.Flags.Interface != "" {

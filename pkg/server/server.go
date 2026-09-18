@@ -2426,8 +2426,23 @@ func New(cfg *config.Config) (*Server, error) {
 			return &Server{}, err
 		}
 	}
-	// Create a listener. If `port: 0`, a random one is chosen
-	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", bind, cfg.Port))
+	// Create a listener. If `port: 0` and `PreferStandardPort: true`, attempt standard port (80 for HTTP, 443 for HTTPS) first.
+	var listener net.Listener
+	if cfg.Port == 0 && cfg.PreferStandardPort {
+		standardPort := 80
+		if cfg.Secure {
+			standardPort = 443
+		}
+		stdListener, stdErr := net.Listen("tcp", fmt.Sprintf("%s:%d", bind, standardPort))
+		if stdErr == nil {
+			listener = stdListener
+		} else {
+			// Gracefully fallback to random ephemeral port
+			listener, err = net.Listen("tcp", fmt.Sprintf("%s:0", bind))
+		}
+	} else {
+		listener, err = net.Listen("tcp", fmt.Sprintf("%s:%d", bind, cfg.Port))
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -2456,8 +2471,23 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 	}
 
+	formatHostPort := func(rawHost string) string {
+		isStandard := (!cfg.Secure && port == 80) || (cfg.Secure && port == 443)
+		isIPv6 := strings.Count(rawHost, ":") >= 2 && !strings.HasPrefix(rawHost, "[")
+		if isStandard {
+			if isIPv6 {
+				return fmt.Sprintf("[%s]", rawHost)
+			}
+			return rawHost
+		}
+		if isIPv6 {
+			return fmt.Sprintf("[%s]:%d", rawHost, port)
+		}
+		return fmt.Sprintf("%s:%d", rawHost, port)
+	}
+
 	if cfg.FQDN != "" {
-		hostname = fmt.Sprintf("%s:%d", cfg.FQDN, port)
+		hostname = formatHostPort(cfg.FQDN)
 	} else if cfg.Secure {
 		targetIP := bind
 		if targetIP == "0.0.0.0" || targetIP == "" {
@@ -2469,12 +2499,12 @@ func New(cfg *config.Config) (*Server, error) {
 		}
 		directDomain := cert.FormatDirectDomainWithNode(targetIP, activeNode)
 		if directDomain != targetIP && !strings.HasPrefix(directDomain, "0-0-0-0") {
-			hostname = fmt.Sprintf("%s:%d", directDomain, port)
+			hostname = formatHostPort(directDomain)
 		} else {
 			if targetIP == "0.0.0.0" || targetIP == "" || strings.HasPrefix(directDomain, "0-0-0-0") {
 				return nil, fmt.Errorf("cannot enable secure mode: unable to determine a valid non-loopback IP address to generate direct domain")
 			}
-			hostname = fmt.Sprintf("%s:%d", targetIP, port)
+			hostname = formatHostPort(targetIP)
 		}
 	} else if bind == "0.0.0.0" {
 		fmt.Println("Retrieving the external IP...")
@@ -2482,14 +2512,9 @@ func New(cfg *config.Config) (*Server, error) {
 		if err != nil {
 			return nil, err
 		}
-		extIPString := extIP.String()
-		fmtstring := "%s:%d"
-		if strings.Count(extIPString, ":") >= 2 {
-			fmtstring = "[%s]:%d"
-		}
-		hostname = fmt.Sprintf(fmtstring, extIPString, port)
+		hostname = formatHostPort(extIP.String())
 	} else {
-		hostname = fmt.Sprintf("%s:%d", bind, port)
+		hostname = formatHostPort(bind)
 	}
 	// Set URLs
 	protocol := "http"

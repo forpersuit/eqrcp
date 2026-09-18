@@ -165,6 +165,7 @@ type DesktopSettings struct {
 	EnableNotification       bool              `json:"enableNotification"`
 	EnableTLS                bool              `json:"enableTLS"`
 	BlockProxy               bool              `json:"blockProxy"`
+	PreferStandardPort       bool              `json:"preferStandardPort"`
 	ChatDownloadDir          string            `json:"chatDownloadDir"`
 	LogDir                   string            `json:"logDir"`
 	SelfHealNotice           string            `json:"selfHealNotice,omitempty"`

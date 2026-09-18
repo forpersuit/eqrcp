@@ -1862,6 +1862,7 @@ func (agent *desktopAgent) runTask(task desktopAgentTask) error {
 		agent.log.Errorf("runTask: failed to create qrcp config: %v", err)
 		return err
 	}
+	cfg.PreferStandardPort = desktopSettings.PreferStandardPort
 	agent.log.Infof("runTask: instantiating qrcp server...")
 	srv, err := server.New(&cfg)
 	if err != nil {

@@ -2602,6 +2602,15 @@ function renderSettingsPanel() {
                     </div>
                     <div class="setting-row">
                         <div class="setting-copy">
+                            <strong>${t('prefer_standard_port')}</strong>
+                            <span>${t('prefer_standard_port_desc')}</span>
+                        </div>
+                        <div class="setting-control-stack">
+                            ${renderSwitch('settings-prefer-standard-port', state.settings?.preferStandardPort !== false)}
+                        </div>
+                    </div>
+                    <div class="setting-row">
+                        <div class="setting-copy">
                             <strong>${t('update_check_interval')}</strong>
                             <span>${t('update_check_interval_desc')}</span>
                         </div>
@@ -5324,6 +5333,7 @@ function syncSettingsFromDOM() {
     const telemetrySwitch = document.querySelector('#settings-telemetry');
     const enableTLSSwitch = document.querySelector('#settings-enable-tls');
     const blockProxySwitch = document.querySelector('#settings-block-proxy');
+    const preferStandardPortSwitch = document.querySelector('#settings-prefer-standard-port');
 
 
     if (receiveInput) state.settings.output = receiveInput.value;
@@ -5354,6 +5364,7 @@ function syncSettingsFromDOM() {
     if (telemetrySwitch) state.settings.enableTelemetry = telemetrySwitch.checked;
     if (enableTLSSwitch) state.settings.enableTLS = enableTLSSwitch.checked;
     if (blockProxySwitch) state.settings.blockProxy = blockProxySwitch.checked;
+    if (preferStandardPortSwitch) state.settings.preferStandardPort = preferStandardPortSwitch.checked;
 
 
     state.receiveDir = state.settings.output || '';

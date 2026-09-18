@@ -302,6 +302,68 @@ func TestDesktopSettingsBlockProxyDefaultAndOverride(t *testing.T) {
 	}
 }
 
+func TestDesktopSettingsPreferStandardPortDefaultAndOverride(t *testing.T) {
+	// 1. Default should be true when unset
+	configPath := filepath.Join(t.TempDir(), "config.yml")
+	if err := os.WriteFile(configPath, []byte("interface: any\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	app := application.New()
+	app.Flags.Config = configPath
+
+	settings, err := ReadDesktopSettings(app)
+	if err != nil {
+		t.Fatalf("ReadDesktopSettings failed: %v", err)
+	}
+	if !settings.PreferStandardPort {
+		t.Fatalf("expected PreferStandardPort default to be true, got false")
+	}
+
+	// 2. Explicit false in config should be respected
+	configPathFalse := filepath.Join(t.TempDir(), "config_false.yml")
+	if err := os.WriteFile(configPathFalse, []byte("preferStandardPort: false\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	appFalse := application.New()
+	appFalse.Flags.Config = configPathFalse
+
+	settingsFalse, err := ReadDesktopSettings(appFalse)
+	if err != nil {
+		t.Fatalf("ReadDesktopSettings with preferStandardPort=false failed: %v", err)
+	}
+	if settingsFalse.PreferStandardPort {
+		t.Fatalf("expected PreferStandardPort to be false when configured, got true")
+	}
+
+	// 3. Write false and verify persistence
+	settings.PreferStandardPort = false
+	saved, err := WriteDesktopSettings(app, settings)
+	if err != nil {
+		t.Fatalf("WriteDesktopSettings failed: %v", err)
+	}
+	if saved.PreferStandardPort {
+		t.Fatalf("saved.PreferStandardPort = true, want false")
+	}
+
+	reloaded, err := ReadDesktopSettings(app)
+	if err != nil {
+		t.Fatalf("reloaded ReadDesktopSettings failed: %v", err)
+	}
+	if reloaded.PreferStandardPort {
+		t.Fatalf("reloaded.PreferStandardPort = true, want false")
+	}
+
+	// 4. Write true and verify persistence
+	settings.PreferStandardPort = true
+	savedTrue, err := WriteDesktopSettings(app, settings)
+	if err != nil {
+		t.Fatalf("WriteDesktopSettings true failed: %v", err)
+	}
+	if !savedTrue.PreferStandardPort {
+		t.Fatalf("savedTrue.PreferStandardPort = false, want true")
+	}
+}
+
 func TestApplyProxyPolicy(t *testing.T) {
 	// Test blocking proxy
 	t.Setenv("http_proxy", "http://127.0.0.1:10808")

@@ -43,6 +43,7 @@ type DesktopSettings struct {
 	EnableNotification       bool                     `json:"enableNotification"`
 	EnableTLS                bool                     `json:"enableTLS"`
 	BlockProxy               bool                     `json:"blockProxy"`
+	PreferStandardPort       bool                     `json:"preferStandardPort"`
 	ChatDownloadDir          string                   `json:"chatDownloadDir"`
 	LogDir                   string                   `json:"logDir"`
 	SelfHealNotice           string                   `json:"selfHealNotice,omitempty"`
@@ -202,6 +203,12 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 	} else if v.IsSet("disableProxy") {
 		blockProxy = v.GetBool("disableProxy")
 	}
+	preferStandardPort := true
+	if v.IsSet("preferStandardPort") {
+		preferStandardPort = v.GetBool("preferStandardPort")
+	} else if v.IsSet("preferStandardPorts") {
+		preferStandardPort = v.GetBool("preferStandardPorts")
+	}
 	chatDownloadDir := v.GetString("chatDownloadDir")
 	logDir := v.GetString("logDir")
 	port := v.GetInt("port")
@@ -244,6 +251,7 @@ func ReadDesktopSettings(app application.App) (DesktopSettings, error) {
 		EnableNotification:       enableNotification,
 		EnableTLS:                enableTLS,
 		BlockProxy:               blockProxy,
+		PreferStandardPort:       preferStandardPort,
 		ChatDownloadDir:          chatDownloadDir,
 		LogDir:                   logDir,
 		SelfHealNotice:           selfHealNotice,
@@ -419,6 +427,7 @@ func WriteDesktopSettings(app application.App, settings DesktopSettings) (Deskto
 	cleanV.Set("enableTLS", settings.EnableTLS)
 	cleanV.Set("secure", settings.EnableTLS)
 	cleanV.Set("blockProxy", settings.BlockProxy)
+	cleanV.Set("preferStandardPort", settings.PreferStandardPort)
 	cleanV.Set("chatDownloadDir", strings.TrimSpace(settings.ChatDownloadDir))
 	cleanV.Set("logDir", strings.TrimSpace(settings.LogDir))
 	if err := AtomicWriteConfigFile(cleanV, v.ConfigFileUsed()); err != nil {
