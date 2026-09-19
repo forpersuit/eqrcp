@@ -43,6 +43,12 @@
    - 4 组真实生动的高转化英文情景对话（办公室跨系统 4K 传输、会议室多人扫码收图、极客剪贴板敏感 Token 同步、咖啡馆手机热点局域网对传）
    - 适用于产品短视频脚本、海外推特/Reddit 帖子、官网落地页用户原声展示
 
+7. **[官网多语种 SEO/GEO 深度适配与最新功能对齐落地设计规范](multilingual-seo-geo-design-spec.md)**
+   - 解决单页客户端 JS 翻译导致非英语搜索引擎/AI 爬虫收录率为 0% 的致命痛点
+   - 基于 Cloudflare Pages 静态预渲染 (SSG) 与边缘路由体系（`/zh/`, `/ja/`, `hreflang` 双向绑定）
+   - 深度对齐近期重大更新（80/443 标准端口、Android 跨端全场景、AirDrop 跨生态替代心智、移动端免装 Web Chat）
+   - 现代 GEO 核心资产 `/llms.txt`、Schema.org JSON-LD 与 Twitter Cards 全链路闭环
+
 ---
 
 ## 🧭 营销执行第一性原则
