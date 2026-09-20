@@ -2414,17 +2414,17 @@ function renderSettingsPanel() {
                         <strong>${t('chat_avatar')}</strong>
                         <span>${t('chat_avatar_desc')}</span>
                     </div>
-                    <div class="avatar-setting-row">
+                    <div class="avatar-setting-row" style="width: 100%;">
                         <div class="avatar-preview-wrapper">
                             <span class="avatar-preview">${renderAvatarMarkup(chatAvatar, (cleanChatProfileName(chatSender).charAt(0) || 'D').toUpperCase())}</span>
                         </div>
-                        <div class="avatar-inputs-stack" style="position: relative; z-index: 9;">
-                            <div class="avatar-actions">
-                                <button type="button" id="btn-avatar-upload" class="avatar-action-btn">${t('btn_upload_image')}</button>
-                                <button type="button" id="btn-emoji-more" class="avatar-action-btn">${t('btn_emoji') || 'Emoji'}</button>
+                        <div class="avatar-inputs-stack" style="position: relative; z-index: 9; width: 100%;">
+                            <div class="avatar-actions" style="display: flex; gap: 6px; justify-content: flex-end; align-items: center;">
+                                <button type="button" id="btn-avatar-upload" class="icon-button-mini" title="${escapeAttr(t('btn_upload_image'))}" aria-label="${escapeAttr(t('btn_upload_image'))}" style="padding: 4px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;">${photoIcon()}</button>
+                                <button type="button" id="btn-emoji-more" class="icon-button-mini" title="${escapeAttr(t('btn_emoji') || 'Emoji')}" aria-label="${escapeAttr(t('btn_emoji') || 'Emoji')}" style="padding: 4px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;">${emojiSmileIcon()}</button>
                                 <input type="file" id="settings-avatar-file" accept="image/*" style="display:none;" />
                                 ${chatAvatar.startsWith('data:image/') ? `
-                                    <button type="button" id="btn-avatar-reset" class="avatar-action-btn reset-btn">${t('btn_reset')}</button>
+                                    <button type="button" id="btn-avatar-reset" class="icon-button-mini" title="${escapeAttr(t('btn_reset'))}" aria-label="${escapeAttr(t('btn_reset'))}" style="padding: 4px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;">${resetIcon()}</button>
                                 ` : ''}
                             </div>
                             ${state.showEmojiPicker ? (() => {
@@ -6835,6 +6835,14 @@ function messageTime(value) {
         return '';
     }
     return date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+}
+
+function photoIcon() {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>';
+}
+
+function emojiSmileIcon() {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>';
 }
 
 function resetIcon() {
