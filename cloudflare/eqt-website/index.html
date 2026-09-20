@@ -1419,8 +1419,9 @@ function getCookie(name) {
                         }
                     }
                     // Apply language again to force refreshing the download button text with version
-                    let lang = localStorage.getItem('eqt-lang') || getCookie('eqt-lang') || 'en';
-                    applyLang(lang);
+                    let currentDocLang = document.documentElement.lang || 'en';
+                    if (currentDocLang.toLowerCase().startsWith('zh')) currentDocLang = 'zh';
+                    applyLang(currentDocLang);
                 }
             }
         } catch (e) {
