@@ -2461,15 +2461,17 @@ function renderSettingsPanel() {
                         <button type="button" class="icon-button-mini path-link" id="open-chat-save" data-open-path="${escapeAttr(state.chatSaveDir || '')}" title="${t('open_folder')}" aria-label="${t('open_folder')}" style="padding: 4px; display: inline-flex; align-items: center; justify-content: center;">${openFolderIcon()}</button>
                     </div>
                 </div>
-                <div class="setting-row">
+                <div class="setting-row" style="align-items: flex-start;">
                     <div class="setting-copy">
                         <strong>${t('chat_download_dir')}</strong>
                         <span>${t('chat_download_dir_desc')}</span>
                     </div>
-                    <div class="setting-control-stack path-selector-wrapper" style="display: flex; gap: 6px; align-items: center; width: 240px; justify-content: flex-end;">
-                        <input type="text" id="settings-chat-download-dir" value="${escapeAttr(state.settings.chatDownloadDir || '')}" placeholder="${escapeAttr(t('choose_folder'))}" title="${escapeAttr(state.settings.chatDownloadDir || t('choose_folder'))}" style="font-size: 12px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; flex: 1; min-width: 0; box-sizing: border-box;" readonly />
-                        <button type="button" class="icon-button-mini" id="btn-select-chat-download-dir" title="${escapeAttr(t('choose'))}" aria-label="${escapeAttr(t('choose'))}" style="padding: 4px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;">${openFolderIcon()}</button>
-                        <button type="button" class="icon-button-mini" id="btn-reset-chat-download-dir" title="${escapeAttr(t('btn_reset_default'))}" aria-label="${escapeAttr(t('btn_reset_default'))}" style="padding: 4px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; ${!state.settings?.chatDownloadDir ? 'opacity: 0.45; cursor: not-allowed;' : ''}" ${!state.settings?.chatDownloadDir ? 'disabled' : ''}>${resetIcon()}</button>
+                    <div class="setting-control-stack path-selector-wrapper" style="display: flex; flex-direction: column; gap: 6px; align-items: stretch; justify-content: flex-start; width: 100%;">
+                        <input type="text" id="settings-chat-download-dir" value="${escapeAttr(state.settings.chatDownloadDir || '')}" placeholder="${escapeAttr(t('choose_folder'))}" title="${escapeAttr(state.settings.chatDownloadDir || t('choose_folder'))}" style="font-size: 12px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; width: 100%; box-sizing: border-box;" readonly />
+                        <div class="path-actions-wrapper" style="display: flex; gap: 6px; justify-content: flex-end; align-items: center;">
+                            <button type="button" class="icon-button-mini" id="btn-select-chat-download-dir" title="${escapeAttr(t('choose'))}" aria-label="${escapeAttr(t('choose'))}" style="padding: 4px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;">${openFolderIcon()}</button>
+                            <button type="button" class="icon-button-mini" id="btn-reset-chat-download-dir" title="${escapeAttr(t('btn_reset_default'))}" aria-label="${escapeAttr(t('btn_reset_default'))}" style="padding: 4px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; ${!state.settings?.chatDownloadDir ? 'opacity: 0.45; cursor: not-allowed;' : ''}" ${!state.settings?.chatDownloadDir ? 'disabled' : ''}>${resetIcon()}</button>
+                        </div>
                     </div>
                 </div>
                 <div class="setting-row" style="display: none;">
