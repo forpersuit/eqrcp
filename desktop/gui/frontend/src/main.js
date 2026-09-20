@@ -2469,7 +2469,7 @@ function renderSettingsPanel() {
                     <div class="setting-control-stack path-selector-wrapper" style="display: flex; gap: 6px; align-items: center; width: 240px; justify-content: flex-end;">
                         <input type="text" id="settings-chat-download-dir" value="${escapeAttr(state.settings.chatDownloadDir || '')}" placeholder="${escapeAttr(t('choose_folder'))}" title="${escapeAttr(state.settings.chatDownloadDir || t('choose_folder'))}" style="font-size: 12px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; flex: 1; min-width: 0; box-sizing: border-box;" readonly />
                         <button type="button" class="icon-button-mini" id="btn-select-chat-download-dir" title="${escapeAttr(t('choose'))}" aria-label="${escapeAttr(t('choose'))}" style="padding: 4px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;">${openFolderIcon()}</button>
-                        <button type="button" class="btn-mini secondary" id="btn-reset-chat-download-dir" style="height: 26px; font-size: 11px; padding: 0 8px; border-radius: 6px; flex-shrink: 0; white-space: nowrap; ${!state.settings?.chatDownloadDir ? 'opacity: 0.45; cursor: not-allowed;' : ''}" ${!state.settings?.chatDownloadDir ? 'disabled' : ''}>${t('btn_reset_default')}</button>
+                        <button type="button" class="icon-button-mini" id="btn-reset-chat-download-dir" title="${escapeAttr(t('btn_reset_default'))}" aria-label="${escapeAttr(t('btn_reset_default'))}" style="padding: 4px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; ${!state.settings?.chatDownloadDir ? 'opacity: 0.45; cursor: not-allowed;' : ''}" ${!state.settings?.chatDownloadDir ? 'disabled' : ''}>${resetIcon()}</button>
                     </div>
                 </div>
                 <div class="setting-row" style="display: none;">
@@ -2535,7 +2535,7 @@ function renderSettingsPanel() {
                 <div class="setting-row">
                     <div class="setting-copy">
                         <strong>${t('update_mode')}</strong>
-                        <span>${t('update_mode_desc')}</span>
+                        <span id="settings-auto-update-mode-desc">${escapeHTML(getUpdateModeDesc(state.settings?.autoUpdateMode || 'silent'))}</span>
                     </div>
                     <select id="settings-auto-update-mode">
                         <option value="off" ${state.settings?.autoUpdateMode === 'off' ? 'selected' : ''}>${t('update_off')}</option>
@@ -4939,9 +4939,27 @@ function updateSettingsBadgeUI() {
     }
 }
 
+function getUpdateModeDesc(mode) {
+    switch (mode) {
+        case 'off':
+            return t('update_mode_desc_off');
+        case 'notify':
+            return t('update_mode_desc_notify');
+        case 'download':
+            return t('update_mode_desc_download');
+        case 'silent':
+        default:
+            return t('update_mode_desc_silent');
+    }
+}
+
 async function handleAutoUpdateModeChange(mode) {
     if (!state.settings) state.settings = {};
     state.settings.autoUpdateMode = mode;
+    const descEl = document.querySelector('#settings-auto-update-mode-desc');
+    if (descEl) {
+        descEl.textContent = getUpdateModeDesc(mode);
+    }
 
     if (mode === 'off') {
         state.updateStage = 'idle';
@@ -6815,6 +6833,10 @@ function messageTime(value) {
         return '';
     }
     return date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+}
+
+function resetIcon() {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>';
 }
 
 function refreshIcon() {
