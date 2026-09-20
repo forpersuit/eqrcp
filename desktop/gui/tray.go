@@ -59,7 +59,8 @@ func (t *trayController) onReady() {
 	share := systray.AddMenuItem("Share...", "Open the share workflow")
 	receive := systray.AddMenuItem("Receive...", "Open the receive workflow")
 	systray.AddSeparator()
-	openCurrent := systray.AddMenuItem("Open Current Task", "Open the active transfer or chat page")
+	// Open Current Task hidden for current phase to prevent launching external browser; to be refined in next phase
+	// openCurrent := systray.AddMenuItem("Open Current Task", "Open the active transfer or chat page")
 	stopCurrent := systray.AddMenuItem("Stop Current Task", "Stop the active transfer or chat session")
 	systray.AddSeparator()
 	settings := systray.AddMenuItem("Settings", "Open EQT settings")
@@ -75,7 +76,7 @@ func (t *trayController) onReady() {
 	go t.handle(open, func() { t.showAndEmit("") })
 	go t.handle(share, func() { t.showAndEmit("share") })
 	go t.handle(receive, func() { t.showAndEmit("receive") })
-	go t.handle(openCurrent, t.openCurrentQR)
+	// go t.handle(openCurrent, t.openCurrentQR)
 	go t.handle(stopCurrent, t.stopCurrent)
 	go t.handle(settings, func() { t.showAndEmit("settings") })
 	go t.handle(feedback, func() { t.showAndEmit("feedback") })

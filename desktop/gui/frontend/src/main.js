@@ -2366,6 +2366,8 @@ function renderSettingsPanel() {
                 </div>
             </section>
 
+            <!-- System integration (right click) hidden for current phase; to be refined in next phase -->
+            <!--
             <section class="settings-section">
                 <div class="settings-section-head">
                     <h3>${t('sys_integration')}</h3>
@@ -2382,6 +2384,7 @@ function renderSettingsPanel() {
                     </div>
                 </div>
             </section>
+            -->
 
             <section class="settings-section">
                 <div class="settings-section-head">
