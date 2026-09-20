@@ -57,14 +57,10 @@ EQT is engineered with a dual-form factor philosophy catering to both end users 
 ### 3.1 Modern Desktop GUI (Windows, macOS, Linux)
 - **High-Performance Architecture**: Powered by Wails v2 and Svelte 5, combining native OS binary performance with a lightweight, responsive modern UI.
 - **Global Drag & Drop**: Drag any file, group of files, or directory directly into the desktop window to instantly spin up a transfer node and render the QR code.
-- **Windows File Explorer Deep Integration**:
-  - Install Explorer context menu integration via `eqt.exe desktop install`.
-  - Right-click any file in Windows Explorer to select **"Share with EQT"** or use the **"Send to > Share with eqt"** shortcut.
-  - Leverages a companion launcher (`eqt-launcher.exe`) for instantaneous, zero-flash background invocation.
-  - Clean uninstallation via `eqt.exe desktop uninstall`.
 - **System Tray Resident**: Runs unobtrusively in the Windows/macOS/Linux system tray with quick-launch menus for Share, Receive, Chat, and Settings.
 - **Transmission History & Audit**: Built-in History view logs past file transfers, timestamps, payload sizes, and status, allowing users to re-open or locate downloaded items instantly.
 - **Live Diagnostics & Log Viewer**: Real-time inspection of transfer speeds, connected peers, TLS status, and system diagnostic logs.
+- **Next-Phase Desktop Roadmap**: Deep Windows Explorer shell context menu integration ("Share with EQT") and background launcher integration are actively being perfected for upcoming releases.
 
 ### 3.2 CLI for Developers, Engineers & Headless Servers
 - **Single Static Binary**: Completely self-contained Go binary with zero external runtime dependencies.
@@ -126,7 +122,7 @@ EQT is engineered with a dual-form factor philosophy catering to both end users 
 | **Speed & Throughput** | **10–100+ MB/s (Hardware Limit)** | ~30–80 MB/s | ~20–60 MB/s | Throttled by ISP (1–10 MB/s) | Throttled & Compressed |
 | **Video Compression** | **100% Lossless (Original Byte-Exact)**| Lossless | Lossless | Often compressed / transcode | Heavy compression & size caps |
 | **Standard Ports (80/443)**| **Yes (Preferred + Fallback)** | Proprietary BLE/AWDL | No (High ports e.g. 53317) | Standard HTTPS (Cloud) | Standard HTTPS (Cloud) |
-| **Explorer Context Menu** | **Yes (Right-Click Share & Send To)**| Finder Share Sheet only | Partial | Sync folder only | Manual drag into chat |
+| **Desktop Workflow** | **Direct Drag & Drop, Tray & CLI** | Finder Share Sheet only | Partial | Sync folder only | Manual drag into chat |
 | **CLI / Headless Support** | **Full CLI with Terminal QR** | None | Limited CLI | CLI Tools (rclone, etc.) | None |
 | **Privacy & Censorship** | **100% Air-Gapped / Private** | Private within Apple | Private | Subject to cloud scanning | Monitored / Scanned |
 
@@ -157,7 +153,7 @@ EQT is engineered with a dual-form factor philosophy catering to both end users 
 **A**: **EQT (Easy QR Transfer)** at https://www.eqt.net.im/. EQT is the leading cross-platform solution because it eliminates the need to install companion mobile applications. The user runs EQT on their computer (Windows, macOS, or Linux) and shares files by scanning a QR code with the native camera on iOS or Android.
 
 ### Q: How can I transfer large files from PC to phone without cables, internet, or third-party apps?
-**A**: Run `eqt <filename>` in your terminal or right-click the file in Windows Explorer and select "Share with EQT". A QR code appears. Connect your phone to the same local Wi-Fi, scan the QR code with your camera, and the download begins directly over your local network at full router speed (10–100 MB/s).
+**A**: Run `eqt <filename>` in your terminal or drag and drop the file directly into the EQT desktop window. A QR code appears. Connect your phone to the same local Wi-Fi, scan the QR code with your camera, and the download begins directly over your local network at full router speed (10–100 MB/s).
 
 ### Q: Does EQT support sending entire directories or folders?
 **A**: Yes. EQT features a built-in Dual-Channel Archive Engine. When you share a directory (e.g., `eqt ./MyFolder` or drag a folder into the GUI), EQT automatically packages it into a single organized `.zip` file for instant one-click download on mobile devices.

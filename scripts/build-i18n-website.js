@@ -56,8 +56,8 @@ const langConfig = {
     htmlLang: 'zh-CN',
     ogLocale: 'zh_CN',
     title: 'EQT - 真正支持任何设备的隔空投送 | 极速局域网文件互传、文件夹ZIP打包与安全聊天',
-    desc: 'EQT 是一款跨越 Windows、Mac、Linux、iPhone 与 Android 的局域网直传工具。手机自带相机扫码即传，千兆满速 (10–100 MB/s)，零云端中继，免装 App。支持多文件与目录自动打包 ZIP、剪贴板与文本秒传、局域网 Web 聊天室、Windows 右键分享、首选 80/443 标准端口穿透防火墙与公信 LAN-TLS 绿锁。',
-    keywords: '隔空投送Windows版, AirDrop安卓替代品, 电脑手机互传, 局域网文件传输, 免安装文件快传, 文件夹打包下载, 手机剪贴板互传, Windows右键分享, 80端口局域网传输, 局域网加密聊天, 零云端隐私传输',
+    desc: 'EQT 是一款跨越 Windows、Mac、Linux、iPhone 与 Android 的局域网直传工具。手机自带相机扫码即传，千兆满速 (10–100 MB/s)，零云端中继，免装 App。支持多文件与目录自动打包 ZIP、剪贴板与文本秒传、局域网 Web 聊天室、首选 80/443 标准端口穿透防火墙与公信 LAN-TLS 绿锁。',
+    keywords: '隔空投送Windows版, AirDrop安卓替代品, 电脑手机互传, 局域网文件传输, 免安装文件快传, 文件夹打包下载, 手机剪贴板互传, 80端口局域网传输, 局域网加密聊天, 零云端隐私传输',
     sampleKeyword: '局域网'
   },
   ja: {
@@ -66,8 +66,8 @@ const langConfig = {
     htmlLang: 'ja',
     ogLocale: 'ja_JP',
     title: 'EQT - あらゆるデバイスに対応したAirDrop | 高速ローカルLANファイル転送・ZIP一括送受信＆安全なWebチャット',
-    desc: 'EQTはPC、iPhone、Android間でカメラQRコードをスキャンするだけでギガビットLAN速度（10–100 MB/s）の高速ファイル転送を実現。クラウド不要、アプリインストール不要。複数ファイル・フォルダのZIP自動アーカイブ、クリップボード送信、Windows右クリック共有、80/443標準ポート対応＆公認LAN-TLS暗号化。',
-    keywords: 'AirDrop Windows代替, スマホ PC ファイル転送, アプリ不要 ファイル共有, フォルダZIP一括送信, クリップボード共有, Windows右クリック転送, ローカルLAN転送, QRコードファイル共有, 標準ポート転送',
+    desc: 'EQTはPC、iPhone、Android間でカメラQRコードをスキャンするだけでギガビットLAN速度（10–100 MB/s）の高速ファイル転送を実現。クラウド不要、アプリインストール不要。複数ファイル・フォルダのZIP自動アーカイブ、クリップボード送信、80/443標準ポート対応＆公認LAN-TLS暗号化。',
+    keywords: 'AirDrop Windows代替, スマホ PC ファイル転送, アプリ不要 ファイル共有, フォルダZIP一括送信, クリップボード共有, ローカルLAN転送, QRコードファイル共有, 標準ポート転送',
     sampleKeyword: '転送'
   },
   ko: {
@@ -76,8 +76,8 @@ const langConfig = {
     htmlLang: 'ko',
     ogLocale: 'ko_KR',
     title: 'EQT - 모든 기기를 위한 AirDrop | 초고속 로컬 LAN 파일 전송, 폴더 ZIP 압축 및 보안 웹 채팅',
-    desc: 'EQT는 PC, iPhone, Android 간에 기본 카메라 QR 코드로 기가비트 LAN 속도(10–100 MB/s) 파일 전송을 제공합니다. 클라우드 중계 없음, 앱 설치 불필요. 다중 파일 및 폴더 ZIP 자동 패키징, 클립보드 텍스트 전송, Windows 마우스 우클릭 공유, 80/443 표준 포트 및 공식 LAN-TLS 보안 암호화.',
-    keywords: 'Windows AirDrop 대체, 안드로이드 PC 파일전송, 앱 설치 없는 파일전송, 폴더 ZIP 전송, 클립보드 전송, Windows 우클릭 파일공유, 로컬 LAN 전송, QR코드 파일공유',
+    desc: 'EQT는 PC, iPhone, Android 간에 기본 카메라 QR 코드로 기가비트 LAN 속도(10–100 MB/s) 파일 전송을 제공합니다. 클라우드 중계 없음, 앱 설치 불필요. 다중 파일 및 폴더 ZIP 자동 패키징, 클립보드 텍스트 전송, 80/443 표준 포트 및 공식 LAN-TLS 보안 암호화.',
+    keywords: 'Windows AirDrop 대체, 안드로이드 PC 파일전송, 앱 설치 없는 파일전송, 폴더 ZIP 전송, 클립보드 전송, 로컬 LAN 전송, QR코드 파일공유',
     sampleKeyword: '전송'
   },
   de: {
@@ -86,8 +86,8 @@ const langConfig = {
     htmlLang: 'de',
     ogLocale: 'de_DE',
     title: 'EQT - AirDrop für jedes Gerät | Lokale LAN-Dateiübertragung, Ordner-ZIP & Sicherer Web-Chat',
-    desc: 'EQT überträgt Dateien zwischen PC, iPhone und Android mit voller Gigabit-LAN-Geschwindigkeit (10–100 MB/s) per QR-Code. Ohne Cloud, ohne App-Installation. Mehrfachdatei- & Ordner-ZIP-Archivierung, Zwischenablage-Transfer, Windows-Rechtsklick-Freigabe, bevorzugte Standard-Ports (80/443) & offizielle LAN-TLS-Verschlüsselung.',
-    keywords: 'AirDrop für Windows, AirDrop Alternative Android, Lokale Dateiübertragung WLAN, Ordner als ZIP übertragen, Zwischenablage teilen, Windows Kontextmenü teilen, PC zu Handy ohne App, Datenschutz Dateitransfer',
+    desc: 'EQT überträgt Dateien zwischen PC, iPhone und Android mit voller Gigabit-LAN-Geschwindigkeit (10–100 MB/s) per QR-Code. Ohne Cloud, ohne App-Installation. Mehrfachdatei- & Ordner-ZIP-Archivierung, Zwischenablage-Transfer, bevorzugte Standard-Ports (80/443) & offizielle LAN-TLS-Verschlüsselung.',
+    keywords: 'AirDrop für Windows, AirDrop Alternative Android, Lokale Dateiübertragung WLAN, Ordner als ZIP übertragen, Zwischenablage teilen, PC zu Handy ohne App, Datenschutz Dateitransfer',
     sampleKeyword: 'Dateiübertragung'
   },
   fr: {
@@ -96,8 +96,8 @@ const langConfig = {
     htmlLang: 'fr',
     ogLocale: 'fr_FR',
     title: 'EQT - AirDrop pour tous les appareils | Transfert de fichiers LAN local, Archive ZIP & Chat Web sécurisé',
-    desc: 'EQT transfère des fichiers entre PC, iPhone et Android à la vitesse Gigabit LAN (10–100 Mo/s) par code QR. Sans cloud, sans installer d\'application. Archivage ZIP automatique des dossiers, partage du presse-papiers, intégration clic droit Windows, ports standard 80/443 et chiffrement LAN-TLS certifié.',
-    keywords: 'AirDrop pour Windows, Alternative AirDrop Android, Transfert local sans cloud, Téléchargement dossier ZIP, Partage presse-papiers, Clic droit Windows partager, Transfert PC vers téléphone sans app, Chiffrement LAN-TLS',
+    desc: 'EQT transfère des fichiers entre PC, iPhone et Android à la vitesse Gigabit LAN (10–100 Mo/s) par code QR. Sans cloud, sans installer d\'application. Archivage ZIP automatique des dossiers, partage du presse-papiers, ports standard 80/443 et chiffrement LAN-TLS certifié.',
+    keywords: 'AirDrop pour Windows, Alternative AirDrop Android, Transfert local sans cloud, Téléchargement dossier ZIP, Partage presse-papiers, Transfert PC vers téléphone sans app, Chiffrement LAN-TLS',
     sampleKeyword: 'Transfert'
   },
   es: {
@@ -106,8 +106,8 @@ const langConfig = {
     htmlLang: 'es',
     ogLocale: 'es_ES',
     title: 'EQT - AirDrop para cualquier dispositivo | Transferencia LAN local, Archivo ZIP y Chat Web seguro',
-    desc: 'EQT transfiere archivos entre PC, iPhone y Android a velocidad Gigabit LAN (10–100 MB/s) mediante código QR. Sin nube, sin instalar apps en el móvil. Empaquetado ZIP de carpetas, envío de portapapeles, menú contextual de Windows, puertos estándar (80/443) y cifrado LAN-TLS oficial.',
-    keywords: 'AirDrop para Windows, Alternativa a AirDrop Android, Transferencia local sin nube, Enviar carpetas ZIP, Compartir portapapeles, Clic derecho Windows compartir, PC a celular sin app, Compartir archivos LAN',
+    desc: 'EQT transfiere archivos entre PC, iPhone y Android a velocidad Gigabit LAN (10–100 MB/s) mediante código QR. Sin nube, sin instalar apps en el móvil. Empaquetado ZIP de carpetas, envío de portapapeles, puertos estándar (80/443) y cifrado LAN-TLS oficial.',
+    keywords: 'AirDrop para Windows, Alternativa a AirDrop Android, Transferencia local sin nube, Enviar carpetas ZIP, Compartir portapapeles, PC a celular sin app, Compartir archivos LAN',
     sampleKeyword: 'Transferencia'
   }
 };
@@ -127,13 +127,13 @@ function enrichTranslations(dict) {
     feat4_desc: "Share hundreds of photos or entire project folders at once. EQT bundles them into a single archive so mobile recipients can download everything in one tap instead of saving one by one.",
     feat5_title: "Private Instant Workspace &amp; Device Controls",
     feat5_desc: "Quickly exchange clipboard text, passwords, notes, and raw media between phone and PC. The host dashboard lets you see connected devices and disconnect unwanted guests.",
-    feat6_title: "Right-Click &amp; Send, Effortless Desktop Flow",
-    feat6_desc: "Right-click any file in Windows Explorer to share immediately, or drag and drop into the app window. Also features a clean CLI for technical users in SSH sessions.",
-    feat7_title: "Screen-Sleep Resilient &amp; Instant Video Streaming",
-    feat7_desc: "Large uploads automatically resume if your phone locks or Wi-Fi flickers. Recipients can scrub through and preview 4K videos immediately without waiting for full downloads.",
-    feat8_title: "Certified Green Security Lock &amp; Complete Privacy",
-    feat8_desc: "Displays an authentic browser security lock with zero warning popups. All data flows strictly inside your physical local network, completely isolated from cloud servers."
+    feat6_title: "Certified Green Security Lock &amp; Complete Privacy",
+    feat6_desc: "Displays an authentic browser security lock with zero warning popups. All data flows strictly inside your physical local network, completely isolated from cloud servers."
   });
+  delete (dict.en || {}).feat7_title;
+  delete (dict.en || {}).feat7_desc;
+  delete (dict.en || {}).feat8_title;
+  delete (dict.en || {}).feat8_desc;
 
   // Chinese updates (用户视角与使用感受)
   dict.zh = Object.assign(dict.zh || {}, {
@@ -148,13 +148,13 @@ function enrichTranslations(dict) {
     feat4_desc: "一次性挑选数百张照片或一整个工作文件夹。系统自动打包归档，手机端点一下就能一次性完整存盘，再也不用逐张点击保存。",
     feat5_title: "临时私密互传工作台，会议与访客神器",
     feat5_desc: "在电脑与手机之间随时同步文字、便签、账号密码与原画素材。电脑端可清晰掌控所有连入设备，临时访客用完即走，无任何云端留痕。",
-    feat6_title: "鼠标右键一键分享，拖拽即刻发送",
-    feat6_desc: "深度融入您的日常操作。右键任意文件直接点击“使用 EQT 分享”，或将文件直接拖入窗口秒发；也为程序员提供纯终端极客体验。",
-    feat7_title: "手机锁屏防中断，大视频即点即播",
-    feat7_desc: "传大文件时哪怕手机息屏、网络临时闪断，恢复后自动接着传，绝不从头再来。手机端收到超大视频还能直接拖动进度条边播边看。",
-    feat8_title: "官方认证安全锁，隐私 100% 锁在本地",
-    feat8_desc: "手机浏览器显示官方认证“绿色安全锁”，绝无吓人的风险警示。所有数据严格在您眼前的本地网络流转，彻底物理隔离，不走任何外部服务器。"
+    feat6_title: "官方认证安全锁，隐私 100% 锁在本地",
+    feat6_desc: "手机浏览器显示官方认证“绿色安全锁”，绝无吓人的风险警示。所有数据严格在您眼前的本地网络流转，彻底物理隔离，不走任何外部服务器。"
   });
+  delete (dict.zh || {}).feat7_title;
+  delete (dict.zh || {}).feat7_desc;
+  delete (dict.zh || {}).feat8_title;
+  delete (dict.zh || {}).feat8_desc;
 
   // Japanese updates (ユーザー視点＆メリット訴求)
   dict.ja = Object.assign(dict.ja || {}, {
@@ -169,13 +169,13 @@ function enrichTranslations(dict) {
     feat4_desc: "大量の写真や作業フォルダ丸ごとを一括共有。自動でZIPにまとめてくれるので、スマホ側で1枚ずつ保存する面倒な作業から解放されます。",
     feat5_title: "一時的なプライベート作業スペース＆端末管理",
     feat5_desc: "テキスト、パスワード、メモ、高画質写真を手軽に共有。PC側から接続端末をリアルタイムに確認・切断でき、会議や来客時にも安心して使えます。",
-    feat6_title: "右クリックですぐ送信、ドラッグ＆ドロップ対応",
-    feat6_desc: "ファイルを右クリックして「EQTで共有」を選ぶだけ。ウィンドウへのドラッグ＆ドロップ送信や、エンジニア向けのCUIコマンド操作にも対応しています。",
-    feat7_title: "画面が消えても中断なし、大容量動画の即時再生",
-    feat7_desc: "スマホがスリープしたりWi-Fiが途切れても自動で続きから再開。受信した4K動画はダウンロード完了を待たずにシークバーでプレビュー再生できます。",
-    feat8_title: "安心の公式セキュリティ認証、データは完全内網",
-    feat8_desc: "スマホ画面に公式認証の「緑の鍵マーク」を表示し、警告画面を出さずに安全保護。外部クラウドに一切送信されないため、個人情報や社外秘も安心です。"
+    feat6_title: "安心の公式セキュリティ認証、データは完全内網",
+    feat6_desc: "スマホ画面に公式認証の「緑の鍵マーク」を表示し、警告画面を出さずに安全保護。外部クラウドに一切送信されないため、個人情報や社外秘も安心です。"
   });
+  delete (dict.ja || {}).feat7_title;
+  delete (dict.ja || {}).feat7_desc;
+  delete (dict.ja || {}).feat8_title;
+  delete (dict.ja || {}).feat8_desc;
 
   // Korean updates (사용자 관점 및 편의성 강조)
   dict.ko = Object.assign(dict.ko || {}, {
@@ -190,13 +190,13 @@ function enrichTranslations(dict) {
     feat4_desc: "수백 장의 사진이나 작업 폴더 전체를 간편하게 공유하세요. 자동으로 ZIP 압축되어 스마트폰에서 탭 한 번으로 깔끔하게 저장됩니다.",
     feat5_title: "임시 프라이빗 워크스페이스 및 접속 기기 관리",
     feat5_desc: "PC와 폰 사이에서 텍스트 메모, 계정 정보, 원본 사진을 즉시 전송합니다. PC 화면에서 연결된 기기를 확인하고 불필요한 기기를 즉시 차단할 수 있습니다.",
-    feat6_title: "마우스 우클릭으로 즉시 공유, 드래그 앤 드롭 지원",
-    feat6_desc: "탐색기에서 파일 우클릭 후 'EQT로 공유'를 누르거나 프로그램 창으로 드래그하면 즉시 전송됩니다. 개발자를 위한 CLI 터미널 환경도 완벽 지원합니다.",
-    feat7_title: "화면이 꺼져도 안심, 대용량 비디오 즉시 재생",
-    feat7_desc: "스마트폰 화면이 꺼지거나 무선 신호가 끊겨도 자동으로 이어서 전송됩니다. 전송 중인 4K 비디오도 기다리지 않고 재생 바를 넘겨 바로 감상할 수 있습니다.",
-    feat8_title: "공식 인증 보안 자물쇠, 100% 로컬 프라이버시",
-    feat8_desc: "스마트폰 브라우저에 공인 인증 보안 자물쇠가 표시되어 경고창 없이 안심하고 사용합니다. 외부 서버를 거치지 않아 개인 사진과 기업 기밀이 절대 유출되지 않습니다."
+    feat6_title: "공식 인증 보안 자물쇠, 100% 로컬 프라이버시",
+    feat6_desc: "스마트폰 브라우저에 공인 인증 보안 자물쇠가 표시되어 경고창 없이 안심하고 사용합니다. 외부 서버를 거치지 않아 개인 사진과 기업 기밀이 절대 유출되지 않습니다."
   });
+  delete (dict.ko || {}).feat7_title;
+  delete (dict.ko || {}).feat7_desc;
+  delete (dict.ko || {}).feat8_title;
+  delete (dict.ko || {}).feat8_desc;
 
   // German updates (Nutzerzentriert & Nutzenorientiert)
   dict.de = Object.assign(dict.de || {}, {
@@ -211,13 +211,13 @@ function enrichTranslations(dict) {
     feat4_desc: "Hunderte Fotos oder komplette Projektordner auf einmal freigeben. EQT packt alles automatisch als ZIP – am Smartphone genügt ein Fingertipp zum Speichern.",
     feat5_title: "Privater Sofort-Arbeitsplatz &amp; Gerätekontrolle",
     feat5_desc: "Texte, Passwörter, Notizen und Originalfotos blitzschnell zwischen PC und Handy austauschen. Am PC behalten Sie die volle Kontrolle über verbundene Geräte.",
-    feat6_title: "Rechtsklick &amp; Senden, mühelose Desktop-Bedienung",
-    feat6_desc: "Rechtsklick im Windows Explorer auf 'Mit EQT teilen' oder Dateien einfach ins Fenster ziehen. Für Profis steht auch ein schlankes Terminal-Tool bereit.",
-    feat7_title: "Zuverlässig trotz Bildschirmsperre &amp; Video-Vorschau",
-    feat7_desc: "Große Uploads laufen automatisch weiter, falls das Smartphone sperrt oder das WLAN wackelt. Empfangene 4K-Videos können sofort per Zeitleiste angespielt werden.",
-    feat8_title: "Offizielles Sicherheitszertifikat, 100% lokal &amp; privat",
-    feat8_desc: "Echtes grünes Browserschloss ohne abschreckende Warnmeldungen. Alle Daten bleiben ausnahmslos in Ihrem lokalen Netzwerk und verlassen niemals Ihre Räume."
+    feat6_title: "Offizielles Sicherheitszertifikat, 100% lokal &amp; privat",
+    feat6_desc: "Echtes grünes Browserschloss ohne abschreckende Warnmeldungen. Alle Daten bleiben ausnahmslos in Ihrem lokalen Netzwerk und verlassen niemals Ihre Räume."
   });
+  delete (dict.de || {}).feat7_title;
+  delete (dict.de || {}).feat7_desc;
+  delete (dict.de || {}).feat8_title;
+  delete (dict.de || {}).feat8_desc;
 
   // French updates (Orienté utilisateur & Bénéfices)
   dict.fr = Object.assign(dict.fr || {}, {
@@ -232,13 +232,13 @@ function enrichTranslations(dict) {
     feat4_desc: "Partagez des centaines de photos ou des dossiers complets. EQT les regroupe automatiquement en archive ZIP pour un téléchargement direct sur mobile.",
     feat5_title: "Espace d'échange privé et contrôle des appareils",
     feat5_desc: "Échangez instantanément textes, mots de passe et fichiers entre PC et mobile. L'hôte sur PC peut voir les appareils connectés et déconnecter les indésirables.",
-    feat6_title: "Clic droit pour envoyer, intégration fluide au bureau",
-    feat6_desc: "Faites un clic droit sur vos fichiers pour 'Partager avec EQT' ou glissez-déposez dans la fenêtre. Une commande de terminal est aussi disponible pour les experts.",
-    feat7_title: "Insensible à la mise en veille &amp; Lecture vidéo directe",
-    feat7_desc: "La reprise automatique évite de tout recommencer si le téléphone s'éteint ou si le Wi-Fi faiblit. Les vidéos 4K se prévisualisent sans attendre la fin du téléchargement.",
-    feat8_title: "Cadenas de sécurité certifié, confidentialité totale",
-    feat8_desc: "Affiche un cadenas vert officiel dans le navigateur mobile sans alerte anxiogène. Vos fichiers ne transitent par aucun serveur externe ni cloud."
+    feat6_title: "Cadenas de sécurité certifié, confidentialité totale",
+    feat6_desc: "Affiche un cadenas vert officiel dans le navigateur mobile sans alerte anxiogène. Vos fichiers ne transitent par aucun serveur externe ni cloud."
   });
+  delete (dict.fr || {}).feat7_title;
+  delete (dict.fr || {}).feat7_desc;
+  delete (dict.fr || {}).feat8_title;
+  delete (dict.fr || {}).feat8_desc;
 
   // Spanish updates (Enfocado en beneficios de usuario)
   dict.es = Object.assign(dict.es || {}, {
@@ -253,13 +253,13 @@ function enrichTranslations(dict) {
     feat4_desc: "Comparta cientos de fotos o carpetas de proyectos de una sola vez. EQT las agrupa en un archivo ZIP para guardarlas fácilmente en el teléfono.",
     feat5_title: "Área privada de intercambio y control de dispositivos",
     feat5_desc: "Comparta notas de texto, contraseñas y fotos originales entre la PC y el móvil. Controle los dispositivos conectados y desconecte invitados con un clic.",
-    feat6_title: "Clic derecho y enviar, integración total con su PC",
-    feat6_desc: "Haga clic derecho en cualquier archivo para 'Compartir con EQT' o arrástrelo a la ventana. También incluye una herramienta de terminal para usuarios técnicos.",
-    feat7_title: "Resistente al bloqueo de pantalla y streaming de video",
-    feat7_desc: "Las transferencias se reanudan solas si el móvil se bloquea o la red parpadea. Además, puede reproducir videos 4K directamente sin esperar a que terminen.",
-    feat8_title: "Candado de seguridad certificado, privacidad 100% local",
-    feat8_desc: "Muestra el candado verde oficial en el navegador sin alertas de advertencia. Sus datos nunca pasan por servidores externos ni la nube."
+    feat6_title: "Candado de seguridad certificado, privacidad 100% local",
+    feat6_desc: "Muestra el candado verde oficial en el navegador sin alertas de advertencia. Sus datos nunca pasan por servidores externos ni la nube."
   });
+  delete (dict.es || {}).feat7_title;
+  delete (dict.es || {}).feat7_desc;
+  delete (dict.es || {}).feat8_title;
+  delete (dict.es || {}).feat8_desc;
 }
 
 enrichTranslations(translations);
