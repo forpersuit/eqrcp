@@ -1139,9 +1139,11 @@ dd {
 
 .avatar-setting-row {
     align-items: center;
-    display: grid;
-    gap: 10px;
-    grid-template-columns: 34px minmax(0, 1fr);
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    position: relative;
+    width: 100%;
 }
 
 .avatar-preview {
@@ -1256,6 +1258,7 @@ dd {
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
 }
 
 .avatar-inputs-stack {
@@ -1269,6 +1272,8 @@ dd {
 .avatar-actions {
     display: flex;
     gap: 6px;
+    align-items: center;
+    flex-shrink: 0;
 }
 
 .avatar-action-btn {

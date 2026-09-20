@@ -2414,41 +2414,39 @@ function renderSettingsPanel() {
                         <strong>${t('chat_avatar')}</strong>
                         <span>${t('chat_avatar_desc')}</span>
                     </div>
-                    <div class="avatar-setting-row" style="width: 100%;">
+                    <div class="avatar-setting-row">
                         <div class="avatar-preview-wrapper">
                             <span class="avatar-preview">${renderAvatarMarkup(chatAvatar, (cleanChatProfileName(chatSender).charAt(0) || 'D').toUpperCase())}</span>
                         </div>
-                        <div class="avatar-inputs-stack" style="position: relative; z-index: 9; width: 100%;">
-                            <div class="avatar-actions" style="display: flex; gap: 6px; justify-content: flex-end; align-items: center;">
-                                <button type="button" id="btn-avatar-upload" class="icon-button-mini" title="${escapeAttr(t('btn_upload_image'))}" aria-label="${escapeAttr(t('btn_upload_image'))}" style="padding: 4px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;">${photoIcon()}</button>
-                                <button type="button" id="btn-emoji-more" class="icon-button-mini" title="${escapeAttr(t('btn_emoji') || 'Emoji')}" aria-label="${escapeAttr(t('btn_emoji') || 'Emoji')}" style="padding: 4px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;">${emojiSmileIcon()}</button>
-                                <input type="file" id="settings-avatar-file" accept="image/*" style="display:none;" />
-                                ${chatAvatar.startsWith('data:image/') ? `
-                                    <button type="button" id="btn-avatar-reset" class="icon-button-mini" title="${escapeAttr(t('btn_reset'))}" aria-label="${escapeAttr(t('btn_reset'))}" style="padding: 4px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;">${resetIcon()}</button>
-                                ` : ''}
-                            </div>
-                            ${state.showEmojiPicker ? (() => {
-                                const allCulturalEmojis = Object.values(culturalEmojis).flatMap(g => g.emojis);
-                                const combined = [...allCulturalEmojis, ...allEmojis];
-                                const uniqueEmojis = Array.from(new Set(combined));
-                                return `
-                                    <div class="emoji-picker-popover" id="emoji-picker-popover">
-                                        <div class="emoji-picker-custom-row">
-                                            <input type="text" id="emoji-picker-custom-input" placeholder="${escapeAttr(t('emoji_picker_custom_placeholder') || 'Custom...')}" maxlength="8" />
-                                            <button type="button" id="btn-emoji-picker-custom-submit" class="avatar-action-btn">${t('btn_confirm') || 'Confirm'}</button>
-                                        </div>
-                                        <div class="emoji-picker-divider"></div>
-                                        <div class="emoji-picker-scroll-area">
-                                            <div class="emoji-picker-grid">
-                                                ${uniqueEmojis.map(emoji => `
-                                                    <button type="button" class="emoji-picker-item" data-emoji="${escapeAttr(emoji)}">${escapeHTML(emoji)}</button>
-                                                `).join('')}
-                                            </div>
+                        <div class="avatar-actions">
+                            <button type="button" id="btn-avatar-upload" class="icon-button-mini" title="${escapeAttr(t('btn_upload_image'))}" aria-label="${escapeAttr(t('btn_upload_image'))}" style="padding: 4px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;">${photoIcon()}</button>
+                            <button type="button" id="btn-emoji-more" class="icon-button-mini" title="${escapeAttr(t('btn_emoji') || 'Emoji')}" aria-label="${escapeAttr(t('btn_emoji') || 'Emoji')}" style="padding: 4px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;">${emojiSmileIcon()}</button>
+                            <input type="file" id="settings-avatar-file" accept="image/*" style="display:none;" />
+                            ${chatAvatar.startsWith('data:image/') ? `
+                                <button type="button" id="btn-avatar-reset" class="icon-button-mini" title="${escapeAttr(t('btn_reset'))}" aria-label="${escapeAttr(t('btn_reset'))}" style="padding: 4px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;">${resetIcon()}</button>
+                            ` : ''}
+                        </div>
+                        ${state.showEmojiPicker ? (() => {
+                            const allCulturalEmojis = Object.values(culturalEmojis).flatMap(g => g.emojis);
+                            const combined = [...allCulturalEmojis, ...allEmojis];
+                            const uniqueEmojis = Array.from(new Set(combined));
+                            return `
+                                <div class="emoji-picker-popover" id="emoji-picker-popover">
+                                    <div class="emoji-picker-custom-row">
+                                        <input type="text" id="emoji-picker-custom-input" placeholder="${escapeAttr(t('emoji_picker_custom_placeholder') || 'Custom...')}" maxlength="8" />
+                                        <button type="button" id="btn-emoji-picker-custom-submit" class="avatar-action-btn">${t('btn_confirm') || 'Confirm'}</button>
+                                    </div>
+                                    <div class="emoji-picker-divider"></div>
+                                    <div class="emoji-picker-scroll-area">
+                                        <div class="emoji-picker-grid">
+                                            ${uniqueEmojis.map(emoji => `
+                                                <button type="button" class="emoji-picker-item" data-emoji="${escapeAttr(emoji)}">${escapeHTML(emoji)}</button>
+                                            `).join('')}
                                         </div>
                                     </div>
-                                `;
-                            })() : ''}
-                        </div>
+                                </div>
+                            `;
+                        })() : ''}
                     </div>
                 </div>
                 <div class="setting-row">
