@@ -1,4 +1,16 @@
 {
+  "name": "eqt",
+  "private": true,
+  "scripts": {
+    "test": "go test ./... && (cd desktop/gui && go test ./...)",
+    "build": "bash scripts/deploy-windows-results.sh",
+    "build:quick": "bash scripts/deploy-windows-results.sh --no-tests",
+    "publish:test": "bash scripts/publish-test.sh",
+    "publish:prod": "bash scripts/publish-prod.sh",
+    "publish:all": "bash scripts/publish-test.sh && bash scripts/publish-prod.sh",
+    "deploy:test": "bash -c 'cd cloudflare/eqt-drm-api && npx wrangler deploy --env test && cd ../eqt-feedback-api && npx wrangler deploy --env test && cd ../eqt-website && npx wrangler pages deploy ./ --project-name=eqt-test --branch=dev'",
+    "deploy:prod": "bash -c 'cd cloudflare/eqt-drm-api && npx wrangler deploy && cd ../eqt-feedback-api && npx wrangler deploy && cd ../eqt-website && npx wrangler pages deploy ./ --project-name=eqt --branch=master'"
+  },
   "devDependencies": {
     "wrangler": "^4.112.0"
   }
