@@ -20,10 +20,25 @@ description: Guides EQT developer mode configurations, log system structures, lo
 | **生产边缘部署 (Prod Deploy)** | 部署 Cloudflare 生产边缘服务 (Workers / Pages) | **push 到 `master` 分支**<br>触发 `.github/workflows/deploy.yml` | 1. CI 通过后触发，**受 GitHub `production` 环境人工审批门禁保护**<br>2. 同样支持路径变更检测，仅部署有改动的生产 Worker/Pages，未变动服务直接跳过 |
 | **生产正式发布 (Prod Release)** | 编译生产正式客户端 -> GitHub Release -> R2 全球分发 -> 官网更新 | **push `v*` tag**<br>触发 `.github/workflows/release.yml` | 1. Windows runner 编译生产二进制（**绝无 `-tags eqtdev`**）<br>2. Ed25519 签名，发 GitHub Release<br>3. 上传至 R2 `downloads/v*/` 与 `downloads/latest/`<br>4. 部署生产官网 `eqt.net.im` |
 
+### 统一命令入口 (Unified pnpm Lifecycle Commands)
+
+根目录 `package.json` 提供标准化 `pnpm` 命令矩阵，消除各子目录与脚本的记忆负担：
+
+| 命令 | 动作说明 | 底层映射 |
+| :--- | :--- | :--- |
+| `pnpm run publish:test` | **测试环境完整发布闭环**（编译物理包 -> 上传 R2 测试分发桶 -> 同步时间戳 -> 推送 dev 触发 CI/CD 全链路） | `scripts/publish-test.sh` |
+| `pnpm run publish:prod` | **生产环境完整发布闭环**（推送 master -> 打版本 Tag 并推送触发 GitHub Actions 官方 Release 安全加签与分发流水线 -> 部署官网 -> 验证） | `scripts/publish-prod.sh` |
+| `pnpm run publish:all` | **一键全量发布**：先执行测试发布，紧接着执行生产发布 | `scripts/publish-test.sh && scripts/publish-prod.sh` |
+| `pnpm run deploy:test` | 纯边缘部署：部署测试环境 Cloudflare Workers 与 Pages | `wrangler deploy --env test` |
+| `pnpm run deploy:prod` | 纯边缘部署：部署生产环境 Cloudflare Workers 与 Pages | `wrangler deploy` |
+| `pnpm run build` | 本地完整编译：运行 Go 测试并生成 Windows 生产/测试物理产物至验收目录 | `scripts/deploy-windows-results.sh` |
+| `pnpm run build:quick` | 本地快速编译：跳过测试快速生成 Windows 物理产物 | `scripts/deploy-windows-results.sh --no-tests` |
+| `pnpm test` | 运行 Go 全模块自动化测试 | `go test ./...` |
+
 > **关键准则**：
-> 1. **测试发布全走云端**：日常开发无需在本地机器手动跑编译和 R2 上传，只需提交代码并使用 `scripts/git-push-smart.sh origin dev` 推送到 `dev` 分支，GitHub Actions 全自动完成差异化发布。
+> 1. **测试发布全走云端**：日常开发只需运行 `pnpm run publish:test`（或直接使用 `scripts/git-push-smart.sh origin dev` 推送到 `dev` 分支），GitHub Actions 全自动完成差异化发布。
 > 2. **差异化增量保障**：修改某个 Worker 时，流水线绝对不会空跑 5 分钟去编译 Windows GUI；修改文档或配置时，所有编译部署均秒级跳过。
-> 3. **本地发布脚本备用**：`scripts/publish-test.sh` 仅保留作为本地单机脱网或紧急手工发布的后备工具。
+> 3. **生产安全加签隔离**：生产二进制由 GitHub Actions 使用保存在 Secrets 中的正式私钥执行 Ed25519 安全加签，本地环境绝不保存生产私钥。运行 `pnpm run publish:prod` 会自动推送版本 Tag 触发该标准安全发布链路。
 
 ---
 
