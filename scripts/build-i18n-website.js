@@ -116,7 +116,7 @@ const langConfig = {
 function enrichTranslations(dict) {
   // English updates (User-Centric & Benefit-Driven)
   dict.en = Object.assign(dict.en || {}, {
-    hero_badge_new: "v1.36.165 Released: Zero Mobile App Install, Works on Any Wi-Fi &amp; One-Tap Folder Pack",
+    hero_badge_new: "v1.36.167 Released: Zero Mobile App Install, Works on Any Wi-Fi &amp; One-Tap Folder Pack",
     feat1_title: "Instant Scan, Works on Any Wi-Fi",
     feat1_desc: "Scan with your default phone camera to start instantly. Seamlessly navigates office networks, campus Wi-Fi, and hotel networks without being blocked by corporate firewalls.",
     feat2_title: "Blazing Gigabit LAN Speed (10-100+ MB/s)",
@@ -137,7 +137,7 @@ function enrichTranslations(dict) {
 
   // Chinese updates (用户视角与使用感受)
   dict.zh = Object.assign(dict.zh || {}, {
-    hero_badge_new: "v1.36.165 正式发布：安卓与苹果手机免装直传、办公 Wi-Fi 畅通无阻 &amp; 文件夹一键打包",
+    hero_badge_new: "v1.36.167 正式发布：安卓与苹果手机免装直传、办公 Wi-Fi 畅通无阻 &amp; 文件夹一键打包",
     feat1_title: "扫码即连，公共 Wi-Fi 畅通无阻",
     feat1_desc: "掏出手机自带相机扫一扫即可开始。智能兼容公司办公网、校园网与酒店 Wi-Fi，杜绝被企业防火墙误拦截，生成的链接干净清爽。",
     feat2_title: "千兆局域网满速狂飙，大文件秒传",
@@ -158,7 +158,7 @@ function enrichTranslations(dict) {
 
   // Japanese updates (ユーザー視点＆メリット訴求)
   dict.ja = Object.assign(dict.ja || {}, {
-    hero_badge_new: "v1.36.165 リリース：スマホアプリ不要の高速転送、オフィスWi-Fi完全対応＆フォルダ一括共有",
+    hero_badge_new: "v1.36.167 リリース：スマホアプリ不要の高速転送、オフィスWi-Fi完全対応＆フォルダ一括共有",
     feat1_title: "カメラで即スキャン、公共Wi-Fiでも快適",
     feat1_desc: "スマホの標準カメラでかざすだけ。オフィスの社内LAN、大学キャンパス、ホテルのWi-Fiでもファイアウォールに遮断されず、いつでもスムーズに接続できます。",
     feat2_title: "ギガビットLAN全速力、大容量も一瞬で完了",
@@ -179,7 +179,7 @@ function enrichTranslations(dict) {
 
   // Korean updates (사용자 관점 및 편의성 강조)
   dict.ko = Object.assign(dict.ko || {}, {
-    hero_badge_new: "v1.36.165 출시: 모바일 앱 설치 없는 초고속 전송, 공용 Wi-Fi 완벽 호환 및 폴더 일괄 다운로드",
+    hero_badge_new: "v1.36.167 출시: 모바일 앱 설치 없는 초고속 전송, 공용 Wi-Fi 완벽 호환 및 폴더 일괄 다운로드",
     feat1_title: "카메라 즉석 스캔, 공용 Wi-Fi에서도 완벽 접속",
     feat1_desc: "스마트폰 기본 카메라로 비추기만 하면 즉시 시작됩니다. 회사 업무망, 캠퍼스, 호텔 Wi-Fi에서도 방화벽 차단 없이 깔끔하게 접속됩니다.",
     feat2_title: "기가비트 LAN 최대 속도, 대용량 파일 초고속 전송",
@@ -200,7 +200,7 @@ function enrichTranslations(dict) {
 
   // German updates (Nutzerzentriert & Nutzenorientiert)
   dict.de = Object.assign(dict.de || {}, {
-    hero_badge_new: "v1.36.165 Veröffentlicht: Kein App-Download nötig, Firewall-sichere Freigabe &amp; 1-Klick-Ordner-Download",
+    hero_badge_new: "v1.36.167 Veröffentlicht: Kein App-Download nötig, Firewall-sichere Freigabe &amp; 1-Klick-Ordner-Download",
     feat1_title: "Sofort-Scan per Kamera, funktioniert in jedem WLAN",
     feat1_desc: "Einfach mit der normalen Smartphone-Kamera scannen. Funktioniert reibungslos im Büro-, Campus- oder Hotel-WLAN, ohne von strikten Firmen-Firewalls blockiert zu werden.",
     feat2_title: "Gigabit-LAN-Vollspeed, riesige Dateien in Sekunden",
@@ -221,7 +221,7 @@ function enrichTranslations(dict) {
 
   // French updates (Orienté utilisateur & Bénéfices)
   dict.fr = Object.assign(dict.fr || {}, {
-    hero_badge_new: "v1.36.165 Sortie : Zéro appli mobile requise, Passe à travers les pare-feu &amp; Dossiers ZIP en 1 clic",
+    hero_badge_new: "v1.36.167 Sortie : Zéro appli mobile requise, Passe à travers les pare-feu &amp; Dossiers ZIP en 1 clic",
     feat1_title: "Scannez et connectez, compatible tout Wi-Fi",
     feat1_desc: "Scannez simplement avec l'appareil photo de votre téléphone. Fonctionne parfaitement sur les réseaux de bureau, d'université et d'hôtel sans blocage pare-feu.",
     feat2_title: "Vitesse Gigabit maximale, fichiers lourds instantanés",
@@ -242,7 +242,7 @@ function enrichTranslations(dict) {
 
   // Spanish updates (Enfocado en beneficios de usuario)
   dict.es = Object.assign(dict.es || {}, {
-    hero_badge_new: "Lanzamiento v1.36.165: Sin instalar apps en el móvil, Sin bloqueo en redes Wi-Fi y Carpetas ZIP en 1 toque",
+    hero_badge_new: "Lanzamiento v1.36.167: Sin instalar apps en el móvil, Sin bloqueo en redes Wi-Fi y Carpetas ZIP en 1 toque",
     feat1_title: "Escaneo instantáneo, funciona en cualquier Wi-Fi",
     feat1_desc: "Escanee con la cámara de su móvil para comenzar de inmediato. Funciona sin problemas en redes corporativas, universitarias y hoteles sin bloqueos de cortafuegos.",
     feat2_title: "Velocidad Gigabit máxima, archivos pesados al instante",

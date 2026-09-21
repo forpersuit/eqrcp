@@ -4,7 +4,7 @@
 > **文档类型**：系统架构与工程技术指南 (Technical Architecture & Engineering Guide)  
 > **归档目录**：`docs/mechanism/`  
 > **密级状态**：开源公开发布 / 现役规范基线  
-> **最新基线版本**：`v1.36.166`  
+> **最新基线版本**：`v1.36.167`  
 > **适用范围**：系统架构师、Web 增长与 SEO/GEO 工程师、技术布道师、产品研发团队  
 > **关联生产实现**：  
 > - 机器事实知识库：[`cloudflare/eqt-website/llms.txt`](../../cloudflare/eqt-website/llms.txt)  
