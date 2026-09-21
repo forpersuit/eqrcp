@@ -58,13 +58,13 @@ export async function handleDownloadDomain(
       }
 
       const testResult = {
-        version: "v1.36.165",
+        version: "v1.36.167",
         published_at: new Date().toISOString(),
         changelog: "Test build: Automated cloud release pipeline, change-detection incremental deployment",
         assets: [
           {
             name: "eqt-desktop-test-windows-amd64.zip",
-            download_url: "https://download.eqt.net.im/downloads/test/eqt-desktop-test-windows-amd64.zip?t=202609190108",
+            download_url: "https://download.eqt.net.im/downloads/test/eqt-desktop-test-windows-amd64.zip?t=202609211048",
             size: 7790422
           },
           {
@@ -74,12 +74,12 @@ export async function handleDownloadDomain(
           },
           {
             name: "EQT-test-windows-amd64.zip",
-            download_url: "https://download.eqt.net.im/downloads/test/EQT-test-windows-amd64.zip?t=202609190108",
+            download_url: "https://download.eqt.net.im/downloads/test/EQT-test-windows-amd64.zip?t=202609211048",
             size: 7790422
           },
           {
             name: "EQT.exe",
-            download_url: "https://download.eqt.net.im/downloads/test/EQT.exe?t=202609190108",
+            download_url: "https://download.eqt.net.im/downloads/test/EQT.exe?t=202609211048",
             size: 19067904
           }
         ]
