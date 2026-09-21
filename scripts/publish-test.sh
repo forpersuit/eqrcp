@@ -42,7 +42,7 @@ fi
 
 zip_size="$(stat -c%s "$zip_file" 2>/dev/null || wc -c < "$zip_file" | tr -d ' ')"
 exe_size="$(stat -c%s "$exe_file" 2>/dev/null || wc -c < "$exe_file" | tr -d ' ')"
-current_version="$(grep -o 'version = "v[^"]*"' "${root_dir}/pkg/version/version.go" | cut -d'"' -f2)"
+current_version="$(rg -o 'version = "v[^"]*"' "${root_dir}/pkg/version/version.go" | cut -d'"' -f2)"
 timestamp="$(date +%Y%m%d%H%M)"
 
 echo "当前版本: ${current_version}"
@@ -76,12 +76,12 @@ code = code.replace(/download_url:\s*\"https:\/\/download\.eqt\.net\.im\/downloa
 fs.writeFileSync('${github_file}', code, 'utf8');
 "
 
-# 更新 index.html 中的下载链接时间戳
-sed -i -E "s|EQT-test-windows-amd64\.zip\?t=[^\']*|EQT-test-windows-amd64.zip?t=${timestamp}|g" "$index_file"
+# 更新 index.html 与各语言分站中的下载链接时间戳
+sed -i -E "s|EQT-test-windows-amd64\.zip\?t=[^\']*|EQT-test-windows-amd64.zip?t=${timestamp}|g" "$index_file" "${root_dir}"/cloudflare/eqt-website/*/index.html
 
 echo "=== [4/5] 提交元数据并部署同步至测试环境 ==="
 cd "${root_dir}"
-git add cloudflare/eqt-drm-api/src/services/github.ts cloudflare/eqt-website/index.html pkg/version/version.go desktop/gui/wails.json || true
+git add cloudflare/eqt-drm-api/src/services/github.ts cloudflare/eqt-website/ pkg/version/version.go desktop/gui/wails.json || true
 if ! git diff --cached --quiet; then
   git commit -m "chore(test): publish test release ${current_version} (t=${timestamp})"
 fi
@@ -99,7 +99,7 @@ git checkout "$current_branch"
 echo "=== [5/5] 验证测试环境主页与元数据状态 ==="
 sleep 5
 echo "检查 lic-test.eqt.net.im/update-metadata.json:"
-$WRANGLER_ENV curl -s https://lic-test.eqt.net.im/update-metadata.json | grep -o '"version":"[^"]*"' || true
+$WRANGLER_ENV curl -s https://lic-test.eqt.net.im/update-metadata.json | rg -o '"version":"[^"]*"' || true
 
 echo "检查 test.eqt.net.im 首页连通性:"
 $WRANGLER_ENV curl -sI https://test.eqt.net.im/ | head -n 1 || true
