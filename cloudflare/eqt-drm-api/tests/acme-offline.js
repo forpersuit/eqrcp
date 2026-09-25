@@ -363,6 +363,121 @@ async function runTests() {
     assert(capturedAccountPayload?.externalAccountBinding?.signature, 'T4.7c: EAB payload on the wire contains valid JWS signature');
   }
 
+  // Test 5: RSA (RS256) Account Key Support, RFC 7638 RSA Thumbprint, and accountUrl Pinning
+  {
+    console.log('\n--- Test 5: RSA (RS256) Account Key Support & accountUrl Pinning ---');
+    const { publicKey: rsaPubJwk, privateKey: rsaPrivJwk } = crypto.generateKeyPairSync('rsa', {
+      modulusLength: 2048,
+      publicKeyEncoding: { type: 'spki', format: 'jwk' },
+      privateKeyEncoding: { type: 'pkcs8', format: 'jwk' }
+    });
+
+    // T5.1: RFC 7638 RSA Thumbprint lexicographical order (e, kty, n)
+    const rsaThumbprint = await computeJWKThumbprint(rsaPubJwk);
+    const expectedCanonical = JSON.stringify({
+      e: rsaPubJwk.e,
+      kty: rsaPubJwk.kty,
+      n: rsaPubJwk.n
+    });
+    const expectedSha256 = crypto.createHash('sha256').update(expectedCanonical).digest('base64url');
+    assert(rsaThumbprint === expectedSha256, 'T5.1: computeJWKThumbprint strictly matches RFC 7638 Section 3.1 lexicographic (e, kty, n) for RSA');
+
+    // T5.2: DNS-01 Challenge value with RSA Thumbprint
+    const token = 'test-challenge-token-rsa-dns01';
+    const challengeValue = await computeDns01ChallengeValue(token, rsaThumbprint);
+    const expectedKeyAuth = `${token}.${rsaThumbprint}`;
+    const expectedChallengeValue = crypto.createHash('sha256').update(expectedKeyAuth).digest('base64url');
+    assert(challengeValue === expectedChallengeValue, 'T5.2: computeDns01ChallengeValue with RSA thumbprint matches SHA256(token + "." + thumbprint)');
+
+    // T5.3: AcmeClient with RSA key and accountUrl pinning
+    let capturedJws = null;
+    let newAccountCalled = false;
+    const pinnedAccountUrl = 'https://acme-v02.api.letsencrypt.org/acme/acct/3704177676';
+
+    const rsaMockFetch = async (url, options = {}) => {
+      const u = new URL(url);
+      if (u.pathname === '/directory') {
+        return new Response(JSON.stringify({
+          newNonce: 'https://acme.test/new-nonce',
+          newAccount: 'https://acme.test/new-account',
+          newOrder: 'https://acme.test/new-order'
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (u.pathname === '/new-nonce') {
+        return new Response('', { status: 200, headers: { 'Replay-Nonce': 'rsa-nonce-1' } });
+      }
+      if (u.pathname === '/new-account') {
+        newAccountCalled = true;
+        return new Response(JSON.stringify({ status: 'valid' }), { status: 201 });
+      }
+      if (u.pathname === '/new-order') {
+        capturedJws = JSON.parse(options.body);
+        return new Response(JSON.stringify({
+          status: 'pending',
+          authorizations: [],
+          finalize: 'https://acme.test/finalize'
+        }), {
+          status: 201,
+          headers: {
+            'Location': 'https://acme.test/order/rsa-1',
+            'Replay-Nonce': 'rsa-nonce-2',
+            'Content-Type': 'application/json'
+          }
+        });
+      }
+      return new Response('', { status: 404 });
+    };
+
+    const rsaClient = await AcmeClient.create({
+      directoryUrl: 'https://acme.test/directory',
+      accountKeyJWK: JSON.stringify(rsaPrivJwk),
+      accountUrl: pinnedAccountUrl,
+      customFetch: rsaMockFetch
+    });
+
+    // T5.4: accountUrl pinning bypasses newAccount roundtrip
+    const acctUrl = await rsaClient.initAccount('leeyelon@gmail.com');
+    assert(acctUrl === pinnedAccountUrl, 'T5.4a: initAccount returns pinned accountUrl directly');
+    assert(!newAccountCalled, 'T5.4b: Pinned accountUrl completely bypasses redundant newAccount network POST');
+
+    // T5.5: RS256 signing and wire verification
+    await rsaClient.newOrder(['test.direct.eqt.net.im']);
+    assert(capturedJws !== null, 'T5.5a: AcmeClient with RSA key sent order request over wire');
+
+    const protectedHeader = JSON.parse(Buffer.from(capturedJws.protected, 'base64url').toString('utf8'));
+    assert(protectedHeader.alg === 'RS256', 'T5.5b: Protected header specifies alg="RS256"');
+    assert(protectedHeader.kid === pinnedAccountUrl, 'T5.5c: Protected header uses kid=pinnedAccountUrl instead of jwk');
+    assert(!protectedHeader.jwk, 'T5.5d: Protected header does not leak embedded jwk when kid is set');
+
+    // T5.6: Cryptographic RS256 signature verification
+    const signingInput = `${capturedJws.protected}.${capturedJws.payload}`;
+    const sigBytes = Buffer.from(capturedJws.signature, 'base64url');
+
+    const pubCryptoKey = await crypto.subtle.importKey(
+      'jwk',
+      rsaPubJwk,
+      { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+      true,
+      ['verify']
+    );
+    const isValidSig = await crypto.subtle.verify(
+      'RSASSA-PKCS1-v1_5',
+      pubCryptoKey,
+      sigBytes,
+      new TextEncoder().encode(signingInput)
+    );
+    assert(isValidSig === true, 'T5.6a: RS256 signature generated by AcmeClient is mathematically verified by RSA public key');
+
+    // T5.6b: Falsifiable probe: Tampered payload fails verification
+    const isTamperedValid = await crypto.subtle.verify(
+      'RSASSA-PKCS1-v1_5',
+      pubCryptoKey,
+      sigBytes,
+      new TextEncoder().encode(signingInput + '_tampered')
+    );
+    assert(isTamperedValid === false, 'T5.6b: Tampered payload fails RS256 signature verification (falsifiable gate)');
+  }
+
   console.log(`\nResults: ${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
 }

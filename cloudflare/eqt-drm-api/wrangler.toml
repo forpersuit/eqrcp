@@ -34,6 +34,7 @@ ACME_DIRECTORY_URL = "https://dv.acme-v02.api.pki.goog/directory"
 ACME_EAB_KID = "b160e386be328f849159219f87cae8a5"
 ACME_DNS_API_ENDPOINTS = "https://ns1-dns.eqt.net.im,https://ns2-dns.eqt.net.im"
 ACME_EMAIL = "forpersuit@gmail.com"
+ACME_LE_ACCOUNT_URL = "https://acme-v02.api.letsencrypt.org/acme/acct/3704177676"
 
 routes = [
   { pattern = "lic.eqt.net.im", custom_domain = true }
@@ -85,4 +86,5 @@ ACME_DIRECTORY_URL = "https://dv.acme-v02.api.pki.goog/directory"
 ACME_EAB_KID = "b160e386be328f849159219f87cae8a5"
 ACME_DNS_API_ENDPOINTS = "https://ns1-dns.eqt.net.im,https://ns2-dns.eqt.net.im"
 ACME_EMAIL = "forpersuit@gmail.com"
+ACME_LE_ACCOUNT_URL = "https://acme-v02.api.letsencrypt.org/acme/acct/3704177676"
 

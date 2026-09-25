@@ -1,7 +1,13 @@
 # Let's Encrypt 官方 Rate Limit 豁免申请表单与技术说明书
 
-> **申请目标**：向 Let's Encrypt 提交官方 [Rate Limit Exemption Request](https://letsencrypt.org/contact/) 表单。  
-> **核心诉求**：申请将主域名 `eqt.net.im` / `direct.eqt.net.im` 的证书签发速率限制由默认的 50 张/周，临时提升至 **20,000 张/周**，以保障 Mozilla Public Suffix List (PSL) 审查窗口期（1~3 个月）内，公网新设备单机专属 TLS 证书置备与平滑演进不受中断。
+> **状态**：✅ **官方审核已批准并部署生效 (Approved & Deployed)**  
+> **生效时间**：2026-09-25（由 ISRG 平台团队邮件确认）  
+> **审批结果**：  
+> - **Rate Limit Type**: `Certificates per Registered Domain`  
+> - **绑定账户**: `https://acme-v02.api.letsencrypt.org/acme/acct/3704177676`  
+> - **生效新限额 (New Limit)**: **`10,000+ 20000`**（原 50 张/周提升至 20,000~30,000 张/周）  
+> - **适用域**: `*.direct.eqt.net.im` / `direct.eqt.net.im`  
+> **核心诉求**：保障 Mozilla Public Suffix List (PSL) 审查窗口期内，公网新设备单机专属 TLS 证书置备与平滑演进不受中断。
 
 ---
 
@@ -101,13 +107,20 @@
 
 ---
 
-### 步骤 5：生效验收与限额突破验证（Verification）
+### 步骤 5：生效验收与密码学适配落地（Verification & Deployment）
 
-收到批准通知后，在测试脚本或云端 Worker 中执行验收：
-1. **使用被授权的同一个 ACME 账户**发起证书签发请求；
-2. 为测试节点申请超过默认 50 张限额的子域名证书（例如在 1 小时内签发 60 张不同的 `<node-id>.direct.eqt.net.im` 证书）；
-3. **验收标准**：
-   - 第 51 张及之后的请求不再返回 HTTP 429 `rateLimited` 错误；
-   - 证书全部正常签发并在自建权威 DNS 完成质询验证；
-4. 归档豁免批准邮件，记录 6 个月到期时间，并在到期前评估 Mozilla PSL 的合并推进进度。
+1. **官方审批邮件确认（已闭环 ✅）**：
+   - **时间**：2026-09-25 05:38 GMT
+   - **发件方**：ISRG / Let's Encrypt Review Team
+   - **审批内容**：
+     - *Rate Limit Type*: Certificates per Registered Domain
+     - *Registration ID*: `https://acme-v02.api.letsencrypt.org/acme/acct/3704177676`
+     - *New Limit*: `10,000+ 20000`（提升至 20,000~30,000 张/周）
+     - *部署状态*: 已在全球边缘部署生效（"We have approved and deployed the following rate limit adjustment that you requested."）
+
+2. **密码学与工程适配落地（已闭环 ✅）**：
+   - **RSA JWK 导入与 RS256 原生支持**：Cloudflare Worker (`cloudflare/eqt-drm-api`) 中的 `AcmeClient` 已扩展支持 RSA-2048 账户密钥（`kty: RSA`），签名算法自动切换为 `RS256`（`RSASSA-PKCS1-v1_5` + `SHA-256`）；
+   - **RFC 7638 RSA Thumbprint 标准计算**：按标准字典序（`e`, `kty`, `n`）计算 SHA-256 摘要，准确导出 DNS-01 TXT 验证值；
+   - **生产账户 URI 强绑定 (`kid`)**：通过环境变量 `ACME_LE_ACCOUNT_URL` 将 JWS 请求头中的 `kid` 严格锚定至 `https://acme-v02.api.letsencrypt.org/acme/acct/3704177676`，跳过冗余 `newAccount` 探测并杜绝临时账户导致配额回退；
+   - **离线门禁验收通过**：`test:acme:offline`（T5.1~T5.6）及 `test:cert:offline`（T25.6）自动化断言 100% 通过。
 

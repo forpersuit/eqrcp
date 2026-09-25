@@ -19,6 +19,7 @@ export interface CAProvider {
   getDirectoryUrl(env: Env): string;
   getEAB(env: Env): ExternalAccountBindingOptions | undefined;
   getAccountKey(env: Env): string | undefined;
+  getAccountUrl?(env: Env): string | undefined;
   getContactEmail(env: Env): string | undefined;
 }
 
@@ -44,6 +45,9 @@ export const GTS_PROVIDER: CAProvider = {
   getAccountKey(env: Env): string | undefined {
     return env.ACME_ACCOUNT_KEY;
   },
+  getAccountUrl(_env: Env): string | undefined {
+    return undefined;
+  },
   getContactEmail(env: Env): string | undefined {
     return env.ACME_EMAIL;
   }
@@ -64,6 +68,9 @@ export const LETSENCRYPT_PROVIDER: CAProvider = {
   },
   getAccountKey(env: Env): string | undefined {
     return env.ACME_LE_ACCOUNT_KEY || env.ACME_ACCOUNT_KEY;
+  },
+  getAccountUrl(env: Env): string | undefined {
+    return env.ACME_LE_ACCOUNT_URL;
   },
   getContactEmail(env: Env): string | undefined {
     return env.ACME_LE_EMAIL || env.ACME_EMAIL;

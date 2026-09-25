@@ -1977,6 +1977,8 @@ async function runTests() {
     let gtsCalls = 0;
     let leCalls = 0;
     let leProxyCalls = 0;
+    let leNewAcctCalls = 0;
+    let lastLeOrderBody = null;
     let dnsChallengeSets = 0;
     let gtsChalTriggered = false;
     let leChalTriggered = false;
@@ -2104,12 +2106,18 @@ async function runTests() {
           return new Response(null, { status: 200, headers: { 'Replay-Nonce': `le-nonce-${nonceIndex++}` } });
         }
         if (subPath === '/new-acct') {
+          leNewAcctCalls++;
           return new Response(JSON.stringify({ status: 'valid' }), {
             status: 200,
             headers: { 'Location': 'https://acme-v02.api.letsencrypt.org/acct/1', 'Replay-Nonce': `le-nonce-${nonceIndex++}`, 'Content-Type': 'application/json' }
           });
         }
         if (subPath === '/new-order') {
+          if (init && init.body) {
+            try {
+              lastLeOrderBody = JSON.parse(init.body);
+            } catch (_) {}
+          }
           if (leBehavior === '429') {
             return new Response(JSON.stringify({
               type: 'urn:ietf:params:acme:error:rateLimited',
@@ -2299,6 +2307,63 @@ async function runTests() {
 
       assert(resp25_5.status === 429 && data25_5.reason_key === 'ca_circuit_open', 'T25.5a: When failover disabled, GTS OPEN returns 429 ca_circuit_open');
       assert(leCalls === 0, 'T25.5b: LE receives 0 requests when ACME_DISABLE_FAILOVER is true');
+
+      // T25.6: Pre-flight failover with RSA ACME_LE_ACCOUNT_KEY and pinned ACME_LE_ACCOUNT_URL (Rate Limit Exemption account 3704177676)
+      const rsaAccountKey = crypto.generateKeyPairSync('rsa', {
+        modulusLength: 2048,
+        publicKeyEncoding: { type: 'spki', format: 'jwk' },
+        privateKeyEncoding: { type: 'pkcs8', format: 'jwk' }
+      });
+      const pinnedLeAccountUrl = 'https://acme-v02.api.letsencrypt.org/acme/acct/3704177676';
+
+      multiDb._circuitBreakers.set('gts_ca', {
+        name: 'gts_ca',
+        state: 'OPEN',
+        failure_count: 1,
+        success_count: 0,
+        last_failure_time: new Date().toISOString(),
+        cooldown_until: new Date(Date.now() + 60000).toISOString(),
+        last_retry_after: 60,
+        updated_at: new Date().toISOString()
+      });
+      multiDb._circuitBreakers.set('letsencrypt_ca', {
+        name: 'letsencrypt_ca',
+        state: 'CLOSED',
+        failure_count: 0,
+        success_count: 0,
+        last_failure_time: null,
+        cooldown_until: null,
+        last_retry_after: 0,
+        updated_at: new Date().toISOString()
+      });
+
+      lastLeOrderBody = null;
+      leNewAcctCalls = 0;
+      leCalls = 0;
+
+      const req25_6 = buildNodeReq('ff0000000006');
+      const ctx25_6 = makeMockCtx();
+      const resp25_6 = await handleCertRoutes(
+        req25_6,
+        {
+          ...multiEnv,
+          ACME_LE_ACCOUNT_KEY: JSON.stringify(rsaAccountKey.privateKey),
+          ACME_LE_ACCOUNT_URL: pinnedLeAccountUrl
+        },
+        ctx25_6,
+        new URL(req25_6.url),
+        {}
+      );
+      const data25_6 = await resp25_6.json();
+      await ctx25_6.drain();
+
+      assert(resp25_6.status === 200 && data25_6.cert_pem, 'T25.6a: Failover with RSA key and pinned accountUrl succeeds with 200 OK certificate');
+      assert(leNewAcctCalls === 0, 'T25.6b: Pinned ACME_LE_ACCOUNT_URL skips newAccount call to Let\'s Encrypt');
+      assert(lastLeOrderBody !== null, 'T25.6c: LE received signed new-order request over le-proxy');
+
+      const leProtHeader = JSON.parse(Buffer.from(lastLeOrderBody.protected, 'base64url').toString('utf8'));
+      assert(leProtHeader.alg === 'RS256', 'T25.6d: JWS protected header sent to LE uses alg="RS256"');
+      assert(leProtHeader.kid === pinnedLeAccountUrl, 'T25.6e: JWS protected header sent to LE pins kid to 3704177676 account');
     } finally {
       globalThis.fetch = origFetch;
     }

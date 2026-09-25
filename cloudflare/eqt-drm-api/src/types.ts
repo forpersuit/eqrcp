@@ -52,8 +52,10 @@ export interface Env {
   ACME_GTS_DIRECTORY_URL?: string;
   /** Optional override URL for Let's Encrypt directory */
   ACME_LE_DIRECTORY_URL?: string;
-  /** Optional dedicated account key for Let's Encrypt (defaults to ACME_ACCOUNT_KEY) */
+  /** Optional dedicated account key for Let's Encrypt (RSA or ECDSA JWK, defaults to ACME_ACCOUNT_KEY) */
   ACME_LE_ACCOUNT_KEY?: string;
+  /** Optional dedicated account URL for Let's Encrypt (e.g. https://acme-v02.api.letsencrypt.org/acme/acct/3704177676) */
+  ACME_LE_ACCOUNT_URL?: string;
   /** Optional dedicated contact email for Let's Encrypt (defaults to ACME_EMAIL) */
   ACME_LE_EMAIL?: string;
   /** Optional disable Multi-CA automatic failover (defaults to false / enabled) */

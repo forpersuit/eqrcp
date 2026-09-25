@@ -702,11 +702,13 @@ async function executeSingleAcmeProvision(
   const eabOpts = provider.getEAB(env);
   const dirUrl = provider.getDirectoryUrl(env);
   const accountKey = provider.getAccountKey(env);
+  const accountUrl = provider.getAccountUrl ? provider.getAccountUrl(env) : undefined;
   const contactEmail = provider.getContactEmail(env);
 
   const acmeClient = await AcmeClient.create({
     directoryUrl: dirUrl,
     accountKeyJWK: accountKey,
+    accountUrl: accountUrl,
     customFetch: acmeCustomFetch,
     eab: eabOpts
   });

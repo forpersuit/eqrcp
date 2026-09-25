@@ -37,7 +37,8 @@ WantedBy=multi-user.target
   3. **离线运维冷备 (Dev Ops)**：保存于开发运维机 `~/.config/eqt/backup/acme-account/`（防范云端误删）。
 - **故障接管判定与机制**：
   - **DNS 业务解析**：双 NS 委派下全球公共 DNS 递归解析自动 failover 切换至 `ns2`，局域网传输业务 0 秒级中断；
-  - **证书签发接管**：`ns2` 只需安装 certbot，配置调用本地 `127.0.0.1:5380` 的 challenge hook，即可立即继承该账户的全部 20,000 张/周配额，无缝恢复签发。
+  - **证书签发接管**：`ns2` 只需安装 certbot，配置调用本地 `127.0.0.1:5380` 的 challenge hook，即可立即继承该账户的全部 20,000 张/周配额，无缝恢复签发；
+  - **云端网关接管**：Cloudflare Worker (`cloudflare/eqt-drm-api`) 支持 RSA-2048 (RS256) 签名，配置 `ACME_LE_ACCOUNT_KEY` 与 `ACME_LE_ACCOUNT_URL` 即可在 GTS 故障时自动无缝接管签发，继承该账户配额。
 
 ---
 

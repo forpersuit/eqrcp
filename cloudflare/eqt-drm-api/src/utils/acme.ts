@@ -68,23 +68,49 @@ export function base64UrlDecode(str: string): Uint8Array {
 
 export interface JwkKey {
   kty: string;
-  crv: string;
-  x: string;
-  y: string;
+  crv?: string;
+  x?: string;
+  y?: string;
+  n?: string;
+  e?: string;
   d?: string;
+  p?: string;
+  q?: string;
+  dp?: string;
+  dq?: string;
+  qi?: string;
 }
 
 /**
- * Computes canonical JWK Thumbprint (RFC 7638) for an EC P-256 key.
- * Required fields in lexicographic order: crv, kty, x, y.
+ * Computes canonical JWK Thumbprint (RFC 7638) for an EC P-256 or RSA key.
+ * Required fields in lexicographic order:
+ *  - EC: crv, kty, x, y (Section 3.2)
+ *  - RSA: e, kty, n (Section 3.1)
  */
 export async function computeJWKThumbprint(jwk: JwkKey): Promise<string> {
-  const canonical = JSON.stringify({
-    crv: jwk.crv,
-    kty: jwk.kty,
-    x: jwk.x,
-    y: jwk.y
-  });
+  let canonical: string;
+  if (jwk.kty === 'RSA') {
+    if (!jwk.e || !jwk.n) {
+      throw new Error('RSA JWK missing required parameters (e, n)');
+    }
+    canonical = JSON.stringify({
+      e: jwk.e,
+      kty: jwk.kty,
+      n: jwk.n
+    });
+  } else if (jwk.kty === 'EC') {
+    if (!jwk.crv || !jwk.x || !jwk.y) {
+      throw new Error('EC JWK missing required parameters (crv, x, y)');
+    }
+    canonical = JSON.stringify({
+      crv: jwk.crv,
+      kty: jwk.kty,
+      x: jwk.x,
+      y: jwk.y
+    });
+  } else {
+    throw new Error(`Unsupported JWK kty for thumbprint: ${jwk.kty}`);
+  }
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonical));
   return base64UrlEncode(new Uint8Array(digest));
 }
@@ -182,6 +208,7 @@ export class AcmeClient {
   private nonce?: string;
   private customFetch: typeof fetch;
   private eab?: ExternalAccountBindingOptions;
+  private sigAlgorithm: 'ES256' | 'RS256';
 
   constructor(opts: {
     directoryUrl: string;
@@ -190,6 +217,7 @@ export class AcmeClient {
     accountUrl?: string;
     customFetch?: typeof fetch;
     eab?: ExternalAccountBindingOptions;
+    sigAlgorithm?: 'ES256' | 'RS256';
   }) {
     this.directoryUrl = opts.directoryUrl;
     this.accountKey = opts.accountKey;
@@ -197,6 +225,7 @@ export class AcmeClient {
     this.accountUrl = opts.accountUrl;
     this.customFetch = opts.customFetch || globalThis.fetch.bind(globalThis);
     this.eab = opts.eab;
+    this.sigAlgorithm = opts.sigAlgorithm || (opts.publicJwk.kty === 'RSA' ? 'RS256' : 'ES256');
   }
 
   static async create(opts: {
@@ -214,16 +243,40 @@ export class AcmeClient {
 
     if (opts.accountKeyJWK) {
       const parsed = JSON.parse(opts.accountKeyJWK);
+      if (parsed.kty === 'RSA') {
+        const privKey = await crypto.subtle.importKey(
+          'jwk',
+          parsed,
+          { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+          true,
+          ['sign']
+        );
+        publicJwk = {
+          kty: 'RSA',
+          n: parsed.n,
+          e: parsed.e
+        };
+        return new AcmeClient({
+          directoryUrl: dirUrl,
+          accountKey: privKey,
+          publicJwk,
+          accountUrl: opts.accountUrl,
+          customFetch: opts.customFetch,
+          eab: opts.eab,
+          sigAlgorithm: 'RS256'
+        });
+      }
+
       const privKey = await crypto.subtle.importKey(
         'jwk',
         parsed,
-        { name: 'ECDSA', namedCurve: 'P-256' },
+        { name: 'ECDSA', namedCurve: parsed.crv || 'P-256' },
         true,
         ['sign']
       );
       publicJwk = {
-        kty: parsed.kty,
-        crv: parsed.crv,
+        kty: parsed.kty || 'EC',
+        crv: parsed.crv || 'P-256',
         x: parsed.x,
         y: parsed.y
       };
@@ -233,7 +286,8 @@ export class AcmeClient {
         publicJwk,
         accountUrl: opts.accountUrl,
         customFetch: opts.customFetch,
-        eab: opts.eab
+        eab: opts.eab,
+        sigAlgorithm: 'ES256'
       });
     }
 
@@ -257,7 +311,8 @@ export class AcmeClient {
         publicJwk,
         accountUrl: opts.accountUrl,
         customFetch: opts.customFetch,
-        eab: opts.eab
+        eab: opts.eab,
+        sigAlgorithm: 'ES256'
       });
     }
 
@@ -296,7 +351,7 @@ export class AcmeClient {
       attempt++;
       const nonce = await this.getNonce();
       const protectedHeader: Record<string, any> = {
-        alg: 'ES256',
+        alg: this.sigAlgorithm,
         nonce,
         url
       };
@@ -311,8 +366,12 @@ export class AcmeClient {
       const payloadB64 = payload === '' ? '' : base64UrlEncode(typeof payload === 'string' ? payload : JSON.stringify(payload));
       const signingInput = `${protectedB64}.${payloadB64}`;
 
+      const signParams = this.sigAlgorithm === 'RS256'
+        ? { name: 'RSASSA-PKCS1-v1_5' }
+        : { name: 'ECDSA', hash: 'SHA-256' };
+
       const rawSig = await crypto.subtle.sign(
-        { name: 'ECDSA', hash: 'SHA-256' },
+        signParams,
         this.accountKey,
         new TextEncoder().encode(signingInput)
       );
