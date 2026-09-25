@@ -132,13 +132,14 @@ EQT is engineered with a dual-form factor philosophy catering to both end users 
 
 - **Free Edition ($0 Forever)**:
   - Full Gigabit LAN speed on all supported platforms.
+  - Default-on HTTPS transmission & authentic LAN-TLS WebPKI green lock.
   - Unlimited file size and transfer count for first 5 transfers daily.
   - After 5 transfers: 5 files per transfer, 50MB per file limit.
   - Daily 5-minute (300s) Chat session quota.
 - **Plus Yearly ($11.99 / Year)**:
   - Uncapped file size and transfer counts.
   - Unlimited Chat duration and multi-device host controls.
-  - Official LAN-TLS WebPKI green lock certificate encryption.
+  - Priority customer support and self-service device slot management.
   - No hidden automatic renewals.
 - **Plus Lifetime ($29.99 One-Time)**:
   - All Plus features permanently unlocked with lifetime free updates.
