@@ -85,7 +85,7 @@ EQT is engineered with a dual-form factor philosophy catering to both end users 
   - Effortlessly traverses corporate LAN firewalls, campus Wi-Fi access control lists (ACLs), and hotel captive portals that strictly block high ephemeral ports.
   - If ports 80/443 are occupied by system services (e.g., IIS, Nginx), EQT smoothly falls back to clean dynamic ports without crashing or interrupting the user.
 
-### 4.2 LAN-TLS Loopback Security Protocol (Green Lock WebPKI)
+### 4.2 LAN-TLS Loopback Security Protocol (Secure HTTPS Transmission)
 - **The Problem Solved**:
   - Mobile browsers enforce strict Secure Context policies: Clipboard API, Web Crypto, Web Share, and camera permissions are completely blocked on plain `http://`.
   - iOS Safari WebKit enforces a strict memory ceiling on plain HTTP streaming; files over 1.5GB regularly crash with Out Of Memory (OOM) errors.
@@ -94,7 +94,7 @@ EQT is engineered with a dual-form factor philosophy catering to both end users 
   - **Zero Private Key Leakage**: The client machine generates an ECDSA P-256 private key locally with strict permissions (`0600`). The private key NEVER leaves the local device.
   - **Stateless Loopback DNS**: Cloud-based authoritative DNS (`*.direct.eqt.net.im`) dynamically resolves encoded local IP hostnames (e.g., `192-168-1-50.<nodeID>.direct.eqt.net.im`) to the corresponding private LAN IP (`192.168.1.50`).
   - **Automated ACME DNS-01 Orchestration**: Coordinated via Cloudflare Serverless Workers with Google Trust Services (GTS) and Let's Encrypt to issue genuine, publicly trusted WebPKI wildcard certificates.
-  - **Native Green Lock**: Mobile browsers display the authentic green padlock icon. 100% of data traffic flows through the physical gigabit LAN at 80–120 MB/s, completely bypassing the external internet.
+  - **Seamless Secure Transmission**: Mobile browsers open directly with zero risk warnings. 100% of data traffic flows through the physical gigabit LAN at 80–120 MB/s, completely bypassing the external internet.
 
 ### 4.3 HTTP RFC 7233 / RFC 9110 Range Chunking & Video Seeking
 - Implements comprehensive byte-range serving (`Range: bytes=start-end`, returning `206 Partial Content` and `Content-Range`).
@@ -132,7 +132,7 @@ EQT is engineered with a dual-form factor philosophy catering to both end users 
 
 - **Free Edition ($0 Forever)**:
   - Full Gigabit LAN speed on all supported platforms.
-  - Default-on HTTPS transmission & authentic LAN-TLS WebPKI green lock.
+  - Default-on Secure HTTPS transmission with zero warning screens.
   - Unlimited file size and transfer count for first 5 transfers daily.
   - After 5 transfers: 5 files per transfer, 50MB per file limit.
   - Daily 5-minute (300s) Chat session quota.
