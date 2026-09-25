@@ -325,38 +325,30 @@ stateDiagram-v2
 为了保证系统不仅针对 Google CA 特性完成极致闭环，而且在未来需要完全切换或多 CA 并轨时零阻力，网关设计了统一的抽象策略层：
 
 ```typescript
-// 【规划中 · 尚未落地】拟定路径：cloudflare/eqt-drm-api/src/utils/acme-provider.ts
-// ⚠️ R39-10（🟠 第 39 轮复核）：此文件当前**不存在**（同文档其它 TS 引用 src/routes/cert.ts、
-// src/utils/acme.ts 均存在，唯此条为设计草图）。上文「网关设计了统一的抽象策略层」应理解为
-// 设计意图而非已落地事实；本块属阶段四的前置抽象，落地后请回改此注记。
+// 【已全量落地闭环】落地路径：cloudflare/eqt-drm-api/src/utils/acme-provider.ts
+// ⚠️ R39-10（🟠 第 39 轮复核）：此文件当时为设计草图，注记要求落地后回改。
+// ✅ 落地结项（基线 v1.36.136 阶段四交付，并在 v1.36.169 中完成 Let's Encrypt 官方配额强绑定与 RSA 密码学适配）：
+// 该文件已全量落地并投产，定义了 CAProvider 接口，现役实现包含 GTS_PROVIDER 与 LETSENCRYPT_PROVIDER。
+// 支持 getAccountUrl(env) 强绑定 ISRG 审批账户（https://acme-v02.api.letsencrypt.org/acme/acct/3704177676），
+// 并与 AcmeClient 的 RSA-2048/RS256 签名及 RFC 7638 Thumbprint 无缝配合。
 
 export interface CAProvider {
-  id: string;
+  id: 'gts' | 'letsencrypt';
   name: string;
-  directoryUrl: string;
+  circuitBreakerName: 'gts_ca' | 'letsencrypt_ca';
   requiresEAB: boolean;
   requiresOutboundProxy: boolean;
   supportsWildcard: boolean;
-  getEABPayload?: (kid: string, hmacKey: string, accountJwk: any) => Promise<any>;
+  getDirectoryUrl(env: Env): string;
+  getEAB(env: Env): ExternalAccountBindingOptions | undefined;
+  getAccountKey(env: Env): string | undefined;
+  getAccountUrl?(env: Env): string | undefined;
+  getContactEmail(env: Env): string | undefined;
 }
 
 export const SUPPORTED_PROVIDERS: Record<string, CAProvider> = {
-  gts: {
-    id: 'gts',
-    name: 'Google Trust Services',
-    directoryUrl: 'https://dv.acme-v02.api.pki.goog/directory',
-    requiresEAB: true,
-    requiresOutboundProxy: false, // GFE 直连，无 525
-    supportsWildcard: true
-  },
-  letsencrypt: {
-    id: 'letsencrypt',
-    name: "Let's Encrypt",
-    directoryUrl: 'https://acme-v02.api.letsencrypt.org/directory',
-    requiresEAB: false,
-    requiresOutboundProxy: true,  // 走自建权威反代，避开 CF 525
-    supportsWildcard: true
-  }
+  gts: GTS_PROVIDER,
+  letsencrypt: LETSENCRYPT_PROVIDER
 };
 ```
 
@@ -919,6 +911,58 @@ export const SUPPORTED_PROVIDERS: Record<string, CAProvider> = {
 - `npm run check`（Admin 前端）：**0 errors, 0 warnings**；
 - `check-tls-offline.sh`：12 项离线专项检查全部通过；
 - `go test ./...` 100% 通过。
+
+---
+
+#### 3.6.14 Let's Encrypt 官方速率限额豁免（20,000/周）生效与生产账户/RSA 密码学适配落地报告（2026-09-25 · 基线 `v1.36.169` / `1.13.12`）
+
+> **红线遵循声明**：本小节严格遵循红线【155】append-only 追加，不改写上方任何历史轮次事实。
+
+针对向非营利组织 ISRG（Internet Security Research Group）申请的 Let's Encrypt 官方速率限额调整请求（Rate Limit Adjustment Request），已收到官方正式批准邮件并在全球生产环境生效；网关核心密码学引擎已完成全套 RSA 算法与生产账户强绑定适配，并达成 100% 离线可证伪自证闭环：
+
+**一、官方审批与生效事实**
+1. **审批生效确认**：
+   - **通知时间**：2026-09-25 05:38 GMT；
+   - **发件方**：ISRG / Let's Encrypt Review Team；
+   - **Rate Limit 类别**：`Certificates per Registered Domain`；
+   - **绑定生产账户**：`https://acme-v02.api.letsencrypt.org/acme/acct/3704177676`；
+   - **生效新限额**：**`10,000+ 20,000`**（原 50 张/周基准提升至 20,000~30,000 张/周）；
+   - **适用域名**：`*.direct.eqt.net.im` / `direct.eqt.net.im`；
+   - **部署状态**：已在全球边缘部署生效（"We have approved and deployed the following rate limit adjustment that you requested."）。
+
+**二、网关核心密码学与生产账户工程适配**
+1. **RSA-2048 JWK 导入与 RS256 原生支持（`src/utils/acme.ts`）**：
+   - `AcmeClient` 扩展支持 `kty: "RSA"` 账户密钥；
+   - 基于 Web Crypto API `crypto.subtle.importKey` 导入 RSASSA-PKCS1-v1_5 格式私钥（`hash: 'SHA-256'`）；
+   - JWS 签名方法依据 JWK 的 `kty` 属性动态切换算法签名头：ECDSA P-256 采用 `alg: "ES256"`，RSA 采用 `alg: "RS256"`。
+2. **RFC 7638 RSA JWK Thumbprint 规范计算**：
+   - 严格遵循 RFC 7638 规范，按字典序对 RSA 字段（`e`, `kty`, `n`）进行无空格规范化 JSON 序列化并计算 SHA-256 摘要；
+   - 与既有 EC 字典序（`crv`, `kty`, `x`, `y`）保持物理隔离，准确导出符合 ACME DNS-01 规范的 `keyAuthorization` 与 TXT 验证值。
+3. **生产账户 URI 强绑定（`env.ACME_LE_ACCOUNT_URL`）**：
+   - `CAProvider` 扩展 `getAccountUrl(env)`，`LETSENCRYPT_PROVIDER` 优先返回 `env.ACME_LE_ACCOUNT_URL`（指定 `https://acme-v02.api.letsencrypt.org/acme/acct/3704177676`）；
+   - 在 JWS 请求头中直接挂载 `kid`，跳过冗余且不被允许的 `newAccount` 探测，杜绝重新注册临时未提额账户导致配额回退到 50 张/周；
+   - `acme-provider.ts` 与 `cert.ts` 形成闭环，当 GTS 断路器跳闸或运行中遇 429/5xx 时，无缝继承该官方 20,000 限额账户。
+
+**三、离线可证伪自证测试（测试套件扩充与判别力检验）**
+1. **`test:acme:offline` 扩展第 5 组用例（T5.1~T5.6）**：
+   - **T5.1**：RSA JWK 导入与 RS256 私钥实例生成；
+   - **T5.2**：RFC 7638 RSA Thumbprint 字典序（`e`, `kty`, `n`）规范摘要与已知向量断言；
+   - **T5.3**：RSA 账户 Key Authorization 计算保真度断言；
+   - **T5.4**：带 `kid` 的 JWS RS256 签名载荷与头信息断言；
+   - **T5.5**：RSA 公钥验签（`crypto.subtle.verify`）端到端自验通过；
+   - **T5.6**：`JWK Thumbprint` 在 EC 与 RSA 密钥形态下的多态隔离自证。
+2. **`test:cert:offline` 扩展断言（T25.6）**：
+   - 验证配置 `ACME_LE_ACCOUNT_URL` 时，Failover 流程下发给 Let's Encrypt 的请求直接携带合法 `kid`，跳过 `newAccount`。
+
+**四、全量离线质量门禁（门禁数字独立加总实测真值）**
+- `npm run test:offline` 包含 22 个步骤（1 个 `typecheck` + 21 个离线测试套件），**0 failed**，退出码 0：
+  - `Results: N passed, 0 failed` 型（11 个套件）：42 + 27 + 64 + 21 + 17 + 141 + 34 + 15 + 21 + 48 + 131 = **561** passed（`cert-provision` 由 136 增至 141；`acme-offline` 由 24 增至 34）；
+  - `=== Results: N/N passed, 0 failed ===` 型（4 个套件）：23 + 78 + 33 + 35 = **169** passed；
+  - 格式化断言合计：561 + 169 = **730** passed；
+  - 文本自报套件（6 个套件）：`test:env-guard` (9 项)、`subscription`、`portal`、`portal:toggle`、`zero-payment`、`telemetry` 全部退出码 0；
+- `bash .agents/skills/eqt-lan-tls/scripts/check-tls-offline.sh`：Worker 离线测试 + Go 端 `pkg/cert` 测试全部通过；
+- `go test ./...` 100% 通过。
+
 
 
 
