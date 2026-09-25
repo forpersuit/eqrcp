@@ -444,6 +444,40 @@ export namespace main {
 	        this.exists = source["exists"];
 	    }
 	}
+	export class TLSDiagnosticResult {
+	    ok: boolean;
+	    status: string;
+	    message: string;
+	    certValid: boolean;
+	    dnsValid: boolean;
+	    handshake: boolean;
+	    expiresAt?: string;
+	    daysLeft?: number;
+	    issuer?: string;
+	    nodeId?: string;
+	    domain?: string;
+	    resolvedIP?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TLSDiagnosticResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ok = source["ok"];
+	        this.status = source["status"];
+	        this.message = source["message"];
+	        this.certValid = source["certValid"];
+	        this.dnsValid = source["dnsValid"];
+	        this.handshake = source["handshake"];
+	        this.expiresAt = source["expiresAt"];
+	        this.daysLeft = source["daysLeft"];
+	        this.issuer = source["issuer"];
+	        this.nodeId = source["nodeId"];
+	        this.domain = source["domain"];
+	        this.resolvedIP = source["resolvedIP"];
+	    }
+	}
 	export class TLSIssuanceStats {
 	    total_requests: number;
 	    success_count: number;

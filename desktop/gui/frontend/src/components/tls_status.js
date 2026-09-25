@@ -44,6 +44,32 @@ export function renderSpinnerSvg({ color = 'var(--accent, #156f5a)', size = 13, 
 }
 
 /**
+ * 渲染精致矢量盾牌打勾 SVG 图标 (用于诊断成功状态)
+ * @param {object} options
+ * @param {string} [options.color] 描边颜色
+ * @param {number} [options.size] 尺寸（像素）
+ * @param {string} [options.className] 附加 CSS 类名
+ * @returns {string} SVG HTML 片段
+ */
+export function renderShieldCheckSvg({ color = '#10b981', size = 14, className = '' } = {}) {
+    const strokeColor = color || 'currentColor';
+    return `<svg class="tls-svg-icon tls-shield-check-icon ${className}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${strokeColor}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; display: inline-block;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>`;
+}
+
+/**
+ * 渲染精致矢量脉冲/诊断探针 SVG 图标 (用于诊断待测/就绪状态)
+ * @param {object} options
+ * @param {string} [options.color] 描边颜色
+ * @param {number} [options.size] 尺寸（像素）
+ * @param {string} [options.className] 附加 CSS 类名
+ * @returns {string} SVG HTML 片段
+ */
+export function renderPulseSvg({ color = 'currentColor', size = 14, className = '' } = {}) {
+    const strokeColor = color || 'currentColor';
+    return `<svg class="tls-svg-icon tls-pulse-icon ${className}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${strokeColor}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; display: inline-block;"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>`;
+}
+
+/**
  * 计算当前系统 TLS 状态
  * @param {object} state 全局状态对象
  * @returns {'disabled' | 'ready' | 'mismatch' | 'failed' | 'preparing'}
@@ -171,3 +197,42 @@ export function renderTopbarTLSIndicator(state, t, escapeAttr) {
         }
     }
 }
+
+/**
+ * 渲染设置面板中 TLS 诊断验证控制图标/按钮 (Question 3)
+ * 界面反馈仅使用图标状态展示 (idle -> testing -> success/warning/error)，详细信息由后端写入运行日志。
+ * @param {object} state 全局状态对象
+ * @param {Function} t 国际化翻译函数
+ * @param {Function} escapeAttr 属性转义函数
+ * @returns {string} HTML 片段
+ */
+export function renderTLSDiagnosticControl(state, t, escapeAttr) {
+    if (!Boolean(state?.settings?.enableTLS)) {
+        return '';
+    }
+
+    if (state?.tlsDiagnosing) {
+        return `<span class="tls-diag-status diagnosing" role="status" aria-label="${escapeAttr(t('tls_diag_testing') || '正在测试局域网 TLS（证书、DNS与握手探测）...')}" title="${escapeAttr(t('tls_diag_testing') || '正在测试局域网 TLS（证书、DNS与握手探测）...')}" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;">${renderSpinnerSvg({ color: 'var(--accent, #156f5a)', size: 14 })}</span>`;
+    }
+
+    if (state?.tlsDiagResult) {
+        const res = state.tlsDiagResult;
+        const retestTip = t('tls_diag_retest') || '点击重新验证';
+        if (res.status === 'success') {
+            const tooltip = `${res.message} (${retestTip}，详情见日志)`;
+            return `<button type="button" class="tool-button tls-diag-btn success" id="btn-test-tls" aria-label="TLS 验证通过" title="${escapeAttr(tooltip)}" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: transparent; cursor: pointer; border-radius: 4px; padding: 0;">${renderShieldCheckSvg({ color: '#10b981', size: 14 })}</button>`;
+        }
+        if (res.status === 'warning') {
+            const tooltip = `${res.message} (${retestTip}，详情见日志)`;
+            return `<button type="button" class="tool-button tls-diag-btn warning" id="btn-test-tls" aria-label="TLS 验证警告" title="${escapeAttr(tooltip)}" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: transparent; cursor: pointer; border-radius: 4px; padding: 0;">${renderAlertSvg({ color: '#f59e0b', size: 14 })}</button>`;
+        }
+        // error
+        const tooltip = `${res.message} (${retestTip}，详情见日志)`;
+        return `<button type="button" class="tool-button tls-diag-btn error" id="btn-test-tls" aria-label="TLS 验证异常" title="${escapeAttr(tooltip)}" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: transparent; cursor: pointer; border-radius: 4px; padding: 0;">${renderAlertSvg({ color: '#ef4444', size: 14 })}</button>`;
+    }
+
+    // Default / idle state
+    const tooltip = t('tls_diag_btn_tooltip') || '诊断测试局域网 TLS 状态（证书有效性、DNS 回环解析与握手测试，详细信息记录于日志）';
+    return `<button type="button" class="tool-button tls-diag-btn idle" id="btn-test-tls" aria-label="TLS 诊断测试" title="${escapeAttr(tooltip)}" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: transparent; cursor: pointer; border-radius: 4px; padding: 0; color: var(--text-muted, #94a3b8);">${renderPulseSvg({ color: 'currentColor', size: 14 })}</button>`;
+}
+

@@ -15,7 +15,7 @@ import { initDragDrop, sendDebugMessageToChat, showChatDragOverlay } from './dra
 import { renderShareOverlay, closeShareOverlay, prepareMergedQRCode, downloadSharePosterImage, resetQRPrepareFailed } from './components/share.js';
 import { renderLogViewerOverlay, openLogViewer, closeLogViewer, refreshLogTail, setLogFilter, setLogSearch, toggleAutoRefresh, copyAllLogs, exportDiagnostics, logViewerState, initLogViewerDrag } from './components/log_viewer.js';
 import { renderChatTransfersTray } from './components/chat_tray.js';
-import { renderTLSSettingIcon, getDevTLSStatusText, renderTaskSecurityBadge, renderTopbarTLSIndicator } from './components/tls_status.js';
+import { renderTLSSettingIcon, renderTLSDiagnosticControl, getDevTLSStatusText, renderTaskSecurityBadge, renderTopbarTLSIndicator } from './components/tls_status.js';
 
 import {ClipboardGetText, ClipboardSetText, EventsOn, LogInfo, LogError} from '../wailsjs/runtime/runtime';
 import {
@@ -64,6 +64,7 @@ import {
     DevForceOnlineLicenseSync,
     DevTriggerCrash,
     DevProvisionDeviceTLSCert,
+    DiagnoseDeviceTLS,
 } from '../wailsjs/go/main/App';
 
 window.addEventListener('error', (e) => {
@@ -2590,6 +2591,7 @@ function renderSettingsPanel() {
                             <span>${t('enable_tls_desc')}</span>
                         </div>
                         <div class="setting-control-stack">
+                            ${renderTLSDiagnosticControl(state, t, escapeAttr)}
                             ${renderTLSSettingIcon(state, t, escapeAttr)}
                             ${renderSwitch('settings-enable-tls', Boolean(state.settings?.enableTLS))}
                         </div>
@@ -2723,9 +2725,14 @@ function renderSettingsPanel() {
                         <div style="font-size: 10.5px; color: var(--text-secondary); margin-bottom: 8px; line-height: 1.35;">
                             ${escapeHTML((t('dev_lan_tls_status') || 'Status: ') + getDevTLSStatusText(state, t))} | Node: <code style="font-family: var(--font-mono);">${escapeHTML(state.appInfo?.nodeID || 'unknown')}</code>
                         </div>
-                        <button type="button" class="ghost" id="dev-provision-tls" ${state.devProvisioningTLS ? 'disabled' : ''} style="padding: 7px 6px; font-size: 11px; color: var(--accent); border-color: var(--accent); border-radius: 6px; font-weight: 700; width: 100%;">
-                            ${state.devProvisioningTLS ? '⏳ ' + (t('dev_tls_provisioning') || 'Requesting Certificate from Gateway (10-15s)...') : '🔄 ' + (t('dev_request_tls_cert') || 'Request / Refresh TLS Certificate')}
-                        </button>
+                        <div style="display: flex; gap: 8px;">
+                            <button type="button" class="ghost" id="dev-provision-tls" ${state.devProvisioningTLS ? 'disabled' : ''} style="flex: 1; padding: 7px 6px; font-size: 11px; color: var(--accent); border-color: var(--accent); border-radius: 6px; font-weight: 700;">
+                                ${state.devProvisioningTLS ? '⏳ ' + (t('dev_tls_provisioning') || 'Requesting Certificate from Gateway (10-15s)...') : '🔄 ' + (t('dev_request_tls_cert') || 'Request / Refresh TLS Certificate')}
+                            </button>
+                            <button type="button" class="ghost" id="dev-diag-tls" ${state.tlsDiagnosing ? 'disabled' : ''} style="padding: 7px 10px; font-size: 11px; color: var(--ink); border-color: var(--line); border-radius: 6px; font-weight: 600;" title="${t('tls_diag_btn_tooltip') || '诊断测试局域网 TLS 状态（详细信息将写入运行日志）'}">
+                                ${state.tlsDiagnosing ? '⏳ ' + (t('tls_diag_testing') || 'Testing...') : '🩺 ' + (t('dev_diag_tls_btn') || '诊断验证')}
+                            </button>
+                        </div>
                         ${state.devProvisionTLSResult ? `<div style="font-size: 11px; margin-top: 6px; color: ${state.devProvisionTLSError ? '#ef4444' : 'var(--accent)'}; line-height: 1.35;">${escapeHTML(state.devProvisionTLSResult)}</div>` : ''}
                     </div>
 
@@ -4235,8 +4242,11 @@ function bindEvents() {
                 state.devProvisioningTLS = true;
                 state.devProvisionTLSResult = '';
                 state.devProvisionTLSError = false;
-                render();
-                openPanel('settings');
+                if (state.activePanel === 'settings') {
+                    syncPanelSurface();
+                } else {
+                    render();
+                }
                 DevProvisionDeviceTLSCert().then(async (success) => {
                     try {
                         state.appInfo = await AppInfo();
@@ -4248,18 +4258,22 @@ function bindEvents() {
                         state.tlsProvisionError = '';
                         state.devProvisionTLSResult = t('dev_tls_success') || '✅ 证书申请成功，已通过系统全局根信任校验并已落盘！';
                         showToast(state.devProvisionTLSResult);
-                        render();
-                        openPanel('settings');
+                        if (state.activePanel === 'settings') {
+                            syncPanelSurface();
+                        } else {
+                            render();
+                        }
                     } else {
                         state.tlsProvisionFailed = true;
                         state.tlsProvisionError = state.appInfo?.tlsError || 'Fail-soft active';
                         state.devProvisionTLSResult = (t('dev_tls_failed') || '⚠️ 证书置备未完成（局域网普通 HTTP 降级保障中）') + (state.appInfo?.tlsError ? `: ${state.appInfo.tlsError}` : '');
                         showToast(state.devProvisionTLSResult);
                         if (Boolean(state.settings?.enableTLS)) {
-                            await autoDisableTLSOnFailure(state.tlsProvisionError, true);
+                            await autoDisableTLSOnFailure(state.tlsProvisionError, false);
+                        } else if (state.activePanel === 'settings') {
+                            syncPanelSurface();
                         } else {
                             render();
-                            openPanel('settings');
                         }
                     }
                 }).catch(async (err) => {
@@ -4270,10 +4284,42 @@ function bindEvents() {
                     state.devProvisionTLSResult = '❌ ' + (err?.message || err || '申请证书异常');
                     showToast(state.devProvisionTLSResult);
                     if (Boolean(state.settings?.enableTLS)) {
-                        await autoDisableTLSOnFailure(state.tlsProvisionError, true);
+                        await autoDisableTLSOnFailure(state.tlsProvisionError, false);
+                    } else if (state.activePanel === 'settings') {
+                        syncPanelSurface();
                     } else {
                         render();
-                        openPanel('settings');
+                    }
+                });
+                return;
+            }
+            if (e.target.closest('#btn-test-tls') || e.target.closest('#dev-diag-tls')) {
+                if (state.tlsDiagnosing) return;
+                state.tlsDiagnosing = true;
+                if (state.activePanel === 'settings') {
+                    syncPanelSurface();
+                }
+                DiagnoseDeviceTLS().then((res) => {
+                    state.tlsDiagnosing = false;
+                    state.tlsDiagResult = res;
+                    showToast(t('tls_diag_toast_done') || 'TLS 诊断完成，详细测试结果已写入运行日志');
+                    if (state.activePanel === 'settings') {
+                        syncPanelSurface();
+                    } else {
+                        render();
+                    }
+                }).catch((err) => {
+                    state.tlsDiagnosing = false;
+                    state.tlsDiagResult = {
+                        ok: false,
+                        status: 'error',
+                        message: err?.message || String(err) || '诊断测试执行异常'
+                    };
+                    showToast(t('tls_diag_toast_done') || 'TLS 诊断完成，详细测试结果已写入运行日志');
+                    if (state.activePanel === 'settings') {
+                        syncPanelSurface();
+                    } else {
+                        render();
                     }
                 });
                 return;
@@ -4539,16 +4585,19 @@ function bindEvents() {
                                     state.tlsProvisionFailed = false;
                                     state.tlsProvisionError = '';
                                     showToast(t('tls_cert_ready') || '✅ 官方公信 TLS 证书就绪！');
-                                    render();
-                                    openPanel('settings');
+                                    if (state.activePanel === 'settings') {
+                                        syncPanelSurface();
+                                    } else {
+                                        render();
+                                    }
                                 } else {
                                     const errMsg = state.appInfo?.tlsError || 'Provisioning deferred (plain HTTP fallback active)';
-                                    await autoDisableTLSOnFailure(errMsg, true);
+                                    await autoDisableTLSOnFailure(errMsg, false);
                                 }
                             }).catch(async (err) => {
                                 console.warn('[LAN-TLS] Auto provision on switch toggle failed:', err);
                                 const errMsg = err?.message || String(err) || 'Error';
-                                await autoDisableTLSOnFailure(errMsg, true);
+                                await autoDisableTLSOnFailure(errMsg, false);
                             });
                         } else {
                             showToast(t('tls_cert_ready') || '✅ 官方公信 TLS 证书已就绪！');
@@ -5439,9 +5488,13 @@ async function autoDisableTLSOnFailure(errorMsg, openSettings = false) {
         ? (t('tls_cert_rate_limited') || '触发证书颁发机构频次限制，已自动切换为局域网高速传输（保护冷却中）')
         : (t('tls_failed_auto_disabled') || '⚠️ 证书置备遇到异常，已自动关闭局域网 TLS 并保持标准明文传输。可稍后在开发者选项重试。');
     showToast(toastMsg);
-    render();
-    if (openSettings || state.activePanel === 'settings') {
-        openPanel('settings');
+    if (state.activePanel === 'settings') {
+        syncPanelSurface();
+    } else {
+        render();
+        if (openSettings) {
+            openPanel('settings');
+        }
     }
 }
 

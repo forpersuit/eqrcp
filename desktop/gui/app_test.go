@@ -3,8 +3,15 @@ package main
 import (
 	"archive/zip"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,6 +21,7 @@ import (
 	"time"
 
 	"eqt/pkg/cert"
+	"eqt/pkg/server"
 )
 
 func TestParseDesktopIntegrationStatus(t *testing.T) {
@@ -750,5 +758,148 @@ func TestValidateChatDownloadURL(t *testing.T) {
 		if _, err := app.validateChatDownloadURL(malURL); err == nil {
 			t.Errorf("expected URL %q to be rejected, but it passed", malURL)
 		}
+	}
+}
+
+func TestDiagnoseDeviceTLS_NoCert(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("EQT_CONFIG_DIR", filepath.Join(tempHome, "eqt_conf"))
+	t.Setenv("EQT_TESTING", "true")
+
+	app := NewApp()
+	logPath := filepath.Join(tempHome, "desktop.log")
+	app.logger = NewFileLogger(logPath, true)
+	defer app.logger.Close()
+
+	res, err := app.DiagnoseDeviceTLS()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.OK {
+		t.Fatalf("expected res.OK=false when no cert exists, got true")
+	}
+	if res.CertValid {
+		t.Fatalf("expected res.CertValid=false when no cert exists, got true")
+	}
+	if res.Status != "error" {
+		t.Fatalf("expected status=error, got: %s", res.Status)
+	}
+	if !strings.Contains(res.Message, "未检测到本地设备证书") {
+		t.Fatalf("expected message about missing cert, got: %s", res.Message)
+	}
+
+	// Verify log file captured diagnosis tags
+	app.logger.Close()
+	logBytes, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("failed to read log file: %v", err)
+	}
+	if !strings.Contains(string(logBytes), "[LAN-TLS-DIAG]") {
+		t.Fatalf("expected log to contain [LAN-TLS-DIAG], got:\n%s", string(logBytes))
+	}
+}
+
+func TestDiagnoseDeviceTLS_WithValidCert(t *testing.T) {
+	t.Setenv("EQT_TESTING", "true")
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+	t.Setenv("EQT_CONFIG_DIR", filepath.Join(tempHome, "eqt_conf"))
+
+	app := NewApp()
+	logPath := filepath.Join(tempHome, "desktop.log")
+	app.logger = NewFileLogger(logPath, true)
+	defer app.logger.Close()
+
+	nodeID := server.GetDeviceNodeID()
+	if nodeID == "" {
+		nodeID = "9be192a9efff"
+	}
+
+	// 1. Generate a self-signed CA
+	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("failed to generate CA key: %v", err)
+	}
+	caTemplate := x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "Test LAN-TLS Root CA"},
+		NotBefore:             time.Now().Add(-1 * time.Hour),
+		NotAfter:              time.Now().Add(365 * 24 * time.Hour),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+	}
+	caDER, err := x509.CreateCertificate(rand.Reader, &caTemplate, &caTemplate, &caKey.PublicKey, caKey)
+	if err != nil {
+		t.Fatalf("failed to create CA cert: %v", err)
+	}
+	caCert, _ := x509.ParseCertificate(caDER)
+
+	// 2. Ensure cert directory exists and key is generated for nodeID
+	leafKey, err := cert.LoadOrGenerateDeviceKey(nodeID)
+	if err != nil {
+		t.Fatalf("failed to create leaf key: %v", err)
+	}
+
+	nodeDomain := cert.GetNodeDomain(nodeID)
+	leafTemplate := x509.Certificate{
+		SerialNumber: big.NewInt(1001),
+		Subject: pkix.Name{
+			CommonName: nodeDomain,
+		},
+		NotBefore: time.Now().Add(-1 * time.Hour),
+		NotAfter:  time.Now().Add(90 * 24 * time.Hour),
+		DNSNames: []string{
+			nodeDomain,
+			"*." + nodeDomain,
+		},
+	}
+	leafDER, err := x509.CreateCertificate(rand.Reader, &leafTemplate, caCert, &leafKey.PublicKey, caKey)
+	if err != nil {
+		t.Fatalf("failed to create leaf cert: %v", err)
+	}
+
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafDER})
+	certPEM = append(certPEM, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER})...)
+
+	testPool := x509.NewCertPool()
+	testPool.AddCert(caCert)
+	cert.SetCustomRootPoolForTesting(testPool)
+	defer cert.SetCustomRootPoolForTesting(nil)
+
+	if err := cert.SaveDeviceCertificate(nodeID, certPEM); err != nil {
+		t.Fatalf("failed to save device cert: %v", err)
+	}
+
+	res, err := app.DiagnoseDeviceTLS()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !res.CertValid {
+		t.Fatalf("expected res.CertValid=true, got false: %s", res.Message)
+	}
+	if !res.Handshake {
+		t.Fatalf("expected res.Handshake=true, got false: %s", res.Message)
+	}
+	if res.DaysLeft <= 0 {
+		t.Fatalf("expected positive DaysLeft, got %d", res.DaysLeft)
+	}
+	if !res.OK {
+		t.Fatalf("expected res.OK=true, got false: %s", res.Message)
+	}
+
+	// Verify log file captured diagnosis tags
+	app.logger.Close()
+	logBytes, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("failed to read log file: %v", err)
+	}
+	logStr := string(logBytes)
+	if !strings.Contains(logStr, "[LAN-TLS-DIAG]") {
+		t.Fatalf("expected log to contain [LAN-TLS-DIAG]")
+	}
+	if !strings.Contains(logStr, "本地 TLS 握手测试通过") {
+		t.Fatalf("expected log to contain handshake success, got:\n%s", logStr)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"eqt/cmd"
@@ -21,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -74,6 +76,22 @@ type TLSIssuanceStats struct {
 	LastErrorMessage    string    `json:"last_error_message"`
 	IsRateLimitedActive bool      `json:"is_rate_limited_active"`
 	RemainingCoolingSec int       `json:"remaining_cooling_sec"`
+}
+
+// TLSDiagnosticResult holds the structured outcome of a local TLS verification probe.
+type TLSDiagnosticResult struct {
+	OK         bool   `json:"ok"`
+	Status     string `json:"status"` // "success", "warning", "error"
+	Message    string `json:"message"`
+	CertValid  bool   `json:"certValid"`
+	DNSValid   bool   `json:"dnsValid"`
+	Handshake  bool   `json:"handshake"`
+	ExpiresAt  string `json:"expiresAt,omitempty"`
+	DaysLeft   int    `json:"daysLeft,omitempty"`
+	Issuer     string `json:"issuer,omitempty"`
+	NodeID     string `json:"nodeId,omitempty"`
+	Domain     string `json:"domain,omitempty"`
+	ResolvedIP string `json:"resolvedIP,omitempty"`
 }
 
 type AgentTask struct {
@@ -2261,6 +2279,284 @@ func (a *App) SubmitFeedback(category, contact, message, imageData, imageFormat 
 	}
 
 	return result.ImageURL, nil
+}
+
+// DiagnoseDeviceTLS performs an offline/local read-only diagnostic probe of the LAN-TLS certificate,
+// DNS loopback resolution, and local TLS handshake. It writes detailed step-by-step diagnostics to desktop.log.
+// Zero remote CA network requests are made, ensuring no quota consumption.
+func (a *App) DiagnoseDeviceTLS() (TLSDiagnosticResult, error) {
+	startTime := time.Now()
+	res := TLSDiagnosticResult{
+		OK:     false,
+		Status: "error",
+	}
+
+	logDiag := func(format string, args ...interface{}) {
+		msg := fmt.Sprintf("[LAN-TLS-DIAG] "+format, args...)
+		if a.logger != nil {
+			a.logger.Info(msg)
+		}
+		if a.ctx != nil {
+			wailsruntime.LogInfo(a.ctx, msg)
+		}
+	}
+
+	logDiag("=== 局域网 TLS 诊断与状态验证开始 ===")
+
+	nodeID := server.GetDeviceNodeID()
+	res.NodeID = nodeID
+	res.Domain = cert.GetNodeDomain(nodeID)
+
+	var tlsEnabled bool
+	if a.agent != nil {
+		if s, err := a.agent.readSettings(); err == nil {
+			tlsEnabled = s.EnableTLS
+		}
+	}
+	paidStatus := server.GetPaidStatus() || os.Getenv("EQT_TESTING") == "true"
+
+	logDiag("配置状态: NodeID=%s, 域名=%s, EnableTLS=%v, PaidLicense=%v", nodeID, res.Domain, tlsEnabled, paidStatus)
+
+	if nodeID == "" {
+		res.Message = "设备指纹识别中或无法获取 NodeID"
+		logDiag("诊断终止: 无法获取有效设备 NodeID")
+		return res, nil
+	}
+
+	// 1. Certificate & Key Pair verification
+	certDir, err := cert.GetDeviceCertDir(nodeID)
+	if err != nil {
+		res.Message = fmt.Sprintf("获取证书目录失败: %v", err)
+		logDiag("证书目录解析失败: %v", err)
+		return res, nil
+	}
+
+	certPath := filepath.Join(certDir, "fullchain.pem")
+	keyPath := filepath.Join(certDir, "privkey.pem")
+
+	logDiag("证书探测路径: cert=%s, key=%s", certPath, keyPath)
+
+	certBytes, err := os.ReadFile(certPath)
+	if err != nil {
+		res.Message = "未检测到本地设备证书 (fullchain.pem)"
+		logDiag("证书读取失败: %v (证书尚未置备或文件丢失)", err)
+		return res, nil
+	}
+
+	if _, err := os.Stat(keyPath); err != nil {
+		res.Message = "未检测到本地设备私钥 (privkey.pem)"
+		logDiag("私钥读取失败: %v (私钥尚未生成或文件丢失)", err)
+		return res, nil
+	}
+
+	tlsCert, err := tls.LoadX509KeyPair(certPath, keyPath)
+	if err != nil {
+		res.Message = fmt.Sprintf("证书与私钥不匹配或损坏: %v", err)
+		logDiag("密钥对校验失败: %v (证书公钥与本地私钥不匹配)", err)
+		return res, nil
+	}
+
+	if len(tlsCert.Certificate) == 0 {
+		res.Message = "证书链为空"
+		logDiag("解析失败: 证书链中无可用证书")
+		return res, nil
+	}
+
+	x509Cert, err := x509.ParseCertificate(tlsCert.Certificate[0])
+	if err != nil {
+		res.Message = fmt.Sprintf("证书解析失败: %v", err)
+		logDiag("X509解析异常: %v", err)
+		return res, nil
+	}
+
+	res.Issuer = x509Cert.Issuer.CommonName
+	if res.Issuer == "" && len(x509Cert.Issuer.Organization) > 0 {
+		res.Issuer = x509Cert.Issuer.Organization[0]
+	}
+	res.ExpiresAt = x509Cert.NotAfter.Format("2006-01-02 15:04:05")
+	daysRemaining := int(time.Until(x509Cert.NotAfter).Hours() / 24)
+	res.DaysLeft = daysRemaining
+
+	logDiag("证书信息: 颁发者=%s, 主题CN=%s, SANs=%v", res.Issuer, x509Cert.Subject.CommonName, x509Cert.DNSNames)
+	logDiag("证书有效期: %s 至 %s (剩余 %d 天)", x509Cert.NotBefore.Format("2006-01-02 15:04"), x509Cert.NotAfter.Format("2006-01-02 15:04"), daysRemaining)
+
+	if time.Now().After(x509Cert.NotAfter) {
+		res.Message = fmt.Sprintf("证书已过期 (过期时间: %s)", res.ExpiresAt)
+		logDiag("证书已过期: 过期时间为 %s", res.ExpiresAt)
+		return res, nil
+	}
+
+	if err := cert.VerifyCertificateTrust(certBytes, cert.GetCustomRootPoolForTesting()); err != nil {
+		logDiag("系统根证书校验未通过: %v (可能系统缺少权威根证书或处于测试自签环境)", err)
+	} else {
+		logDiag("系统根证书信任链校验: 通过 (受系统受信根锚点信任)")
+	}
+
+	res.CertValid = true
+
+	// 2. DNS Loopback Resolution Probe
+	targetIP := "127.0.0.1"
+	if lanIP := getFirstNonLoopbackIPv4(); lanIP != "" {
+		targetIP = lanIP
+	}
+	testDomain := cert.FormatDirectDomainWithNode(targetIP, nodeID)
+	logDiag("DNS 回环解析测试: 待解析测试域名=%s (目标IP: %s)", testDomain, targetIP)
+
+	dnsStart := time.Now()
+	dnsCtx, dnsCancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer dnsCancel()
+
+	ips, dnsErr := net.DefaultResolver.LookupIP(dnsCtx, "ip4", testDomain)
+	dnsDuration := time.Since(dnsStart)
+
+	if dnsErr != nil {
+		logDiag("DNS 回环解析失败 (%v): %v (请检查路由器是否开启了 DNS Rebinding 保护，或当前无外部互联网连接)", dnsDuration, dnsErr)
+		res.DNSValid = false
+	} else {
+		matched := false
+		for _, ip := range ips {
+			if ip.String() == targetIP {
+				matched = true
+				break
+			}
+		}
+		res.DNSValid = true
+		res.ResolvedIP = fmt.Sprintf("%v", ips)
+		logDiag("DNS 回环解析成功 (%v): %s -> %v (目标匹配: %v)", dnsDuration, testDomain, ips, matched)
+	}
+
+	// 3. Local TLS Loopback Handshake Probe
+	handshakeStart := time.Now()
+	serverTLSConfig := &tls.Config{
+		Certificates: []tls.Certificate{tlsCert},
+	}
+	listener, err := tls.Listen("tcp", "127.0.0.1:0", serverTLSConfig)
+	if err != nil {
+		logDiag("本地 TLS 探测监听器创建失败: %v", err)
+	} else {
+		defer listener.Close()
+		listenerAddr := listener.Addr().String()
+
+		acceptDone := make(chan error, 1)
+		go func() {
+			conn, err := listener.Accept()
+			if err != nil {
+				acceptDone <- err
+				return
+			}
+			defer conn.Close()
+			tlsConn, ok := conn.(*tls.Conn)
+			if ok {
+				_ = tlsConn.Handshake()
+			}
+			acceptDone <- nil
+		}()
+
+		sniName := x509Cert.Subject.CommonName
+		if len(x509Cert.DNSNames) > 0 {
+			sniName = x509Cert.DNSNames[0]
+		}
+		clientTLSConfig := &tls.Config{
+			ServerName:         sniName,
+			InsecureSkipVerify: true,
+		}
+		dialer := &net.Dialer{Timeout: 2 * time.Second}
+		clientConn, dialErr := tls.DialWithDialer(dialer, "tcp", listenerAddr, clientTLSConfig)
+		if dialErr != nil {
+			logDiag("本地 TLS 握手探测失败: %v", dialErr)
+			res.Handshake = false
+		} else {
+			connState := clientConn.ConnectionState()
+			_ = clientConn.Close()
+			select {
+			case <-acceptDone:
+			case <-time.After(500 * time.Millisecond):
+			}
+
+			tlsVersionStr := tlsVersionToString(connState.Version)
+			cipherSuiteStr := tls.CipherSuiteName(connState.CipherSuite)
+			handshakeDuration := time.Since(handshakeStart)
+
+			logDiag("本地 TLS 握手测试通过 (%v): 协议=%s, 加密套件=%s, SNI=%s",
+				handshakeDuration, tlsVersionStr, cipherSuiteStr, connState.ServerName)
+			res.Handshake = true
+		}
+	}
+
+	// 4. Active Server Status
+	if a.agent != nil && a.agent.activeServer != nil {
+		srv := a.agent.activeServer
+		logDiag("当前活跃任务服务检测: BaseURL=%s, SendURL=%s, ReceiveURL=%s", srv.BaseURL, srv.SendURL, srv.ReceiveURL)
+	}
+
+	// 5. Overall Summary
+	totalDuration := time.Since(startTime)
+	if res.CertValid && res.Handshake {
+		if res.DNSValid {
+			res.OK = true
+			res.Status = "success"
+			res.Message = fmt.Sprintf("TLS 诊断通过: 证书有效(剩余%d天)、DNS解析正常、TLS握手成功", res.DaysLeft)
+		} else {
+			res.OK = true
+			res.Status = "warning"
+			res.Message = fmt.Sprintf("证书与握手正常(剩余%d天)，但DNS解析异常(疑为路由器开启DNS Rebinding保护)", res.DaysLeft)
+		}
+	} else {
+		res.OK = false
+		res.Status = "error"
+		if !res.CertValid {
+			// res.Message already populated
+		} else if !res.Handshake {
+			res.Message = "证书有效但本地 TLS 握手探测失败"
+		}
+	}
+
+	logDiag("=== 局域网 TLS 诊断结束 (耗时: %v): 状态=%s, 结果=%s ===", totalDuration, res.Status, res.Message)
+	return res, nil
+}
+
+func tlsVersionToString(version uint16) string {
+	switch version {
+	case tls.VersionTLS10:
+		return "TLS 1.0"
+	case tls.VersionTLS11:
+		return "TLS 1.1"
+	case tls.VersionTLS12:
+		return "TLS 1.2"
+	case tls.VersionTLS13:
+		return "TLS 1.3"
+	default:
+		return fmt.Sprintf("0x%04x", version)
+	}
+}
+
+func getFirstNonLoopbackIPv4() string {
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return ""
+	}
+	for _, iface := range interfaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			var ip net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+			if ip != nil && !ip.IsLoopback() && ip.To4() != nil {
+				return ip.To4().String()
+			}
+		}
+	}
+	return ""
 }
 
 // DevProvisionDeviceTLSCert allows manual triggering of TLS certificate provisioning from developer options.

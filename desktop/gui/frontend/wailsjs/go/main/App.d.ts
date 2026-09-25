@@ -29,6 +29,8 @@ export function DevProvisionDeviceTLSCert():Promise<boolean>;
 
 export function DevTriggerCrash():Promise<main.CrashReportInfo>;
 
+export function DiagnoseDeviceTLS():Promise<main.TLSDiagnosticResult>;
+
 export function DismissCrashReport():Promise<void>;
 
 export function DismissCrashReportPermanently():Promise<void>;

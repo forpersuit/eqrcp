@@ -62,4 +62,6 @@ export const state = {
     tlsProvisioning: false,
     tlsProvisionFailed: false,
     tlsProvisionError: '',
+    tlsDiagnosing: false,
+    tlsDiagResult: null,
 };

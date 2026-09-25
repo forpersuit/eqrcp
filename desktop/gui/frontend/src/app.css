@@ -3803,6 +3803,17 @@ body.log-viewer-is-dragging * {
     color: #ef4444;
 }
 
+.tls-diag-btn {
+    transition: background 0.15s ease, transform 0.15s ease, color 0.15s ease;
+}
+.tls-diag-btn:hover {
+    background: var(--bg-hover, rgba(0, 0, 0, 0.06)) !important;
+}
+.tls-diag-btn:active {
+    transform: scale(0.92);
+}
+
+
 .badge-pro-tag,
 .setting-copy strong .badge-pro-tag,
 .setting-copy .badge-pro-tag {

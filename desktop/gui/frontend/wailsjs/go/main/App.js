@@ -54,6 +54,10 @@ export function DevTriggerCrash() {
   return window['go']['main']['App']['DevTriggerCrash']();
 }
 
+export function DiagnoseDeviceTLS() {
+  return window['go']['main']['App']['DiagnoseDeviceTLS']();
+}
+
 export function DismissCrashReport() {
   return window['go']['main']['App']['DismissCrashReport']();
 }
