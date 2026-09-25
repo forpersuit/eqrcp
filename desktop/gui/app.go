@@ -2577,10 +2577,6 @@ func (a *App) silentProvisionDeviceTLSCert() {
 			return
 		}
 	}
-	if !server.GetPaidStatus() && os.Getenv("EQT_TESTING") != "true" {
-		// 非付费用户不自发申请证书，严格保持网络静默
-		return
-	}
 
 	// 1. Initial grace delay to let main startup finish smoothly without competing for network/CPU
 	time.Sleep(3 * time.Second)
@@ -2603,11 +2599,8 @@ func (a *App) silentProvisionDeviceTLSCert() {
 			return
 		}
 	}
-	if !server.GetPaidStatus() && os.Getenv("EQT_TESTING") != "true" {
-		return
-	}
 
-	_, _ = a.provisionDeviceTLSCert(false)
+	_, _ = a.provisionDeviceTLSCertSilent(false)
 }
 
 // provisionDeviceTLSCert requests a dedicated device certificate from the provisioner gateway.
@@ -2617,13 +2610,16 @@ func (a *App) silentProvisionDeviceTLSCert() {
 func (a *App) provisionDeviceTLSCert(force bool) (bool, error) {
 	a.provisionMu.Lock()
 	defer a.provisionMu.Unlock()
-	return a.provisionDeviceTLSCertInternal(force, true)
+	return a.provisionDeviceTLSCertInternal(force, true, false)
 }
 
-func (a *App) provisionDeviceTLSCertInternal(force bool, allowSelfHeal bool) (bool, error) {
-	if !server.GetPaidStatus() && os.Getenv("EQT_TESTING") != "true" {
-		return false, fmt.Errorf("LAN-TLS is a PLUS exclusive feature; active license required")
-	}
+func (a *App) provisionDeviceTLSCertSilent(force bool) (bool, error) {
+	a.provisionMu.Lock()
+	defer a.provisionMu.Unlock()
+	return a.provisionDeviceTLSCertInternal(force, true, true)
+}
+
+func (a *App) provisionDeviceTLSCertInternal(force bool, allowSelfHeal bool, isSilent bool) (bool, error) {
 	nodeID := server.GetDeviceNodeID()
 	if nodeID == "" {
 		return false, fmt.Errorf("device node ID is empty")
@@ -2666,9 +2662,11 @@ func (a *App) provisionDeviceTLSCertInternal(force bool, allowSelfHeal bool) (bo
 		a.lastTLSError = coolErr.Error()
 		a.tlsMu.Unlock()
 
-		a.persistDisableTLS()
-		if a.testHookBeforeFailBroadcast != nil {
-			a.testHookBeforeFailBroadcast()
+		if !isSilent {
+			a.persistDisableTLS()
+			if a.testHookBeforeFailBroadcast != nil {
+				a.testHookBeforeFailBroadcast()
+			}
 		}
 		if a.ctx != nil {
 			wailsruntime.EventsEmit(a.ctx, "eqt:tls-cert-failed", map[string]any{
@@ -2677,6 +2675,7 @@ func (a *App) provisionDeviceTLSCertInternal(force bool, allowSelfHeal bool) (bo
 				"fallback":        "plain_http",
 				"is_rate_limited": true,
 				"retry_after_sec": remainingSec,
+				"is_silent":       isSilent,
 				"message":         "触发证书颁发机构频次限制，已自动切换为局域网高速传输（保护冷却中）",
 			})
 		}
@@ -2721,7 +2720,7 @@ func (a *App) provisionDeviceTLSCertInternal(force bool, allowSelfHeal bool) (bo
 					if a.ctx != nil {
 						wailsruntime.LogWarning(a.ctx, healMsg)
 					}
-					success, retryErr := a.provisionDeviceTLSCertInternal(true, false)
+					success, retryErr := a.provisionDeviceTLSCertInternal(true, false, isSilent)
 					if !success && retryErr != nil {
 						retryFailMsg := fmt.Sprintf("[LAN-TLS-PROVISION] [SELF-HEALING] Node identity successfully rotated to %s, but retry deferred: %v. New identity will persist for next attempt.", newNodeID, retryErr)
 						if a.logger != nil {
@@ -2744,16 +2743,19 @@ func (a *App) provisionDeviceTLSCertInternal(force bool, allowSelfHeal bool) (bo
 			}
 			// 第一性原理：错配路径亦必须在发出事件前先行落盘 EnableTLS=false，
 			// 消除 ToCToU 竞态，杜绝前端 ReadSettings() 读回磁盘残留 true 的 fail-open 风险。
-			a.persistDisableTLS()
-			if a.testHookBeforeFailBroadcast != nil {
-				a.testHookBeforeFailBroadcast()
+			if !isSilent {
+				a.persistDisableTLS()
+				if a.testHookBeforeFailBroadcast != nil {
+					a.testHookBeforeFailBroadcast()
+				}
 			}
 			if a.ctx != nil {
 				wailsruntime.LogWarning(a.ctx, warnMsg)
 				wailsruntime.EventsEmit(a.ctx, "eqt:tls-node-key-mismatch", map[string]any{
-					"node_id": nodeID,
-					"reason":  "node_key_mismatch",
-					"message": "本地证书私钥与云端设备登记不一致，请重置密钥绑定",
+					"node_id":   nodeID,
+					"reason":    "node_key_mismatch",
+					"is_silent": isSilent,
+					"message":   "本地证书私钥与云端设备登记不一致，请重置密钥绑定",
 				})
 			}
 			return false, err
@@ -2772,15 +2774,16 @@ func (a *App) provisionDeviceTLSCertInternal(force bool, allowSelfHeal bool) (bo
 		a.tlsStats.LastErrorMessage = err.Error()
 		a.tlsMu.Unlock()
 
-		// 第一性原理：证书置备失败后，后端先同步落盘 settings.EnableTLS = false，再对外广播事件，
-		// 确保前后端与磁盘配置强一致性。
-		a.persistDisableTLS()
-
-		if a.testHookBeforeFailBroadcast != nil {
-			a.testHookBeforeFailBroadcast()
+		// 第一性原理：仅非静默置备失败时，后端才同步落盘 settings.EnableTLS = false，
+		// 避免后台静默失败破坏用户的默认开启意图；任务运行时本身会自动优雅回退至普通 HTTP。
+		if !isSilent {
+			a.persistDisableTLS()
+			if a.testHookBeforeFailBroadcast != nil {
+				a.testHookBeforeFailBroadcast()
+			}
 		}
 
-		msg := fmt.Sprintf("[LAN-TLS-PROVISION] [AUTO-DISABLED] Provisioning deferred: %v (EnableTLS automatically reset to false; plain HTTP fallback active)", err)
+		msg := fmt.Sprintf("[LAN-TLS-PROVISION] [FALLBACK] Provisioning deferred: %v (plain HTTP fallback active)", err)
 		if a.logger != nil {
 			a.logger.Info(msg)
 		}
@@ -2792,11 +2795,12 @@ func (a *App) provisionDeviceTLSCertInternal(force bool, allowSelfHeal bool) (bo
 				"fallback":        "plain_http",
 				"is_rate_limited": isRateLimit,
 				"retry_after_sec": retryAfterSec,
+				"is_silent":       isSilent,
 				"message": func() string {
 					if isRateLimit {
 						return "触发证书颁发机构频次限制，已自动切换为局域网高速传输（保护冷却中）"
 					}
-					return "证书置备遇到异常，已自动关闭局域网 TLS 并保持标准明文传输"
+					return "证书置备遇到异常，已自动切换为局域网高速传输（保障连通性）"
 				}(),
 			})
 		}

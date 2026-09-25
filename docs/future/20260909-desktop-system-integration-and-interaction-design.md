@@ -174,7 +174,7 @@ EQT 采用 **IPC 代理分发模型 (Proxy-Daemon Model)**：
 
 ## 五、 商业化分级规划 (Free vs Plus/Pro Tier)
 
-根据产品授权与商业化体系（`docs/payment/` 与 `docs/crypto/`）：
+根据产品授权与商业化体系（`docs/payment/` 与 `docs/drm/`）：
 
 | 桌面系统集成能力 | Community 社区免费版 | Pro / Plus 商业版 |
 | :--- | :--- | :--- |

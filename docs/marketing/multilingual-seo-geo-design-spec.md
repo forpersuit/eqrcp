@@ -125,7 +125,7 @@
 | **首选标准端口 (80/443)** | **Preferred Standard Ports**: Clean URLs without messy `:xxxx` ports. Effortlessly bypass strict enterprise firewalls & school network blocks. | **首选 80/443 标准端口**：生成干净无杂乱端口号的直链，轻松穿透公司企业网与校园受限防火墙，扫码秒连。 | **JA**: 標準ポート対応 (80/443ポート自動切替、企業ファイアウォール回避)<br>**DE**: Standard-Ports 80/443 für reibungslose Firewall-Umgehung. |
 | **Android 跨端全场景支持** | **Universal Cross-Platform**: AirDrop for literally ANY device. iPhone, Android, Windows, Mac, Linux. Zero app needed on mobile. | **打破跨平台生态围墙**：真正支持任何设备的 AirDrop。iPhone、安卓手机与电脑互通，接收端手机 0 安装 0 注册。 | **JA**: iPhone・Android・PC対応、アプリ不要で相互転送。<br>**DE**: Echter AirDrop für jedes Gerät: iOS, Android & Windows. |
 | **移动端 0 安装 Web Chat** | **Instant Zero-Install Mobile Web**: Scan and exchange files & clipboard notes in real-time. Background reconnect protection & fluid typing. | **免安装移动端极速工作台**：自带相机扫码即开，双向传图传视频、文字口令秒达，后台断线智能自愈，无惧键盘遮挡。 | **JA**: アプリインストール不要のWebチャット＆ファイル共有。<br>**DE**: Webbasierter Datenaustausch ohne App-Installation. |
-| **纯局域网脱机与公信安全** | **Offline LAN Resilience & Green Lock**: 10–100MB/s Gigabit speed. Publicly trusted LAN-TLS certificates with browser green lock. Zero cloud relay. | **纯局域网脱机互联 & 权威绿锁**：物理满速 10~100MB/s 狂飙，官方公信 LAN-TLS 证书端到端加密，脱机可用，绝不上云。 | **JA**: クラウド不要の超高速ローカルWi-Fi転送、SSL暗号化。<br>**DE**: 100% lokales WLAN ohne Cloud, geprüfte TLS-Verschlüsselung. |
+| **纯局域网脱机与公信安全** | **Offline LAN Resilience & Green Lock**: 10–100MB/s Gigabit speed. Publicly trusted LAN-TLS certificates with browser green lock. Zero cloud relay. | **纯局域网脱机互联 & 权威绿锁**：物理满速 10~100MB/s 狂飙，官方公信 LAN-TLS 证书传输加密，脱机可用，绝不上云。 | **JA**: クラウド不要の超高速ローカルWi-Fi転送、SSL暗号化。<br>**DE**: 100% lokales WLAN ohne Cloud, geprüfte TLS-Verschlüsselung. |
 
 ---
 
@@ -153,7 +153,7 @@
   1. 接收端 0 安装、0 注册，任何系统自带原生相机扫码秒开；
   2. 优先绑定标准 80/443 端口，消除杂乱端口号，穿透受限网络；
   3. 局域网物理满速 (10~100MB/s+)，完全不消耗公网流量，4K 视频原画零压缩；
-  4. 官方公信 LAN-TLS 证书端到端加密，浏览器显示绿色安全锁。
+  4. 官方公信 LAN-TLS 证书传输加密，浏览器显示绿色安全锁。
 - **多语种资源直链导航**。
 
 ### 5.3 合规 Schema.org (JSON-LD) 结构化语义注入

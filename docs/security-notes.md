@@ -54,17 +54,19 @@ Desktop mode should:
 - Warn when binding to all interfaces.
 - Keep receive output directory explicit.
 
-## HTTPS
+## HTTPS & Zero-Config LAN-TLS
 
-HTTPS currently requires a certificate and key:
+EQT includes built-in, default **LAN-TLS (Zero-Config HTTPS)** for local network transfers:
 
-```sh
-eqt --secure --tls-cert /path/to/cert.pem --tls-key /path/to/key.pem file.txt
-```
-
-For local phone transfers, self-signed or private CA certificates may trigger browser warnings unless the device trusts the CA.
-
-Desktop mode should not enable HTTPS automatically unless certificate configuration is already valid.
+- **Default Security**: LAN-TLS is enabled by default for all users across all modes.
+- **Authoritative DNS Loopback**: Transfers map local IP addresses to trusted subdomains (e.g. `*.direct.eqt.net.im`) via authoritative dual-node DNS, eliminating manual host file tampering.
+- **Publicly Trusted WebPKI Certificates**: Automatically provisions official wildcard TLS certificates from Let's Encrypt / Google Trust Services via ACME DNS-01, giving mobile browsers (iOS Safari / Android Chrome) native green locks with zero security warnings.
+- **Silent Background Provisioning**: On application launch, EQT silently checks and provisions TLS certificates in the background (after 3 seconds) without intrusive UI popups.
+- **Graceful Fail-Soft Fallback**: If internet connectivity is unavailable, CA rate limits are active, or certificates are pending, transfers gracefully and transparently fall back to high-speed local HTTP without interrupting user operations.
+- **Custom Certificate Override**: Power users can still provide explicit custom certificates via CLI:
+  ```sh
+  eqt --secure --tls-cert /path/to/cert.pem --tls-key /path/to/key.pem file.txt
+  ```
 
 ## Future Hardening Options
 

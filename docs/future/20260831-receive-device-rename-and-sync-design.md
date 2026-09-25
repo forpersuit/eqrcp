@@ -2,7 +2,7 @@
 
 > **文档状态**：未来功能架构设计规范 (Design Proposal)  
 > **记录日期**：2026-08-31  
-> **涉及模块**：移动端 Web 上传页 (`pkg/pages/upload.tmpl.html`)、Go 服务端上传接收处理器 (`pkg/server/`)、桌面 GUI 目录管理 (`desktop/gui/`)、DRM 付费权益体系 (`pkg/config/` / `crypto/`)
+> **涉及模块**：移动端 Web 上传页 (`pkg/pages/upload.tmpl.html`)、Go 服务端上传接收处理器 (`pkg/server/`)、桌面 GUI 目录管理 (`desktop/gui/`)、DRM 付费权益体系 (`pkg/config/` / `server.GetPaidStatus()`)
 
 ---
 
@@ -135,7 +135,7 @@ receive:
   - 在上传 JavaScript 中将 `device_name` 注入请求头与 Form 字段。
 - [ ] **Phase 2: 服务端安全清洗与目录分流**
   - 在 `pkg/server/` 中实现 `sanitizeDeviceName` 安全过滤器，编写单元测试覆盖路径穿越攻击用例（如 `../../etc/passwd`、`COM1`、`CON` 等）。
-  - 根据 DRM 授权状态（`crypto.IsPremium()`）判定是否添加 `eqt_receive_` 强制前缀。
+  - 根据 DRM 授权状态（`server.GetPaidStatus()`）判定是否添加 `eqt_receive_` 强制前缀。
 - [ ] **Phase 3: 桌面 GUI 设置集成与多语种文案**
   - 在 Wails 桌面端前端增设“按设备隔离目录”开关与付费权益提示。
   - 完成中、英、德、日多语种文案补齐。

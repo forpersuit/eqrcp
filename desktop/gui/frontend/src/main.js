@@ -4551,16 +4551,6 @@ function bindEvents() {
                 }
                 if (e.target.id === 'settings-enable-tls') {
                     const isEnabled = Boolean(e.target.checked);
-                    if (isEnabled && !hasPaidLicense()) {
-                        e.target.checked = false;
-                        if (!state.settings) state.settings = {};
-                        state.settings.enableTLS = false;
-                        syncSettingsFromDOM();
-                        handleAutoSaveSettings();
-                        showToast(t('tls_requires_paid_license') || '🔒 LAN-TLS 加密传输为 PLUS 会员专享功能，请升级或激活许可证后使用。');
-                        openPanel('license');
-                        return;
-                    }
                     if (!state.settings) state.settings = {};
                     state.settings.enableTLS = isEnabled;
                     syncSettingsFromDOM();
@@ -5461,38 +5451,40 @@ async function saveSettingsData() {
     syncIdentityToChatFrame();
 }
 
-async function autoDisableTLSOnFailure(errorMsg, openSettings = false) {
+async function autoDisableTLSOnFailure(errorMsg, openSettings = false, silent = false) {
     if (!state.settings) state.settings = {};
-    state.settings.enableTLS = false;
+    if (!silent) {
+        state.settings.enableTLS = false;
+        const enableTLSSwitch = document.querySelector('#settings-enable-tls');
+        if (enableTLSSwitch) {
+            enableTLSSwitch.checked = false;
+        }
+    }
     state.tlsProvisioning = false;
     state.tlsProvisionFailed = true;
     state.tlsProvisionError = errorMsg || '';
-
-    const enableTLSSwitch = document.querySelector('#settings-enable-tls');
-    if (enableTLSSwitch) {
-        enableTLSSwitch.checked = false;
-    }
 
     try {
         state.settings = await ReadSettings();
     } catch (e) {
         console.warn('[LAN-TLS] Failed to read latest settings after auto-disable:', e);
     }
-    // Fail-Closed 强制保证：无论 ReadSettings 读回什么，失败自动降级分支必须将 enableTLS 强行锁定为 false，彻底杜绝 fail-open 风险。
-    if (!state.settings) {
-        state.settings = {};
+    if (!silent) {
+        if (!state.settings) {
+            state.settings = {};
+        }
+        state.settings.enableTLS = false;
+        const isRateLimit = state.tlsRateLimited || (errorMsg && (errorMsg.includes('rate limit') || errorMsg.includes('429') || errorMsg.includes('Too Many Requests')));
+        const toastMsg = isRateLimit
+            ? (t('tls_cert_rate_limited') || '触发证书颁发机构频次限制，已自动切换为局域网高速传输（保护冷却中）')
+            : (t('tls_failed_auto_disabled') || '⚠️ 证书置备遇到异常，已自动关闭局域网 TLS 并保持标准明文传输。可稍后在开发者选项重试。');
+        showToast(toastMsg);
     }
-    state.settings.enableTLS = false;
-    const isRateLimit = state.tlsRateLimited || (errorMsg && (errorMsg.includes('rate limit') || errorMsg.includes('429') || errorMsg.includes('Too Many Requests')));
-    const toastMsg = isRateLimit
-        ? (t('tls_cert_rate_limited') || '触发证书颁发机构频次限制，已自动切换为局域网高速传输（保护冷却中）')
-        : (t('tls_failed_auto_disabled') || '⚠️ 证书置备遇到异常，已自动关闭局域网 TLS 并保持标准明文传输。可稍后在开发者选项重试。');
-    showToast(toastMsg);
     if (state.activePanel === 'settings') {
         syncPanelSurface();
     } else {
         render();
-        if (openSettings) {
+        if (openSettings && !silent) {
             openPanel('settings');
         }
     }
@@ -7193,6 +7185,7 @@ EventsOn('eqt:tls-cert-ready', async () => {
 
 EventsOn('eqt:tls-node-key-mismatch', async (payload) => {
     console.warn('[LAN-TLS] Device key mismatch received:', payload);
+    const isSilent = Boolean(payload && payload.is_silent);
     const REASON_KEY_MAP = Object.freeze(Object.assign(Object.create(null), {
         'node_key_mismatch': 'tls_key_mismatch_msg',
     }));
@@ -7206,9 +7199,11 @@ EventsOn('eqt:tls-node-key-mismatch', async (payload) => {
     state.tlsKeyMismatchMsg = msgText;
     state.tlsProvisioning = false;
     if (Boolean(state.settings?.enableTLS)) {
-        await autoDisableTLSOnFailure(msgText, false);
+        await autoDisableTLSOnFailure(msgText, false, isSilent);
     } else {
-        showToast('⚠️ ' + msgText);
+        if (!isSilent) {
+            showToast('⚠️ ' + msgText);
+        }
         render();
     }
 });
@@ -7220,12 +7215,13 @@ EventsOn('eqt:tls-cert-failed', async (payload) => {
     state.tlsProvisionError = (payload && payload.error) || 'Certificate provisioning deferred';
     state.tlsRateLimited = Boolean(payload && payload.is_rate_limited);
     state.tlsRateLimitRetryAfter = (payload && payload.retry_after_sec) || 0;
+    const isSilent = Boolean(payload && payload.is_silent);
     try {
         state.appInfo = await AppInfo();
     } catch (_) {}
     if (Boolean(state.settings?.enableTLS) && !state.appInfo?.hasValidTLSCert) {
         const errorMsg = (payload && payload.message) || state.tlsProvisionError;
-        await autoDisableTLSOnFailure(errorMsg, false);
+        await autoDisableTLSOnFailure(errorMsg, false, isSilent);
     } else {
         render();
     }

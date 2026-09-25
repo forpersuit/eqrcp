@@ -15,6 +15,7 @@ description: "Architectural guidelines, disaster recovery, authoritative DNS ope
 - **公信通配符证书与回环解析**: 权威 DNS 将 `*.direct.eqt.net.im` 与 `<node-id>.direct.eqt.net.im` 通过双机 NS 委派直接解析到内网私有 IP（`192.168.x.x` / `10.x.x.x` / `127.0.0.1`），无公网中继。
 - **Mozilla PSL 官方合规收录**: `direct.eqt.net.im` 收录于 Mozilla Public Suffix List PRIVATE section，权威节点常驻 `_psl` TXT 记录，杜绝跨设备 Cookie/Origin 渗透。
 - **Fail-Soft 优雅降级**: 证书临期或异常时平滑退回标准 HTTP 传输，保障物理局域网传输永不中断。
+- **默认安全与静默自愈 (Default-On & Silent Healing)**: LAN-TLS 对全体用户默认开启；客户端启动 3s 后后台异步静默置备。静默失败绝不弹窗打扰用户，且不篡改磁盘偏好配置，网络恢复后自愈。
 
 ---
 
@@ -73,6 +74,7 @@ bash .agents/skills/eqt-lan-tls/scripts/check-tls-offline.sh
 - **WebView2 代理穿透**: Windows 本地开启 Clash 等系统代理时，必须追加 `--proxy-bypass-list` 排除 `*.direct.eqt.net.im;*.lan.eqt.im`，杜绝 WebView2 挂起。
 - **Safari 附件下载沙箱**: HTTPS 下附件下载严禁返回 `Cache-Control: no-cache/no-store`，必须使用 `Cache-Control: private, no-transform` 并移除 `Pragma`，否则 WebKit 直接中断下载。
 - **Fail-Soft 绝不吞没可观测性**: 离线降级时必须保留完整的结构化错误审计日志，严禁静默忽略底层失败。
+- **静默置备降级不篡改磁盘配置**: 离线或启动静默置备失败时，仅在内存与会话层降级明文 HTTP，严禁向本地磁盘写回 `enableTLS=false`，避免偶发网络断连导致用户默认加密偏好永久丢失。
 
 ---
 

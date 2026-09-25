@@ -189,7 +189,7 @@ func TestDesktopSettingsEnableNotification(t *testing.T) {
 }
 
 func TestDesktopSettingsEnableTLSDefaultAndOverride(t *testing.T) {
-	// 1. Default should be false when unset
+	// 1. Default should be true when unset
 	configPath := filepath.Join(t.TempDir(), "config.yml")
 	if err := os.WriteFile(configPath, []byte("interface: any\n"), 0644); err != nil {
 		t.Fatal(err)
@@ -201,42 +201,42 @@ func TestDesktopSettingsEnableTLSDefaultAndOverride(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadDesktopSettings failed: %v", err)
 	}
-	if settings.EnableTLS {
-		t.Fatalf("expected EnableTLS default to be false, got true")
+	if !settings.EnableTLS {
+		t.Fatalf("expected EnableTLS default to be true, got false")
 	}
 
-	// 2. Explicit true in config should be respected
-	configPathTrue := filepath.Join(t.TempDir(), "config_true.yml")
-	if err := os.WriteFile(configPathTrue, []byte("enableTLS: true\n"), 0644); err != nil {
+	// 2. Explicit false in config should be respected
+	configPathFalse := filepath.Join(t.TempDir(), "config_false.yml")
+	if err := os.WriteFile(configPathFalse, []byte("enableTLS: false\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	appTrue := application.New()
-	appTrue.Flags.Config = configPathTrue
+	appFalse := application.New()
+	appFalse.Flags.Config = configPathFalse
 
-	settingsTrue, err := ReadDesktopSettings(appTrue)
+	settingsFalse, err := ReadDesktopSettings(appFalse)
 	if err != nil {
-		t.Fatalf("ReadDesktopSettings with enableTLS=true failed: %v", err)
+		t.Fatalf("ReadDesktopSettings with enableTLS=false failed: %v", err)
 	}
-	if !settingsTrue.EnableTLS {
-		t.Fatalf("expected EnableTLS to be true when configured, got false")
+	if settingsFalse.EnableTLS {
+		t.Fatalf("expected EnableTLS to be false when configured, got true")
 	}
 
-	// 3. Write true and verify persistence of both keys
-	settings.EnableTLS = true
+	// 3. Write false and verify persistence of both keys
+	settings.EnableTLS = false
 	saved, err := WriteDesktopSettings(app, settings)
 	if err != nil {
 		t.Fatalf("WriteDesktopSettings failed: %v", err)
 	}
-	if !saved.EnableTLS {
-		t.Fatalf("saved.EnableTLS = false, want true")
+	if saved.EnableTLS {
+		t.Fatalf("saved.EnableTLS = true, want false")
 	}
 
 	reloaded, err := ReadDesktopSettings(app)
 	if err != nil {
 		t.Fatalf("reloaded ReadDesktopSettings failed: %v", err)
 	}
-	if !reloaded.EnableTLS {
-		t.Fatalf("reloaded.EnableTLS = false, want true")
+	if reloaded.EnableTLS {
+		t.Fatalf("reloaded.EnableTLS = true, want false")
 	}
 }
 

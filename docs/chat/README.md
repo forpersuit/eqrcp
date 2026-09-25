@@ -93,7 +93,6 @@ Legacy /chat/*  ──301──►  /chat-v2/*
 | :--- | :--- |
 | [`docs/payment/tier-design.md`](../payment/tier-design.md) | Free/Plus/Pro 与 Chat 体验降级产品设计 |
 | [`docs/payment/license-tier-analysis.md`](../payment/license-tier-analysis.md) | 各模式付费/免费限制（含 Chat 行） |
-| [`docs/future/20260901-e2ee-end-to-end-encryption-architecture.md`](../future/20260901-e2ee-end-to-end-encryption-architecture.md) | 现行 E2EE 端到端加密架构设计与 Wi-Fi 防嗅探规范 |
 | [`pkg/chat/v2/README.md`](../../pkg/chat/v2/README.md) | 包内边界说明（部分「skeleton」措辞可能滞后于实现） |
 
 ---

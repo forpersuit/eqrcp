@@ -236,22 +236,30 @@ func TestGetLogTailAndBuildDiagnosticsZip(t *testing.T) {
 	}
 }
 
-func TestDevProvisionDeviceTLSCert_FreeUserBlocked(t *testing.T) {
+func TestDevProvisionDeviceTLSCert_FreeUserAllowed(t *testing.T) {
 	tempHome := t.TempDir()
 	t.Setenv("HOME", tempHome)
 	t.Setenv("EQT_CONFIG_DIR", filepath.Join(tempHome, "eqt_conf"))
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error":      "rate limit",
+			"reason_key": "rate_limited",
+		})
+	}))
+	defer server.Close()
+	t.Setenv("EQT_PROVISION_ENDPOINT", server.URL)
 
 	app := NewApp()
 	app.logger = NewFileLogger(filepath.Join(tempHome, "desktop.log"), true)
 	defer app.logger.Close()
 
-	// When EQT_TESTING is not set and user is not paid, provisioning must be blocked
-	success, err := app.DevProvisionDeviceTLSCert()
-	if success {
-		t.Fatalf("expected success=false for free tier user, got true")
-	}
-	if err == nil || !strings.Contains(err.Error(), "PLUS exclusive") {
-		t.Fatalf("expected error mentioning PLUS exclusive, got: %v", err)
+	// When user is not paid, provisioning is NOT blocked by license check
+	_, err := app.DevProvisionDeviceTLSCert()
+	if err != nil && strings.Contains(err.Error(), "PLUS exclusive") {
+		t.Fatalf("unexpected error mentioning PLUS exclusive, TLS should be available for all users: %v", err)
 	}
 }
 

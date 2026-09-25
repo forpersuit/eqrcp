@@ -58,14 +58,15 @@ Environment variables use the `EQT_` prefix.
 - [Auto-Update Design & Settings (自动更新设计)](IMPORTANT_auto-update-design.md)
 - [Desktop integration plan](desktop-integration-plan.md)
 - **[Chat 模式文档目录](chat/README.md)** — V2 现状、Free 额度、交互修复、历史归档
-- **[密码学与加密文档目录](crypto/README.md)** — 传输与内容加密（Chat/Pro E2EE）、DRM 授权 Ed25519 签名与硬件指纹密码学规范
+- **[DRM 授权密码学与数字签名规范](payment/drm-crypto-spec.md)** — Ed25519 签名、硬件指纹哈希与防篡改规范
+- **[局域网安全与 LAN-TLS 架构报告](mechanism/lan-tls-security-protocol-technical-report.md)** — 自建权威 DNS 回环与公信通配符 TLS 传输加密
 - [EQT product roadmap](product-roadmap.md)
 - [Desktop platform notes](desktop-platform-notes.md)
 - [Windows validation checklist](windows-validation-checklist.md)
 - **[市场营销与全球推广全案目录 (Marketing Hub)](marketing/README.md)** — [全球 GTM 推广战略与 SEO/GEO 增长全案](marketing/global-gtm-and-seo-strategy.md) · [Twitter (X) 推广策略与推文库](marketing/twitter-promotion-strategy.md) · [核心功能短视频推广计划](marketing/feature-video-promotion-plan.md)
-- **[未来功能设计 (Future Designs)](future/README.md)** — [Receive 连续传输与 Chat 批量打包透明化清单设计](future/20260909-receive-continue-and-chat-zip-manifest-design.md) · [桌面系统级深度集成与人机交互设计规范](future/20260909-desktop-system-integration-and-interaction-design.md) · [传输状态投影架构](future/20260908-transfer-status-projection-architecture.md) · [零配置端到端加密 (E2EE) 设计](future/20260901-e2ee-end-to-end-encryption-architecture.md) · [Receive 模式移动端设备重命名与目录同步设计](future/20260831-receive-device-rename-and-sync-design.md)
+- **[未来功能设计 (Future Designs)](future/README.md)** — [Receive 连续传输与 Chat 批量打包透明化清单设计](future/20260909-receive-continue-and-chat-zip-manifest-design.md) · [桌面系统级深度集成与人机交互设计规范](future/20260909-desktop-system-integration-and-interaction-design.md) · [传输状态投影架构](future/20260908-transfer-status-projection-architecture.md) · [Receive 模式移动端设备重命名与目录同步设计](future/20260831-receive-device-rename-and-sync-design.md)
 - [Admin 文档目录](admin/README.md) · [Portal 文档目录](portal/README.md)
 
 ## License
 
-MIT. See [LICENSE](../LICENSE).
+MIT. See [LICENSE](LICENSE).
