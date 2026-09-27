@@ -2,9 +2,9 @@
   "name": "eqt",
   "private": true,
   "scripts": {
-    "test": "go test ./... && (cd desktop/gui && go test ./...)",
-    "test:offline": "go test ./... && (cd desktop/gui && go test ./...) && (cd cloudflare/eqt-drm-api && npm run test:offline)",
-    "test:all": "go test ./... && (cd desktop/gui && go test ./...) && (cd cloudflare/eqt-drm-api && npm run test:offline) && node scripts/build-i18n-website.js",
+    "test": "go test ./... && (cd desktop/gui && go test ./...) && node desktop/gui/frontend/tests/tls_status.test.js",
+    "test:offline": "go test ./... && (cd desktop/gui && go test ./...) && node desktop/gui/frontend/tests/tls_status.test.js && (cd cloudflare/eqt-drm-api && npm run test:offline)",
+    "test:all": "go test ./... && (cd desktop/gui && go test ./...) && node desktop/gui/frontend/tests/tls_status.test.js && (cd cloudflare/eqt-drm-api && npm run test:offline) && node scripts/build-i18n-website.js",
     "build": "bash scripts/deploy-windows-results.sh",
     "build:quick": "bash scripts/deploy-windows-results.sh --no-tests",
     "website:build": "node scripts/build-i18n-website.js",

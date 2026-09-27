@@ -92,28 +92,31 @@ export function getTLSState(state) {
 
 /**
  * 渲染设置面板中启用 TLS 开关旁边的状态图标
- * 状态为 ready 或 disabled 时不显示图标（开关自身开启/关闭状态足以表征）；
- * 处于置备中(preparing)时显示旋转加载图标；失败(failed/mismatch)时显示警告图标。
+ * 处于置备中(preparing)时显示旋转加载图标；就绪(ready)时显示安全锁图标；失败(failed/mismatch)时显示警告图标；关闭(disabled)时不显示。
  * @param {object} state 全局状态对象
  * @param {Function} t 国际化翻译函数
  * @param {Function} escapeAttr 属性转义函数
  * @returns {string} 图标 HTML 或空字符串
  */
 export function renderTLSSettingIcon(state, t, escapeAttr) {
+    if (!Boolean(state?.settings?.enableTLS)) {
+        return '';
+    }
     const status = getTLSState(state);
     switch (status) {
         case 'mismatch':
-            return `<span class="tls-status-icon mismatch" role="img" aria-label="${escapeAttr(state?.tlsKeyMismatchMsg || t('tls_key_mismatch_msg'))}" title="${escapeAttr(state?.tlsKeyMismatchMsg || t('tls_key_mismatch_msg'))}" style="display: inline-flex; align-items: center; cursor: help;">${renderAlertSvg({ color: '#d97706', size: 14 })}</span>`;
+            return `<span class="tls-status-icon mismatch" role="img" aria-label="${escapeAttr(state?.tlsKeyMismatchMsg || t('tls_key_mismatch_msg'))}" title="${escapeAttr(state?.tlsKeyMismatchMsg || t('tls_key_mismatch_msg'))}" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; cursor: help;">${renderAlertSvg({ color: '#d97706', size: 14 })}</span>`;
         case 'failed': {
             const err = state?.tlsProvisionError || state?.appInfo?.tlsError || '';
             const isRateLimit = err && (err.includes('rate limit') || err.includes('429') || err.includes('Too Many Requests'));
             const fallbackTooltip = isRateLimit ? t('tls_cert_rate_limited') : t('tls_cert_failed_tooltip');
             const tooltip = (fallbackTooltip || '证书置备遇到异常（已自动降级为明文传输保障传输），点击查看详情或重试') + (err ? ` [${err}]` : '');
-            return `<span class="tls-status-icon failed" role="img" aria-label="${escapeAttr(tooltip)}" title="${escapeAttr(tooltip)}" style="display: inline-flex; align-items: center; cursor: help;">${renderAlertSvg({ color: '#d97706', size: 14 })}</span>`;
+            return `<span class="tls-status-icon failed" role="img" aria-label="${escapeAttr(tooltip)}" title="${escapeAttr(tooltip)}" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; cursor: help;">${renderAlertSvg({ color: '#d97706', size: 14 })}</span>`;
         }
         case 'preparing':
-            return `<span class="tls-status-icon preparing" role="img" aria-label="${escapeAttr(t('tls_cert_preparing'))}" title="${escapeAttr(t('tls_cert_preparing'))}" style="display: inline-flex; align-items: center;">${renderSpinnerSvg({ color: 'var(--accent, #156f5a)', size: 14 })}</span>`;
+            return `<span class="tls-status-icon preparing" role="status" aria-label="${escapeAttr(t('tls_cert_preparing'))}" title="${escapeAttr(t('tls_cert_preparing'))}" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;">${renderSpinnerSvg({ color: 'var(--accent, #156f5a)', size: 14 })}</span>`;
         case 'ready':
+            return `<span class="tls-status-icon ready" role="img" aria-label="${escapeAttr(t('tls_cert_ready') || 'TLS Ready')}" title="${escapeAttr(t('tls_cert_ready') || 'TLS Ready')}" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; cursor: help;">${renderLockSvg({ color: 'var(--accent, #156f5a)', size: 14 })}</span>`;
         case 'disabled':
         default:
             return '';
@@ -168,6 +171,8 @@ export function renderTaskSecurityBadge(pageUrl, state, t, escapeAttr) {
 
 /**
  * 渲染顶栏 (Top Bar) 处的 TLS 安全状态交互徽章/图标
+ * 第一性原理：顶栏指示器仅表征就绪的安全传输状态（“要么有，要么没有”）。
+ * 处理中（preparing）或未开启/异常状态绝不在此处显示，避免初次使用用户产生困惑；详细状态由设置项开关处呈现。
  * @param {object} state 全局状态对象
  * @param {Function} t 国际化翻译函数
  * @param {Function} escapeAttr 属性转义函数
@@ -175,27 +180,10 @@ export function renderTaskSecurityBadge(pageUrl, state, t, escapeAttr) {
  */
 export function renderTopbarTLSIndicator(state, t, escapeAttr) {
     const status = getTLSState(state);
-    switch (status) {
-        case 'ready':
-            return `<span class="topbar-tls-indicator" id="topbar-tls-status" role="status" aria-label="${escapeAttr(t('tls_cert_ready') || 'TLS Ready')}" title="${escapeAttr(t('tls_cert_ready') || 'TLS Ready')}" style="padding: 0 4px; display: inline-flex; align-items: center; justify-content: center; cursor: default; user-select: none;">${renderLockSvg({ color: 'var(--accent, #156f5a)', size: 14 })}</span>`;
-        case 'preparing':
-            return `<span class="topbar-tls-indicator" id="topbar-tls-status" role="status" aria-label="${escapeAttr(t('tls_cert_preparing') || 'TLS Preparing')}" title="${escapeAttr(t('tls_cert_preparing') || 'TLS Preparing')}" style="padding: 0 4px; display: inline-flex; align-items: center; justify-content: center; cursor: default; user-select: none;">${renderSpinnerSvg({ color: 'var(--accent, #156f5a)', size: 14 })}</span>`;
-        case 'mismatch':
-        case 'failed': {
-            const err = state?.tlsProvisionError || state?.appInfo?.tlsError || '';
-            const tooltip = (t('tls_cert_failed_tooltip') || '证书置备遇到异常') + (err ? ` [${err}]` : '');
-            return `<span class="topbar-tls-indicator" id="topbar-tls-status" role="status" aria-label="${escapeAttr(tooltip)}" title="${escapeAttr(tooltip)}" style="padding: 0 4px; display: inline-flex; align-items: center; justify-content: center; cursor: default; user-select: none;">${renderAlertSvg({ color: '#d97706', size: 14 })}</span>`;
-        }
-        case 'disabled':
-        default: {
-            const lastErr = state?.tlsProvisionError || state?.appInfo?.tlsError;
-            if (lastErr && state?.tlsProvisionFailed) {
-                const tooltip = (t('tls_failed_auto_disabled') || '证书置备遇到异常，已自动关闭局域网 TLS 并保持标准明文传输') + ` [${lastErr}]`;
-                return `<span class="topbar-tls-indicator" id="topbar-tls-status" role="status" aria-label="${escapeAttr(tooltip)}" title="${escapeAttr(tooltip)}" style="padding: 0 4px; display: inline-flex; align-items: center; justify-content: center; cursor: default; user-select: none;">${renderAlertSvg({ color: 'var(--text-muted, #94a3b8)', size: 14 })}</span>`;
-            }
-            return '';
-        }
+    if (status === 'ready') {
+        return `<span class="topbar-tls-indicator" id="topbar-tls-status" role="status" aria-label="${escapeAttr(t('tls_cert_ready') || 'TLS Ready')}" title="${escapeAttr(t('tls_cert_ready') || 'TLS Ready')}" style="padding: 0 4px; display: inline-flex; align-items: center; justify-content: center; cursor: default; user-select: none;">${renderLockSvg({ color: 'var(--accent, #156f5a)', size: 14 })}</span>`;
     }
+    return '';
 }
 
 /**

@@ -3799,8 +3799,24 @@ body.log-viewer-is-dragging * {
     color: var(--text-muted, #64748b);
     border: 1px solid rgba(100, 116, 139, 0.18);
 }
-.tls-status-icon.failed {
-    color: #ef4444;
+.tls-status-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    vertical-align: middle;
+    user-select: none;
+}
+.tls-status-icon.ready {
+    color: var(--accent, #156f5a);
+}
+.tls-status-icon.preparing {
+    color: var(--accent, #156f5a);
+}
+.tls-status-icon.failed,
+.tls-status-icon.mismatch {
+    color: #d97706;
 }
 
 .tls-diag-btn {

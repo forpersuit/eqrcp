@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "lint": "eslint src",
-    "build": "npm run lint && vite build",
+    "test": "node tests/tls_status.test.js",
+    "build": "npm run lint && npm run test && vite build",
     "preview": "vite preview"
   },
   "devDependencies": {
