@@ -3,13 +3,16 @@
   "private": true,
   "scripts": {
     "test": "go test ./... && (cd desktop/gui && go test ./...)",
+    "test:offline": "go test ./... && (cd desktop/gui && go test ./...) && (cd cloudflare/eqt-drm-api && npm run test:offline)",
+    "test:all": "go test ./... && (cd desktop/gui && go test ./...) && (cd cloudflare/eqt-drm-api && npm run test:offline) && node scripts/build-i18n-website.js",
     "build": "bash scripts/deploy-windows-results.sh",
     "build:quick": "bash scripts/deploy-windows-results.sh --no-tests",
+    "website:build": "node scripts/build-i18n-website.js",
     "publish:test": "bash scripts/publish-test.sh",
     "publish:prod": "bash scripts/publish-prod.sh",
-    "publish:all": "bash scripts/publish-test.sh && bash scripts/publish-prod.sh",
-    "deploy:test": "bash -c 'cd cloudflare/eqt-drm-api && npx wrangler deploy --env test && cd ../eqt-feedback-api && npx wrangler deploy --env test && cd ../eqt-website && npx wrangler pages deploy ./ --project-name=eqt-test --branch=dev'",
-    "deploy:prod": "bash -c 'cd cloudflare/eqt-drm-api && npx wrangler deploy && cd ../eqt-feedback-api && npx wrangler deploy && cd ../eqt-website && npx wrangler pages deploy ./ --project-name=eqt --branch=master'"
+    "deploy:test": "bash -c 'WRANGLER_ENV=\"env -u http_proxy -u HTTP_PROXY -u https_proxy -u HTTPS_PROXY -u all_proxy -u ALL_PROXY\" && cd cloudflare/eqt-drm-api && $WRANGLER_ENV npx wrangler deploy --env test && cd ../eqt-feedback-api && $WRANGLER_ENV npx wrangler deploy --env test && cd ../.. && npm run website:build && cd cloudflare/eqt-website && $WRANGLER_ENV npx wrangler pages deploy ./ --project-name=eqt-test --branch=dev'",
+    "deploy:prod": "bash -c 'WRANGLER_ENV=\"env -u http_proxy -u HTTP_PROXY -u https_proxy -u HTTPS_PROXY -u all_proxy -u ALL_PROXY\" && cd cloudflare/eqt-drm-api && $WRANGLER_ENV npx wrangler deploy && cd ../eqt-feedback-api && $WRANGLER_ENV npx wrangler deploy && cd ../.. && npm run website:build && cd cloudflare/eqt-website && $WRANGLER_ENV npx wrangler pages deploy ./ --project-name=eqt --branch=master'",
+    "deploy:admin": "bash -c 'WRANGLER_ENV=\"env -u http_proxy -u HTTP_PROXY -u https_proxy -u HTTPS_PROXY -u all_proxy -u ALL_PROXY\" && cd cloudflare/eqt-admin && npm run build && $WRANGLER_ENV npx wrangler pages deploy dist --project-name=eqt-admin --branch=master'"
   },
   "devDependencies": {
     "wrangler": "^4.112.0"

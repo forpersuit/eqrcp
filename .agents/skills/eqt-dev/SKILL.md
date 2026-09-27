@@ -27,18 +27,23 @@ description: Guides EQT developer mode configurations, log system structures, lo
 | 命令 | 动作说明 | 底层映射 |
 | :--- | :--- | :--- |
 | `pnpm run publish:test` | **测试环境完整发布闭环**（编译物理包 -> 上传 R2 测试分发桶 -> 同步时间戳 -> 推送 dev 触发 CI/CD 全链路） | `scripts/publish-test.sh` |
-| `pnpm run publish:prod` | **生产环境完整发布闭环**（推送 master -> 打版本 Tag 并推送触发 GitHub Actions 官方 Release 安全加签与分发流水线 -> 部署官网 -> 验证） | `scripts/publish-prod.sh` |
-| `pnpm run publish:all` | **一键全量发布**：先执行测试发布，紧接着执行生产发布 | `scripts/publish-test.sh && scripts/publish-prod.sh` |
-| `pnpm run deploy:test` | 纯边缘部署：部署测试环境 Cloudflare Workers 与 Pages | `wrangler deploy --env test` |
-| `pnpm run deploy:prod` | 纯边缘部署：部署生产环境 Cloudflare Workers 与 Pages | `wrangler deploy` |
+| `pnpm run publish:prod` | **生产环境完整发布闭环**（推送 master -> 打版本 Tag 并推送触发 GitHub Actions 官方 Release 安全加签与分发流水线 -> 预渲染官网 -> 部署官网 -> 验证） | `scripts/publish-prod.sh` |
+| `pnpm run deploy:test` | 纯边缘部署：多语言官网预渲染 + 部署测试环境 Cloudflare Workers 与 Pages (自动剥离 WSL 代理) | `scripts/build-i18n-website.js` + `wrangler deploy --env test` |
+| `pnpm run deploy:prod` | 纯边缘部署：多语言官网预渲染 + 部署生产环境 Cloudflare Workers 与 Pages (自动剥离 WSL 代理) | `scripts/build-i18n-website.js` + `wrangler deploy` |
+| `pnpm run deploy:admin` | 纯边缘部署：编译并部署生产运营后台 `eqt-admin` 到 Cloudflare Pages | `cd cloudflare/eqt-admin && npm run build && wrangler pages deploy` |
+| `pnpm run website:build` | 官网预渲染：根据主模板提取多语言词条，生成 6 语言静态分站并执行 4 大质量断言门禁 | `scripts/build-i18n-website.js` |
 | `pnpm run build` | 本地完整编译：运行 Go 测试并生成 Windows 生产/测试物理产物至验收目录 | `scripts/deploy-windows-results.sh` |
 | `pnpm run build:quick` | 本地快速编译：跳过测试快速生成 Windows 物理产物 | `scripts/deploy-windows-results.sh --no-tests` |
 | `pnpm test` | 运行 Go 全模块自动化测试 | `go test ./...` |
+| `pnpm run test:offline` | 运行 Go 全模块测试 + Worker 离线全量单测套件 | `go test ./...` + `eqt-drm-api test:offline` |
+| `pnpm run test:all` | 运行全栈质量门禁：Go 测试 + Worker 离线单测 + 官网多语言预渲染断言 | `test:offline` + `website:build` |
 
 > **关键准则**：
 > 1. **测试发布全走云端**：日常开发只需运行 `pnpm run publish:test`（或直接使用 `scripts/git-push-smart.sh origin dev` 推送到 `dev` 分支），GitHub Actions 全自动完成差异化发布。
 > 2. **差异化增量保障**：修改某个 Worker 时，流水线绝对不会空跑 5 分钟去编译 Windows GUI；修改文档或配置时，所有编译部署均秒级跳过。
 > 3. **生产安全加签隔离**：生产二进制由 GitHub Actions 使用保存在 Secrets 中的正式私钥执行 Ed25519 安全加签，本地环境绝不保存生产私钥。运行 `pnpm run publish:prod` 会自动推送版本 Tag 触发该标准安全发布链路。
+> 4. **WSL 代理剥离防呆**：边缘部署命令均统一注入 `env -u http_proxy -u HTTPS_PROXY ...`，防止 WSL 代理环境导致 Node `undici` 网络调用崩溃。
+> 5. **官网与版本号解耦**：官网移除了首屏固化版本号的 Badge，页面呈现常青态；下载按钮动态拉取最新可下载产物，彻底杜绝“文案版本超前于二进制包”的体验割裂。
 
 ---
 

@@ -116,7 +116,6 @@ const langConfig = {
 function enrichTranslations(dict) {
   // English updates (User-Centric & Benefit-Driven)
   dict.en = Object.assign(dict.en || {}, {
-    hero_badge_new: "v1.36.170 Released: Default HTTPS Transmission, Zero Mobile App Install &amp; One-Tap Folder Pack",
     feat1_title: "Instant Scan, Works on Any Wi-Fi",
     feat1_desc: "Scan with your default phone camera to start instantly. Seamlessly navigates office networks, campus Wi-Fi, and hotel networks without being blocked by corporate firewalls.",
     feat2_title: "Blazing Gigabit LAN Speed (10-100+ MB/s)",
@@ -132,6 +131,7 @@ function enrichTranslations(dict) {
     price_free_feat_tls: "Default Secure Transmission (HTTPS)",
     price_plus_feat_tls: "Default Secure Transmission (HTTPS)"
   });
+  delete (dict.en || {}).hero_badge_new;
   delete (dict.en || {}).feat7_title;
   delete (dict.en || {}).feat7_desc;
   delete (dict.en || {}).feat8_title;
@@ -139,7 +139,6 @@ function enrichTranslations(dict) {
 
   // Chinese updates (用户视角与使用感受)
   dict.zh = Object.assign(dict.zh || {}, {
-    hero_badge_new: "v1.36.170 正式发布：默认支持安全传输 (HTTPS)、安卓与苹果手机免装直传 &amp; 文件夹一键打包",
     feat1_title: "扫码即连，公共 Wi-Fi 畅通无阻",
     feat1_desc: "掏出手机自带相机扫一扫即可开始。智能兼容公司办公网、校园网与酒店 Wi-Fi，杜绝被企业防火墙误拦截，生成的链接干净清爽。",
     feat2_title: "千兆局域网满速狂飙，大文件秒传",
@@ -155,6 +154,7 @@ function enrichTranslations(dict) {
     price_free_feat_tls: "默认支持安全传输 (HTTPS)",
     price_plus_feat_tls: "全系标配安全传输 (HTTPS)"
   });
+  delete (dict.zh || {}).hero_badge_new;
   delete (dict.zh || {}).feat7_title;
   delete (dict.zh || {}).feat7_desc;
   delete (dict.zh || {}).feat8_title;
@@ -162,7 +162,6 @@ function enrichTranslations(dict) {
 
   // Japanese updates (ユーザー視点＆メリット訴求)
   dict.ja = Object.assign(dict.ja || {}, {
-    hero_badge_new: "v1.36.170 リリース：HTTPS安全転送標準対応、スマホアプリ不要＆フォルダ一括共有",
     feat1_title: "カメラで即スキャン、公共Wi-Fiでも快適",
     feat1_desc: "スマホの標準カメラでかざすだけ。オフィスの社内LAN、大学キャンパス、ホテルのWi-Fiでもファイアウォールに遮断されず、いつでもスムーズに接続できます。",
     feat2_title: "ギガビットLAN全速力、大容量も一瞬で完了",
@@ -178,6 +177,7 @@ function enrichTranslations(dict) {
     price_free_feat_tls: "安全なHTTPS暗号化転送を標準サポート",
     price_plus_feat_tls: "安全なHTTPS暗号化転送を標準サポート"
   });
+  delete (dict.ja || {}).hero_badge_new;
   delete (dict.ja || {}).feat7_title;
   delete (dict.ja || {}).feat7_desc;
   delete (dict.ja || {}).feat8_title;
@@ -185,7 +185,6 @@ function enrichTranslations(dict) {
 
   // Korean updates (사용자 관점 및 편의성 강조)
   dict.ko = Object.assign(dict.ko || {}, {
-    hero_badge_new: "v1.36.170 출시: 기본 보안 전송(HTTPS) 지원, 모바일 앱 설치 없는 초고속 전송 및 폴더 일괄 다운로드",
     feat1_title: "카메라 즉석 스캔, 공용 Wi-Fi에서도 완벽 접속",
     feat1_desc: "스마트폰 기본 카메라로 비추기만 하면 즉시 시작됩니다. 회사 업무망, 캠퍼스, 호텔 Wi-Fi에서도 방화벽 차단 없이 깔끔하게 접속됩니다.",
     feat2_title: "기가비트 LAN 최대 속도, 대용量 파일 초고속 전송",
@@ -201,6 +200,7 @@ function enrichTranslations(dict) {
     price_free_feat_tls: "기본 보안 전송(HTTPS) 지원",
     price_plus_feat_tls: "기본 보안 전송(HTTPS) 지원"
   });
+  delete (dict.ko || {}).hero_badge_new;
   delete (dict.ko || {}).feat7_title;
   delete (dict.ko || {}).feat7_desc;
   delete (dict.ko || {}).feat8_title;
@@ -208,7 +208,6 @@ function enrichTranslations(dict) {
 
   // German updates (Nutzerzentriert & Nutzenorientiert)
   dict.de = Object.assign(dict.de || {}, {
-    hero_badge_new: "v1.36.170 Veröffentlicht: Standardmäßig HTTPS-Übertragung, kein App-Download nötig &amp; 1-Klick-Ordner-Download",
     feat1_title: "Sofort-Scan per Kamera, funktioniert in jedem WLAN",
     feat1_desc: "Einfach mit der normalen Smartphone-Kamera scannen. Funktioniert reibungslos im Büro-, Campus- oder Hotel-WLAN, ohne von strikten Firmen-Firewalls blockiert zu werden.",
     feat2_title: "Gigabit-LAN-Vollspeed, riesige Dateien in Sekunden",
@@ -224,6 +223,7 @@ function enrichTranslations(dict) {
     price_free_feat_tls: "Standardmäßig sichere Übertragung (HTTPS)",
     price_plus_feat_tls: "Standardmäßig sichere Übertragung (HTTPS)"
   });
+  delete (dict.de || {}).hero_badge_new;
   delete (dict.de || {}).feat7_title;
   delete (dict.de || {}).feat7_desc;
   delete (dict.de || {}).feat8_title;
@@ -231,7 +231,6 @@ function enrichTranslations(dict) {
 
   // French updates (Orienté utilisateur & Bénéfices)
   dict.fr = Object.assign(dict.fr || {}, {
-    hero_badge_new: "v1.36.170 Sortie : Transfert HTTPS par défaut, zéro appli mobile requise &amp; dossiers ZIP en 1 clic",
     feat1_title: "Scannez et connectez, compatible tout Wi-Fi",
     feat1_desc: "Scannez simplement avec l'appareil photo de votre téléphone. Fonctionne parfaitement sur les réseaux de bureau, d'université et d'hôtel sans blocage pare-feu.",
     feat2_title: "Vitesse Gigabit maximale, fichiers lourds instantanés",
@@ -247,6 +246,7 @@ function enrichTranslations(dict) {
     price_free_feat_tls: "Transfert sécurisé par défaut (HTTPS)",
     price_plus_feat_tls: "Transfert sécurisé par défaut (HTTPS)"
   });
+  delete (dict.fr || {}).hero_badge_new;
   delete (dict.fr || {}).feat7_title;
   delete (dict.fr || {}).feat7_desc;
   delete (dict.fr || {}).feat8_title;
@@ -254,7 +254,6 @@ function enrichTranslations(dict) {
 
   // Spanish updates (Enfocado en beneficios de usuario)
   dict.es = Object.assign(dict.es || {}, {
-    hero_badge_new: "Lanzamiento v1.36.170: Transmisión HTTPS por defecto, sin instalar apps en el móvil y carpetas ZIP en 1 toque",
     feat1_title: "Escaneo instantáneo, funciona en cualquier Wi-Fi",
     feat1_desc: "Escanee con la cámara de su móvil para comenzar de inmediato. Funciona sin problemas en redes corporativas, universitarias y hoteles sin bloqueos de cortafuegos.",
     feat2_title: "Velocidad Gigabit máxima, archivos pesados al instante",
@@ -270,6 +269,7 @@ function enrichTranslations(dict) {
     price_free_feat_tls: "Transmisión segura por defecto (HTTPS)",
     price_plus_feat_tls: "Transmisión segura por defecto (HTTPS)"
   });
+  delete (dict.es || {}).hero_badge_new;
   delete (dict.es || {}).feat7_title;
   delete (dict.es || {}).feat7_desc;
   delete (dict.es || {}).feat8_title;
