@@ -42,7 +42,23 @@
 
 ## 3. 执行方式对照(同一操作,测试 / 生产分别怎么做)
 
-> 所有命令在 `cloudflare/<项目>/` 目录下执行。**`--env test` 缺失 = 生产!**
+> 所有操作可在项目根目录通过标准化 npm 生命周期命令一键完成（推荐，见 §3.1），亦可在 `cloudflare/<项目>/` 目录下执行底层原始命令（见 §3.2）。**底层命令缺少 `--env test` = 生产!**
+
+### 3.1 根目录标准化一键命令 (推荐)
+
+| 场景 / 意图 | 🟢 生产命令 | 🟡 测试命令 | 核心保护与作用 |
+|---|---|---|---|
+| **完整版本发布闭环** | `npm run publish:prod` | `npm run publish:test` | 生产：检查分支 -> 推 Tag 触发 Actions 云端构建签名与 R2 归档 -> 官网预渲染 -> Pages 部署；测试：编译打包测试二进制 -> 推送 R2 测试桶与 dev 分支 |
+| **边缘服务全量部署** | `npm run deploy:prod` | `npm run deploy:test` | 生产：剥离代理 -> 部署 DRM + Feedback + 官网预渲染及 Pages；测试：全量部署测试 Worker 与测试 Pages |
+| **多语言官网预渲染** | `npm run website:build` | `npm run website:build` | 读取模板生成 6 语言分站 HTML，执行大小、路径、hreflang、本地词 4 大质量断言 |
+| **管理后台前端部署** | `npm run deploy:admin` | — | 构建 Svelte 前端产物并发布至 Cloudflare Pages |
+| **离线全量单测矩阵** | `npm run test:offline` | `npm run test:offline` | Go 根模块测试 + `eqt-drm-api` 131 项离线单元测试 |
+| **发布前全量质量门禁** | `npm run test:all` | `npm run test:all` | 串联 Go 单元测试 + Worker 离线单测 + 官网预渲染断言，任一失败即阻断 |
+| **本地 Windows 验收包** | `npm run build` | `cd desktop/gui && wails build -tags eqtdev` | 生产：编译三合一 `eqt.exe` 并输出至 `/mnt/e/developer/results/`；测试：附带 `eqtdev` 标签 |
+
+### 3.2 底层分步执行对照
+
+> 所有底层命令在 `cloudflare/<项目>/` 目录下执行。**`--env test` 缺失 = 生产!**
 
 | 操作 | 🟢 生产 | 🟡 测试 |
 |---|---|---|

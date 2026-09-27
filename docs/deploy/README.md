@@ -144,9 +144,27 @@ CI workflow 运行（go test / lint / frontend build）
 
 ## 3. 手动部署场景
 
-### 3.1 紧急热修复（跳过审批）
+### 3.1 根目录标准化一键部署与发布命令矩阵（推荐）
 
-当需要跳过审批流程直接部署时，在本地执行：
+为消除记忆各子目录与命令参数的负担、防范 WSL 下因系统代理引发 Node `undici` 网络崩溃，并在部署前强制执行静态预渲染断言门禁，根目录 `package.json` 提供了标准化的 npm 命令：
+
+| 命令 | 操作范围与作用 | 关键防护与底层机制 |
+| :--- | :--- | :--- |
+| `npm run publish:prod` | **生产环境完整发布闭环**：校验分支状态与当前版本 -> 创建并推送 `v*` Tag 触发 GitHub Actions 安全加签构建与 R2 归档 -> 多语言官网预渲染断言 -> 部署生产官网 -> 连通性校验 | 调用 `scripts/publish-prod.sh`。前置 `node scripts/build-i18n-website.js` 门禁，自动剥离 WSL 代理变量 |
+| `npm run publish:test` | **测试环境完整发布闭环**：编译带 `-tags eqtdev` 的测试包 -> 上传 R2 测试分发桶 -> 更新时间戳与直链 -> 推送 dev 触发 CI/CD 全链路测试部署 | 调用 `scripts/publish-test.sh`。测试专用闭环，不污染正式发布 Tag |
+| `npm run deploy:prod` | **生产边缘纯部署**：一键同步部署 Cloudflare 生产服务（`eqt-drm-api` + `eqt-feedback-api` + 多语言预渲染 + `eqt-website`） | 注入 `WRANGLER_ENV` 剥离 WSL 代理，部署前强制运行 `website:build` 确保分站 HTML 最新 |
+| `npm run deploy:test` | **测试边缘纯部署**：一键部署测试环境服务（`drm-api --env test` + `feedback-api --env test` + 预渲染 + `eqt-test` Pages） | 绑定测试专属环境配置，防范误推生产 |
+| `npm run deploy:admin` | **管理后台部署**：编译 `eqt-admin` Svelte 前端产物并部署至 Cloudflare Pages | 自动执行 `npm run build` 打包 `dist/` 后通过 Wrangler 部署 |
+| `npm run website:build` | **官网多语言静态预渲染 (SSG)**：读取主模板生成 6 语言分站（zh/ja/ko/de/fr/es） | 执行文件大小 (>50KB)、无相对路径、双向 hreflang 与本地关键词 4 大确定性断言 |
+| `npm run test` | **快速 Go 单元测试**：测试 Go 根模块与桌面 GUI 模块 | 快速回归核心后端与桌面集成逻辑 |
+| `npm run test:offline` | **Go 测试 + Worker 全量离线单测**：涵盖 Go 测试与 `eqt-drm-api` 131 项离线单测 | 覆盖 DRM、D1、TokenBucket、单飞 (SingleFlight)、断路器与证书申请等核心逻辑 |
+| `npm run test:all` | **全栈发布前质量门禁**：Go 测试 + Worker 离线单测 + 官网多语言预渲染断言 | 发布前的全量质检门禁，任一失败即阻断 |
+| `npm run build` | **本地 Windows 验收包编译**：全量执行代码检查与测试，并在本地生成 Windows 3-in-1 可执行文件 `eqt.exe` 与 ZIP | 调用 `scripts/deploy-windows-results.sh` 输出至 `/mnt/e/developer/results/` |
+| `npm run build:quick` | **本地快速编译**：跳过测试快速生成 Windows 物理二进制产物 | 调用 `scripts/deploy-windows-results.sh --no-tests` |
+
+### 3.2 紧急热修复分步手动部署（原始底层命令）
+
+当需要针对单个服务跳过审批流程直接部署时，在本地执行：
 
 ```bash
 # 部署 eqt-drm-api
@@ -157,7 +175,8 @@ npx wrangler deploy
 cd cloudflare/eqt-feedback-api
 npx wrangler deploy
 
-# 部署 eqt-website
+# 部署 eqt-website (部署前先运行 pre-render)
+node scripts/build-i18n-website.js
 cd cloudflare/eqt-website
 npx wrangler pages deploy ./ --project-name=eqt --branch=master
 
@@ -170,7 +189,7 @@ npx wrangler pages deploy dist --project-name=eqt-admin --branch=master
 
 > ⚠️ 紧急部署后，下次正常 push 到 master 时 deploy.yml 会再次部署覆盖，无需额外操作。
 
-### 3.2 预览部署（PR 分支）
+### 3.3 预览部署（PR 分支）
 
 Cloudflare Pages 对 PR 自动创建预览部署：
 
@@ -361,26 +380,39 @@ graph LR
 
 ### 6.2 发布步骤
 
+#### 方式 A：一键标准化闭环发布（推荐）
+
+在 master 分支且工作区干净时，直接在根目录下运行：
+
 ```bash
-# 1. 确保所有代码已合并到 master
+npm run publish:prod
+```
+
+该命令调用 `scripts/publish-prod.sh`，全自动完成以下 4 个阶段：
+1. **版本与代码校验**：从 `pkg/version/version.go` 解析当前版本，推送 master 分支至远程。
+2. **创建并推送 Tag**：自动创建版本 Tag（如 `v1.36.170`）并推送至 GitHub，自动触发云端 `.github/workflows/release.yml` 运行器执行正式 Windows 编译、签名、创建 GitHub Release 与 R2 归档。
+3. **官网预渲染与部署**：前置执行 `node scripts/build-i18n-website.js`，通过 4 大质量断言后部署至 Cloudflare Pages。
+4. **端到端连通性校验**：自动校验 `www.eqt.net.im` 与 `lic.eqt.net.im/api/v1/health`。
+
+#### 方式 B：手动分步发布
+
+```bash
+# 1. 确保所有代码已合并到 master 且工作区干净
 git checkout master
 git pull
 
-# 2. 更新版本号（按语义版本）
-#    修改 cloudflare/eqt-drm-api/package.json
-#    修改 cloudflare/eqt-admin/package.json
-
-# 3. 打 tag 并推送
-git tag v1.6.0
-git push --tags
+# 2. 确认版本号（pkg/version/version.go 与 desktop/gui/wails.json 一致）
+# 3. 本地创建 tag 并推送（触发 release.yml 流水线）
+git tag vX.Y.Z
+scripts/git-push-smart.sh origin vX.Y.Z
 
 # 4. 在 GitHub Actions 中监控 release.yml 执行
-#    产物自动上传到 GitHub Release + R2
+#    产物自动上传到 GitHub Release + R2 分发桶
 
-# 5. 验证
-#    - GitHub Release 页面有 .exe 文件
-#    - https://download.eqt.net.im/downloads/latest/ 可访问
-#    - 桌面端检查更新可发现新版本
+# 5. 部署生产官网（先预渲染）
+npm run website:build
+cd cloudflare/eqt-website
+npx wrangler pages deploy ./ --project-name=eqt --branch=master
 ```
 
 ### 6.3 发布 vs 部署对比
