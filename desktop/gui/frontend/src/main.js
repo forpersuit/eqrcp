@@ -2584,10 +2584,7 @@ function renderSettingsPanel() {
                     </div>
                     <div class="setting-row">
                         <div class="setting-copy">
-                            <strong>
-                                ${t('enable_tls')}
-                                ${!hasPaidLicense() ? '<span class="badge-pro-tag" style="color: #ffffff;">PLUS</span>' : ''}
-                            </strong>
+                            <strong>${t('enable_tls')}</strong>
                             <span>${t('enable_tls_desc')}</span>
                         </div>
                         <div class="setting-control-stack">
