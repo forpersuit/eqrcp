@@ -150,6 +150,7 @@ CI workflow 运行（go test / lint / frontend build）
 
 | 命令 | 操作范围与作用 | 关键防护与底层机制 |
 | :--- | :--- | :--- |
+| `npm run publish:all` | **双环境一键全自动闭环发布**：全栈质量门禁 (test:all) -> 测试环境完整发布 (publish:test) -> 生产环境完整发布 (publish:prod) | 单条命令串联全链路，任一阶段失败立即熔断阻断，防范污染后续环境 |
 | `npm run publish:prod` | **生产环境完整发布闭环**：校验分支状态与当前版本 -> 创建并推送 `v*` Tag 触发 GitHub Actions 安全加签构建与 R2 归档 -> 多语言官网预渲染断言 -> 部署生产官网 -> 连通性校验 | 调用 `scripts/publish-prod.sh`。前置 `node scripts/build-i18n-website.js` 门禁，自动剥离 WSL 代理变量 |
 | `npm run publish:test` | **测试环境完整发布闭环**：编译带 `-tags eqtdev` 的测试包 -> 上传 R2 测试分发桶 -> 更新时间戳与直链 -> 推送 dev 触发 CI/CD 全链路测试部署 | 调用 `scripts/publish-test.sh`。测试专用闭环，不污染正式发布 Tag |
 | `npm run deploy:prod` | **生产边缘纯部署**：一键同步部署 Cloudflare 生产服务（`eqt-drm-api` + `eqt-feedback-api` + 多语言预渲染 + `eqt-website`） | 注入 `WRANGLER_ENV` 剥离 WSL 代理，部署前强制运行 `website:build` 确保分站 HTML 最新 |

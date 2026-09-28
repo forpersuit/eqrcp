@@ -53,7 +53,7 @@ echo "正在推送 Tag ${current_version} 至 GitHub (触发官方 release.yml �
 echo "=== [3/4] 同步部署生产官网到 Cloudflare Pages (www.eqt.net.im) ==="
 echo "正在预渲染多语言官网静态页面并执行质量断言..."
 node "${root_dir}/scripts/build-i18n-website.js"
-WRANGLER_ENV="env -u http_proxy -u HTTP_PROXY -u https_proxy -u HTTPS_PROXY -u all_proxy -u ALL_PROXY"
+WRANGLER_ENV="env -u http_proxy -u HTTP_PROXY -u https_proxy -u HTTPS_PROXY -u all_proxy -u ALL_PROXY CI=true"
 cd "${root_dir}/cloudflare/eqt-website"
 $WRANGLER_ENV npx wrangler pages deploy ./ --project-name=eqt --branch=master
 

@@ -48,7 +48,8 @@
 
 | 场景 / 意图 | 🟢 生产命令 | 🟡 测试命令 | 核心保护与作用 |
 |---|---|---|---|
-| **完整版本发布闭环** | `npm run publish:prod` | `npm run publish:test` | 生产：检查分支 -> 推 Tag 触发 Actions 云端构建签名与 R2 归档 -> 官网预渲染 -> Pages 部署；测试：编译打包测试二进制 -> 推送 R2 测试桶与 dev 分支 |
+| **双环境全自动闭环发布** | `npm run publish:all` | — | 自动串联：全量质量门禁 (test:all) -> 测试环境发布闭环 (publish:test) -> 生产环境发布闭环 (publish:prod)，任意一环失败立即熔断阻断 |
+| **完整版本发布闭环** | `npm run publish:prod` | `npm run publish:test` | 生产：检查分支 -> 推 Tag 触发 Actions 云端构建签名与 R2 归档 -> 官网预渲染 -> Pages 部署；测试：编译打包测试二进制 -> 推送 R2 测试桶、部署测试 Worker/Pages 与推送 dev 分支 |
 | **边缘服务全量部署** | `npm run deploy:prod` | `npm run deploy:test` | 生产：剥离代理 -> 部署 DRM + Feedback + 官网预渲染及 Pages；测试：全量部署测试 Worker 与测试 Pages |
 | **多语言官网预渲染** | `npm run website:build` | `npm run website:build` | 读取模板生成 6 语言分站 HTML，执行大小、路径、hreflang、本地词 4 大质量断言 |
 | **管理后台前端部署** | `npm run deploy:admin` | — | 构建 Svelte 前端产物并发布至 Cloudflare Pages |
