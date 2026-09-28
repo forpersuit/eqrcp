@@ -4555,16 +4555,22 @@ function bindEvents() {
                     state.settings.enableTLS = isEnabled;
                     syncSettingsFromDOM();
                     handleAutoSaveSettings();
-                    render();
-                    openPanel('settings');
+                    if (state.activePanel === 'settings') {
+                        syncPanelSurface();
+                    } else {
+                        render();
+                    }
 
                     if (isEnabled) {
                         if (!state.appInfo?.hasValidTLSCert) {
                             state.tlsProvisioning = true;
                             state.tlsProvisionFailed = false;
                             state.tlsProvisionError = '';
-                            render();
-                            openPanel('settings');
+                            if (state.activePanel === 'settings') {
+                                syncPanelSurface();
+                            } else {
+                                render();
+                            }
                             showToast(t('tls_enabling_auto_provision') || 'ℹ️ 已开启 TLS 加密，正在后台申请设备证书（预计 10~15 秒）...');
                             DevProvisionDeviceTLSCert().then(async (success) => {
                                 state.tlsProvisioning = false;

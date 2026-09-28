@@ -208,19 +208,19 @@ export function renderTLSDiagnosticControl(state, t, escapeAttr) {
         const retestTip = t('tls_diag_retest') || '点击重新验证';
         if (res.status === 'success') {
             const tooltip = `${res.message} (${retestTip}，详情见日志)`;
-            return `<button type="button" class="tool-button tls-diag-btn success" id="btn-test-tls" aria-label="TLS 验证通过" title="${escapeAttr(tooltip)}" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: transparent; cursor: pointer; border-radius: 4px; padding: 0;">${renderShieldCheckSvg({ color: '#10b981', size: 14 })}</button>`;
+            return `<button type="button" class="tool-button tls-diag-btn success" id="btn-test-tls" aria-label="${escapeAttr(t('tls_diag_aria_passed') || 'TLS Validation Passed')}" title="${escapeAttr(tooltip)}" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: transparent; cursor: pointer; border-radius: 4px; padding: 0;">${renderShieldCheckSvg({ color: '#10b981', size: 14 })}</button>`;
         }
         if (res.status === 'warning') {
             const tooltip = `${res.message} (${retestTip}，详情见日志)`;
-            return `<button type="button" class="tool-button tls-diag-btn warning" id="btn-test-tls" aria-label="TLS 验证警告" title="${escapeAttr(tooltip)}" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: transparent; cursor: pointer; border-radius: 4px; padding: 0;">${renderAlertSvg({ color: '#f59e0b', size: 14 })}</button>`;
+            return `<button type="button" class="tool-button tls-diag-btn warning" id="btn-test-tls" aria-label="${escapeAttr(t('tls_diag_aria_warning') || 'TLS Validation Warning')}" title="${escapeAttr(tooltip)}" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: transparent; cursor: pointer; border-radius: 4px; padding: 0;">${renderAlertSvg({ color: '#f59e0b', size: 14 })}</button>`;
         }
         // error
         const tooltip = `${res.message} (${retestTip}，详情见日志)`;
-        return `<button type="button" class="tool-button tls-diag-btn error" id="btn-test-tls" aria-label="TLS 验证异常" title="${escapeAttr(tooltip)}" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: transparent; cursor: pointer; border-radius: 4px; padding: 0;">${renderAlertSvg({ color: '#ef4444', size: 14 })}</button>`;
+        return `<button type="button" class="tool-button tls-diag-btn error" id="btn-test-tls" aria-label="${escapeAttr(t('tls_diag_aria_error') || 'TLS Validation Error')}" title="${escapeAttr(tooltip)}" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: transparent; cursor: pointer; border-radius: 4px; padding: 0;">${renderAlertSvg({ color: '#ef4444', size: 14 })}</button>`;
     }
 
     // Default / idle state
     const tooltip = t('tls_diag_btn_tooltip') || '诊断测试局域网 TLS 状态（证书有效性、DNS 回环解析与握手测试，详细信息记录于日志）';
-    return `<button type="button" class="tool-button tls-diag-btn idle" id="btn-test-tls" aria-label="TLS 诊断测试" title="${escapeAttr(tooltip)}" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: transparent; cursor: pointer; border-radius: 4px; padding: 0; color: var(--text-muted, #94a3b8);">${renderPulseSvg({ color: 'currentColor', size: 14 })}</button>`;
+    return `<button type="button" class="tool-button tls-diag-btn idle" id="btn-test-tls" aria-label="${escapeAttr(t('tls_diag_aria_test') || 'TLS Diagnostic Test')}" title="${escapeAttr(tooltip)}" style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: none; background: transparent; cursor: pointer; border-radius: 4px; padding: 0; color: var(--text-muted, #94a3b8);">${renderPulseSvg({ color: 'currentColor', size: 14 })}</button>`;
 }
 

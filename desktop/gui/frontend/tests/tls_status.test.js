@@ -8,7 +8,8 @@ import assert from 'node:assert/strict';
 import {
     getTLSState,
     renderTopbarTLSIndicator,
-    renderTLSSettingIcon
+    renderTLSSettingIcon,
+    renderTLSDiagnosticControl
 } from '../src/components/tls_status.js';
 
 const mockT = (key) => key;
@@ -109,4 +110,64 @@ console.log('=== Running TLS Status Indicator Unit Tests ===');
     console.log('✓ Test 5: mismatch state returns empty on topbar and alert in settings');
 }
 
-console.log('✅ All 5 TLS status indicator unit tests passed successfully!\n');
+// Test 6: 诊断控件在 TLS 关闭时返回空字符串
+{
+    const state = { settings: { enableTLS: false } };
+    const diag = renderTLSDiagnosticControl(state, mockT, mockEscapeAttr);
+    assert.equal(diag, '', 'Diagnostic control MUST return empty string when TLS is disabled');
+    console.log('✓ Test 6: diagnostic control returns empty when TLS disabled');
+}
+
+// Test 7: 诊断控件在空闲（idle）状态显示脉冲测试按钮且具备国际化 aria-label
+{
+    const state = { settings: { enableTLS: true } };
+    const diag = renderTLSDiagnosticControl(state, mockT, mockEscapeAttr);
+    assert.ok(diag.includes('id="btn-test-tls"'), 'Must include button with id btn-test-tls');
+    assert.ok(diag.includes('tls-pulse-icon'), 'Must include pulse icon');
+    assert.ok(diag.includes('aria-label="tls_diag_aria_test"'), 'Must include localized aria-label for test');
+    console.log('✓ Test 7: diagnostic control in idle state renders pulse button with localized aria-label');
+}
+
+// Test 8: 诊断控件在执行中（diagnosing）显示加载状态
+{
+    const state = { settings: { enableTLS: true }, tlsDiagnosing: true };
+    const diag = renderTLSDiagnosticControl(state, mockT, mockEscapeAttr);
+    assert.ok(diag.includes('tls-diag-status diagnosing'), 'Must show diagnosing status container');
+    assert.ok(diag.includes('tls-spinner-icon'), 'Must show spinner icon while diagnosing');
+    console.log('✓ Test 8: diagnostic control while diagnosing renders spinner');
+}
+
+// Test 9: 诊断控件在通过（success）状态呈现盾牌图标与通过 aria-label
+{
+    const state = {
+        settings: { enableTLS: true },
+        tlsDiagResult: { ok: true, status: 'success', message: 'All checks passed' }
+    };
+    const diag = renderTLSDiagnosticControl(state, mockT, mockEscapeAttr);
+    assert.ok(diag.includes('tls-diag-btn success'), 'Must show success button');
+    assert.ok(diag.includes('tls-shield-check-icon'), 'Must include shield check icon');
+    assert.ok(diag.includes('aria-label="tls_diag_aria_passed"'), 'Must include localized aria-label for passed');
+    console.log('✓ Test 9: diagnostic control in success state renders shield icon with localized aria-label');
+}
+
+// Test 10: 诊断控件在警告（warning）与异常（error）状态呈现警示图标与对应 aria-label
+{
+    const stateWarn = {
+        settings: { enableTLS: true },
+        tlsDiagResult: { ok: true, status: 'warning', message: 'DNS rebinding' }
+    };
+    const diagWarn = renderTLSDiagnosticControl(stateWarn, mockT, mockEscapeAttr);
+    assert.ok(diagWarn.includes('tls-diag-btn warning'), 'Must show warning button');
+    assert.ok(diagWarn.includes('aria-label="tls_diag_aria_warning"'), 'Must include localized aria-label for warning');
+
+    const stateErr = {
+        settings: { enableTLS: true },
+        tlsDiagResult: { ok: false, status: 'error', message: 'Handshake failed' }
+    };
+    const diagErr = renderTLSDiagnosticControl(stateErr, mockT, mockEscapeAttr);
+    assert.ok(diagErr.includes('tls-diag-btn error'), 'Must show error button');
+    assert.ok(diagErr.includes('aria-label="tls_diag_aria_error"'), 'Must include localized aria-label for error');
+    console.log('✓ Test 10: diagnostic control in warning/error state renders alert button with localized aria-label');
+}
+
+console.log('✅ All 10 TLS status & diagnostic unit tests passed successfully!\n');
