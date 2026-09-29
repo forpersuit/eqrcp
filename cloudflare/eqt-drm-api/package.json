@@ -42,7 +42,7 @@
     "test:singleflight:offline": "npx esbuild src/utils/singleflight.ts --bundle --outfile=tests/compiled/singleflight.js --platform=node --format=cjs && node tests/singleflight-offline.js",
     "pretest:admin:tls:offline": "npm run typecheck",
     "test:admin:tls:offline": "npx esbuild src/routes/admin.ts --bundle --alias:cloudflare:sockets=./tests/mocks/cloudflare-sockets-stub.js --outfile=tests/compiled/admin-tls.js --platform=node --format=cjs && node --experimental-sqlite tests/admin-tls-dashboard-offline.js",
-    "test:admin:batch:offline": "npx esbuild src/routes/admin.ts --bundle --alias:cloudflare:sockets=./tests/mocks/cloudflare-sockets-stub.js --outfile=tests/compiled/admin-batch.js --platform=node --format=cjs && node --experimental-sqlite tests/verify-admin-batch-promo-offline.js",
+    "test:admin:batch:offline": "npx esbuild src/routes/admin.ts --bundle --alias:cloudflare:sockets=./tests/mocks/cloudflare-sockets-stub.js --outfile=tests/compiled/admin-batch.js --platform=node --format=cjs && node --experimental-sqlite tests/verify-admin-batch-promo-offline.js && node --experimental-sqlite tests/verify-admin-full-matrix-offline.js",
     "test:gts:live": "node tests/verify-gts-eab-live.js",
     "test:website-review": "node tests/verify-website-review-fixes.mjs",
     "typecheck": "tsc --noEmit",
