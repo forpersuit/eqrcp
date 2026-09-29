@@ -50,17 +50,24 @@ fi
 echo "正在推送 Tag ${current_version} 至 GitHub (触发官方 release.yml 流水线)..."
 "${root_dir}/scripts/git-push-smart.sh" origin "${current_version}"
 
-echo "=== [3/4] 同步部署生产官网到 Cloudflare Pages (www.eqt.net.im) ==="
+echo "=== [3/4] 同步部署生产官网与技术文档站 ==="
 echo "正在预渲染多语言官网静态页面并执行质量断言..."
 node "${root_dir}/scripts/build-i18n-website.js"
 WRANGLER_ENV="env -u http_proxy -u HTTP_PROXY -u https_proxy -u HTTPS_PROXY -u all_proxy -u ALL_PROXY CI=true"
 cd "${root_dir}/cloudflare/eqt-website"
 $WRANGLER_ENV npx wrangler pages deploy ./ --project-name=eqt --branch=master
 
+echo "正在部署 Nimbus 技术文档站到 Cloudflare Worker (docs.eqt.net.im)..."
+cd "${root_dir}/cloudflare/eqt-website-nimbus"
+$WRANGLER_ENV npx wrangler deploy
+
 echo "=== [4/4] 验证生产环境连通性与服务状态 ==="
 sleep 3
 echo "检查 www.eqt.net.im 首页响应状态:"
 $WRANGLER_ENV curl -sI https://www.eqt.net.im/ | head -n 1 || true
+
+echo "检查 docs.eqt.net.im 文档站响应状态:"
+$WRANGLER_ENV curl -sI https://docs.eqt.net.im/ | head -n 1 || true
 
 echo "检查 lic.eqt.net.im 健康状态:"
 $WRANGLER_ENV curl -s https://lic.eqt.net.im/api/v1/health || true
@@ -69,4 +76,5 @@ echo ""
 echo "🎉 生产发布已触发！"
 echo "  1. GitHub Actions release.yml 正在运行（安全构建 Windows 生产客户端、生成签名、归档 R2 与 Release）。"
 echo "  2. 生产官网已更新发布至 www.eqt.net.im。"
+echo "  3. 生产技术文档站已同步部署至 docs.eqt.net.im。"
 echo "  可访问: https://github.com/forpersuit/eqrcp/actions 跟踪 Release 流水线进度。"
