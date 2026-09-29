@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS licenses (
     last_purchased_at TEXT DEFAULT NULL, -- ISO time of initial purchase or latest renewal
     paid_amount REAL DEFAULT NULL, -- Total amount charged in Paddle transaction (0 = coupon/trial, >0 = paid)
     first_activated_at TEXT DEFAULT NULL, -- ISO time of initial device activation (permanent redemption proof)
+    batch_id TEXT DEFAULT NULL, -- Unique batch identifier linking promo/admin mints to audit logs
     created_at TEXT NOT NULL
 );
 
@@ -49,6 +50,7 @@ CREATE INDEX IF NOT EXISTS idx_activations_license ON activations(license_code);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_activations_license_device ON activations(license_code, device_id) WHERE device_id IS NOT NULL AND device_id != '';
 CREATE INDEX IF NOT EXISTS idx_licenses_email_hash ON licenses(buyer_email_hash);
 CREATE INDEX IF NOT EXISTS idx_licenses_created ON licenses(created_at);
+CREATE INDEX IF NOT EXISTS idx_licenses_batch ON licenses(batch_id);
 
 -- A2 (audit licensing-flow-audit.md): atomic mint idempotency.
 -- UNIQUE on paddle_transaction_id makes the SELECT→INSERT mint path atomic — a concurrent

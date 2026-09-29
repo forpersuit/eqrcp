@@ -56,7 +56,8 @@ export function evaluateLicenseExpiration(
     Number(license.duration_days) >= 0 &&
     effectiveExpiresAt !== "LIFETIME"
   ) {
-    const baseTimeMs = activatedAt ? new Date(activatedAt).getTime() : Date.now();
+    const baseTimeStr = license.first_activated_at || activatedAt;
+    const baseTimeMs = baseTimeStr ? new Date(baseTimeStr).getTime() : Date.now();
     effectiveExpiresAt = new Date(baseTimeMs + Number(license.duration_days) * 86400 * 1000).toISOString();
   }
 
@@ -189,7 +190,7 @@ async function findPeerActiveLicensesOnDevice(
   const dev = (deviceId || "").trim();
   if (dev) {
     const byDevice = await env.DB.prepare(`
-      SELECT l.license_code, l.expires_at, l.tier, l.duration_days, l.source, l.paddle_transaction_id, l.status
+      SELECT l.license_code, l.expires_at, l.tier, l.duration_days, l.source, l.paddle_transaction_id, l.status, l.first_activated_at, a.activated_at
       FROM activations a
       JOIN licenses l ON a.license_code = l.license_code
       WHERE a.device_id = ? AND l.license_code != ? AND l.status = 'active'
@@ -215,8 +216,8 @@ async function findPeerActiveLicensesOnDevice(
 
   if (clauses.length > 0) {
     const sql = `
-      SELECT a.uuid_hash, a.cpu_hash, a.disk_hash,
-             l.license_code, l.expires_at, l.tier, l.duration_days, l.source, l.paddle_transaction_id, l.status
+      SELECT a.uuid_hash, a.cpu_hash, a.disk_hash, a.activated_at,
+             l.license_code, l.expires_at, l.tier, l.duration_days, l.source, l.paddle_transaction_id, l.status, l.first_activated_at
       FROM activations a
       JOIN licenses l ON a.license_code = l.license_code
       WHERE l.license_code != ? AND l.status = 'active'
@@ -321,8 +322,8 @@ async function findBestActiveLicenseForDevice(
   const dev = (deviceId || "").trim();
   if (dev) {
     const byDevice = await env.DB.prepare(`
-      SELECT l.license_code, l.expires_at, l.tier, l.duration_days, l.max_devices, l.buyer_email, l.source, l.paddle_transaction_id, l.status, a.id as activation_id,
-             a.uuid_hash, a.cpu_hash, a.disk_hash
+      SELECT l.license_code, l.expires_at, l.tier, l.duration_days, l.max_devices, l.buyer_email, l.source, l.paddle_transaction_id, l.status, l.first_activated_at,
+             a.id as activation_id, a.uuid_hash, a.cpu_hash, a.disk_hash, a.activated_at
       FROM activations a
       JOIN licenses l ON a.license_code = l.license_code
       WHERE a.device_id = ? AND l.status = 'active'
@@ -345,8 +346,8 @@ async function findBestActiveLicenseForDevice(
 
   if (clauses.length > 0) {
     const sql = `
-      SELECT a.uuid_hash, a.cpu_hash, a.disk_hash, a.id as activation_id,
-             l.license_code, l.expires_at, l.tier, l.duration_days, l.max_devices, l.buyer_email, l.source, l.paddle_transaction_id, l.status
+      SELECT a.uuid_hash, a.cpu_hash, a.disk_hash, a.id as activation_id, a.activated_at,
+             l.license_code, l.expires_at, l.tier, l.duration_days, l.max_devices, l.buyer_email, l.source, l.paddle_transaction_id, l.status, l.first_activated_at
       FROM activations a
       JOIN licenses l ON a.license_code = l.license_code
       WHERE l.status = 'active'
@@ -366,7 +367,7 @@ async function findBestActiveLicenseForDevice(
 
   // Filter out expired / redeem-expired licenses
   const validCandidates = candidates.filter(lic => {
-    const evalRes = evaluateLicenseExpiration(lic, lic.expires_at || "LIFETIME");
+    const evalRes = evaluateLicenseExpiration(lic, lic.expires_at || "LIFETIME", lic.activated_at);
     return !evalRes.isExpired && !evalRes.isRedeemExpired;
   });
 

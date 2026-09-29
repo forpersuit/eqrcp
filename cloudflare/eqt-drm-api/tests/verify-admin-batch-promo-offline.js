@@ -109,6 +109,7 @@ async function run() {
 
   const adminMod = require('./compiled/admin-batch.js');
   const handleAdminRoutes = adminMod.handleAdminRoutes;
+  const { evaluateLicenseExpiration } = require('./compiled/drm-batch.js');
 
   const mockDb = new SqliteD1Mock();
 
@@ -219,6 +220,9 @@ async function run() {
     assert(json.licenses[0].license_code.startsWith('EQT-PLUS-'), "code format starts with EQT-PLUS-");
     assertEqual(json.licenses[0].source, 'promo', "source is promo");
     assertEqual(json.licenses[0].duration_days, 14, "duration_days is 14");
+    assert(Boolean(json.batch_id), "batch_id exists in response");
+    assert(Boolean(json.licenses[0].batch_id), "license item has batch_id");
+    assertEqual(json.licenses[0].batch_id, json.batch_id, "license batch_id matches response batch_id");
     promoCodes = json.licenses.map(l => l.license_code);
   }
 
@@ -320,6 +324,40 @@ async function run() {
     const pRes = await handleAdminRoutes(pReq, env, ctx, pUrl, corsHeaders);
     const pJson = await pRes.json();
     assertEqual(pJson.promo_stats, null, "promo_stats is null on deep pagination offset > 0 (query optimization)");
+  }
+
+  // 7. Verify duration_days anchoring on first_activated_at (prevent drift on device re-activation)
+  console.log("\n[Test 7] Verify duration_days anchoring on first_activated_at without expiration drift");
+  {
+    const now = Date.now();
+    const tenDaysAgo = new Date(now - 10 * 86400 * 1000).toISOString();
+    const fifteenDaysAgo = new Date(now - 15 * 86400 * 1000).toISOString();
+
+    // Mock license with duration_days = 14, activated 10 days ago (should have 4 days remaining)
+    const validLic = {
+      source: 'promo',
+      duration_days: 14,
+      expires_at: new Date(now + 20 * 86400 * 1000).toISOString(),
+      first_activated_at: tenDaysAgo
+    };
+
+    // Calculate expiration on a NEW device (activatedAt is undefined):
+    // Prior to fix, it would drift and set baseTime to Date.now() (giving full 14 days from now).
+    // With fix, it anchors on first_activated_at (giving only 4 days from now).
+    const evalValid = evaluateLicenseExpiration(validLic, validLic.expires_at, undefined);
+    assert(evalValid.isExpired === false, "license with 4 days remaining is not expired");
+    const diffDays = (new Date(evalValid.effectiveExpiresAt).getTime() - now) / (86400 * 1000);
+    assert(Math.abs(diffDays - 4) < 0.1, `remaining days correctly anchored at ~4 days (got ${diffDays.toFixed(2)})`);
+
+    // Mock license with duration_days = 14, activated 15 days ago (should be expired now)
+    const expiredLic = {
+      source: 'promo',
+      duration_days: 14,
+      expires_at: new Date(now + 20 * 86400 * 1000).toISOString(),
+      first_activated_at: fifteenDaysAgo
+    };
+    const evalExpired = evaluateLicenseExpiration(expiredLic, expiredLic.expires_at, undefined);
+    assert(evalExpired.isExpired === true, "license activated 15 days ago with 14d duration is expired upon re-activation");
   }
 
   console.log(`\nResults: ${passed} passed, ${failed} failed`);

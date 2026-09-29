@@ -91,6 +91,7 @@ export interface License {
   revoked_at?: string | null;
   revoke_reason?: RevokeReason | null;
   first_activated_at?: string | null;
+  batch_id?: string | null;
   created_at: string;
   active_devices_count: number;
   activations: Activation[];
@@ -215,12 +216,14 @@ export interface BatchLicenseItem {
   expires_at: string;
   duration_days: number | null;
   status: LicenseStatus;
+  batch_id?: string;
   created_at: string;
 }
 
 export interface GenerateBatchResponse {
   success: boolean;
   count: number;
+  batch_id?: string;
   licenses: BatchLicenseItem[];
 }
 

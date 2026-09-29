@@ -417,6 +417,7 @@ export async function handleAdminRoutes(
     }
 
     const nowIso = new Date().toISOString();
+    const batchId = "batch_" + crypto.randomUUID().replace(/-/g, "");
     const generatedCodes = new Set<string>();
     const items: Array<{
       license_code: string;
@@ -426,6 +427,7 @@ export async function handleAdminRoutes(
       expires_at: string;
       duration_days: number | null;
       status: string;
+      batch_id: string;
       created_at: string;
     }> = [];
 
@@ -441,13 +443,14 @@ export async function handleAdminRoutes(
           expires_at: expiresAt,
           duration_days: durDays,
           status: "active",
+          batch_id: batchId,
           created_at: nowIso
         });
       }
     }
 
     const statements = items.map(item => env.DB.prepare(
-      "INSERT INTO licenses (license_code, tier, status, max_devices, expires_at, duration_days, buyer_email_hash, buyer_email, source, bound_device_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO licenses (license_code, tier, status, max_devices, expires_at, duration_days, buyer_email_hash, buyer_email, source, bound_device_id, batch_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(
       item.license_code,
       tier,
@@ -459,13 +462,15 @@ export async function handleAdminRoutes(
       null,
       source,
       boundDevice,
+      batchId,
       nowIso
     ));
 
     await env.DB.batch(statements);
 
-    ctx.waitUntil(logAdminAudit(env, 'BATCH_GENERATE', 'LICENSE', null, {
+    ctx.waitUntil(logAdminAudit(env, 'BATCH_GENERATE', 'LICENSE', batchId, {
       count,
+      batch_id: batchId,
       tier,
       max_devices: maxDev,
       expires_at: expiresAt,
@@ -478,6 +483,7 @@ export async function handleAdminRoutes(
     return new Response(JSON.stringify({
       success: true,
       count,
+      batch_id: batchId,
       licenses: items
     }), {
       status: 200,

@@ -259,6 +259,7 @@ Content-Type: application/json
 {
   "success": true,
   "count": 50,
+  "batch_id": "batch_a1b2c3d4e5f67890",
   "licenses": [
     {
       "license_code": "EQT-PLUS-20260929-A1B2C3D4E5F6",
@@ -268,6 +269,7 @@ Content-Type: application/json
       "expires_at": "2026-10-29T00:00:00.000Z",
       "duration_days": 14,
       "status": "active",
+      "batch_id": "batch_a1b2c3d4e5f67890",
       "created_at": "2026-09-29T00:00:00.000Z"
     }
   ]
