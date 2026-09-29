@@ -29,8 +29,8 @@
   let genCount = $state(1);
   /** admin = 客服补发；promo = 活动码；test = 沙箱内测专属码 */
   let genSource = $state<'admin' | 'promo' | 'test'>('admin');
-  let genExpiresInDays = $state<string>('');
-  let genDurationDays = $state<string>('');
+  let genExpiresInDays = $state<number | string>('');
+  let genDurationDays = $state<number | string>('');
   let genBuyerEmail = $state('');
   let genBoundDeviceId = $state('');
   let genSendEmail = $state(false);
@@ -50,54 +50,58 @@
     copyHint = '';
     batchCopyHint = '';
 
-    const count = Math.max(1, Math.min(100, Math.floor(Number(genCount) || 1)));
+    try {
+      const count = Math.max(1, Math.min(100, Math.floor(Number(genCount) || 1)));
 
-    const body: Record<string, any> = {
-      tier: genTier,
-      max_devices: genMaxDevices,
-      source: genSource
-    };
+      const body: Record<string, any> = {
+        tier: genTier,
+        max_devices: genMaxDevices,
+        source: genSource
+      };
 
-    if (genSource === 'promo' || genSource === 'test') {
-      const expDays = parseInt(genExpiresInDays.trim(), 10);
-      const durDays = parseInt(genDurationDays.trim(), 10);
-      if (isNaN(expDays) || expDays <= 0) {
-        errorMsg = $t('licenses.errPromoRedeemDays');
-        generating = false;
-        return;
-      }
-      if (isNaN(durDays) || durDays <= 0) {
-        errorMsg = $t('licenses.errPromoDurationDays');
-        generating = false;
-        return;
-      }
-      body.expires_in_days = expDays;
-      body.duration_days = durDays;
-    } else {
-      if (genExpiresInDays.trim()) {
-        const d = parseInt(genExpiresInDays.trim(), 10);
-        if (!isNaN(d) && d > 0) body.expires_in_days = d;
-      }
-      if (genDurationDays.trim()) {
-        const d = parseInt(genDurationDays.trim(), 10);
-        if (!isNaN(d) && d > 0) body.duration_days = d;
-      }
-    }
-
-    if (genBoundDeviceId.trim()) {
-      body.bound_device_id = genBoundDeviceId.trim();
-    }
-
-    // Single license generation mode
-    if (count === 1) {
-      if (genBuyerEmail.trim()) {
-        body.buyer_email = genBuyerEmail.trim();
-        if (genSendEmail) {
-          body.send_email = true;
+      if (genSource === 'promo' || genSource === 'test') {
+        const expStr = String(genExpiresInDays ?? '').trim();
+        const durStr = String(genDurationDays ?? '').trim();
+        const expDays = parseInt(expStr, 10);
+        const durDays = parseInt(durStr, 10);
+        if (isNaN(expDays) || expDays <= 0) {
+          errorMsg = $t('licenses.errPromoRedeemDays');
+          return;
+        }
+        if (isNaN(durDays) || durDays <= 0) {
+          errorMsg = $t('licenses.errPromoDurationDays');
+          return;
+        }
+        body.expires_in_days = expDays;
+        body.duration_days = durDays;
+      } else {
+        const expStr = String(genExpiresInDays ?? '').trim();
+        if (expStr) {
+          const d = parseInt(expStr, 10);
+          if (!isNaN(d) && d > 0) body.expires_in_days = d;
+        }
+        const durStr = String(genDurationDays ?? '').trim();
+        if (durStr) {
+          const d = parseInt(durStr, 10);
+          if (!isNaN(d) && d > 0) body.duration_days = d;
         }
       }
 
-      try {
+      const boundDevStr = String(genBoundDeviceId ?? '').trim();
+      if (boundDevStr) {
+        body.bound_device_id = boundDevStr;
+      }
+
+      // Single license generation mode
+      if (count === 1) {
+        const buyerEmailStr = String(genBuyerEmail ?? '').trim();
+        if (buyerEmailStr) {
+          body.buyer_email = buyerEmailStr;
+          if (genSendEmail) {
+            body.send_email = true;
+          }
+        }
+
         const res = await adminFetch<GenerateLicenseResponse>('/api/v1/admin/generate-license', {
           method: 'POST',
           body: JSON.stringify(body)
@@ -109,17 +113,11 @@
         }
         actionMsg = okText;
         if (ongenerated) ongenerated();
-      } catch (err: any) {
-        errorMsg = $t('common.failed') + ': ' + (err.message || String(err));
-      } finally {
-        generating = false;
+        return;
       }
-      return;
-    }
 
-    // Batch generation mode
-    body.count = count;
-    try {
+      // Batch generation mode
+      body.count = count;
       const res = await adminFetch<GenerateBatchResponse>('/api/v1/admin/generate-batch', {
         method: 'POST',
         body: JSON.stringify(body)
