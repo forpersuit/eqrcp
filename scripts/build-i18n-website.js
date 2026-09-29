@@ -338,6 +338,10 @@ function renderLanguageHtml(lang, cfg) {
     return `<${tag}${attrs}>${text}</${tag}>`;
   });
 
+  // Replace documentation links to match current language
+  const docsTargetLang = lang === 'fr' ? 'fr' : lang === 'zh' ? 'zh' : 'en';
+  html = html.replace(/href="https:\/\/docs\.eqt\.net\.im[^"]*"/g, `href="https://docs.eqt.net.im/${docsTargetLang}/intro"`);
+
   return html;
 }
 

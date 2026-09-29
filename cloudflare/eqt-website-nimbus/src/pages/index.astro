@@ -13,8 +13,13 @@ export const prerender = true;
       try {
         const pref = localStorage.getItem("preferred_lang");
         const browserLang = (navigator.language || "").toLowerCase();
-        const isEn = pref === "en" || (!pref && browserLang.startsWith("en"));
-        window.location.replace(isEn ? "/en/intro" : "/zh/intro");
+        let target = "/zh/intro";
+        if (pref === "en" || (!pref && browserLang.startsWith("en"))) {
+          target = "/en/intro";
+        } else if (pref === "fr" || (!pref && browserLang.startsWith("fr"))) {
+          target = "/fr/intro";
+        }
+        window.location.replace(target);
       } catch {
         window.location.replace("/zh/intro");
       }
@@ -26,7 +31,7 @@ export const prerender = true;
 
   <div class="flex flex-col min-h-screen">
     <Header />
-    <main id="main-content" tabindex="-1" class="flex-1 mx-auto max-w-2xl w-full px-6 py-24">
+    <main id="main-content" tabindex="-1" class="flex-1 mx-auto max-w-3xl w-full px-6 py-20">
       <h1
         class="text-foreground leading-tight"
         style="font-size: var(--nb-h1-size); font-weight: var(--nb-h1-weight); letter-spacing: var(--nb-h1-tracking);"
@@ -34,10 +39,10 @@ export const prerender = true;
         EQT Technical Documentation
       </h1>
       <p class="mt-2 text-[1.0625rem] text-muted-foreground leading-relaxed">
-        Ultra-fast, peer-to-peer local area network transfer and collaboration system. / 局域网高速传输、Chat 模式与 LAN-TLS 架构全景指南。
+        Ultra-fast peer-to-peer LAN streaming & LAN-TLS architecture. / 局域网高速传输、Chat 模式与 LAN-TLS 架构全景指南。 / Transfert local ultra-rapide et architecture LAN-TLS.
       </p>
 
-      <div class="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div class="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <a
           href={withBase("/zh/intro", import.meta.env.BASE_URL)}
           class="block rounded-lg border border-border p-4 transition-colors hover:border-border-strong no-underline"
@@ -49,8 +54,15 @@ export const prerender = true;
           href={withBase("/en/intro", import.meta.env.BASE_URL)}
           class="block rounded-lg border border-border p-4 transition-colors hover:border-border-strong no-underline"
         >
-          <div class="font-medium text-foreground">🌐 English Documentation</div>
+          <div class="font-medium text-foreground">🌐 English Docs</div>
           <div class="mt-1 text-sm text-muted-foreground">Explore user guides, troubleshooting, CLI manual, and security whitepaper.</div>
+        </a>
+        <a
+          href={withBase("/fr/intro", import.meta.env.BASE_URL)}
+          class="block rounded-lg border border-border p-4 transition-colors hover:border-border-strong no-underline"
+        >
+          <div class="font-medium text-foreground">🇫🇷 Docs en Français</div>
+          <div class="mt-1 text-sm text-muted-foreground">Guides d'utilisation, dépannage, manuel CLI et livre blanc de sécurité.</div>
         </a>
       </div>
     </main>

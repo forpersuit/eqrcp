@@ -32,26 +32,40 @@ const { collection, showSidebar = true, sections: sectionsProp } = Astro.props;
 // Normalize trailing slash so isActive matches sidebar hrefs.
 const currentSlug = stripBase(Astro.url.pathname, import.meta.env.BASE_URL).replace(/\/$/, "") || "/";
 const isEn = currentSlug.startsWith("en/") || currentSlug === "en" || currentSlug.startsWith("/en/") || currentSlug === "/en";
-const currentLang = isEn ? "en" : "zh";
-const siteTitle = isEn ? "EQT Documentation" : config.title;
-const homeHref = withBase(isEn ? "/en/intro" : "/zh/intro", import.meta.env.BASE_URL);
+const isFr = currentSlug.startsWith("fr/") || currentSlug === "fr" || currentSlug.startsWith("/fr/") || currentSlug === "/fr";
+const currentLang: "zh" | "en" | "fr" = isEn ? "en" : isFr ? "fr" : "zh";
+const siteTitle = isEn ? "EQT Documentation" : isFr ? "Documentation EQT" : config.title;
+const homeHref = withBase(isEn ? "/en/intro" : isFr ? "/fr/intro" : "/zh/intro", import.meta.env.BASE_URL);
 
 const pathname = Astro.url.pathname;
 let zhHref = withBase("/zh/intro", import.meta.env.BASE_URL);
 let enHref = withBase("/en/intro", import.meta.env.BASE_URL);
+let frHref = withBase("/fr/intro", import.meta.env.BASE_URL);
 
 if (pathname.includes("/en/")) {
+  enHref = pathname;
   zhHref = pathname.replace("/en/", "/zh/");
-  enHref = pathname;
+  frHref = pathname.replace("/en/", "/fr/");
 } else if (pathname.endsWith("/en")) {
-  zhHref = pathname.replace(/\/en$/, "/zh/intro");
   enHref = pathname;
+  zhHref = pathname.replace(/\/en$/, "/zh/intro");
+  frHref = pathname.replace(/\/en$/, "/fr/intro");
+} else if (pathname.includes("/fr/")) {
+  frHref = pathname;
+  zhHref = pathname.replace("/fr/", "/zh/");
+  enHref = pathname.replace("/fr/", "/en/");
+} else if (pathname.endsWith("/fr")) {
+  frHref = pathname;
+  zhHref = pathname.replace(/\/fr$/, "/zh/intro");
+  enHref = pathname.replace(/\/fr$/, "/en/intro");
 } else if (pathname.includes("/zh/")) {
+  zhHref = pathname;
   enHref = pathname.replace("/zh/", "/en/");
-  zhHref = pathname;
+  frHref = pathname.replace("/zh/", "/fr/");
 } else if (pathname.endsWith("/zh")) {
-  enHref = pathname.replace(/\/zh$/, "/en/intro");
   zhHref = pathname;
+  enHref = pathname.replace(/\/zh$/, "/en/intro");
+  frHref = pathname.replace(/\/zh$/, "/fr/intro");
 }
 
 const sections =
@@ -109,7 +123,7 @@ const resolveSectionHref = (href: string): string =>
           <Icon name="ph:github-logo" class="w-4 h-4" />
         </LinkButton>
       )}
-      <LanguageSwitcher currentLang={currentLang} zhHref={zhHref} enHref={enHref} />
+      <LanguageSwitcher currentLang={currentLang} zhHref={zhHref} enHref={enHref} frHref={frHref} />
       <ThemeToggle />
       {showSidebar && (
         <Button

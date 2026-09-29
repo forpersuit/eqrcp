@@ -27,6 +27,12 @@ const nimbusConfig = defineNimbusConfig({
       { label: "Troubleshooting & FAQ", autogenerate: { directory: "en/troubleshooting" } },
       { label: "CLI Manual", autogenerate: { directory: "en/cli" } },
       { label: "Security & Privacy", autogenerate: { directory: "en/security" } },
+      // Français
+      { label: "Vue d'ensemble", link: "/fr/intro" },
+      { label: "Guides d'utilisation", autogenerate: { directory: "fr/guides" } },
+      { label: "Dépannage et FAQ", autogenerate: { directory: "fr/troubleshooting" } },
+      { label: "Manuel CLI", autogenerate: { directory: "fr/cli" } },
+      { label: "Sécurité et confidentialité", autogenerate: { directory: "fr/security" } },
     ],
   },
 });
@@ -45,6 +51,7 @@ export default defineConfig({
     "/security/whitepaper": "/zh/security/whitepaper",
     "/zh": "/zh/intro",
     "/en": "/en/intro",
+    "/fr": "/fr/intro",
   },
   // nimbus:adapter
   output: "static",
