@@ -31,7 +31,8 @@ const {
   coordinate,
 } = Astro.props;
 
-const lang = config.locale ?? "en";
+const isEn = Astro.url.pathname.startsWith("/en") || Astro.url.pathname.startsWith("en");
+const lang = isEn ? "en" : (config.locale ?? "zh");
 // Per-page agent-index pointer. For pages in non-primary or version
 // collections, this resolves to `/<prefix>/llms.txt` (e.g. `/v0/llms.txt`
 // for a v0 docs page, `/blog/llms.txt` for a blog post). Falls back to

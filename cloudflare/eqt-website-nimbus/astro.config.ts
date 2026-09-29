@@ -14,16 +14,38 @@ const nimbusConfig = defineNimbusConfig({
   socialImageAlt: "EQT 文档预览",
   sidebar: {
     items: [
-      { label: "产品概览", link: "/intro" },
-      { label: "用户使用指南", autogenerate: { directory: "guides" } },
-      { label: "故障排查与 FAQ", autogenerate: { directory: "troubleshooting" } },
-      { label: "CLI 极客手册", autogenerate: { directory: "cli" } },
-      { label: "安全与隐私白皮书", autogenerate: { directory: "security" } },
+      // 简体中文
+      { label: "产品概览", link: "/zh/intro" },
+      { label: "用户使用指南", autogenerate: { directory: "zh/guides" } },
+      { label: "故障排查与 FAQ", autogenerate: { directory: "zh/troubleshooting" } },
+      { label: "CLI 极客手册", autogenerate: { directory: "zh/cli" } },
+      { label: "安全与隐私白皮书", autogenerate: { directory: "zh/security" } },
+
+      // English
+      { label: "Product Overview", link: "/en/intro" },
+      { label: "User Guides", autogenerate: { directory: "en/guides" } },
+      { label: "Troubleshooting & FAQ", autogenerate: { directory: "en/troubleshooting" } },
+      { label: "CLI Manual", autogenerate: { directory: "en/cli" } },
+      { label: "Security & Privacy", autogenerate: { directory: "en/security" } },
     ],
   },
 });
 
 export default defineConfig({
+  redirects: {
+    "/intro": "/zh/intro",
+    "/guides/quickstart": "/zh/guides/quickstart",
+    "/guides/chat-mode": "/zh/guides/chat-mode",
+    "/guides/free-vs-plus": "/zh/guides/free-vs-plus",
+    "/troubleshooting/firewall-and-lan": "/zh/troubleshooting/firewall-and-lan",
+    "/troubleshooting/https-and-certificates": "/zh/troubleshooting/https-and-certificates",
+    "/troubleshooting/faq": "/zh/troubleshooting/faq",
+    "/cli/commands": "/zh/cli/commands",
+    "/cli/configuration": "/zh/cli/configuration",
+    "/security/whitepaper": "/zh/security/whitepaper",
+    "/zh": "/zh/intro",
+    "/en": "/en/intro",
+  },
   // nimbus:adapter
   output: "static",
   // Tailwind v4 via its Vite plugin (the integration Astro recommends for

@@ -22,19 +22,19 @@ description: "EQT (Easy QR Transfer) — 专为现代桌面端与移动端打造
 ## 快速导航
 
 <div class="not-prose my-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-  <a href="/guides/quickstart" class="block rounded-lg border border-border p-4 transition-colors hover:border-border-strong no-underline">
+  <a href="/zh/guides/quickstart" class="block rounded-lg border border-border p-4 transition-colors hover:border-border-strong no-underline">
     <div class="font-semibold text-foreground">🚀 快速入门指南</div>
     <div class="mt-1 text-sm text-muted-foreground">3 分钟掌握电脑传手机、手机传电脑的基础操作。</div>
   </a>
-  <a href="/guides/chat-mode" class="block rounded-lg border border-border p-4 transition-colors hover:border-border-strong no-underline">
+  <a href="/zh/guides/chat-mode" class="block rounded-lg border border-border p-4 transition-colors hover:border-border-strong no-underline">
     <div class="font-semibold text-foreground">💬 局域网 Chat 协同</div>
     <div class="mt-1 text-sm text-muted-foreground">跨端剪贴板同步、文件附件直传与即焚交互。</div>
   </a>
-  <a href="/troubleshooting/firewall-and-lan" class="block rounded-lg border border-border p-4 transition-colors hover:border-border-strong no-underline">
+  <a href="/zh/troubleshooting/firewall-and-lan" class="block rounded-lg border border-border p-4 transition-colors hover:border-border-strong no-underline">
     <div class="font-semibold text-foreground">🛠️ 故障排查与 FAQ</div>
     <div class="mt-1 text-sm text-muted-foreground">扫码无法连通、Windows 防火墙阻断与 AP 隔离排错。</div>
   </a>
-  <a href="/security/whitepaper" class="block rounded-lg border border-border p-4 transition-colors hover:border-border-strong no-underline">
+  <a href="/zh/security/whitepaper" class="block rounded-lg border border-border p-4 transition-colors hover:border-border-strong no-underline">
     <div class="font-semibold text-foreground">🛡️ 安全与隐私白皮书</div>
     <div class="mt-1 text-sm text-muted-foreground">深度解析设备私钥零泄漏与 LAN-TLS 安全协议。</div>
   </a>
