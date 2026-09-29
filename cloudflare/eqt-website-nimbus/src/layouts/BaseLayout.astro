@@ -31,8 +31,23 @@ const {
   coordinate,
 } = Astro.props;
 
-const isEn = Astro.url.pathname.startsWith("/en") || Astro.url.pathname.startsWith("en");
-const lang = isEn ? "en" : (config.locale ?? "zh");
+const supportedLangs = ["zh", "en", "fr", "ja", "ko", "de", "es"] as const;
+type SupportedLang = (typeof supportedLangs)[number];
+
+const pathname = Astro.url.pathname;
+let lang: SupportedLang = (config.locale as SupportedLang) ?? "zh";
+for (const l of supportedLangs) {
+  if (
+    pathname.startsWith(`/${l}/`) ||
+    pathname === `/${l}` ||
+    pathname.startsWith(`${l}/`) ||
+    pathname === l ||
+    (entryId && (entryId.startsWith(`${l}/`) || entryId === l))
+  ) {
+    lang = l;
+    break;
+  }
+}
 // Per-page agent-index pointer. For pages in non-primary or version
 // collections, this resolves to `/<prefix>/llms.txt` (e.g. `/v0/llms.txt`
 // for a v0 docs page, `/blog/llms.txt` for a blog post). Falls back to

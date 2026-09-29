@@ -13,6 +13,40 @@ const { prevNext, class: className, ...attrs } = Astro.props;
 const { prev, next } = prevNext;
 const prevHref = prev ? withBase(prev.href, import.meta.env.BASE_URL) : undefined;
 const nextHref = next ? withBase(next.href, import.meta.env.BASE_URL) : undefined;
+const supportedLangs = ["zh", "en", "fr", "ja", "ko", "de", "es"] as const;
+type SupportedLang = (typeof supportedLangs)[number];
+
+const pathname = Astro.url.pathname;
+let currentLang: SupportedLang = "zh";
+for (const lang of supportedLangs) {
+  if (pathname.startsWith(`/${lang}/`) || pathname === `/${lang}` || pathname.startsWith(`${lang}/`) || pathname === lang) {
+    currentLang = lang;
+    break;
+  }
+}
+
+const prevLabels: Record<SupportedLang, string> = {
+  zh: "上一页",
+  en: "Previous",
+  fr: "Précédent",
+  ja: "前へ",
+  ko: "이전",
+  de: "Zurück",
+  es: "Anterior",
+};
+
+const nextLabels: Record<SupportedLang, string> = {
+  zh: "下一页",
+  en: "Next",
+  fr: "Suivant",
+  ja: "次へ",
+  ko: "다음",
+  de: "Weiter",
+  es: "Siguiente",
+};
+
+const prevText = prevLabels[currentLang] || "Previous";
+const nextText = nextLabels[currentLang] || "Next";
 ---
 
 {(prev || next) && (
@@ -21,7 +55,7 @@ const nextHref = next ? withBase(next.href, import.meta.env.BASE_URL) : undefine
       <a href={prevHref} class="group flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
         <Icon name="ph:caret-left" class="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
         <span>
-          <span class="block text-xs text-muted-foreground">Previous</span>
+          <span class="block text-xs text-muted-foreground">{prevText}</span>
           <span class="font-medium text-foreground">{prev.label}</span>
         </span>
       </a>
@@ -29,7 +63,7 @@ const nextHref = next ? withBase(next.href, import.meta.env.BASE_URL) : undefine
     {next ? (
       <a href={nextHref} class="group flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors text-right">
         <span>
-          <span class="block text-xs text-muted-foreground">Next</span>
+          <span class="block text-xs text-muted-foreground">{nextText}</span>
           <span class="font-medium text-foreground">{next.label}</span>
         </span>
         <Icon name="ph:caret-right" class="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
