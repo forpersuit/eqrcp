@@ -991,9 +991,9 @@ export async function handleAdminRoutes(
 
     if (redeemedParam && redeemedParam !== "all") {
       if (redeemedParam === "redeemed") {
-        conditions.push("EXISTS (SELECT 1 FROM activations a WHERE a.license_code = licenses.license_code)");
+        conditions.push("(licenses.first_activated_at IS NOT NULL OR EXISTS (SELECT 1 FROM activations a WHERE a.license_code = licenses.license_code))");
       } else if (redeemedParam === "unredeemed") {
-        conditions.push("NOT EXISTS (SELECT 1 FROM activations a WHERE a.license_code = licenses.license_code)");
+        conditions.push("(licenses.first_activated_at IS NULL AND NOT EXISTS (SELECT 1 FROM activations a WHERE a.license_code = licenses.license_code))");
       }
     }
 
@@ -1044,33 +1044,38 @@ export async function handleAdminRoutes(
     }
 
     const nowIso = new Date().toISOString();
-    const promoStatsSql = `
-      SELECT
-        COUNT(*) as total_promo,
-        SUM(CASE WHEN EXISTS (SELECT 1 FROM activations a WHERE a.license_code = l.license_code) THEN 1 ELSE 0 END) as redeemed,
-        SUM(CASE WHEN NOT EXISTS (SELECT 1 FROM activations a WHERE a.license_code = l.license_code) AND (l.expires_at = 'LIFETIME' OR l.expires_at > ?) THEN 1 ELSE 0 END) as unredeemed,
-        SUM(CASE WHEN NOT EXISTS (SELECT 1 FROM activations a WHERE a.license_code = l.license_code) AND (l.expires_at != 'LIFETIME' AND l.expires_at <= ?) THEN 1 ELSE 0 END) as expired_unredeemed
-      FROM licenses l
-      WHERE l.source = 'promo'
-    `;
-    let promoStats = { total: 0, redeemed: 0, unredeemed: 0, expired_unredeemed: 0 };
-    try {
-      const promoStatsRes = await env.DB.prepare(promoStatsSql).bind(nowIso, nowIso).first<{
-        total_promo: number;
-        redeemed: number;
-        unredeemed: number;
-        expired_unredeemed: number;
-      }>();
-      if (promoStatsRes) {
-        promoStats = {
-          total: promoStatsRes.total_promo || 0,
-          redeemed: promoStatsRes.redeemed || 0,
-          unredeemed: promoStatsRes.unredeemed || 0,
-          expired_unredeemed: promoStatsRes.expired_unredeemed || 0
-        };
+    const shouldCalculatePromoStats = offset === 0 && (!queryStr || sourceParam === "promo");
+    let promoStats: { total: number; redeemed: number; unredeemed: number; expired_unredeemed: number } | null = null;
+
+    if (shouldCalculatePromoStats) {
+      const promoStatsSql = `
+        SELECT
+          COUNT(*) as total_promo,
+          SUM(CASE WHEN (l.first_activated_at IS NOT NULL OR EXISTS (SELECT 1 FROM activations a WHERE a.license_code = l.license_code)) THEN 1 ELSE 0 END) as redeemed,
+          SUM(CASE WHEN (l.first_activated_at IS NULL AND NOT EXISTS (SELECT 1 FROM activations a WHERE a.license_code = l.license_code)) AND (l.expires_at = 'LIFETIME' OR l.expires_at > ?) THEN 1 ELSE 0 END) as unredeemed,
+          SUM(CASE WHEN (l.first_activated_at IS NULL AND NOT EXISTS (SELECT 1 FROM activations a WHERE a.license_code = l.license_code)) AND (l.expires_at != 'LIFETIME' AND l.expires_at <= ?) THEN 1 ELSE 0 END) as expired_unredeemed
+        FROM licenses l
+        WHERE l.source = 'promo'
+      `;
+      promoStats = { total: 0, redeemed: 0, unredeemed: 0, expired_unredeemed: 0 };
+      try {
+        const promoStatsRes = await env.DB.prepare(promoStatsSql).bind(nowIso, nowIso).first<{
+          total_promo: number;
+          redeemed: number;
+          unredeemed: number;
+          expired_unredeemed: number;
+        }>();
+        if (promoStatsRes) {
+          promoStats = {
+            total: promoStatsRes.total_promo || 0,
+            redeemed: promoStatsRes.redeemed || 0,
+            unredeemed: promoStatsRes.unredeemed || 0,
+            expired_unredeemed: promoStatsRes.expired_unredeemed || 0
+          };
+        }
+      } catch {
+        // In case table or query in partial mock environments
       }
-    } catch {
-      // In case table or query in partial mock environments
     }
 
     return new Response(JSON.stringify({

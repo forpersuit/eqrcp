@@ -295,6 +295,33 @@ async function run() {
     assertEqual(json.promo_stats.expired_unredeemed, 0, "promo_stats.expired_unredeemed is 0 (all within 30 days)");
   }
 
+  // 6. Test first_activated_at unbind resilience and promo_stats query optimization
+  console.log("\n[Test 6] Verify first_activated_at unbind persistence & query optimization");
+  {
+    // Simulate initial activation setting first_activated_at
+    const activatedCode = promoCodes[0];
+    const nowIso = new Date().toISOString();
+    await env.DB.prepare("UPDATE licenses SET first_activated_at = ? WHERE license_code = ?").bind(nowIso, activatedCode).run();
+
+    // Now simulate unbinding all devices (activations table is cleared for this code)
+    await env.DB.prepare("DELETE FROM activations WHERE license_code = ?").bind(activatedCode).run();
+
+    // Query redeemed=redeemed: even with 0 active devices, it MUST remain matched due to first_activated_at!
+    const { req, url } = adminReq('/api/v1/admin/licenses?source=promo&redeemed=redeemed');
+    const res = await handleAdminRoutes(req, env, ctx, url, corsHeaders);
+    const json = await res.json();
+    assertEqual(json.total, 1, "unbound promo code still matches redeemed=redeemed via first_activated_at");
+    assertEqual(json.licenses[0].license_code, activatedCode, "matches correct code");
+    assertEqual(json.licenses[0].active_devices_count, 0, "active_devices_count is 0 as expected");
+    assert(Boolean(json.licenses[0].first_activated_at), "first_activated_at is populated");
+
+    // Deep page query optimization: offset=5 should skip heavy promo_stats calculation
+    const { req: pReq, url: pUrl } = adminReq('/api/v1/admin/licenses?offset=5&limit=5');
+    const pRes = await handleAdminRoutes(pReq, env, ctx, pUrl, corsHeaders);
+    const pJson = await pRes.json();
+    assertEqual(pJson.promo_stats, null, "promo_stats is null on deep pagination offset > 0 (query optimization)");
+  }
+
   console.log(`\nResults: ${passed} passed, ${failed} failed`);
   if (failed > 0) {
     process.exit(1);

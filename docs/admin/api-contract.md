@@ -311,6 +311,7 @@ GET /api/v1/admin/licenses?q=&source=&status=&redeemed=&limit=50&offset=0
       "paddle_transaction_id": "txn_...",
       "paddle_subscription_id": null,
       "source": "promo",
+      "first_activated_at": "2026-07-02T00:00:00.000Z",
       "created_at": "2026-07-01T00:00:00.000Z",
       "active_devices_count": 1,
       "activations": [
@@ -337,6 +338,10 @@ GET /api/v1/admin/licenses?q=&source=&status=&redeemed=&limit=50&offset=0
   }
 }
 ```
+
+> **注**：
+> - `first_activated_at` 记录授权首次被设备激活的时间戳。一旦存在，即使所有设备被解绑（`activations` 为空），该授权仍被判定为“已兑换（Redeemed）”，且不受兑换截止期（`expires_at`）拦截，保障权益期（`duration_days`）内换机自愈。
+> - `promo_stats` 在首页（`offset=0`）且无定向搜索关键词时返回；深分页（`offset>0`）时返回 `null` 以优化 D1 查询性能。
 
 `active_devices_count` 为计算字段 = `activations.length`。
 

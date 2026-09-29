@@ -104,7 +104,8 @@ export function formatLicensesToRows(
 
   const rows = licenses.map(lic => {
     let redemption = columnLabels.unredeemedLabel;
-    if (lic.active_devices_count > 0) {
+    const isRedeemed = (lic.active_devices_count > 0) || Boolean(lic.first_activated_at);
+    if (isRedeemed) {
       redemption = columnLabels.redeemedLabel;
     } else if (lic.expires_at && lic.expires_at !== 'LIFETIME' && new Date(lic.expires_at) <= now) {
       redemption = columnLabels.expiredUnredeemedLabel;

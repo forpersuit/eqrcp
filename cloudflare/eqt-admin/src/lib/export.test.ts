@@ -73,4 +73,41 @@ describe('export utilities', () => {
     expect(rows[0][2]).toBe('promo');
     expect(rows[0][4]).toBe('Unredeemed');
   });
+
+  it('marks license as Redeemed if first_activated_at exists even with 0 active devices', () => {
+    const mockLicenses: License[] = [
+      {
+        license_code: 'EQT-PROMO-UNBOUND',
+        tier: 'PLUS',
+        status: 'active',
+        source: 'promo',
+        max_devices: 2,
+        active_devices_count: 0,
+        first_activated_at: '2026-09-10T00:00:00Z',
+        expires_at: '2026-09-01T00:00:00Z', // Past redeem-by date, but was activated
+        duration_days: 14,
+        created_at: '2026-08-01T00:00:00Z',
+        activations: []
+      }
+    ];
+
+    const { rows } = formatLicensesToRows(mockLicenses, {
+      code: 'Code',
+      tier: 'Tier',
+      source: 'Source',
+      status: 'Status',
+      redemption: 'Redemption',
+      activeDevices: 'Active',
+      maxDevices: 'Max',
+      expiresAt: 'Expires',
+      durationDays: 'Duration',
+      buyerEmail: 'Email',
+      createdAt: 'Created',
+      redeemedLabel: 'Redeemed',
+      unredeemedLabel: 'Unredeemed',
+      expiredUnredeemedLabel: 'Expired'
+    });
+
+    expect(rows[0][4]).toBe('Redeemed');
+  });
 });

@@ -16,6 +16,7 @@ export function evaluateLicenseExpiration(
     paddle_transaction_id?: string | null;
     duration_days?: number | null;
     expires_at?: string | null;
+    first_activated_at?: string | null;
   },
   baseExpiresAtInput?: string | null,
   activatedAt?: string | null
@@ -38,7 +39,8 @@ export function evaluateLicenseExpiration(
   );
 
   let isRedeemExpired = false;
-  if (usesRedeemWindow && license.expires_at && license.expires_at !== "LIFETIME") {
+  const hasEverBeenRedeemed = Boolean(license.first_activated_at);
+  if (usesRedeemWindow && !hasEverBeenRedeemed && license.expires_at && license.expires_at !== "LIFETIME") {
     const redeemBy = new Date(license.expires_at).getTime();
     if (!Number.isNaN(redeemBy) && redeemBy < Date.now()) {
       isRedeemExpired = true;
@@ -843,6 +845,14 @@ export async function handleDrmRoutes(
             headers: { ...corsHeaders, "Content-Type": "application/json" }
           });
         }
+      }
+
+      // Stamp first_activated_at on initial redemption if not set yet (makes redemption proof permanent)
+      if (!license.first_activated_at) {
+        const nowIso = new Date().toISOString();
+        await env.DB.prepare(
+          "UPDATE licenses SET first_activated_at = COALESCE(first_activated_at, ?) WHERE license_code = ?"
+        ).bind(nowIso, license_code).run();
       }
 
       // Send activation notification email to the buyer asynchronously

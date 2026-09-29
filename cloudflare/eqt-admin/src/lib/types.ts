@@ -90,6 +90,7 @@ export interface License {
   bound_device_id?: string | null;
   revoked_at?: string | null;
   revoke_reason?: RevokeReason | null;
+  first_activated_at?: string | null;
   created_at: string;
   active_devices_count: number;
   activations: Activation[];
