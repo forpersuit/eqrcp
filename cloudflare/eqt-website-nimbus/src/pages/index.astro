@@ -1,0 +1,58 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import Header from "../components/Header.astro";
+import { config } from "virtual:nimbus/config";
+import { withBase } from "@cloudflare/nimbus-docs/runtime";
+
+// Prerender explicitly so the homepage stays a static route under
+// `output: "server"` — an adapter alone must add zero on-demand routes.
+export const prerender = true;
+---
+
+<BaseLayout title={config.title} description={config.description}>
+  <div class="flex flex-col min-h-screen">
+    <Header />
+    <main id="main-content" tabindex="-1" class="flex-1 mx-auto max-w-2xl w-full px-6 py-24">
+      <h1
+        class="text-foreground leading-tight"
+        style="font-size: var(--nb-h1-size); font-weight: var(--nb-h1-weight); letter-spacing: var(--nb-h1-tracking);"
+      >
+        {config.title}
+      </h1>
+      <p class="mt-2 text-[1.0625rem] text-muted-foreground leading-relaxed">
+        {config.description}
+      </p>
+
+      <div class="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <a
+          href={withBase("/guides/quickstart", import.meta.env.BASE_URL)}
+          class="block rounded-lg border border-border p-4 transition-colors hover:border-border-strong no-underline"
+        >
+          <div class="font-medium text-foreground">🚀 用户指南</div>
+          <div class="mt-1 text-sm text-muted-foreground">电脑传手机、手机传电脑与局域网 Chat 协同操作。</div>
+        </a>
+        <a
+          href={withBase("/troubleshooting/firewall-and-lan", import.meta.env.BASE_URL)}
+          class="block rounded-lg border border-border p-4 transition-colors hover:border-border-strong no-underline"
+        >
+          <div class="font-medium text-foreground">🛠️ 故障排查与 FAQ</div>
+          <div class="mt-1 text-sm text-muted-foreground">防火墙拦截、局域网连接超时与 HTTPS 常见疑问解答。</div>
+        </a>
+        <a
+          href={withBase("/cli/commands", import.meta.env.BASE_URL)}
+          class="block rounded-lg border border-border p-4 transition-colors hover:border-border-strong no-underline"
+        >
+          <div class="font-medium text-foreground">💻 CLI 极客手册</div>
+          <div class="mt-1 text-sm text-muted-foreground">终端命令行所有参数选项、配置文件与环境变量速查。</div>
+        </a>
+        <a
+          href={withBase("/security/whitepaper", import.meta.env.BASE_URL)}
+          class="block rounded-lg border border-border p-4 transition-colors hover:border-border-strong no-underline"
+        >
+          <div class="font-medium text-foreground">🛡️ 安全与隐私白皮书</div>
+          <div class="mt-1 text-sm text-muted-foreground">深度解析纯局域网传输、0 数据上云与 LAN-TLS 架构。</div>
+        </a>
+      </div>
+    </main>
+  </div>
+</BaseLayout>

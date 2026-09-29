@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "eqt-website-nimbus",
+  "compatibility_date": "2026-09-29",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "404-page"
+  },
+  "workers_dev": true,
+  "routes": [
+    { "pattern": "docs.eqt.net.im", "custom_domain": true }
+  ]
+}
