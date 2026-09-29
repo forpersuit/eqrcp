@@ -2,7 +2,8 @@
 import Icon from "@cloudflare/nimbus-docs/components/Icon.astro";
 import { cn } from "@/lib/cn";
 
-export type SupportedLang = "zh" | "en" | "fr" | "ja" | "ko" | "de" | "es";
+export type { SupportedLang } from "@/i18n";
+import { type SupportedLang, LANGUAGES_META } from "@/i18n";
 
 interface Props {
   currentLang: SupportedLang;
@@ -18,15 +19,21 @@ interface Props {
 
 const { currentLang, zhHref, enHref, frHref, jaHref, koHref, deHref, esHref, class: className } = Astro.props;
 
-const languages: { code: SupportedLang; label: string; href: string }[] = [
-  { code: "zh", label: "简体中文", href: zhHref },
-  { code: "en", label: "English", href: enHref },
-  { code: "fr", label: "Français", href: frHref },
-  { code: "ja", label: "日本語", href: jaHref },
-  { code: "ko", label: "한국어", href: koHref },
-  { code: "de", label: "Deutsch", href: deHref },
-  { code: "es", label: "Español", href: esHref },
-];
+const hrefMap: Record<SupportedLang, string> = {
+  zh: zhHref,
+  en: enHref,
+  fr: frHref,
+  ja: jaHref,
+  ko: koHref,
+  de: deHref,
+  es: esHref,
+};
+
+const languages = LANGUAGES_META.map((item) => ({
+  code: item.code,
+  label: item.label,
+  href: hrefMap[item.code] || zhHref,
+}));
 
 const currentLabel = languages.find((l) => l.code === currentLang)?.label || "Language";
 ---

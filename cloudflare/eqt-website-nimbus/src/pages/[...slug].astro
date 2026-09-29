@@ -21,39 +21,10 @@ const page = await getDocsPage(Astro);
 if (page instanceof Response) return page;
 const { entry, Content, headings, markdownUrl, ogImageUrl } = page;
 
+import { resolveLang, itemBelongsToLang, BREADCRUMB_HOME_LABELS } from "@/i18n";
+
 const currentSlug = stripBase(Astro.url.pathname, import.meta.env.BASE_URL).replace(/\/$/, "") || "/";
-
-const supportedLangs = ["zh", "en", "fr", "ja", "ko", "de", "es"] as const;
-type SupportedLang = (typeof supportedLangs)[number];
-
-let targetLang: SupportedLang = "zh";
-for (const lang of supportedLangs) {
-  if (
-    currentSlug.startsWith(`${lang}/`) ||
-    currentSlug === lang ||
-    currentSlug.startsWith(`/${lang}/`) ||
-    currentSlug === `/${lang}` ||
-    entry.id.startsWith(`${lang}/`) ||
-    entry.id === lang
-  ) {
-    targetLang = lang;
-    break;
-  }
-}
-
-function itemBelongsToLang(item: any, lang: string): boolean {
-  if (!item) return false;
-  const href = item.href || item.indexHref || item._routeKey || "";
-  if (typeof href === "string" && href) {
-    if (href.startsWith(`/${lang}/`) || href === `/${lang}` || href.startsWith(`${lang}/`) || href === lang) {
-      return true;
-    }
-  }
-  if (Array.isArray(item.children)) {
-    return item.children.some((child: any) => itemBelongsToLang(child, lang));
-  }
-  return false;
-}
+const targetLang = resolveLang(currentSlug, entry.id);
 
 const { sidebar: sidebarOn, tableOfContents: tocOn } = await getRouteFlags(entry);
 
@@ -68,22 +39,12 @@ const prevNext = await getPrevNext(currentSlug, {
   overrides: { prev: entry.data.prev, next: entry.data.next },
 });
 
-const breadcrumbHomeLabels: Record<SupportedLang, string> = {
-  zh: "首页",
-  en: "Home",
-  fr: "Accueil",
-  ja: "ホーム",
-  ko: "홈",
-  de: "Startseite",
-  es: "Inicio",
-};
-
 // Pass `collection` so versioned pages (docs-<v>) get version-prefixed
 // breadcrumb hrefs — parity with the getSidebar call above.
 const breadcrumbs = await getBreadcrumbs(currentSlug, {
   collection: entry.collection,
   root: {
-    label: breadcrumbHomeLabels[targetLang] || "Home",
+    label: BREADCRUMB_HOME_LABELS[targetLang] || BREADCRUMB_HOME_LABELS.en,
     href: `/${targetLang}/intro`,
   },
 });

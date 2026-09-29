@@ -42,3 +42,12 @@ description: Guide for utilizing Google AI Stitch MCP for landing page design, s
   - 中间件在判断是否已存在偏好时同时识别 `eqt-lang` 与遗留 `eqt_lang` Cookie，防止覆盖旧版用户偏好并保证前端平滑迁移。
   - 前端脚本优先读取 `localStorage`（用户显式设置），其次回退至 `eqt-lang` / `eqt_lang` Cookie，最后回退至 `navigator.language`。
   - 手动切换语种时必须同时写入 `localStorage` 与长效 `eqt-lang` Cookie（如 365 天），防止后续访问被中间件覆盖。
+
+---
+
+## 4. Nimbus 文档站点多语言单一事实源规范 (Docs i18n SSOT)
+
+- **架构约定**：禁止在各 Astro 模板或页面内联散落 `supportedLangs`、语言提取逻辑及 UI 翻译字典。
+- **模块位置**：所有受支持语言定义、路径语言提取、侧边栏过滤与 UI 字典统一由 `cloudflare/eqt-website-nimbus/src/i18n/docs-translations.ts`（经 `src/i18n/index.ts` 导出）提供。
+- **新增语种标准流**：只需在 `SUPPORTED_LANGS`、`LANGUAGES_META` 及各字典对象中补充对应键值，所有消费组件（Header, DocsLayout, Pagination, LanguageSwitcher, [...slug]）将自动具备静态类型检查与全局对齐。
+

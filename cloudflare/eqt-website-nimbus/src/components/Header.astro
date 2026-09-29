@@ -29,54 +29,26 @@ interface Props {
 // destructure to avoid an unused-var warning.
 const { collection, showSidebar = true, sections: sectionsProp } = Astro.props;
 
-import type { SupportedLang } from "./LanguageSwitcher.astro";
+import {
+  resolveLang,
+  resolveLangHref,
+  SITE_TITLE_MAP,
+} from "@/i18n";
 
 // Normalize trailing slash so isActive matches sidebar hrefs.
 const currentSlug = stripBase(Astro.url.pathname, import.meta.env.BASE_URL).replace(/\/$/, "") || "/";
-
-const supportedLangs: SupportedLang[] = ["zh", "en", "fr", "ja", "ko", "de", "es"];
-let currentLang: SupportedLang = "zh";
-for (const lang of supportedLangs) {
-  if (currentSlug.startsWith(`${lang}/`) || currentSlug === lang || currentSlug.startsWith(`/${lang}/`) || currentSlug === `/${lang}`) {
-    currentLang = lang;
-    break;
-  }
-}
-
-const siteTitleMap: Record<SupportedLang, string> = {
-  zh: config.title,
-  en: "EQT Documentation",
-  fr: "Documentation EQT",
-  ja: "EQT ドキュメント",
-  ko: "EQT 기술 문서",
-  de: "EQT Dokumentation",
-  es: "Documentación EQT",
-};
-
-const siteTitle = siteTitleMap[currentLang] || config.title;
+const currentLang = resolveLang(currentSlug);
+const siteTitle = SITE_TITLE_MAP[currentLang] || config.title;
 const homeHref = withBase(`/${currentLang}/intro`, import.meta.env.BASE_URL);
 
 const pathname = Astro.url.pathname;
-const resolveLangHref = (targetLang: SupportedLang): string => {
-  if (currentLang === targetLang) return pathname;
-  const regexWithSlash = new RegExp(`/${currentLang}/`);
-  if (regexWithSlash.test(pathname)) {
-    return pathname.replace(regexWithSlash, `/${targetLang}/`);
-  }
-  const regexEnd = new RegExp(`/${currentLang}$`);
-  if (regexEnd.test(pathname)) {
-    return withBase(`/${targetLang}/intro`, import.meta.env.BASE_URL);
-  }
-  return withBase(`/${targetLang}/intro`, import.meta.env.BASE_URL);
-};
-
-const zhHref = resolveLangHref("zh");
-const enHref = resolveLangHref("en");
-const frHref = resolveLangHref("fr");
-const jaHref = resolveLangHref("ja");
-const koHref = resolveLangHref("ko");
-const deHref = resolveLangHref("de");
-const esHref = resolveLangHref("es");
+const zhHref = resolveLangHref(pathname, currentLang, "zh");
+const enHref = resolveLangHref(pathname, currentLang, "en");
+const frHref = resolveLangHref(pathname, currentLang, "fr");
+const jaHref = resolveLangHref(pathname, currentLang, "ja");
+const koHref = resolveLangHref(pathname, currentLang, "ko");
+const deHref = resolveLangHref(pathname, currentLang, "de");
+const esHref = resolveLangHref(pathname, currentLang, "es");
 
 const sections =
   sectionsProp ?? (await getSidebarSections(currentSlug, { collection }));
