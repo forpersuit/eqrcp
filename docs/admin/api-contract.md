@@ -223,15 +223,71 @@ Content-Type: application/json
 
 ---
 
+### 2.3.1 批量生成授权（活动推广/批量空投）
+
+```
+POST /api/v1/admin/generate-batch
+Content-Type: application/json
+```
+
+**Body：**
+
+```json
+{
+  "count": 50,
+  "tier": "PLUS",
+  "source": "promo",
+  "max_devices": 2,
+  "expires_in_days": 30,
+  "duration_days": 14
+}
+```
+
+| 字段 | 必填 | 说明 |
+| :--- | :---: | :--- |
+| `count` | 是 | 生成数量，整数，范围 `1` ~ `100` |
+| `tier` | 是 | `PLUS` 或 `PRO` |
+| `source` | 否 | `promo`（默认）\| `admin` \| `test` |
+| `max_devices` | 否 | 默认 2（test 为 1） |
+| `expires_in_days` | promo/test 是 | 兑换截止窗口（天数），超过此时间将无法激活 |
+| `duration_days` | 否 | 激活后权益生效天数（如 14 天） |
+| `bound_device_id` | 否 | 测试设备定向绑定 ID |
+
+**成功 200：**
+
+```json
+{
+  "success": true,
+  "count": 50,
+  "licenses": [
+    {
+      "license_code": "EQT-PLUS-20260929-A1B2C3D4E5F6",
+      "tier": "PLUS",
+      "max_devices": 2,
+      "source": "promo",
+      "expires_at": "2026-10-29T00:00:00.000Z",
+      "duration_days": 14,
+      "status": "active",
+      "created_at": "2026-09-29T00:00:00.000Z"
+    }
+  ]
+}
+```
+
+---
+
 ### 2.4 检索授权列表
 
 ```
-GET /api/v1/admin/licenses?q=&limit=50&offset=0
+GET /api/v1/admin/licenses?q=&source=&status=&redeemed=&limit=50&offset=0
 ```
 
 | Query | 说明 |
 | :--- | :--- |
 | `q` / `query` | 可选。匹配 `license_code` LIKE、`buyer_email` LIKE、`paddle_transaction_id` LIKE；若含 `@` 则额外按 `sha256(lower(email))` 等值匹配 `buyer_email_hash` |
+| `source` | 可选。`all` \| `promo` \| `purchase` \| `admin` \| `test` |
+| `status` | 可选。`all` \| `active` \| `revoked` |
+| `redeemed` | 可选。`all` \| `redeemed`（已激活）\| `unredeemed`（未激活） |
 | `limit` | 默认 50 |
 | `offset` | 默认 0 |
 
@@ -254,6 +310,7 @@ GET /api/v1/admin/licenses?q=&limit=50&offset=0
       "buyer_email_hash": "...",
       "paddle_transaction_id": "txn_...",
       "paddle_subscription_id": null,
+      "source": "promo",
       "created_at": "2026-07-01T00:00:00.000Z",
       "active_devices_count": 1,
       "activations": [
@@ -268,7 +325,16 @@ GET /api/v1/admin/licenses?q=&limit=50&offset=0
         }
       ]
     }
-  ]
+  ],
+  "total": 1,
+  "limit": 50,
+  "offset": 0,
+  "promo_stats": {
+    "total": 50,
+    "redeemed": 12,
+    "unredeemed": 35,
+    "expired_unredeemed": 3
+  }
 }
 ```
 

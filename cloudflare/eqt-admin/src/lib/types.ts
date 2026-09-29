@@ -198,6 +198,30 @@ export interface GenerateLicenseResponse {
   email_sent?: boolean;
 }
 
+export interface PromoStats {
+  total: number;
+  redeemed: number;
+  unredeemed: number;
+  expired_unredeemed: number;
+}
+
+export interface BatchLicenseItem {
+  license_code: string;
+  tier: LicenseTier;
+  max_devices: number;
+  source: LicenseSource;
+  expires_at: string;
+  duration_days: number | null;
+  status: LicenseStatus;
+  created_at: string;
+}
+
+export interface GenerateBatchResponse {
+  success: boolean;
+  count: number;
+  licenses: BatchLicenseItem[];
+}
+
 /** POST /admin/unbind */
 export interface AdminUnbindBody {
   license_code: string;

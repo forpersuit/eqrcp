@@ -6,12 +6,17 @@
   import Modal from '../components/Modal.svelte';
   import Banner from '../components/Banner.svelte';
   import Pagination from '../components/Pagination.svelte';
+  import PromoStatsCard from '../components/PromoStatsCard.svelte';
+  import { exportLicensesToCsv, exportToTxt } from '../lib/export';
   import type {
     Activation,
     BetaTester,
     GenerateLicenseResponse,
+    GenerateBatchResponse,
+    BatchLicenseItem,
     License,
-    LicenseTier
+    LicenseTier,
+    PromoStats
   } from '../lib/types';
 
   interface Props {
@@ -30,6 +35,11 @@
   let errorMsg = $state('');
   let actionMsg = $state('');
   let searchQuery = $state('');
+  let filterSource = $state<string>('all');
+  let filterStatus = $state<string>('all');
+  let filterRedeemed = $state<string>('all');
+  let promoStats = $state<PromoStats | null>(null);
+
   let lastRefreshedAt = $state<string>('');
   let autoRefresh = $state(true);
   let refreshTimer: ReturnType<typeof setInterval> | null = null;
@@ -44,6 +54,7 @@
 
   let genTier = $state<LicenseTier>('PLUS');
   let genMaxDevices = $state(2);
+  let genCount = $state(1);
   /** admin = 客服补发；promo = 活动码；test = 沙箱内测专属码 */
   let genSource = $state<'admin' | 'promo' | 'test'>('admin');
   let genExpiresInDays = $state<string>('');
@@ -52,7 +63,9 @@
   let genBoundDeviceId = $state('');
   let genSendEmail = $state(false);
   let lastGeneratedCode = $state<string | null>(null);
+  let batchGeneratedCodes = $state<BatchLicenseItem[]>([]);
   let copyHint = $state('');
+  let batchCopyHint = $state('');
 
   function shortHash(value?: string | null): string {
     if (!value) return '—';
@@ -104,9 +117,16 @@
         offset: String(offset)
       };
       if (searchQuery.trim()) params.q = searchQuery.trim();
-      const data = await adminFetch<{ licenses: License[]; total?: number }>('/api/v1/admin/licenses', { params });
+      if (filterSource !== 'all') params.source = filterSource;
+      if (filterStatus !== 'all') params.status = filterStatus;
+      if (filterRedeemed !== 'all') params.redeemed = filterRedeemed;
+
+      const data = await adminFetch<{ licenses: License[]; total?: number; promo_stats?: PromoStats }>('/api/v1/admin/licenses', { params });
       licenses = data.licenses || [];
       total = typeof data.total === 'number' ? data.total : licenses.length;
+      if (data.promo_stats) {
+        promoStats = data.promo_stats;
+      }
       if (selectedLicense) {
         const refreshed = licenses.find((l) => l.license_code === selectedLicense?.license_code);
         if (refreshed) selectedLicense = refreshed;
@@ -125,6 +145,24 @@
   }
 
   function handleSearch() {
+    page = 1;
+    loadLicenses();
+  }
+
+  function handleFilterSourceChange(val: string) {
+    filterSource = val;
+    page = 1;
+    loadLicenses();
+  }
+
+  function handleFilterStatusChange(val: string) {
+    filterStatus = val;
+    page = 1;
+    loadLicenses();
+  }
+
+  function handleFilterRedeemedChange(val: string) {
+    filterRedeemed = val;
     page = 1;
     loadLicenses();
   }
@@ -190,7 +228,11 @@
     errorMsg = '';
     actionMsg = '';
     lastGeneratedCode = null;
+    batchGeneratedCodes = [];
     copyHint = '';
+    batchCopyHint = '';
+
+    const count = Math.max(1, Math.min(100, Math.floor(Number(genCount) || 1)));
 
     const body: Record<string, any> = {
       tier: genTier,
@@ -224,28 +266,48 @@
       }
     }
 
-    if (genBuyerEmail.trim()) {
-      body.buyer_email = genBuyerEmail.trim();
-      if (genSendEmail) {
-        body.send_email = true;
-      }
-    }
-
     if (genBoundDeviceId.trim()) {
       body.bound_device_id = genBoundDeviceId.trim();
     }
 
+    // Single license generation mode
+    if (count === 1) {
+      if (genBuyerEmail.trim()) {
+        body.buyer_email = genBuyerEmail.trim();
+        if (genSendEmail) {
+          body.send_email = true;
+        }
+      }
+
+      try {
+        const res = await adminFetch<GenerateLicenseResponse>('/api/v1/admin/generate-license', {
+          method: 'POST',
+          body: JSON.stringify(body)
+        });
+        lastGeneratedCode = res.license_code;
+        let okText = `${$t('licenses.generateTitle')} ${$t('common.success')}: ${res.license_code} (${res.tier})`;
+        if (res.email_sent !== undefined) {
+          okText += res.email_sent ? ` · ${$t('licenses.emailSent')}` : ` · ${$t('licenses.emailNotSent')}`;
+        }
+        actionMsg = okText;
+        await loadLicenses();
+      } catch (err: any) {
+        errorMsg = $t('common.failed') + ': ' + (err.message || String(err));
+      } finally {
+        generating = false;
+      }
+      return;
+    }
+
+    // Batch generation mode
+    body.count = count;
     try {
-      const res = await adminFetch<GenerateLicenseResponse>('/api/v1/admin/generate-license', {
+      const res = await adminFetch<GenerateBatchResponse>('/api/v1/admin/generate-batch', {
         method: 'POST',
         body: JSON.stringify(body)
       });
-      lastGeneratedCode = res.license_code;
-      let okText = `${$t('licenses.generateTitle')} ${$t('common.success')}: ${res.license_code} (${res.tier})`;
-      if (res.email_sent !== undefined) {
-        okText += res.email_sent ? ` · ${$t('licenses.emailSent')}` : ` · ${$t('licenses.emailNotSent')}`;
-      }
-      actionMsg = okText;
+      batchGeneratedCodes = res.licenses || [];
+      actionMsg = $t('licenses.batchSuccessMsg', { count: res.count });
       await loadLicenses();
     } catch (err: any) {
       errorMsg = $t('common.failed') + ': ' + (err.message || String(err));
@@ -265,6 +327,85 @@
     } catch {
       copyHint = $t('common.failed');
     }
+  }
+
+  async function copyAllBatchCodes() {
+    if (!batchGeneratedCodes.length) return;
+    try {
+      const text = batchGeneratedCodes.map(item => item.license_code).join('\r\n');
+      await navigator.clipboard.writeText(text);
+      batchCopyHint = $t('licenses.copyAllSuccess');
+      setTimeout(() => {
+        batchCopyHint = '';
+      }, 2000);
+    } catch {
+      batchCopyHint = $t('common.failed');
+    }
+  }
+
+  function handleExportBatchCsv() {
+    if (!batchGeneratedCodes.length) return;
+    const nowStr = new Date().toISOString().slice(0, 10);
+    const filename = `eqt-batch-${genSource}-${nowStr}.csv`;
+    const mockList: License[] = batchGeneratedCodes.map(b => ({
+      ...b,
+      active_devices_count: 0,
+      activations: []
+    }));
+    exportLicensesToCsv(filename, mockList, {
+      code: $t('licenses.csvColumns.code'),
+      tier: $t('licenses.csvColumns.tier'),
+      source: $t('licenses.csvColumns.source'),
+      status: $t('licenses.csvColumns.status'),
+      redemption: $t('licenses.csvColumns.redemption'),
+      activeDevices: $t('licenses.csvColumns.activeDevices'),
+      maxDevices: $t('licenses.csvColumns.maxDevices'),
+      expiresAt: $t('licenses.csvColumns.expiresAt'),
+      durationDays: $t('licenses.csvColumns.durationDays'),
+      buyerEmail: $t('licenses.csvColumns.buyerEmail'),
+      createdAt: $t('licenses.csvColumns.createdAt'),
+      redeemedLabel: $t('licenses.redemptionBadge.redeemed'),
+      unredeemedLabel: $t('licenses.redemptionBadge.unredeemed'),
+      expiredUnredeemedLabel: $t('licenses.redemptionBadge.expiredUnredeemed')
+    });
+  }
+
+  function handleExportBatchTxt() {
+    if (!batchGeneratedCodes.length) return;
+    const nowStr = new Date().toISOString().slice(0, 10);
+    const filename = `eqt-batch-${genSource}-${nowStr}.txt`;
+    const codes = batchGeneratedCodes.map(b => b.license_code);
+    exportToTxt(filename, codes);
+  }
+
+  function handleExportCurrentCsv() {
+    if (!licenses.length) return;
+    const nowStr = new Date().toISOString().slice(0, 10);
+    const filename = `eqt-licenses-${filterSource}-${nowStr}.csv`;
+    exportLicensesToCsv(filename, licenses, {
+      code: $t('licenses.csvColumns.code'),
+      tier: $t('licenses.csvColumns.tier'),
+      source: $t('licenses.csvColumns.source'),
+      status: $t('licenses.csvColumns.status'),
+      redemption: $t('licenses.csvColumns.redemption'),
+      activeDevices: $t('licenses.csvColumns.activeDevices'),
+      maxDevices: $t('licenses.csvColumns.maxDevices'),
+      expiresAt: $t('licenses.csvColumns.expiresAt'),
+      durationDays: $t('licenses.csvColumns.durationDays'),
+      buyerEmail: $t('licenses.csvColumns.buyerEmail'),
+      createdAt: $t('licenses.csvColumns.createdAt'),
+      redeemedLabel: $t('licenses.redemptionBadge.redeemed'),
+      unredeemedLabel: $t('licenses.redemptionBadge.unredeemed'),
+      expiredUnredeemedLabel: $t('licenses.redemptionBadge.expiredUnredeemed')
+    });
+  }
+
+  function handleExportCurrentTxt() {
+    if (!licenses.length) return;
+    const nowStr = new Date().toISOString().slice(0, 10);
+    const filename = `eqt-codes-${filterSource}-${nowStr}.txt`;
+    const codes = licenses.map(l => l.license_code);
+    exportToTxt(filename, codes);
   }
 
   async function handleRevoke() {
@@ -365,14 +506,36 @@
       <button class="btn btn-secondary btn-sm" onclick={() => loadLicenses()} disabled={loading || refreshing}>
         {refreshing ? $t('common.loading') : $t('licenses.manualRefresh')}
       </button>
-      <button class="btn btn-primary btn-sm" onclick={() => { showGenerateModal = true; lastGeneratedCode = null; copyHint = ''; }}>
+      <button class="btn btn-secondary btn-sm" onclick={handleExportCurrentCsv} disabled={licenses.length === 0} title={$t('licenses.exportCsv')}>
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 3px;">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 10 12 15 17 10"></polyline>
+          <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        {$t('licenses.exportCsv')}
+      </button>
+      <button class="btn btn-secondary btn-sm" onclick={handleExportCurrentTxt} disabled={licenses.length === 0} title={$t('licenses.exportTxt')}>
+        {$t('licenses.exportTxt')}
+      </button>
+      <button class="btn btn-primary btn-sm" onclick={() => { showGenerateModal = true; lastGeneratedCode = null; batchGeneratedCodes = []; copyHint = ''; batchCopyHint = ''; genCount = 1; }}>
         + {$t('licenses.generateTitle')}
       </button>
     </div>
   </div>
 
+  {#if promoStats && promoStats.total > 0}
+    <PromoStatsCard
+      stats={promoStats}
+      activeRedeemedFilter={filterRedeemed}
+      onSelectFilter={(val) => {
+        filterSource = 'promo';
+        handleFilterRedeemedChange(val);
+      }}
+    />
+  {/if}
+
   <div class="filter-bar card">
-    <div class="search-group">
+    <div class="filter-row">
       <div class="search-input-wrap">
         <input
           type="text"
@@ -388,6 +551,31 @@
           </svg>
         </button>
       </div>
+
+      <div class="filters-group">
+        <select class="input filter-select" value={filterSource} onchange={(e) => handleFilterSourceChange((e.target as HTMLSelectElement).value)}>
+          <option value="all">{$t('licenses.allSources')}</option>
+          <option value="promo">{$t('licenses.sourceBadge.promo')}</option>
+          <option value="purchase">{$t('licenses.sourceBadge.purchase')}</option>
+          <option value="admin">{$t('licenses.sourceBadge.admin')}</option>
+          {#if adminEnv.current === 'test'}
+            <option value="test">{$t('licenses.sourceBadge.test')}</option>
+          {/if}
+        </select>
+
+        <select class="input filter-select" value={filterStatus} onchange={(e) => handleFilterStatusChange((e.target as HTMLSelectElement).value)}>
+          <option value="all">{$t('licenses.allStatuses')}</option>
+          <option value="active">{$t('licenses.statusActive')}</option>
+          <option value="revoked">{$t('licenses.statusRevoked')}</option>
+        </select>
+
+        <select class="input filter-select" value={filterRedeemed} onchange={(e) => handleFilterRedeemedChange((e.target as HTMLSelectElement).value)}>
+          <option value="all">{$t('licenses.allRedeemed')}</option>
+          <option value="redeemed">{$t('licenses.redeemedOnly')}</option>
+          <option value="unredeemed">{$t('licenses.unredeemedOnly')}</option>
+        </select>
+      </div>
+
       {#if lastRefreshedAt}
         <span class="refresh-meta">{$t('licenses.lastUpdated')} {lastRefreshedAt}{refreshing ? ' · ...' : ''}</span>
       {/if}
@@ -420,7 +608,20 @@
           {#each licenses as lic (lic.license_code)}
             <tr>
               <td>
-                <span class="code-text">{lic.license_code}</span>
+                <div class="code-column">
+                  <span class="code-text">{lic.license_code}</span>
+                  {#if lic.source === 'promo'}
+                    <div class="promo-tag-row">
+                      {#if lic.active_devices_count > 0}
+                        <span class="badge badge-active dev-ver-badge">{$t('licenses.redemptionBadge.redeemed')}</span>
+                      {:else if lic.expires_at && lic.expires_at !== 'LIFETIME' && new Date(lic.expires_at) <= new Date()}
+                        <span class="badge badge-expired dev-ver-badge">{$t('licenses.redemptionBadge.expiredUnredeemed')}</span>
+                      {:else}
+                        <span class="badge badge-unredeemed dev-ver-badge">{$t('licenses.redemptionBadge.unredeemed')}</span>
+                      {/if}
+                    </div>
+                  {/if}
+                </div>
               </td>
               <td><span class="badge badge-active">{lic.tier}</span></td>
               <td>
@@ -482,8 +683,18 @@
 </div>
 
 {#if showGenerateModal}
-  <Modal open={true} title={$t('licenses.generateTitle')} maxWidth="600px" onclose={() => (showGenerateModal = false)}>
+  <Modal open={true} title={genCount > 1 ? $t('licenses.batchGenerateTitle') : $t('licenses.generateTitle')} maxWidth="640px" onclose={() => (showGenerateModal = false)}>
     <form onsubmit={handleGenerate} class="gen-form">
+      <div class="form-group">
+        <label for="count-input">{$t('licenses.genCount')}:</label>
+        <input id="count-input" type="number" class="input" bind:value={genCount} min="1" max="100" required />
+        {#if genCount > 1}
+          <p class="field-hint highlight-hint">
+            {$t('licenses.batchModeHint', { count: genCount })}
+          </p>
+        {/if}
+      </div>
+
       <div class="form-group">
         <label for="source-select">{$t('licenses.source')}:</label>
         <select id="source-select" class="input" bind:value={genSource}>
@@ -523,24 +734,26 @@
         <input id="dur-days" type="number" class="input" placeholder={genSource === 'promo' || genSource === 'test' ? $t('licenses.durationPromoPlaceholder') : $t('licenses.durationAdminPlaceholder')} bind:value={genDurationDays} min="0" />
       </div>
 
-      <div class="form-group">
-        <label for="bound-dev">{$t('licenses.boundDeviceId')}:</label>
-        <input id="bound-dev" type="text" class="input" placeholder={$t('licenses.boundDevicePlaceholder')} bind:value={genBoundDeviceId} />
-        <p class="field-hint">{$t('licenses.boundDeviceHint')}</p>
-      </div>
-
-      <div class="form-group">
-        <label for="buyer-email">{$t('licenses.buyerEmail')}:</label>
-        <input id="buyer-email" type="email" class="input" placeholder={$t('licenses.buyerEmailPlaceholder')} bind:value={genBuyerEmail} />
-      </div>
-
-      {#if genBuyerEmail.trim()}
-        <div class="form-group checkbox-group">
-          <label for="send-email-check" class="checkbox-label">
-            <input id="send-email-check" type="checkbox" bind:checked={genSendEmail} />
-            {$t('licenses.sendEmailCheck')}
-          </label>
+      {#if genCount <= 1}
+        <div class="form-group">
+          <label for="bound-dev">{$t('licenses.boundDeviceId')}:</label>
+          <input id="bound-dev" type="text" class="input" placeholder={$t('licenses.boundDevicePlaceholder')} bind:value={genBoundDeviceId} />
+          <p class="field-hint">{$t('licenses.boundDeviceHint')}</p>
         </div>
+
+        <div class="form-group">
+          <label for="buyer-email">{$t('licenses.buyerEmail')}:</label>
+          <input id="buyer-email" type="email" class="input" placeholder={$t('licenses.buyerEmailPlaceholder')} bind:value={genBuyerEmail} />
+        </div>
+
+        {#if genBuyerEmail.trim()}
+          <div class="form-group checkbox-group">
+            <label for="send-email-check" class="checkbox-label">
+              <input id="send-email-check" type="checkbox" bind:checked={genSendEmail} />
+              {$t('licenses.sendEmailCheck')}
+            </label>
+          </div>
+        {/if}
       {/if}
 
       {#if lastGeneratedCode}
@@ -552,6 +765,32 @@
           </div>
           {#if copyHint}
             <div class="copy-hint">{copyHint}</div>
+          {/if}
+        </div>
+      {/if}
+
+      {#if batchGeneratedCodes.length > 0}
+        <div class="generated-box">
+          <div class="gen-label">{$t('licenses.batchSuccessMsg', { count: batchGeneratedCodes.length })}</div>
+          <textarea
+            class="batch-codes-textarea"
+            readonly
+            rows="6"
+            value={batchGeneratedCodes.map(b => b.license_code).join('\n')}
+          ></textarea>
+          <div class="batch-actions-row">
+            <button type="button" class="btn btn-secondary btn-sm" onclick={copyAllBatchCodes}>
+              {$t('licenses.copyAllCodes')}
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick={handleExportBatchCsv}>
+              {$t('licenses.exportCsv')}
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick={handleExportBatchTxt}>
+              {$t('licenses.exportTxt')}
+            </button>
+          </div>
+          {#if batchCopyHint}
+            <div class="copy-hint">{batchCopyHint}</div>
           {/if}
         </div>
       {/if}
@@ -720,4 +959,26 @@
   .highlight-seen { color: var(--accent-primary); font-weight: 600; }
 
   .loading-state, .empty-state { text-align: center; padding: 3rem; color: var(--text-muted); }
+
+  .filter-row { display: flex; gap: 0.75rem; width: 100%; align-items: center; flex-wrap: wrap; }
+  .filters-group { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+  .filter-select { padding: 0.4rem 0.6rem; font-size: 0.8rem; width: auto; min-width: 110px; }
+  .code-column { display: flex; flex-direction: column; gap: 0.3rem; }
+  .promo-tag-row { display: flex; align-items: center; gap: 0.35rem; }
+  .badge-unredeemed { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); }
+  .badge-expired { background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.35); }
+  .batch-codes-textarea {
+    width: 100%;
+    font-family: var(--font-mono, monospace);
+    font-size: 0.8rem;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    border-radius: var(--radius-sm, 4px);
+    color: var(--text-primary);
+    padding: 0.5rem;
+    resize: vertical;
+    margin: 0.5rem 0;
+  }
+  .batch-actions-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.25rem; }
+  .highlight-hint { color: var(--accent-primary); font-weight: 500; }
 </style>

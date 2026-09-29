@@ -24,6 +24,15 @@ function parseBoundedInt(val: string | null | undefined, defaultVal: number, min
   return Math.max(min, Math.min(n, max));
 }
 
+export function generateLicenseCode(tier: string, source: string): string {
+  const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const randBytes = new Uint8Array(6);
+  crypto.getRandomValues(randBytes);
+  const randStr = Array.from(randBytes, b => ('00' + b.toString(16)).slice(-2)).join('').toUpperCase();
+  const prefix = source === "test" ? `EQT-TEST-${tier}` : `EQT-${tier}`;
+  return `${prefix}-${todayStr}-${randStr}`;
+}
+
 export function isValidIp(ip: string): boolean {
   if (!ip || typeof ip !== 'string') return false;
   const trimmed = ip.trim();
@@ -213,13 +222,7 @@ export async function handleAdminRoutes(
       });
     }
     const boundDevice = (bound_device_id || "").trim() || null;
-
-    const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    const randBytes = new Uint8Array(6);
-    crypto.getRandomValues(randBytes);
-    const randStr = Array.from(randBytes, b => ('00' + b.toString(16)).slice(-2)).join('').toUpperCase();
-    const prefix = source === "test" ? `EQT-TEST-${tier}` : `EQT-${tier}`;
-    const licenseCode = `${prefix}-${todayStr}-${randStr}`;
+    const licenseCode = generateLicenseCode(tier, source);
 
     let expiresAt = "LIFETIME";
     if (expires_in_days) {
@@ -339,6 +342,143 @@ export async function handleAdminRoutes(
       buyer_email: cleanEmail || null,
       email_sent: emailSent,
       status: "active"
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
+
+  // 3.5 Admin Endpoint: Batch license generation (e.g. promo/campaign codes)
+  if (url.pathname === "/api/v1/admin/generate-batch" && request.method === "POST") {
+    const denied = await requireAdminAuth(request, env, corsHeaders);
+    if (denied) return denied;
+    await ensureLicenseSourceColumns(env);
+
+    const body: any = await request.json();
+    const { count: rawCount, tier, max_devices, expires_in_days, duration_days, source: rawSource, bound_device_id } = body;
+
+    const count = parseInt(rawCount, 10);
+    if (!Number.isFinite(count) || isNaN(count) || count < 1 || count > 100) {
+      return new Response(JSON.stringify({ error: "count must be an integer between 1 and 100" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    if (tier !== "PLUS" && tier !== "PRO") {
+      return new Response(JSON.stringify({ error: "Invalid tier. Must be 'PLUS' or 'PRO'" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const sourceRaw = String(rawSource || "promo").trim().toLowerCase();
+    const source = sourceRaw === "admin" ? "admin" : (sourceRaw === "test" || sourceRaw === "beta" ? "test" : "promo");
+    if (source === "test" && !isTestEnvironment(env, url)) {
+      return new Response(JSON.stringify({
+        error: "Test licenses with source='test' can only be generated in test/sandbox environment",
+        code: "SANDBOX_ONLY"
+      }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+    const boundDevice = (bound_device_id || "").trim() || null;
+
+    let expiresAt = "LIFETIME";
+    if (expires_in_days) {
+      const expDate = new Date();
+      expDate.setDate(expDate.getDate() + Number(expires_in_days));
+      expiresAt = expDate.toISOString();
+    }
+
+    let maxDev = source === "test" ? 1 : 2;
+    if (max_devices !== undefined && max_devices !== null && max_devices !== "") {
+      const parsedMax = Number(max_devices);
+      if (!Number.isFinite(parsedMax) || isNaN(parsedMax) || parsedMax < 1 || parsedMax > 100) {
+        return new Response(JSON.stringify({ error: "max_devices must be an integer between 1 and 100" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+      maxDev = Math.floor(parsedMax);
+    }
+    const durDays = duration_days !== undefined && duration_days !== null && duration_days !== ""
+      ? Number(duration_days)
+      : null;
+
+    if ((source === "promo" || source === "test") && (!expires_in_days || Number(expires_in_days) <= 0)) {
+      return new Response(JSON.stringify({
+        error: "Promo and test licenses require expires_in_days (redeem-by window)"
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    const nowIso = new Date().toISOString();
+    const generatedCodes = new Set<string>();
+    const items: Array<{
+      license_code: string;
+      tier: string;
+      max_devices: number;
+      source: string;
+      expires_at: string;
+      duration_days: number | null;
+      status: string;
+      created_at: string;
+    }> = [];
+
+    while (items.length < count) {
+      const code = generateLicenseCode(tier, source);
+      if (!generatedCodes.has(code)) {
+        generatedCodes.add(code);
+        items.push({
+          license_code: code,
+          tier,
+          max_devices: maxDev,
+          source,
+          expires_at: expiresAt,
+          duration_days: durDays,
+          status: "active",
+          created_at: nowIso
+        });
+      }
+    }
+
+    const statements = items.map(item => env.DB.prepare(
+      "INSERT INTO licenses (license_code, tier, status, max_devices, expires_at, duration_days, buyer_email_hash, buyer_email, source, bound_device_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    ).bind(
+      item.license_code,
+      tier,
+      "active",
+      maxDev,
+      expiresAt,
+      durDays,
+      null,
+      null,
+      source,
+      boundDevice,
+      nowIso
+    ));
+
+    await env.DB.batch(statements);
+
+    ctx.waitUntil(logAdminAudit(env, 'BATCH_GENERATE', 'LICENSE', null, {
+      count,
+      tier,
+      max_devices: maxDev,
+      expires_at: expiresAt,
+      duration_days: durDays,
+      expires_in_days: expires_in_days != null && expires_in_days !== '' ? Number(expires_in_days) : null,
+      source,
+      sample_codes: items.slice(0, 3).map(i => i.license_code)
+    }, clientIp));
+
+    return new Response(JSON.stringify({
+      success: true,
+      count,
+      licenses: items
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -811,11 +951,14 @@ export async function handleAdminRoutes(
     if (denied) return denied;
 
     const queryStr = (url.searchParams.get("q") || url.searchParams.get("query") || "").trim();
+    const sourceParam = (url.searchParams.get("source") || "").trim().toLowerCase();
+    const statusParam = (url.searchParams.get("status") || "").trim().toLowerCase();
+    const redeemedParam = (url.searchParams.get("redeemed") || "").trim().toLowerCase();
     const limit = parseBoundedInt(url.searchParams.get("limit"), 50, 1, 200);
     const offset = parseBoundedInt(url.searchParams.get("offset"), 0, 0, 1_000_000);
 
-    let whereClause = "";
-    let params: any[] = [];
+    const conditions: string[] = [];
+    const params: any[] = [];
 
     if (queryStr) {
       let emailHash = "";
@@ -825,9 +968,36 @@ export async function handleAdminRoutes(
         emailHash = Array.from(new Uint8Array(emailHashBuf), x => ('00' + x.toString(16)).slice(-2)).join('');
       }
       const likeQuery = `%${queryStr}%`;
-      whereClause = " WHERE license_code LIKE ? OR buyer_email LIKE ? OR paddle_transaction_id LIKE ? OR buyer_email_hash = ?";
-      params = [likeQuery, likeQuery, likeQuery, emailHash || queryStr];
+      conditions.push("(license_code LIKE ? OR buyer_email LIKE ? OR paddle_transaction_id LIKE ? OR buyer_email_hash = ?)");
+      params.push(likeQuery, likeQuery, likeQuery, emailHash || queryStr);
     }
+
+    if (sourceParam && sourceParam !== "all") {
+      if (sourceParam === "promo") {
+        conditions.push("source = 'promo'");
+      } else if (sourceParam === "test") {
+        conditions.push("source = 'test'");
+      } else if (sourceParam === "admin") {
+        conditions.push("((source = 'admin') OR (source IS NULL AND paddle_transaction_id IS NULL))");
+      } else if (sourceParam === "purchase") {
+        conditions.push("((source = 'purchase') OR (source IS NULL AND paddle_transaction_id IS NOT NULL))");
+      }
+    }
+
+    if (statusParam && statusParam !== "all") {
+      conditions.push("status = ?");
+      params.push(statusParam);
+    }
+
+    if (redeemedParam && redeemedParam !== "all") {
+      if (redeemedParam === "redeemed") {
+        conditions.push("EXISTS (SELECT 1 FROM activations a WHERE a.license_code = licenses.license_code)");
+      } else if (redeemedParam === "unredeemed") {
+        conditions.push("NOT EXISTS (SELECT 1 FROM activations a WHERE a.license_code = licenses.license_code)");
+      }
+    }
+
+    const whereClause = conditions.length > 0 ? " WHERE " + conditions.join(" AND ") : "";
 
     const countSql = "SELECT COUNT(*) as total FROM licenses" + whereClause;
     const countRes = await env.DB.prepare(countSql).bind(...params).first<{ total: number }>();
@@ -873,12 +1043,43 @@ export async function handleAdminRoutes(
       });
     }
 
+    const nowIso = new Date().toISOString();
+    const promoStatsSql = `
+      SELECT
+        COUNT(*) as total_promo,
+        SUM(CASE WHEN EXISTS (SELECT 1 FROM activations a WHERE a.license_code = l.license_code) THEN 1 ELSE 0 END) as redeemed,
+        SUM(CASE WHEN NOT EXISTS (SELECT 1 FROM activations a WHERE a.license_code = l.license_code) AND (l.expires_at = 'LIFETIME' OR l.expires_at > ?) THEN 1 ELSE 0 END) as unredeemed,
+        SUM(CASE WHEN NOT EXISTS (SELECT 1 FROM activations a WHERE a.license_code = l.license_code) AND (l.expires_at != 'LIFETIME' AND l.expires_at <= ?) THEN 1 ELSE 0 END) as expired_unredeemed
+      FROM licenses l
+      WHERE l.source = 'promo'
+    `;
+    let promoStats = { total: 0, redeemed: 0, unredeemed: 0, expired_unredeemed: 0 };
+    try {
+      const promoStatsRes = await env.DB.prepare(promoStatsSql).bind(nowIso, nowIso).first<{
+        total_promo: number;
+        redeemed: number;
+        unredeemed: number;
+        expired_unredeemed: number;
+      }>();
+      if (promoStatsRes) {
+        promoStats = {
+          total: promoStatsRes.total_promo || 0,
+          redeemed: promoStatsRes.redeemed || 0,
+          unredeemed: promoStatsRes.unredeemed || 0,
+          expired_unredeemed: promoStatsRes.expired_unredeemed || 0
+        };
+      }
+    } catch {
+      // In case table or query in partial mock environments
+    }
+
     return new Response(JSON.stringify({
       success: true,
       licenses: licensesWithDevices,
       total,
       limit,
-      offset
+      offset,
+      promo_stats: promoStats
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
