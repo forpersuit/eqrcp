@@ -218,7 +218,7 @@
 <a class="font-label-md text-label-md text-on-surface-variant hover:text-secondary transition-colors duration-300" href="#pricing" data-i18n="nav_pricing">가격 정책</a>
 <a class="font-label-md text-label-md text-on-surface-variant hover:text-secondary transition-colors duration-300" href="#compliance" data-i18n="nav_compliance">준수 정책</a>
 <a class="font-label-md text-label-md text-on-surface-variant hover:text-secondary transition-colors duration-300" href="mailto:support@eqt.net.im" data-i18n="nav_support">지원</a>
-<a class="font-label-md text-label-md text-on-surface-variant hover:text-secondary transition-colors duration-300" href="https://docs.eqt.net.im/en/intro" target="_blank" rel="noopener noreferrer" data-i18n="nav_docs">기술 문서</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-secondary transition-colors duration-300" href="https://docs.eqt.net.im/ko/intro" target="_blank" rel="noopener noreferrer" data-i18n="nav_docs">기술 문서</a>
 
 <!-- Refined Divider -->
 <div class="h-4 w-[1px] bg-white/20 mx-0.5"></div>
@@ -469,7 +469,7 @@
 </div>
 <div class="flex flex-col md:flex-row gap-lg md:gap-xl">
 <a class="font-body-md text-body-md text-primary font-semibold hover:underline transition-colors" href="/portal.html" data-i18n="nav_portal">라이선스 관리</a>
-<a class="font-body-md text-body-md text-on-surface-variant hover:text-secondary transition-colors" href="https://docs.eqt.net.im/en/intro" target="_blank" rel="noopener noreferrer" data-i18n="nav_docs">기술 문서</a>
+<a class="font-body-md text-body-md text-on-surface-variant hover:text-secondary transition-colors" href="https://docs.eqt.net.im/ko/intro" target="_blank" rel="noopener noreferrer" data-i18n="nav_docs">기술 문서</a>
 <a class="font-body-md text-body-md text-on-surface-variant hover:text-secondary transition-colors" href="mailto:support@eqt.net.im" data-i18n="footer_support">고객지원: support@eqt.net.im</a>
 <a class="font-body-md text-body-md text-on-surface-variant hover:text-secondary transition-colors" href="/pricing.html" data-i18n="nav_pricing">가격 정책</a>
 <a class="font-body-md text-body-md text-on-surface-variant hover:text-secondary transition-colors" href="/refund.html" data-i18n="comp_refund">환불 규정</a>
@@ -1139,11 +1139,9 @@ function getCookie(name) {
         });
 
         // Update docs link to match current language
-        const docsMap = {
-            'zh': 'https://docs.eqt.net.im/zh/intro',
-            'fr': 'https://docs.eqt.net.im/fr/intro'
-        };
-        const targetDocsUrl = docsMap[lang] || 'https://docs.eqt.net.im/en/intro';
+        const supportedDocsLangs = ['zh', 'en', 'fr', 'ja', 'ko', 'de', 'es'];
+        const targetDocsLang = supportedDocsLangs.includes(lang) ? lang : 'en';
+        const targetDocsUrl = `https://docs.eqt.net.im/${targetDocsLang}/intro`;
         document.querySelectorAll('a[data-i18n="nav_docs"]').forEach(a => {
             a.setAttribute('href', targetDocsUrl);
         });

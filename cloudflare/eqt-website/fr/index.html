@@ -1139,11 +1139,9 @@ function getCookie(name) {
         });
 
         // Update docs link to match current language
-        const docsMap = {
-            'zh': 'https://docs.eqt.net.im/zh/intro',
-            'fr': 'https://docs.eqt.net.im/fr/intro'
-        };
-        const targetDocsUrl = docsMap[lang] || 'https://docs.eqt.net.im/en/intro';
+        const supportedDocsLangs = ['zh', 'en', 'fr', 'ja', 'ko', 'de', 'es'];
+        const targetDocsLang = supportedDocsLangs.includes(lang) ? lang : 'en';
+        const targetDocsUrl = `https://docs.eqt.net.im/${targetDocsLang}/intro`;
         document.querySelectorAll('a[data-i18n="nav_docs"]').forEach(a => {
             a.setAttribute('href', targetDocsUrl);
         });

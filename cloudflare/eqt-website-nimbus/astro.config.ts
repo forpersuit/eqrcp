@@ -33,6 +33,34 @@ const nimbusConfig = defineNimbusConfig({
       { label: "Dépannage et FAQ", autogenerate: { directory: "fr/troubleshooting" } },
       { label: "Manuel CLI", autogenerate: { directory: "fr/cli" } },
       { label: "Sécurité et confidentialité", autogenerate: { directory: "fr/security" } },
+
+      // 日本語
+      { label: "製品概要", link: "/ja/intro" },
+      { label: "ユーザーガイド", autogenerate: { directory: "ja/guides" } },
+      { label: "トラブルシューティング & FAQ", autogenerate: { directory: "ja/troubleshooting" } },
+      { label: "CLI マニュアル", autogenerate: { directory: "ja/cli" } },
+      { label: "セキュリティ白書", autogenerate: { directory: "ja/security" } },
+
+      // 한국어
+      { label: "제품 개요", link: "/ko/intro" },
+      { label: "사용자 가이드", autogenerate: { directory: "ko/guides" } },
+      { label: "문제 해결 및 FAQ", autogenerate: { directory: "ko/troubleshooting" } },
+      { label: "CLI 매뉴얼", autogenerate: { directory: "ko/cli" } },
+      { label: "보안 백서", autogenerate: { directory: "ko/security" } },
+
+      // Deutsch
+      { label: "Produktübersicht", link: "/de/intro" },
+      { label: "Benutzerhandbuch", autogenerate: { directory: "de/guides" } },
+      { label: "Fehlerbehebung & FAQ", autogenerate: { directory: "de/troubleshooting" } },
+      { label: "CLI-Handbuch", autogenerate: { directory: "de/cli" } },
+      { label: "Sicherheits-Whitepaper", autogenerate: { directory: "de/security" } },
+
+      // Español
+      { label: "Descripción general", link: "/es/intro" },
+      { label: "Guías de usuario", autogenerate: { directory: "es/guides" } },
+      { label: "Resolución de problemas y FAQ", autogenerate: { directory: "es/troubleshooting" } },
+      { label: "Manual de CLI", autogenerate: { directory: "es/cli" } },
+      { label: "Libro blanco de seguridad", autogenerate: { directory: "es/security" } },
     ],
   },
 });
@@ -52,6 +80,10 @@ export default defineConfig({
     "/zh": "/zh/intro",
     "/en": "/en/intro",
     "/fr": "/fr/intro",
+    "/ja": "/ja/intro",
+    "/ko": "/ko/intro",
+    "/de": "/de/intro",
+    "/es": "/es/intro",
   },
   // nimbus:adapter
   output: "static",
