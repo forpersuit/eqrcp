@@ -1,10 +1,10 @@
 {
   "name": "eqt-website",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "EQT Official Landing Page, Pricing & License Self-service Portal on Cloudflare Pages",
   "scripts": {
     "build": "node ../../scripts/build-i18n-website.js",
-    "deploy": "npm run build && wrangler pages deploy ./ --project-name=eqt"
+    "deploy": "npm run build && env http_proxy=http://127.0.0.1:10828 https_proxy=http://127.0.0.1:10828 all_proxy=http://127.0.0.1:10828 HTTP_PROXY=http://127.0.0.1:10828 HTTPS_PROXY=http://127.0.0.1:10828 ALL_PROXY=http://127.0.0.1:10828 wrangler pages deploy ./ --project-name=eqt --branch=master"
   },
   "devDependencies": {
     "wrangler": "^4.113.0"
