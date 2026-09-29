@@ -36,6 +36,26 @@ describe('audit helpers', () => {
     expect(summarizeDetails(row)).toBe('PRO · 设备上限 3 · 永久 · 邮箱 buyer@example.com · 已发信');
   });
 
+  it('summarizeDetails should format BATCH_GENERATE action', () => {
+    const row: AdminAuditLog = {
+      id: 10,
+      action: 'BATCH_GENERATE',
+      target_type: 'LICENSE',
+      target_id: null,
+      details_json: JSON.stringify({
+        count: 50,
+        tier: 'PLUS',
+        source: 'promo',
+        max_devices: 2,
+        expires_at: '2026-10-30T00:00:00Z',
+        duration_days: 14
+      }),
+      operator_ip: '1.2.3.4',
+      created_at: '2026-09-29T00:00:00Z',
+    };
+    expect(summarizeDetails(row)).toBe('批量生成 50 个 · PLUS · promo · 设备上限 2 · 到期 2026-10-30T00:00:00Z · 激活有效 14 天');
+  });
+
   it('summarizeDetails should format REVOKE action', () => {
     const row: AdminAuditLog = {
       id: 2,

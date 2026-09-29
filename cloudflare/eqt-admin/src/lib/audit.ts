@@ -53,6 +53,8 @@ export function summarizeDetails(row: AdminAuditLog, tFn?: TranslateFunction): s
     if (key === 'audit.summary.resetIpLimit') return `重置IP限流 (${params?.ip}) · ${params?.status}`;
     if (key === 'audit.summary.resetCleared') return '已清空';
     if (key === 'audit.summary.resetInactive') return '未处于限流';
+    if (key === 'audit.summary.batchCount') return `批量生成 ${params?.count} 个`;
+    if (key === 'audit.summary.durationDays') return `激活有效 ${params?.days} 天`;
     return key;
   });
 
@@ -65,6 +67,18 @@ export function summarizeDetails(row: AdminAuditLog, tFn?: TranslateFunction): s
         d.expires_at === 'LIFETIME' ? tr('audit.summary.lifetime') : d.expires_at ? tr('audit.summary.expiresAt', { date: String(d.expires_at) }) : null,
         d.buyer_email ? tr('audit.summary.email', { email: String(d.buyer_email) }) : null,
         d.email_sent === true ? tr('audit.summary.emailSent') : d.send_email_requested ? tr('audit.summary.emailNotSent') : null
+      ]
+        .filter(Boolean)
+        .join(' · ');
+
+    case 'BATCH_GENERATE':
+      return [
+        tr('audit.summary.batchCount', { count: Number(d.count || 0) }),
+        d.tier ? String(d.tier) : null,
+        d.source ? String(d.source) : null,
+        d.max_devices != null ? tr('audit.summary.maxDevices', { count: Number(d.max_devices) }) : null,
+        d.expires_at === 'LIFETIME' ? tr('audit.summary.lifetime') : d.expires_at ? tr('audit.summary.expiresAt', { date: String(d.expires_at) }) : null,
+        d.duration_days != null ? tr('audit.summary.durationDays', { days: Number(d.duration_days) }) : null
       ]
         .filter(Boolean)
         .join(' · ');

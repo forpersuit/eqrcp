@@ -12,6 +12,7 @@ export type LicenseSource = 'purchase' | 'promo' | 'admin' | 'test';
 export type RevokeReason = 'refund' | 'chargeback' | 'subscription' | 'admin' | 'test' | 'expired';
 export type AdminAuditAction =
   | 'GENERATE'
+  | 'BATCH_GENERATE'
   | 'REVOKE'
   | 'UNBIND'
   | 'CLEAR_LOGS'

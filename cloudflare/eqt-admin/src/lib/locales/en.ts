@@ -366,6 +366,7 @@ export const en = {
     actions: {
       ALL: "All Actions",
       GENERATE: "Generate License (GENERATE)",
+      BATCH_GENERATE: "Batch Generate Licenses (BATCH_GENERATE)",
       REVOKE: "Revoke License (REVOKE)",
       UNBIND: "Unbind Devices (UNBIND)",
       CLEAR_LOGS: "Clear Error Logs (CLEAR_LOGS)",
@@ -385,6 +386,8 @@ export const en = {
       email: "Email {email}",
       emailSent: "Email Sent",
       emailNotSent: "Email Not Sent",
+      batchCount: "Batch Generated {count}",
+      durationDays: "Valid for {days} days post-activation",
       revokedFrom: "{from}→revoked",
       revokedTo: "→revoked",
       activeDevicesCount: "Devices at Revoke {count}",

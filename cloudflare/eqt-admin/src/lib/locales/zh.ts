@@ -367,6 +367,7 @@ export const zh = {
     actions: {
       ALL: "全部动作",
       GENERATE: "生成授权码 (GENERATE)",
+      BATCH_GENERATE: "批量生成授权码 (BATCH_GENERATE)",
       REVOKE: "吊销授权 (REVOKE)",
       UNBIND: "解绑设备 (UNBIND)",
       CLEAR_LOGS: "清空错误日志 (CLEAR_LOGS)",
@@ -386,6 +387,8 @@ export const zh = {
       email: "邮箱 {email}",
       emailSent: "已发信",
       emailNotSent: "未发信",
+      batchCount: "批量生成 {count} 个",
+      durationDays: "激活有效 {days} 天",
       revokedFrom: "{from}→已吊销",
       revokedTo: "→已吊销",
       activeDevicesCount: "当时设备 {count}",

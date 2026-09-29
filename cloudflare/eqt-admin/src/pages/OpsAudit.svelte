@@ -21,6 +21,7 @@
   const actions = [
     'ALL',
     'GENERATE',
+    'BATCH_GENERATE',
     'REVOKE',
     'UNBIND',
     'CLEAR_LOGS',
