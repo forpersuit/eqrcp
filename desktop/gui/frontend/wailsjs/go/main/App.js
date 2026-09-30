@@ -6,6 +6,14 @@ export function ActivateLicense(arg1) {
   return window['go']['main']['App']['ActivateLicense'](arg1);
 }
 
+export function ActivateLicenseWithEmail(arg1, arg2, arg3) {
+  return window['go']['main']['App']['ActivateLicenseWithEmail'](arg1, arg2, arg3);
+}
+
+export function ActivateLicenseWithResult(arg1) {
+  return window['go']['main']['App']['ActivateLicenseWithResult'](arg1);
+}
+
 export function AgentStatus() {
   return window['go']['main']['App']['AgentStatus']();
 }
@@ -200,6 +208,10 @@ export function SelectReceiveDirectory() {
 
 export function SelectShareDirectory() {
   return window['go']['main']['App']['SelectShareDirectory']();
+}
+
+export function SendActivationCode(arg1, arg2) {
+  return window['go']['main']['App']['SendActivationCode'](arg1, arg2);
 }
 
 export function SetAutoStop(arg1) {

@@ -1722,6 +1722,30 @@ func (a *App) ActivateLicense(code string) error {
 	return a.agent.activateLicense(code)
 }
 
+func (a *App) ActivateLicenseWithResult(code string) (*server.ActivationResult, error) {
+	a.logInfo(fmt.Sprintf("[GUI] ActivateLicenseWithResult called with code=%s", code))
+	if a.agent == nil {
+		return nil, fmt.Errorf("agent not initialized")
+	}
+	return a.agent.activateLicenseWithResult(code)
+}
+
+func (a *App) SendActivationCode(licenseCode, email string) error {
+	a.logInfo(fmt.Sprintf("[GUI] SendActivationCode called for license=%s, email=%s", licenseCode, email))
+	if a.agent == nil {
+		return fmt.Errorf("agent not initialized")
+	}
+	return a.agent.sendActivationCode(licenseCode, email)
+}
+
+func (a *App) ActivateLicenseWithEmail(licenseCode, email, otpCode string) (*server.ActivationResult, error) {
+	a.logInfo(fmt.Sprintf("[GUI] ActivateLicenseWithEmail called for license=%s, email=%s", licenseCode, email))
+	if a.agent == nil {
+		return nil, fmt.Errorf("agent not initialized")
+	}
+	return a.agent.activateLicenseWithEmail(licenseCode, email, otpCode)
+}
+
 func (a *App) ResetLicense() error {
 	a.logInfo("[GUI] ResetLicense called")
 	if a.agent == nil {

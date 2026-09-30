@@ -1,11 +1,12 @@
 import { Env, MAX_YEARLY_UNBINDS, ONE_YEAR_MS } from '../types';
 import { extractRequestLang, getApiTranslation, getDeviceNoticeTemplate } from '../i18n';
-import { hexToUint8Array, bufToHex } from '../utils/crypto';
+import { hexToUint8Array, bufToHex, emailHash, verificationStorageKey } from '../utils/crypto';
 import { ensureDeviceIdColumn, ensureActivationNetworkColumns, ensureLicenseSourceColumns, ensureBetaTestersTable, isDeviceAuthorizedForDev, ensureFreeDailyUsageTable } from '../utils/auth';
 import { isTestEnvironment } from '../utils/env-guard';
-import { matchFingerprint, countMatchingFingerprints, checkAbusiveRefundBlacklist } from '../utils/blacklist';
+import { matchFingerprint, countMatchingFingerprints, checkAbusiveRefundBlacklist, checkEmailBlacklist } from '../utils/blacklist';
 import { sendDRMEmail, renderEmailWrapper } from '../services/smtp';
 import { clientIpFromRequest, isDeviceRegisterRateLimited, recordDeviceRegisterRequest, isD1RateLimited, logRateLimitHit } from '../utils/rate-limit';
+import { otpFailStorageKey, isOtpVerifyBlocked, recordOtpVerifyFail, clearOtpVerifyFails } from './auth';
 import { normalizeLicenseSource } from '../utils/license-source';
 import { registerOrRefreshDevice } from '../utils/device-registry';
 import { checkAbuseAfterActivation } from '../utils/abuse-detection';
@@ -84,8 +85,10 @@ function needsSandboxConstraint(licenseSource: string, env: Env, url?: URL): boo
 }
 
 // Real-time tester whitelist check. The whitelist is the single authority for
+// Real-time tester whitelist check. The whitelist is the single authority for
 // "registered & still allowed": deleting a whitelist entry immediately blocks
 // activation/refresh. Never trusts the client-supplied device_id.
+// Supports Dual-Channel Whitelist: Channel 1 (email), Channel 2 (authoritativeDeviceId).
 async function assertSandboxTesterAllowed(
   env: Env,
   buyerEmail: string | null | undefined,
@@ -95,30 +98,51 @@ async function assertSandboxTesterAllowed(
 ): Promise<Response | null> {
   await ensureBetaTestersTable(env);
   const email = (buyerEmail || "").trim().toLowerCase();
-  if (!email) {
-    return new Response(JSON.stringify({
-      error: getApiTranslation("unauthorized_test_device", reqLang) || "This test license has no registered tester email"
-    }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  const devId = (authoritativeDeviceId || "").trim();
+
+  let tester: any = null;
+
+  // Channel 1: Match by email if present
+  if (email) {
+    tester = await env.DB.prepare(
+      "SELECT * FROM sandbox_beta_testers WHERE LOWER(email) = ? AND status = 'active'"
+    ).bind(email).first<any>();
   }
-  const tester = await env.DB.prepare(
-    "SELECT * FROM sandbox_beta_testers WHERE LOWER(email) = ? AND status = 'active'"
-  ).bind(email).first<any>();
+
+  // Channel 2: Match by device_id if not found by email or if email was empty
+  if (!tester && devId) {
+    tester = await env.DB.prepare(
+      "SELECT * FROM sandbox_beta_testers WHERE device_id = ? AND status = 'active'"
+    ).bind(devId).first<any>();
+
+    // If matched by device_id and tester has no email (or different), and we now have verified email,
+    // auto-associate email for future queries
+    if (tester && email && (!tester.email || tester.email.trim() === '')) {
+      await env.DB.prepare(
+        "UPDATE sandbox_beta_testers SET email = ? WHERE id = ?"
+      ).bind(email, tester.id).run();
+    }
+  }
+
   if (!tester) {
     return new Response(JSON.stringify({
-      error: getApiTranslation("unauthorized_test_device", reqLang) || "This test license is not registered for any sandbox tester"
+      error: getApiTranslation("unauthorized_test_device", reqLang) || "This test license or device is not registered for any active sandbox tester"
     }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
+
   const registeredDeviceId = (tester.device_id || "").trim();
   if (!registeredDeviceId) {
     return new Response(JSON.stringify({
       error: getApiTranslation("unauthorized_test_device", reqLang) || "This test license is bound to a tester entry without a bound device"
     }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
-  if (authoritativeDeviceId !== registeredDeviceId) {
+
+  if (devId && devId !== registeredDeviceId) {
     return new Response(JSON.stringify({
       error: getApiTranslation("unauthorized_test_device", reqLang) || `This test license is restricted to authorized device: ${registeredDeviceId}`
     }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
+
   return null;
 }
 
@@ -719,6 +743,91 @@ export async function handleDrmRoutes(
       baseExpiresAt = evaluateLicenseExpiration(license, baseExpiresAt, matchedActivation.activated_at).effectiveExpiresAt;
     }
 
+    // Email ownership binding gate:
+    // If this license has NO bound email (promo/test/gift), and it's being activated on a new device,
+    // require user to provide email + OTP verification code.
+    const needsEmailBinding = !isAlreadyActivated && (!license.buyer_email || license.buyer_email.trim() === '');
+    const clientProvidedEmail = (body.email || '').trim().toLowerCase();
+    const clientProvidedCode = (body.verification_code || body.code || '').trim();
+
+    if (needsEmailBinding) {
+      if (!clientProvidedEmail || !clientProvidedCode) {
+        // Return 200 challenge with need_email: true before any device registration or sandbox checks
+        return new Response(JSON.stringify({
+          need_email: true,
+          license_code: license_code,
+          message: getApiTranslation("activation_need_email", reqLang) || "Please verify your email to bind ownership and complete activation",
+          error: "EMAIL_VERIFICATION_REQUIRED"
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      // If email and verification code are supplied:
+      if (!clientProvidedEmail.includes('@')) {
+        return new Response(JSON.stringify({ error: getApiTranslation("missing_params", reqLang) }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      // Gate A: Check email blacklist
+      const emailBl = await checkEmailBlacklist(env, clientProvidedEmail);
+      if (emailBl.isAbusive) {
+        return new Response(JSON.stringify({
+          error: getApiTranslation("blacklist_email", reqLang) || emailBl.reason,
+          reason_key: "blacklist_email"
+        }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      // Gate B: Check OTP brute force rate limit
+      const failKey = otpFailStorageKey(request, "activate", clientProvidedEmail);
+      if (await isOtpVerifyBlocked(env, failKey)) {
+        return new Response(JSON.stringify({
+          error: getApiTranslation("too_many_verify_attempts", reqLang),
+          error_code: "TOO_MANY_ATTEMPTS"
+        }), {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      // Verify OTP from verification_codes
+      const storageKey = verificationStorageKey("activate", clientProvidedEmail);
+      const codeRow = await env.DB.prepare(
+        "SELECT code, expires_at FROM verification_codes WHERE email = ?"
+      ).bind(storageKey).first<any>();
+
+      if (!codeRow || codeRow.code !== clientProvidedCode) {
+        await recordOtpVerifyFail(env, failKey);
+        return new Response(JSON.stringify({
+          error: getApiTranslation("invalid_verification_code", reqLang),
+          error_code: "INVALID_VERIFICATION_CODE"
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      const exp = new Date(codeRow.expires_at).getTime();
+      if (isNaN(exp) || exp < Date.now()) {
+        await recordOtpVerifyFail(env, failKey);
+        return new Response(JSON.stringify({
+          error: getApiTranslation("invalid_verification_code", reqLang),
+          error_code: "EXPIRED_VERIFICATION_CODE"
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      await clearOtpVerifyFails(env, failKey);
+    }
+
     // Sandbox gate: resolve authoritative device_id and enforce the real-time tester whitelist
     // for every sandbox-constrained request (including already-activated re-activations), so
     // deleting a whitelist entry immediately blocks activation/refresh.
@@ -736,8 +845,32 @@ export async function handleDrmRoutes(
       authoritativeDeviceId = regRes.device_id || "";
     }
     if (sandboxConstrained) {
-      const denied = await assertSandboxTesterAllowed(env, license.buyer_email, authoritativeDeviceId, reqLang, corsHeaders);
+      const effectiveEmail = needsEmailBinding ? clientProvidedEmail : license.buyer_email;
+      const denied = await assertSandboxTesterAllowed(env, effectiveEmail, authoritativeDeviceId, reqLang, corsHeaders);
       if (denied) return denied;
+    }
+
+    // If this was an email binding activation, bind atomically in DB now
+    if (needsEmailBinding) {
+      const userEmailHash = await emailHash(clientProvidedEmail);
+      const updateRes = await env.DB.prepare(
+        "UPDATE licenses SET buyer_email = ?, buyer_email_hash = ? WHERE license_code = ? AND (buyer_email IS NULL OR buyer_email = '')"
+      ).bind(clientProvidedEmail, userEmailHash, license_code).run();
+
+      if (!updateRes.meta || updateRes.meta.changes === 0) {
+        return new Response(JSON.stringify({
+          error: getApiTranslation("license_already_bound", reqLang),
+          error_code: "LICENSE_ALREADY_BOUND"
+        }), {
+          status: 409,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      const storageKey = verificationStorageKey("activate", clientProvidedEmail);
+      ctx.waitUntil(env.DB.prepare("DELETE FROM verification_codes WHERE email = ?").bind(storageKey).run());
+      license.buyer_email = clientProvidedEmail;
+      license.buyer_email_hash = userEmailHash;
     }
 
     // Peer licenses on this device — stacking decision BEFORE writing a new activation row

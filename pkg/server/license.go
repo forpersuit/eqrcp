@@ -357,6 +357,17 @@ func VerifyLocalLicense() bool {
 	return true
 }
 
+// ActivationResult conveys the outcome of an online activation attempt.
+type ActivationResult struct {
+	Success     bool   `json:"success"`
+	NeedEmail   bool   `json:"need_email"`
+	LicenseCode string `json:"license_code"`
+	Message     string `json:"message"`
+}
+
+// ErrNeedEmailVerification is returned when an activation code requires email ownership binding
+var ErrNeedEmailVerification = errors.New("EMAIL_VERIFICATION_REQUIRED")
+
 // ActivateLicenseOnline calls the CF Workers API to activate this device
 // with the provided license code. On success, saves .lic locally and updates state.
 func ActivateLicenseOnline(licenseCode string) error {
@@ -365,45 +376,49 @@ func ActivateLicenseOnline(licenseCode string) error {
 
 // ActivateLicenseOnlineWithLang calls the CF Workers API with language metadata
 func ActivateLicenseOnlineWithLang(licenseCode string, lang string) error {
+	res, err := activateLicenseOnlineInternal(licenseCode, "", "", lang)
+	if err != nil {
+		return err
+	}
+	if res != nil && res.NeedEmail {
+		if res.Message != "" {
+			return fmt.Errorf("%w: %s", ErrNeedEmailVerification, res.Message)
+		}
+		return ErrNeedEmailVerification
+	}
+	return nil
+}
+
+// ActivateLicenseOnlineWithResult calls the CF Workers API and returns structured ActivationResult
+func ActivateLicenseOnlineWithResult(licenseCode string, lang string) (*ActivationResult, error) {
+	return activateLicenseOnlineInternal(licenseCode, "", "", lang)
+}
+
+// ActivateLicenseWithEmailOnline sends email and OTP to complete ownership binding & activation
+func ActivateLicenseWithEmailOnline(licenseCode, email, otpCode, lang string) (*ActivationResult, error) {
+	return activateLicenseOnlineInternal(licenseCode, email, otpCode, lang)
+}
+
+// SendActivationCodeOnline requests a 6-digit OTP code to bind an email to a license code
+func SendActivationCodeOnline(licenseCode, email, lang string) error {
 	if lang == "" {
 		lang = config.GetConfiguredLang()
 	}
 
-	uuid, cpu, disk := GetDeviceFingerprintHashes()
-	validCount := 0
-	if uuid != "" {
-		validCount++
-	}
-	if cpu != "" {
-		validCount++
-	}
-	if disk != "" {
-		validCount++
-	}
-	if validCount < 2 {
-		return errors.New("insufficient hardware permissions: at least 2 valid hardware identifiers required")
-	}
-
 	reqMap := map[string]string{
+		"email":        email,
+		"purpose":      "activate",
 		"license_code": licenseCode,
-		"uuid_hash":    uuid,
-		"cpu_hash":     cpu,
-		"disk_hash":    disk,
-		"device_id":    GetDeviceStableID(),
-		"app_version":  version.Version(),
-	}
-	if lang != "" {
-		reqMap["lang"] = lang
+		"lang":         lang,
 	}
 
 	reqBody, _ := json.Marshal(reqMap)
+	apiURL := fmt.Sprintf("%s/api/v1/auth/send-code", getLicenseServer())
 
-	apiURL := fmt.Sprintf("%s/api/v1/activate", getLicenseServer())
-
-	client := &http.Client{Timeout: 20 * time.Second}
+	client := &http.Client{Timeout: 15 * time.Second}
 	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(reqBody))
 	if err != nil {
-		return fmt.Errorf("activation request failed: %w", err)
+		return fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Trace-Id", getTraceID())
@@ -413,7 +428,7 @@ func ActivateLicenseOnlineWithLang(licenseCode string, lang string) error {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("activation request failed: %w", err)
+		return fmt.Errorf("failed to send code request: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -433,38 +448,131 @@ func ActivateLicenseOnlineWithLang(licenseCode string, lang string) error {
 		return fmt.Errorf("server returned status code %d", resp.StatusCode)
 	}
 
+	return nil
+}
+
+func activateLicenseOnlineInternal(licenseCode, email, otpCode, lang string) (*ActivationResult, error) {
+	if lang == "" {
+		lang = config.GetConfiguredLang()
+	}
+
+	uuid, cpu, disk := GetDeviceFingerprintHashes()
+	validCount := 0
+	if uuid != "" {
+		validCount++
+	}
+	if cpu != "" {
+		validCount++
+	}
+	if disk != "" {
+		validCount++
+	}
+	if validCount < 2 {
+		return nil, errors.New("insufficient hardware permissions: at least 2 valid hardware identifiers required")
+	}
+
+	reqMap := map[string]string{
+		"license_code": licenseCode,
+		"uuid_hash":    uuid,
+		"cpu_hash":     cpu,
+		"disk_hash":    disk,
+		"device_id":    GetDeviceStableID(),
+		"app_version":  version.Version(),
+	}
+	if email != "" {
+		reqMap["email"] = email
+	}
+	if otpCode != "" {
+		reqMap["verification_code"] = otpCode
+	}
+	if lang != "" {
+		reqMap["lang"] = lang
+	}
+
+	reqBody, _ := json.Marshal(reqMap)
+
+	apiURL := fmt.Sprintf("%s/api/v1/activate", getLicenseServer())
+
+	client := &http.Client{Timeout: 20 * time.Second}
+	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(reqBody))
+	if err != nil {
+		return nil, fmt.Errorf("activation request failed: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Trace-Id", getTraceID())
+	if lang != "" {
+		req.Header.Set("Accept-Language", lang)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("activation request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respData, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		var errResp struct {
+			Error string `json:"error"`
+		}
+		_ = json.Unmarshal(respData, &errResp)
+		if errResp.Error != "" {
+			return nil, errors.New(errResp.Error)
+		}
+		return nil, fmt.Errorf("server returned status code %d", resp.StatusCode)
+	}
+
+	// Probe for need_email challenge response (REV-01)
+	var challengeResp struct {
+		NeedEmail   bool   `json:"need_email"`
+		LicenseCode string `json:"license_code"`
+		Message     string `json:"message"`
+	}
+	if err := json.Unmarshal(respData, &challengeResp); err == nil && challengeResp.NeedEmail {
+		return &ActivationResult{
+			Success:     false,
+			NeedEmail:   true,
+			LicenseCode: challengeResp.LicenseCode,
+			Message:     challengeResp.Message,
+		}, nil
+	}
+
 	var cert LicenseCertificate
 	if err := json.Unmarshal(respData, &cert); err != nil {
-		return fmt.Errorf("failed to decode activation certificate: %w", err)
+		return nil, fmt.Errorf("failed to decode activation certificate: %w", err)
 	}
 
 	// Perform sanity check on signature & fingerprint before saving
 	if !VerifyLicenseSignature(cert) {
-		return errors.New("signature verification failed on newly received license")
+		return nil, errors.New("signature verification failed on newly received license")
 	}
 
 	if !VerifyFingerprint(cert) {
-		return errors.New("fingerprint check failed on newly received license")
+		return nil, errors.New("fingerprint check failed on newly received license")
 	}
 
 	if cert.VerifySignature != "" && !VerifySyncSignature(cert) {
-		return errors.New("sync verification signature invalid on newly received license")
+		return nil, errors.New("sync verification signature invalid on newly received license")
 	}
 
 	// Save to disk with local last seen time metadata initialized
 	cert.LastSeenLocalTime = time.Now().Format(time.RFC3339)
 	path := getLicenseFilePath()
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return fmt.Errorf("failed to create config dir: %w", err)
+		return nil, fmt.Errorf("failed to create config dir: %w", err)
 	}
 	certBytes, err := json.Marshal(cert)
 	if err != nil {
-		return fmt.Errorf("failed to serialize license: %w", err)
+		return nil, fmt.Errorf("failed to serialize license: %w", err)
 	}
 	licenseFileMu.Lock()
 	if err := os.WriteFile(path, certBytes, 0644); err != nil {
 		licenseFileMu.Unlock()
-		return fmt.Errorf("failed to write license file: %w", err)
+		return nil, fmt.Errorf("failed to write license file: %w", err)
 	}
 	licenseFileMu.Unlock()
 
@@ -476,7 +584,12 @@ func ActivateLicenseOnlineWithLang(licenseCode string, lang string) error {
 	// Apply activation status immediately using server verification sync time
 	SetClockTampered(false)
 	SetPaidStatus(true, cert.LastOnlineSyncTime, cert.ExpiresAt, cert.Tier)
-	return nil
+	return &ActivationResult{
+		Success:     true,
+		NeedEmail:   false,
+		LicenseCode: cert.LicenseCode,
+		Message:     "Activated successfully",
+	}, nil
 }
 
 // SaveRestoredLicenseCertificate writes an automatically restored license certificate to disk,

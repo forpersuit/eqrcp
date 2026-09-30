@@ -16,6 +16,7 @@ import { renderShareOverlay, closeShareOverlay, prepareMergedQRCode, downloadSha
 import { renderLogViewerOverlay, openLogViewer, closeLogViewer, refreshLogTail, setLogFilter, setLogSearch, toggleAutoRefresh, copyAllLogs, exportDiagnostics, logViewerState, initLogViewerDrag } from './components/log_viewer.js';
 import { renderChatTransfersTray } from './components/chat_tray.js';
 import { renderTLSSettingIcon, renderTLSDiagnosticControl, getDevTLSStatusText, renderTaskSecurityBadge, renderTopbarTLSIndicator } from './components/tls_status.js';
+import { renderActivationEmailModal } from './components/activation_email_modal.js';
 
 import {ClipboardGetText, ClipboardSetText, EventsOn, LogInfo, LogError} from '../wailsjs/runtime/runtime';
 import {
@@ -49,6 +50,7 @@ import {
     Share,
     SetRightClickIntegrationEnabled,
     ActivateLicense,
+    ActivateLicenseWithResult,
     ResetLicense,
     RefreshLicenseStatus,
     StopChat,
@@ -2246,6 +2248,7 @@ function renderPanel() {
     const title = {
         settings: t('settings'),
         redeem: t('redeem_title'),
+        'bind-email': t('bind_email_title') || 'Bind Owner Email & Activate',
         about: t('about_title'),
         feedback: t('feedback'),
         license: t('plan_license_menu'),
@@ -2256,12 +2259,15 @@ function renderPanel() {
     const isConfirm = state.activePanel === 'confirm-switch';
     const isPlanComp = state.activePanel === 'plan-comparison';
     const isCrashReport = state.activePanel === 'crash-report';
+    const isBindEmail = state.activePanel === 'bind-email';
     let modalStyle = '';
     if (isConfirm) {
         modalStyle = 'style="max-width: 420px; width: min(420px, 100%);"';
     } else if (isPlanComp) {
         modalStyle = 'style="max-width: 780px; width: min(780px, 100%);"';
     } else if (isCrashReport) {
+        modalStyle = 'style="max-width: 480px; width: min(480px, 100%);"';
+    } else if (isBindEmail) {
         modalStyle = 'style="max-width: 480px; width: min(480px, 100%);"';
     }
     return `
@@ -2276,6 +2282,7 @@ function renderPanel() {
                 </div>
                 ${state.activePanel === 'settings' ? renderSettingsPanel() : ''}
                 ${state.activePanel === 'redeem' ? renderRedeemPanel() : ''}
+                ${state.activePanel === 'bind-email' ? renderActivationEmailModal(state) : ''}
                 ${state.activePanel === 'about' ? renderAboutPanel() : ''}
                 ${state.activePanel === 'license' ? renderLicensePanel() : ''}
                 ${state.activePanel === 'plan-comparison' ? renderPlanComparisonPanel() : ''}
@@ -3931,6 +3938,26 @@ function bindEvents() {
                 openExternal();
                 return;
             }
+            // Activation Email Modal buttons
+            if (e.target.closest('#activation-email-send-btn')) {
+                import('./components/activation_email_modal.js').then(m => {
+                    m.handleSendActivationCode(state, render);
+                });
+                return;
+            }
+            if (e.target.closest('#activation-email-cancel-btn')) {
+                openPanel('redeem');
+                return;
+            }
+            if (e.target.closest('#activation-email-submit-btn')) {
+                const code = state.activationEmailModal?.licenseCode;
+                import('./components/activation_email_modal.js').then(m => {
+                    m.handleSubmitActivationEmail(state, render, async (res) => {
+                        await handleActivationSuccess(res?.license_code || code);
+                    }, formatActivationError);
+                });
+                return;
+            }
             if (e.target.closest('#send-feedback')) {
                 sendFeedback();
                 return;
@@ -4206,7 +4233,22 @@ function bindEvents() {
                 state.devInjectMsg = t('dev_inject_working');
                 render();
                 openPanel('settings');
-                ActivateLicense(code).then(async () => {
+                ActivateLicenseWithResult(code).then(async (res) => {
+                    if (res && res.need_email) {
+                        state.activationEmailModal = {
+                            licenseCode: code,
+                            message: res.message || t('bind_email_desc'),
+                            email: '',
+                            otpCode: '',
+                            sendingOtp: false,
+                            cooldownSeconds: 0,
+                            submitting: false,
+                            error: '',
+                            notice: ''
+                        };
+                        openPanel('bind-email');
+                        return;
+                    }
                     await loadStatusData();
                     state.devInjectError = false;
                     state.devInjectMsg = t('dev_inject_ok') + ': ' + code;
@@ -4356,6 +4398,18 @@ function bindEvents() {
             }
             if (e.target.id === 'redeem-code') {
                 state.tempRedeemCode = e.target.value;
+                return;
+            }
+            if (e.target.id === 'activation-email-input') {
+                if (state.activationEmailModal) {
+                    state.activationEmailModal.email = e.target.value;
+                }
+                return;
+            }
+            if (e.target.id === 'activation-otp-input') {
+                if (state.activationEmailModal) {
+                    state.activationEmailModal.otpCode = e.target.value;
+                }
                 return;
             }
             if (e.target.id === 'receive-dir') {
@@ -4678,6 +4732,20 @@ function bindEvents() {
                 }
                 return;
             }
+            if (e.target.id === 'activation-email-input') {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    document.querySelector('#activation-email-send-btn')?.click();
+                }
+                return;
+            }
+            if (e.target.id === 'activation-otp-input') {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    document.querySelector('#activation-email-submit-btn')?.click();
+                }
+                return;
+            }
         });
 
         document.addEventListener('pointerdown', (e) => {
@@ -4888,6 +4956,9 @@ function closePanel() {
     }
     if (state.activePanel === 'crash-report') {
         state.crashReport = null;
+    }
+    if (state.activePanel === 'bind-email') {
+        state.activationEmailModal = null;
     }
     if (state.activePanel === 'plan-comparison') {
         state.activePanel = 'license';
@@ -6591,6 +6662,26 @@ function saveLicense(license) {
     }
 }
 
+async function handleActivationSuccess(code, tierHint) {
+    const redeemedAt = new Date().toISOString();
+    await loadStatusData();
+    const effectiveExpires = state.status?.licenseExpiresAt || '';
+    const tier = state.status?.licenseTier || tierHint || (validateRedeemCode(code)?.tier) || 'PLUS';
+    saveLicense({
+        tier: tier,
+        codeHash: checksum(`${code}:stored`, 10),
+        redeemedAt: redeemedAt,
+        codeDate: effectiveExpires,
+    });
+    state.redeemMessage = t('activation_success', { tier: licenseTiers[tier] || tier }) || `${licenseTiers[tier]} activated successfully.`;
+    state.redeemError = '';
+    state.tempRedeemCode = ''; // Clear on success
+    state.activationEmailModal = null;
+    stopChatUsage();
+    openPanel('redeem');
+    render();
+}
+
 function confirmRedeem() {
     if (state.isActivating) return;
     const input = document.querySelector('#redeem-code');
@@ -6608,19 +6699,24 @@ function confirmRedeem() {
     state.isActivating = true;
     render();
 
-    ActivateLicense(code).then(async function() {
-        const redeemedAt = new Date().toISOString();
-        await loadStatusData();
-        const effectiveExpires = state.status?.licenseExpiresAt || '';
-        saveLicense({
-            tier: state.status?.licenseTier || result.tier,
-            codeHash: checksum(`${code}:stored`, 10),
-            redeemedAt: redeemedAt,
-            codeDate: effectiveExpires,
-        });
-        state.redeemMessage = t('activation_success', { tier: licenseTiers[result.tier] || result.tier }) || `${licenseTiers[result.tier]} activated successfully.`;
-        state.tempRedeemCode = ''; // Clear on success
-        stopChatUsage();
+    ActivateLicenseWithResult(code).then(async function(res) {
+        if (res && res.need_email) {
+            state.activationEmailModal = {
+                licenseCode: code,
+                message: res.message || t('bind_email_desc'),
+                email: '',
+                otpCode: '',
+                sendingOtp: false,
+                cooldownSeconds: 0,
+                submitting: false,
+                error: '',
+                notice: ''
+            };
+            openPanel('bind-email');
+            render();
+            return;
+        }
+        await handleActivationSuccess(code, result.tier);
     }).catch(function(e) {
         state.redeemMessage = '';
         state.redeemError = formatActivationError(e);

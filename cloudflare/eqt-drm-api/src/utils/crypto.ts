@@ -1,5 +1,5 @@
-/** Storage purpose for verification_codes PK isolation (portal vs checkout). */
-export type VerificationPurpose = "portal" | "checkout";
+/** Storage purpose for verification_codes PK isolation (portal vs checkout vs activate). */
+export type VerificationPurpose = "portal" | "checkout" | "activate";
 
 /**
  * Composite storage key for verification_codes.email column.

@@ -1,6 +1,6 @@
 import { connect } from 'cloudflare:sockets';
 import { Env } from '../types';
-import { AUTH_CODE_EMAIL_I18N, CHECKOUT_EMAIL_I18N } from '../i18n';
+import { AUTH_CODE_EMAIL_I18N, CHECKOUT_EMAIL_I18N, ACTIVATION_EMAIL_I18N } from '../i18n';
 import { logSystemError } from '../utils/error-logger';
 
 export interface MailOptions {
@@ -301,6 +301,19 @@ export function buildCheckoutEmailHtml(lang: string, code: string): { subject: s
   const t = CHECKOUT_EMAIL_I18N[norm] || CHECKOUT_EMAIL_I18N['zh'] || CHECKOUT_EMAIL_I18N['en'];
   const content = `
     <p style="color: #475569; font-size: 14px;">${t.bodyHtml}</p>
+    <div style="background: #e8f2ee; border: 1px solid #156f5a; border-radius: 8px; padding: 16px; text-align: center; margin: 20px 0;">
+      <span style="font-size: 28px; font-weight: 800; letter-spacing: 6px; color: #0d4e42; font-family: monospace;">${code}</span>
+    </div>
+    <p style="font-size: 13px; color: #64748b;">${t.validityText}</p>
+  `;
+  return { subject: t.subject, html: renderEmailWrapper(t.title, content) };
+}
+
+export function buildActivationEmailHtml(lang: string, code: string, licenseCode: string): { subject: string; html: string } {
+  const norm = (lang || 'en').toLowerCase().substring(0, 2);
+  const t = ACTIVATION_EMAIL_I18N[norm] || ACTIVATION_EMAIL_I18N['zh'] || ACTIVATION_EMAIL_I18N['en'];
+  const content = `
+    <p style="color: #475569; font-size: 14px;">${t.bodyHtml(licenseCode)}</p>
     <div style="background: #e8f2ee; border: 1px solid #156f5a; border-radius: 8px; padding: 16px; text-align: center; margin: 20px 0;">
       <span style="font-size: 28px; font-weight: 800; letter-spacing: 6px; color: #0d4e42; font-family: monospace;">${code}</span>
     </div>

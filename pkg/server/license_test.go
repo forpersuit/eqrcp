@@ -677,6 +677,122 @@ func TestActivateLicenseOnlineWithLang(t *testing.T) {
 	}
 }
 
+func TestUnifiedActivationAndEmailBinding(t *testing.T) {
+	var sendCodeReceivedEmail string
+	var sendCodeReceivedPurpose string
+	var sendCodeReceivedLic string
+	var activateReceivedEmail string
+	var activateReceivedCode string
+
+	stage := "challenge" // "challenge" -> "verify_success"
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/auth/send-code" {
+			var body map[string]string
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			sendCodeReceivedEmail = body["email"]
+			sendCodeReceivedPurpose = body["purpose"]
+			sendCodeReceivedLic = body["license_code"]
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "message": "code sent"})
+			return
+		}
+
+		if r.URL.Path == "/api/v1/activate" {
+			var body map[string]string
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			activateReceivedEmail = body["email"]
+			activateReceivedCode = body["verification_code"]
+
+			w.Header().Set("Content-Type", "application/json")
+			if stage == "challenge" {
+				// Server challenges client for email binding
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{
+					"need_email":   true,
+					"license_code": body["license_code"],
+					"message":      "Please verify your email",
+					"error":        "EMAIL_VERIFICATION_REQUIRED",
+				})
+				return
+			}
+
+			// verify_success stage: issue certificate
+			cert := LicenseCertificate{
+				LicenseCode: body["license_code"],
+				Tier:        "PLUS",
+				UUIDHash:    body["uuid_hash"],
+				CPUHash:     body["cpu_hash"],
+				DiskHash:    body["disk_hash"],
+				DeviceID:    body["device_id"],
+				ExpiresAt:   "LIFETIME",
+				MaxDevices:  2,
+			}
+			cert.LastOnlineSyncTime = time.Now().UTC().Format(time.RFC3339)
+			cert.Signature = signTestPayload(cert)
+			cert.VerifySignature = signTestVerifyPayload(cert)
+			_ = json.NewEncoder(w).Encode(cert)
+			return
+		}
+
+		http.NotFound(w, r)
+	}))
+	defer ts.Close()
+
+	os.Setenv("EQT_LICENSE_SERVER", ts.URL)
+	defer os.Unsetenv("EQT_LICENSE_SERVER")
+	ResetLicense()
+	defer ResetLicense()
+
+	licenseCode := "EQT-PROMO-TEST-001"
+
+	// 1. Initial activation call receives challenge
+	stage = "challenge"
+	res, err := ActivateLicenseOnlineWithResult(licenseCode, "en")
+	if err != nil {
+		t.Fatalf("expected nil error on challenge return, got: %v", err)
+	}
+	if res == nil || !res.NeedEmail {
+		t.Fatalf("expected NeedEmail=true, got: %+v", res)
+	}
+	if res.LicenseCode != licenseCode {
+		t.Errorf("expected LicenseCode=%s, got: %s", licenseCode, res.LicenseCode)
+	}
+
+	// 1.1 Legacy ActivateLicenseOnlineWithLang returns ErrNeedEmailVerification
+	errLegacy := ActivateLicenseOnlineWithLang(licenseCode, "en")
+	if errLegacy == nil || !errors.Is(errLegacy, ErrNeedEmailVerification) {
+		t.Fatalf("expected ErrNeedEmailVerification, got: %v", errLegacy)
+	}
+
+	// 2. Send activation code
+	errSend := SendActivationCodeOnline(licenseCode, "tester@example.com", "en")
+	if errSend != nil {
+		t.Fatalf("SendActivationCodeOnline failed: %v", errSend)
+	}
+	if sendCodeReceivedEmail != "tester@example.com" || sendCodeReceivedPurpose != "activate" || sendCodeReceivedLic != licenseCode {
+		t.Errorf("send-code payload mismatch: email=%s, purpose=%s, lic=%s",
+			sendCodeReceivedEmail, sendCodeReceivedPurpose, sendCodeReceivedLic)
+	}
+
+	// 3. Complete activation with email and OTP
+	stage = "verify_success"
+	resFinal, errFinal := ActivateLicenseWithEmailOnline(licenseCode, "tester@example.com", "654321", "en")
+	if errFinal != nil {
+		t.Fatalf("ActivateLicenseWithEmailOnline failed: %v", errFinal)
+	}
+	if resFinal == nil || !resFinal.Success || resFinal.NeedEmail {
+		t.Fatalf("expected Success=true and NeedEmail=false, got: %+v", resFinal)
+	}
+	if activateReceivedEmail != "tester@example.com" || activateReceivedCode != "654321" {
+		t.Errorf("activate payload mismatch: email=%s, code=%s", activateReceivedEmail, activateReceivedCode)
+	}
+
+	// Verify local state was set to paid
+	if _, ok := GetLocalLicenseInfo(); !ok {
+		t.Errorf("expected valid local license info after successful activation")
+	}
+}
+
 func TestZeroComponentActivationRejection(t *testing.T) {
 	// Force all hardware fingerprints to be empty
 	fingerprintMu.Lock()

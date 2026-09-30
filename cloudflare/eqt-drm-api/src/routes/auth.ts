@@ -1,10 +1,10 @@
 import { Env } from '../types';
 import { extractRequestLang, getApiTranslation } from '../i18n';
-import { sendDRMEmail, buildAuthCodeEmailHtml, buildCheckoutEmailHtml } from '../services/smtp';
+import { sendDRMEmail, buildAuthCodeEmailHtml, buildCheckoutEmailHtml, buildActivationEmailHtml } from '../services/smtp';
 import { logSystemError } from '../utils/error-logger';
 import { emailHash, verificationStorageKey, VerificationPurpose } from '../utils/crypto';
 import { ensureVerificationCodesCreatedAt } from '../utils/auth';
-import { clientIpFromRequest } from '../utils/rate-limit';
+import { clientIpFromRequest, isD1RateLimited } from '../utils/rate-limit';
 import { checkEmailBlacklist } from '../utils/blacklist';
 
 const SEND_CODE_COOLDOWN_MS = 60_000;
@@ -35,11 +35,11 @@ async function isSendCodeRateLimited(env: Env, storageKey: string): Promise<bool
 }
 
 /** D1-backed fail counter (multi-isolate safe). Key: fail:{purpose}:{ip}:{email} */
-function otpFailStorageKey(request: Request, purpose: VerificationPurpose, email: string): string {
+export function otpFailStorageKey(request: Request, purpose: VerificationPurpose, email: string): string {
   return `fail:${purpose}:${clientIpFromRequest(request)}:${email}`;
 }
 
-async function isOtpVerifyBlocked(env: Env, failKey: string): Promise<boolean> {
+export async function isOtpVerifyBlocked(env: Env, failKey: string): Promise<boolean> {
   await ensureVerificationCodesCreatedAt(env);
   const row = await env.DB.prepare(
     "SELECT code, created_at FROM verification_codes WHERE email = ?"
@@ -50,7 +50,7 @@ async function isOtpVerifyBlocked(env: Env, failKey: string): Promise<boolean> {
   return (parseInt(row.code, 10) || 0) >= OTP_VERIFY_MAX_FAILS;
 }
 
-async function recordOtpVerifyFail(env: Env, failKey: string): Promise<void> {
+export async function recordOtpVerifyFail(env: Env, failKey: string): Promise<void> {
   await ensureVerificationCodesCreatedAt(env);
   const now = Date.now();
   const nowIso = new Date(now).toISOString();
@@ -74,7 +74,7 @@ async function recordOtpVerifyFail(env: Env, failKey: string): Promise<void> {
   ).bind(failKey, String(fails), expIso, createdAt).run();
 }
 
-async function clearOtpVerifyFails(env: Env, failKey: string): Promise<void> {
+export async function clearOtpVerifyFails(env: Env, failKey: string): Promise<void> {
   await env.DB.prepare("DELETE FROM verification_codes WHERE email = ?").bind(failKey).run();
 }
 
@@ -232,38 +232,125 @@ export async function handleAuthRoutes(
     });
   }
 
-  // 0.1 Send portal login email verification code
+  // 0.1 Send email verification code (supports portal login and license activation ownership binding)
   if (url.pathname === "/api/v1/auth/send-code" && request.method === "POST") {
     const body: any = await request.json().catch(() => ({}));
     const reqLang = extractRequestLang(request, body);
     let email = body.email;
-    if (!email) {
+    const purpose: VerificationPurpose = body.purpose === "activate" ? "activate" : "portal";
+
+    if (!email || typeof email !== "string" || !email.includes("@")) {
       return new Response(JSON.stringify({ error: getApiTranslation("missing_params", reqLang) }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
     email = email.trim().toLowerCase();
-    const storageKey = verificationStorageKey("portal", email);
+    const storageKey = verificationStorageKey(purpose, email);
 
-    // 1. Check if email has purchase history in licenses table
-    const userEmailHash = await emailHash(email);
-
-    const checkPurchase = await env.DB.prepare(
-      "SELECT COUNT(*) as count FROM licenses WHERE buyer_email_hash = ? OR buyer_email = ?"
-    ).bind(userEmailHash, email).first<any>();
-
-    const hasPurchased = checkPurchase && Number(checkPurchase.count) > 0;
-    if (!hasPurchased) {
+    // Gate A: email blacklist check
+    const emailBl = await checkEmailBlacklist(env, email);
+    if (emailBl.isAbusive) {
       return new Response(JSON.stringify({
-        error: getApiTranslation("no_purchase_history", reqLang)
+        error: getApiTranslation("blacklist_email", reqLang) || emailBl.reason,
+        reason_key: "blacklist_email"
       }), {
-        status: 400,
+        status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
-    // 2. 60s rate limit (aligned with checkout)
+    let licenseCode = "";
+    if (purpose === "activate") {
+      licenseCode = (body.license_code || body.license_key || "").trim().toUpperCase();
+      if (!licenseCode) {
+        return new Response(JSON.stringify({
+          error: getApiTranslation("license_not_found", reqLang),
+          error_code: "LICENSE_MISSING"
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      // Check license existence & status
+      const lic = await env.DB.prepare(
+        "SELECT license_code, buyer_email, buyer_email_hash, status FROM licenses WHERE license_code = ?"
+      ).bind(licenseCode).first<any>();
+
+      if (!lic) {
+        return new Response(JSON.stringify({
+          error: getApiTranslation("license_not_found", reqLang),
+          error_code: "LICENSE_NOT_FOUND"
+        }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      const st = (lic.status || "active").toLowerCase();
+      if (st === "suspended" || st === "revoked" || st === "refunded") {
+        return new Response(JSON.stringify({
+          error: getApiTranslation("license_suspended_or_revoked", reqLang),
+          error_code: "LICENSE_INACTIVE"
+        }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      // If already bound to another email, reject (REV-03)
+      if (lic.buyer_email && lic.buyer_email.trim() !== "" && lic.buyer_email.trim().toLowerCase() !== email) {
+        return new Response(JSON.stringify({
+          error: getApiTranslation("license_already_bound", reqLang),
+          error_code: "LICENSE_ALREADY_BOUND"
+        }), {
+          status: 409,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      // IP rate limit: max 5 requests per minute
+      const ip = clientIpFromRequest(request);
+      if (await isD1RateLimited(env, `sendcode:ip:${ip}`, 5, 60_000)) {
+        return new Response(JSON.stringify({
+          error: getApiTranslation("rate_limited", reqLang),
+          error_code: "RATE_LIMITED"
+        }), {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      // License code rate limit: max 2 requests per minute (REV-07)
+      if (await isD1RateLimited(env, `sendcode:lic:${licenseCode}`, 2, 60_000)) {
+        return new Response(JSON.stringify({
+          error: getApiTranslation("rate_limited", reqLang),
+          error_code: "RATE_LIMITED"
+        }), {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+    } else {
+      // 1. Check if email has purchase history in licenses table for portal login
+      const userEmailHash = await emailHash(email);
+      const checkPurchase = await env.DB.prepare(
+        "SELECT COUNT(*) as count FROM licenses WHERE buyer_email_hash = ? OR buyer_email = ?"
+      ).bind(userEmailHash, email).first<any>();
+
+      const hasPurchased = checkPurchase && Number(checkPurchase.count) > 0;
+      if (!hasPurchased) {
+        return new Response(JSON.stringify({
+          error: getApiTranslation("no_purchase_history", reqLang)
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+    }
+
+    // 2. 60s cooldown rate limit on email
     if (await isSendCodeRateLimited(env, storageKey)) {
       return new Response(JSON.stringify({
         error: getApiTranslation("rate_limited", reqLang),
@@ -279,21 +366,24 @@ export async function handleAuthRoutes(
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // Valid for 5 minutes
     const createdAt = new Date().toISOString();
 
-    // Insert code into DB (portal: purpose-prefixed key)
+    // Insert code into DB (purpose-prefixed key)
     await env.DB.prepare(
       "INSERT OR REPLACE INTO verification_codes (email, code, expires_at, created_at) VALUES (?, ?, ?, ?)"
     ).bind(storageKey, code, expiresAt, createdAt).run();
 
     // Send mail via SMTPS with localized i18n template
     const targetEmail = env.TEST_MAIL_RECEIVER || email;
-    const { subject, html } = buildAuthCodeEmailHtml(reqLang, code);
+    const { subject, html } = purpose === "activate"
+      ? buildActivationEmailHtml(reqLang, code, licenseCode)
+      : buildAuthCodeEmailHtml(reqLang, code);
+
     try {
       await Promise.race([
         sendDRMEmail(env, targetEmail, subject, html),
         new Promise((_, reject) => setTimeout(() => reject(new Error("SMTP_TIMEOUT")), 4500))
       ]);
     } catch (err: any) {
-      await logSystemError(env, 'SMTP_EMAIL_FAIL', 'WARN', err, { to: targetEmail, scene: 'auth_send_code' });
+      await logSystemError(env, 'SMTP_EMAIL_FAIL', 'WARN', err, { to: targetEmail, scene: `${purpose}_send_code` });
       // Delete verification code so rate limit doesn't lock out immediate retry
       await env.DB.prepare("DELETE FROM verification_codes WHERE email = ?").bind(storageKey).run();
       return new Response(JSON.stringify({

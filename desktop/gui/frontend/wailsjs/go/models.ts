@@ -537,6 +537,24 @@ export namespace main {
 
 export namespace server {
 	
+	export class ActivationResult {
+	    success: boolean;
+	    need_email: boolean;
+	    license_code: string;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ActivationResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.need_email = source["need_email"];
+	        this.license_code = source["license_code"];
+	        this.message = source["message"];
+	    }
+	}
 	export class ChatActiveTransfer {
 	    id: string;
 	    fileName: string;

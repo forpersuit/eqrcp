@@ -388,6 +388,33 @@ export const API_I18N: Record<string, Record<string, string>> = {
     de: "Lizenzcode fehlt",
     fr: "Code de licence manquant"
   },
+  activation_need_email: {
+    zh: "此激活码尚未绑定所有权邮箱，请输入邮箱完成确权验证",
+    en: "This license code is not yet bound to an owner email. Please verify your email to activate.",
+    ja: "このライセンスは所有者メールアドレスが未登録です。メール認証を行ってアクティベーションを完了してください。",
+    ko: "이 라이선스는 아직 소유자 이메일이 등록되지 않았습니다. 이메일 인증을 완료해 주세요.",
+    es: "Esta licencia aún no está vinculada a un correo electrónico. Verifique su correo para activarla.",
+    de: "Dieser Lizenzcode ist noch keiner E-Mail-Adresse zugewiesen. Bitte bestätigen Sie Ihre E-Mail zur Aktivierung.",
+    fr: "Ce code de licence n'est pas encore associé à une adresse e-mail. Veuillez valider votre e-mail pour l'activer."
+  },
+  license_already_bound: {
+    zh: "该激活码已被其他邮箱绑定",
+    en: "This license code is already bound to another email",
+    ja: "このライセンスコードは既に別のメールアドレスに登録されています",
+    ko: "이 라이선스 코드는 이미 다른 이메일에 연동되어 있습니다",
+    es: "Este código de licencia ya está vinculado a otro correo electrónico",
+    de: "Dieser Lizenzcode ist bereits mit einer anderen E-Mail-Adresse verknüpft",
+    fr: "Ce code de licence est déjà associé à une autre adresse e-mail"
+  },
+  invalid_verification_code: {
+    zh: "验证码无效或已过期，请检查后重试",
+    en: "Invalid or expired verification code",
+    ja: "確認コードが無効または期限切れです",
+    ko: "인증 코드가 유효하지 않거나 만료되었습니다",
+    es: "Código de verificación inválido o expirado",
+    de: "Ungültiger oder abgelaufener Bestätigungscode",
+    fr: "Code de vérification invalide ou expiré"
+  },
   license_suspended_or_revoked: {
     zh: "该授权码当前不可用（已暂停使用、退款或吊销）",
     en: "License is suspended, refunded, or revoked",
@@ -602,6 +629,52 @@ export const CHECKOUT_EMAIL_I18N: Record<string, { subject: string; title: strin
     title: "Vérification de l'e-mail d'achat",
     bodyHtml: "Merci d'avoir choisi EQT Premium. Votre code de vérification est :",
     validityText: "Valable pendant 10 minutes. Ne le partagez pas."
+  }
+};
+
+// Multi-language dictionary for license activation ownership binding verification code (7 Languages)
+export const ACTIVATION_EMAIL_I18N: Record<string, { subject: string; title: string; bodyHtml: (code: string) => string; validityText: string }> = {
+  zh: {
+    subject: "【EQT】您的授权激活邮箱验证码",
+    title: "授权激活与邮箱绑定",
+    bodyHtml: (lic: string) => `您正在为 EQT 授权码 <strong>${lic}</strong> 绑定所有权邮箱。您的验证码为：`,
+    validityText: "验证码有效期为 5 分钟。绑定成功后，您可凭此邮箱登录用户门户管理设备。请勿透露给他人。"
+  },
+  en: {
+    subject: "[EQT] License Activation Verification Code",
+    title: "License Activation & Email Binding",
+    bodyHtml: (lic: string) => `You are binding your email to EQT license code <strong>${lic}</strong>. Your verification code is:`,
+    validityText: "This code is valid for 5 minutes. After binding, you can manage your license in the portal. Do not share with anyone."
+  },
+  ja: {
+    subject: "【EQT】ライセンス認証・メールアドレス確認コード",
+    title: "ライセンス認証とメール連携",
+    bodyHtml: (lic: string) => `EQT ライセンスコード <strong>${lic}</strong> の所有権メールアドレス連携を行っています。確認コード：`,
+    validityText: "このコードは5分間有効です。連携後はポータルでライセンスを管理できます。他人に共有しないでください。"
+  },
+  ko: {
+    subject: "【EQT】라이선스 활성화 인증 코드",
+    title: "라이선스 활성화 및 이메일 연동",
+    bodyHtml: (lic: string) => `EQT 라이선스 코드 <strong>${lic}</strong>에 이메일을 연동하고 있습니다. 인증 코드는 다음과 같습니다:`,
+    validityText: "이 코드는 5분 동안 유효합니다. 연동 완료 후 고객 포털에서 기기를 관리할 수 있습니다. 타인에게 공유하지 마세요."
+  },
+  es: {
+    subject: "[EQT] Código de verificación para activación de licencia",
+    title: "Activación de licencia y vinculación de correo",
+    bodyHtml: (lic: string) => `Está vinculando su correo electrónico a la licencia EQT <strong>${lic}</strong>. Su código de verificación es:`,
+    validityText: "Este código es válido durante 5 minutos. Después de vincular, puede administrar sus dispositivos en el portal. No lo comparta con nadie."
+  },
+  de: {
+    subject: "[EQT] Bestätigungscode für Lizenzaktivierung",
+    title: "Lizenzaktivierung und E-Mail-Verknüpfung",
+    bodyHtml: (lic: string) => `Sie verknüpfen Ihre E-Mail-Adresse mit dem EQT-Lizenzcode <strong>${lic}</strong>. Ihr Bestätigungscode lautet:`,
+    validityText: "Dieser Code ist 5 Minuten lang gültig. Nach der Verknüpfung können Sie Ihre Lizenz im Portal verwalten. Bitte geben Sie ihn nicht weiter."
+  },
+  fr: {
+    subject: "[EQT] Code de vérification d'activation de licence",
+    title: "Activation de licence et association d'adresse e-mail",
+    bodyHtml: (lic: string) => `Vous associez votre adresse e-mail au code de licence EQT <strong>${lic}</strong>. Votre code de vérification est :`,
+    validityText: "Ce code est valable pendant 5 minutes. Après association, vous pouvez gérer vos appareils sur le portail. Ne le partagez avec personne."
   }
 };
 

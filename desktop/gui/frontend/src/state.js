@@ -64,4 +64,15 @@ export const state = {
     tlsProvisionError: '',
     tlsDiagnosing: false,
     tlsDiagResult: null,
+    activationEmailModal: {
+        licenseCode: '',
+        message: '',
+        email: '',
+        otpCode: '',
+        sendingOtp: false,
+        cooldownSeconds: 0,
+        submitting: false,
+        error: '',
+        notice: '',
+    },
 };
