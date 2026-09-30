@@ -404,3 +404,28 @@ Could you send me a quick DM or open your messages so I can deliver your key?
    - 私信文案醒目加入 `💡 On your phone right now? Bookmark this message`，把手机互动转化为实实在在的电脑桌面端安装激活。
 4. **D1 激活码库存保障**：
    - 运营前通过 Cloudflare D1 预置批量的 1 年期体验码（如 `EQT-PLUS-YEARLY-XXXX`），确保私信下发的激活码在用户桌面端兑换时 100% 顺畅秒过。
+
+---
+
+### 3.5 按需即时生成与批量铸造促销激活码 (On-Demand Promo Key Generation)
+
+为了配合推特推文互动（用户回复 `KEY` / `AIRDROP` / `ZIP`），我们提供了专门的按需生成脚本 [`scripts/gen-promo-keys.sh`](../../scripts/gen-promo-keys.sh)，支持单码即时生成与批量预制，并自动写入 Cloudflare D1 远程数据库：
+
+#### 场景 A: X 评论区有人回复，按需生成 1 个 1 年期激活码
+```bash
+./scripts/gen-promo-keys.sh
+```
+* 执行后自动向生产环境 D1 数据库写入记录（`source='promo'`, `duration_days=365`）。
+* 控制台直接打印出可直接复制粘贴的英文私信 (DM) 文本，包含激活码与下载指引。
+
+#### 场景 B: 推文发布前，批量预生成 50 个激活码并保存到文件备用
+```bash
+./scripts/gen-promo-keys.sh -n 50 -o docs/marketing/campaigns/promo_keys_50.txt
+```
+* 自动在云端 D1 批量铸造 50 条合法激活码，并将兑换码清单保存在本地文件，便于随时在 X 私信中按顺序派送。
+
+#### 场景 C: 本地模拟测试（不写入数据库）
+```bash
+./scripts/gen-promo-keys.sh -n 3 --dry-run
+```
+

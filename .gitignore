@@ -64,13 +64,15 @@ ehthumbs.db
 Thumbs.db
 
 .codex
+.gemini
+.claude
 currentStatus
 
 .kiro
 
 
 node_modules
-.wrangler/
+.wrangler
 .codegraph
 .commandcode
 
