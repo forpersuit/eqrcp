@@ -139,7 +139,7 @@ export async function handleAuthRoutes(
     try {
       await Promise.race([
         sendDRMEmail(env, email, subject, html),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("SMTP_TIMEOUT")), 4500))
+        new Promise((_, reject) => setTimeout(() => reject(new Error("SMTP_TIMEOUT")), 10000))
       ]);
     } catch (err: any) {
       await logSystemError(env, 'SMTP_EMAIL_FAIL', 'WARN', err, { to: email, scene: 'checkout_send_code' });
@@ -380,7 +380,7 @@ export async function handleAuthRoutes(
     try {
       await Promise.race([
         sendDRMEmail(env, targetEmail, subject, html),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("SMTP_TIMEOUT")), 4500))
+        new Promise((_, reject) => setTimeout(() => reject(new Error("SMTP_TIMEOUT")), 10000))
       ]);
     } catch (err: any) {
       await logSystemError(env, 'SMTP_EMAIL_FAIL', 'WARN', err, { to: targetEmail, scene: `${purpose}_send_code` });
