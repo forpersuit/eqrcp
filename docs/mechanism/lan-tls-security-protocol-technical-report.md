@@ -7,8 +7,17 @@
 > **最新基线版本**：`v1.36.121`  
 > **适用范围**：EQT 核心研发、网络安全审计、基础设施运维团队  
 > **双文档关系与权威取代声明 (Supersession Notice / R37-14)**：  
-> - 本技术报告为 EQT 当前 LAN-TLS 生产环境的**唯一主干权威技术协议总结与运行基线**。  
-> - 早期架构演进草案 [`lan-tls-zero-leak-acme-architecture.md`](lan-tls-zero-leak-acme-architecture.md) 作为历史研发蓝图与测试环境演进记录归档。凡早期草案中与本文档实测基线冲突的描述（包括私钥存储路径为 `certs/<node-id>/privkey.pem`、续签阈值为 15 天且在启动时巡检、回环 A 记录 TTL 为 300s、协议支持 TLS 1.2+、生产 CA 实际为 Google Public CA 单轨等），**一律以本技术报告为准**。  
+> - 本技术报告为 EQT `v1.36.121` 阶段的系统架构白皮书与第 37 轮代码复核基线。其中 **§一 ~ §七 关于无状态回环数学算法、iOS WebKit OOM 物理机理、ECDSA P-256 本地私钥零泄漏（Zero-Leak）威胁模型** 为 EQT LAN-TLS 架构的核心理论基石。  
+> - 早期架构演进草案 [`lan-tls-zero-leak-acme-architecture.md`](lan-tls-zero-leak-acme-architecture.md) 作为历史研发蓝图与测试环境演进记录归档。  
+> ⚠️ **最新生产基线更正与演进闭环声明 (Supersession & Multi-CA Production Update · 基线 `v1.36.175`)**：  
+> 1. **Multi-CA 双轨热备全量投产**：文中 §3.3、§5.2 等提及的「生产 CA 为 Google Public CA 单轨，Let's Encrypt 仅作为预留方案」已于 `v1.36.136` 全量超越！现役生产全面运行在 **GTS (Primary) + Let's Encrypt (Secondary) 双轨热备与自动故障转移调度**（Pre-flight 预检分流 + In-flight 429 运行时救回），并于 `v1.36.169` 成功绑定非营利组织 ISRG 官方审批的 20,000/周 配额豁免账户 `3704177676` 与 `/le-proxy` 穿透链路。  
+> 2. **废除 40次/7天 静态枷锁**：文中 §3.4、§10.2 提及的「L3 全局 40 次 / 7 天硬熔断（`cert_provision:global_acme` / `604800`）」已于 `v1.36.124` 彻底废除！现役生产由 **五层立体防御体系**（L1 SingleFlight 内存合并 -> L2 D1 原子预占 -> L3 10次/分平滑令牌桶 -> L4 三态断路器 -> L5 Multi-CA 双轨灾备）替代。  
+> 3. **Admin 态势大盘与可逆复位全量投产**：文中 §10.3 建议的 Admin 监控与解封接口已于 `v1.36.135` 交付上线（`GET /api/v1/admin/tls/circuit-status` 与 `POST /api/v1/admin/tls/reset-rate-limit`）。  
+> 4. **现役单一事实源 (SSOT) 权威导航**：  
+>    - 现役 5 层防御与 Multi-CA 运维总控：[`.agents/skills/eqt-lan-tls/SKILL.md`](../../.agents/skills/eqt-lan-tls/SKILL.md)  
+>    - 权威 DNS 双机与 LE 20,000 配额容灾：[`.agents/skills/eqt-lan-tls/references/authoritative-dns-ha.md`](../../.agents/skills/eqt-lan-tls/references/authoritative-dns-ha.md)  
+>    - 实施落地与离线验收终验大表：[`docs/plan/lan-tls-google-ca-limit-closure-and-failover-plan.md`](../plan/lan-tls-google-ca-limit-closure-and-failover-plan.md)  
+>    - 现役生产 API 契约：[`docs/admin/api-contract.md`](../admin/api-contract.md)  
 > **关联规范与代码（仓库相对路径）**：  
 > - 核心实现：[`pkg/cert/provisioner.go`](../../pkg/cert/provisioner.go), [`pkg/cert/cert.go`](../../pkg/cert/cert.go), [`pkg/server/server.go`](../../pkg/server/server.go)  
 > - 权威 DNS 引擎：[`cmd/eqt-dns/main.go`](../../cmd/eqt-dns/main.go)  
@@ -24,7 +33,8 @@
 传统的内网 TLS 方案通常要求用户在移动端手动安装导入自建 CA 根证书，或依赖中心化云端中继。前者门槛极高，彻底背离“扫码即连”的零门槛体验；后者受限于外网公网带宽，丧失了内网千兆/万兆（80MB/s~120MB/s+）物理线速直连优势。
 
 本报告系统阐述 EQT（Easy QR Transfer）落地的 **LAN-TLS 无状态回环与设备专属私钥零泄漏安全架构**。该方案创造性地结合了 **数学无状态回环权威 DNS 解析**、**客户端本地 ECDSA P-256 私钥自主生成**、**Cloudflare Serverless 代理自动化 ACME DNS-01 质询** 以及 **Google Cloud Public CA (GTS) EAB 证书基础设施**。在确保设备私钥“终身永不出机”的严格密码学前提下，实现公信 WebPKI 绿锁证书的全自动置备，彻底兼顾了绝对的零门槛原生扫码体验、物理内网线速直连与单机抗主动中间人攻击能力。
-> **基线现状说明**：生产环境中 ACME 目录为 Google Public CA（`dv.acme-v02.api.pki.goog/directory`），Let's Encrypt 仅作为预留架构方案；CAA 记录规划在域名解析中配置，当前依赖私有权威 DNS 鉴权 API 严格校验。
+> **基线现状说明（历史记录）**：本文档撰写时（`v1.36.121`）生产环境中 ACME 目录为 Google Public CA（`dv.acme-v02.api.pki.goog/directory`），Let's Encrypt 仅作为预留架构方案。  
+> ⚠️ **现役升级注记（`v1.36.175`）**：现役生产已全面升级投产 GTS (Primary) + Let's Encrypt (Secondary) 双轨热备与自动故障转移调度，且 Let's Encrypt 生产账户已获批官方 20,000/周 配额豁免。详见文首《最新生产基线更正与演进闭环声明》。
 
 ---
 
@@ -556,9 +566,10 @@ direct.eqt.net.im   type=257 ancount=0  (rcode=0, NODATA)
   - **桌面端 Agent（Fail-Soft）**：面向普通 GUI 用户，长驻后台进程绝不抛出致命崩溃，证书失效时平滑回退明文 HTTP 并通知前端展示保护状态；
   - **CLI 命令行（Fail-Closed）**：面向终端与脚本，当用户显式传递 `--secure` 参数时，若证书加载失败，严格遵循密码学安全契约报错退出（`failed to load TLS certificate`），杜绝在用户未授权情况下静默降级明文泄露数据。
 
-### 9.5 R37-8 & R37-2：基础设施现状与演化路线声明
+### 9.5 R37-8 & R37-2：基础设施现状与演化路线声明（第 37 轮历史记录）
 - **CAA 记录状态**：目前线上权威 DNS 采用私有 API 严格鉴权。CAA 记录作为域名解析加固项已列入后续基础设施运维规划；
-- **CA 基础设施**：当前生产环境全面稳定运行在 Google Public CA (GTS) EAB 单轨架构下，Let's Encrypt 作为预留方案，目前未启用多 CA 动态灾备切换逻辑。
+- **CA 基础设施（当时基线）**：当前生产环境全面稳定运行在 Google Public CA (GTS) EAB 单轨架构下，Let's Encrypt 作为预留方案，目前未启用多 CA 动态灾备切换逻辑。  
+  > ⚠️ **演进结项注记**：上述「未启用多 CA 动态灾备切换」已于 `v1.36.136`（阶段四）彻底闭环投产！现役全面采用 GTS (Primary) + Let's Encrypt (Secondary) 双轨自适应热备调度，详见文首《最新生产基线更正与演进闭环声明》及 [`lan-tls-google-ca-limit-closure-and-failover-plan.md`](../plan/lan-tls-google-ca-limit-closure-and-failover-plan.md)。
 
 ---
 
@@ -652,7 +663,9 @@ direct.eqt.net.im   type=257 ancount=0  (rcode=0, NODATA)
 - **业务优先的软降级**：安全特性绝不反客为主阻塞文件传输。一旦证书置备受阻，系统毫秒级回落标准 HTTP 明文传输，二维码与详情卡片清晰标识 `HTTP (降级明文)`，保障核心收发链路 100% 畅通；
 - **节点身份自动愈合**：若由于密钥错配导致签发失败，客户端自动调用 `RotateDeviceNodeIdentity()` 轮换随机盐重置 NodeID，并在后续时机平滑重新置备。
 
-#### 2. 第二层：管理台态势感知与运维干预方案（建议推进）
+#### 2. 第二层：管理台态势感知与运维干预方案（原建议项 · ✅ 已于 v1.36.135 阶段三全量落地投产）
+> ⚠️ **落地投产注记**：本小节规划的 Admin 态势看板与一键运维解封已于 `v1.36.135` 彻底交付！包含 `GET /api/v1/admin/tls/circuit-status` 态势感知大盘与 `POST /api/v1/admin/tls/reset-rate-limit` 安全可逆重置接口（支持 `circuit_breaker`、`node_rate_limit` 与 `ip_rate_limit`），详见 [`api-contract.md`](../admin/api-contract.md#L630-L730)。
+
 - **Admin 增加专门的 Google CA 配额看板**：
   - 在 `admin.eqt.net.im` 后台增加「LAN-TLS 证书置备监控」卡片，实时查询 D1 中近 7 天有效证书签发总数（当前值 / 40 预警阈值），以进度条直观呈现；
   - 实时聚合列出最近 10 次 `RATE_LIMIT_*` 与 `CERT_PROVISION_ERROR`（解析出 Google CA 返回的 Problem Document detail）；
@@ -661,7 +674,8 @@ direct.eqt.net.im   type=257 ancount=0  (rcode=0, NODATA)
 - **Admin 一键清流与应急白名单**：
   - 在 Admin API 增加针对特定 `node_id` 或 `client_ip` 的重置端点（`DELETE /api/v1/admin/rate-limits/cert-provision`），允许运维人员在排除故障后立即清除受限状态。
 
-#### 3. 第三层：根本性架构升级方案（消除单域名配额瓶颈）
+#### 3. 第三层：根本性架构升级方案（消除单域名配额瓶颈 · ✅ 方案 A 已于 v1.36.136 & v1.36.169 全量落地投产）
+> ⚠️ **落地投产注记**：下述方案 A（多 CA 动态智能分流轮换池）已于 `v1.36.136` 全量落地（GTS Primary + Let's Encrypt Secondary，支持 Pre-flight + In-flight 两级动态故障转移），并在 `v1.36.169` 成功绑定非营利组织 ISRG 官方审批的 20,000/周 配额豁免账户 `3704177676` 与 `/le-proxy` 穿透链路！单域名配额瓶颈已被彻底结构性化解。
 为从物理根源上解决单域名多用户引发的 CA 配额耗尽，设计如下三套高弹性长期演进路线：
 
 - **方案 A：多 CA 动态智能轮换灾备池 (Multi-CA Failover Pool)**：
