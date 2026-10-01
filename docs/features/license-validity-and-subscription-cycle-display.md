@@ -1,6 +1,7 @@
 # 授权有效期与订阅周期展示规范与实现方案（License Validity & Subscription Cycle Display Specification）
 
-> 状态：**设计方案就绪，待确认推进 (Design Ready for Implementation)**  
+> 状态：**已完成落地并验证 (Implemented & Verified)**  
+> 落地版本：`v1.36.174`  
 > 编写日期：2026-10-01  
 > 关联模块：`cloudflare/eqt-admin`（管理后台 SPA）、`cloudflare/eqt-website/portal.html`（用户自助门户）、`cloudflare/eqt-drm-api`（Cloudflare Worker DRM 授权服务）  
 > 适用范围：所有环境（Production 生产环境与 Test / Sandbox 测试环境）

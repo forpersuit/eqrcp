@@ -84,6 +84,60 @@
     return country ? `${country}${ip ? ' ' + ip : ''}` : String(ip);
   }
 
+  function formatLocalDate(isoStr?: string | null): string {
+    if (!isoStr) return '—';
+    const d = new Date(isoStr);
+    return isNaN(d.getTime()) ? String(isoStr) : d.toLocaleDateString();
+  }
+
+  function getExpiryInfo(lic: License) {
+    const isLifetime = !lic.duration_days && (lic.expires_at === 'LIFETIME' || !lic.expires_at);
+    if (isLifetime) {
+      return { type: 'lifetime' };
+    }
+
+    const durationDays = lic.duration_days ? Number(lic.duration_days) : null;
+    const isPromoOrTest = lic.source === 'promo' || lic.source === 'test' || Boolean(durationDays);
+
+    if (!isPromoOrTest && lic.source === 'purchase') {
+      const expMs = lic.expires_at ? new Date(lic.expires_at).getTime() : NaN;
+      const isExpired = !isNaN(expMs) && expMs < Date.now();
+      const remainingDays = !isNaN(expMs) && !isExpired ? Math.ceil((expMs - Date.now()) / (86400 * 1000)) : 0;
+      return {
+        type: 'purchase',
+        isExpired,
+        dateFormatted: formatLocalDate(lic.expires_at),
+        remainingDays
+      };
+    }
+
+    // 活动促销码、测试码或具有 duration_days 的卡密
+    const isRedeemed = Boolean(lic.first_activated_at || lic.active_devices_count > 0 || (lic.activations && lic.activations.length > 0));
+    if (isRedeemed) {
+      const effectiveDateStr = (lic as any).effective_expires_at || (lic.first_activated_at && durationDays ? new Date(new Date(lic.first_activated_at).getTime() + durationDays * 86400 * 1000).toISOString() : lic.expires_at);
+      const expMs = effectiveDateStr ? new Date(effectiveDateStr).getTime() : NaN;
+      const isExpired = !isNaN(expMs) && expMs < Date.now();
+      return {
+        type: 'redeemed_pass',
+        isExpired,
+        dateFormatted: formatLocalDate(effectiveDateStr),
+        durationDays: durationDays || 0
+      };
+    }
+
+    // 未激活任何设备
+    const hasDeadline = lic.expires_at && lic.expires_at !== 'LIFETIME';
+    const expMs = hasDeadline ? new Date(lic.expires_at!).getTime() : NaN;
+    const isRedeemExpired = hasDeadline && !isNaN(expMs) && expMs < Date.now();
+    return {
+      type: 'unredeemed_pass',
+      durationDays: durationDays || 0,
+      hasDeadline,
+      isRedeemExpired,
+      deadlineFormatted: hasDeadline ? formatLocalDate(lic.expires_at) : ''
+    };
+  }
+
   async function loadLicenses(opts: { silent?: boolean } = {}) {
     const silent = !!opts.silent;
     if (silent) {
@@ -466,6 +520,7 @@
             <th>{$t('licenses.tableHeaderTier')}</th>
             <th>{$t('licenses.source')}</th>
             <th>{$t('licenses.tableHeaderStatus')}</th>
+            <th>{$t('licenses.tableHeaderExpires')}</th>
             <th>{$t('licenses.tableHeaderDevices')}</th>
             <th>{$t('licenses.tableHeaderBuyer')}</th>
             <th>{$t('common.created_at')}</th>
@@ -474,6 +529,7 @@
         </thead>
         <tbody>
           {#each licenses as lic (lic.license_code)}
+            {@const expInfo = getExpiryInfo(lic)}
             <tr>
               <td>
                 <div class="code-column">
@@ -501,6 +557,50 @@
                 <span class={`badge badge-${lic.status === 'active' ? 'active' : 'revoked'}`}>
                   {lic.status === 'active' ? $t('common.active') : $t('common.revoked')}{lic.revoke_reason ? ` · ${lic.revoke_reason}` : ''}
                 </span>
+              </td>
+              <td>
+                {#if expInfo.type === 'lifetime'}
+                  <span class="badge badge-lifetime">{$t('licenses.expiryLifetime')}</span>
+                {:else if expInfo.type === 'purchase'}
+                  {#if expInfo.isExpired}
+                    <span class="badge badge-expired" title={lic.expires_at}>
+                      {$t('licenses.expiryExpired')} ({expInfo.dateFormatted})
+                    </span>
+                  {:else}
+                    <div class="expiry-cell">
+                      <span class="expiry-date">{expInfo.dateFormatted}</span>
+                      {#if expInfo.remainingDays > 0}
+                        <span class="expiry-hint text-muted">{$t('licenses.expiryDaysRemaining', { days: expInfo.remainingDays })}</span>
+                      {/if}
+                    </div>
+                  {/if}
+                {:else if expInfo.type === 'redeemed_pass'}
+                  {#if expInfo.isExpired}
+                    <span class="badge badge-expired">
+                      {$t('licenses.expiryExpired')} ({expInfo.dateFormatted})
+                    </span>
+                  {:else}
+                    <div class="expiry-cell">
+                      <span class="expiry-date">{expInfo.dateFormatted}</span>
+                      {#if expInfo.durationDays}
+                        <span class="expiry-hint text-muted">({expInfo.durationDays}{$t('licenses.expiryDurationDays')})</span>
+                      {/if}
+                    </div>
+                  {/if}
+                {:else if expInfo.type === 'unredeemed_pass'}
+                  <div class="expiry-cell">
+                    <span class="badge badge-unredeemed">{expInfo.durationDays}{$t('licenses.expiryDurationDays')}</span>
+                    {#if expInfo.hasDeadline}
+                      {#if expInfo.isRedeemExpired}
+                        <span class="expiry-hint text-danger">{$t('licenses.expiryRedeemExpired')}</span>
+                      {:else}
+                        <span class="expiry-hint text-muted">{$t('licenses.expiryRedeemDeadline', { date: expInfo.deadlineFormatted })}</span>
+                      {/if}
+                    {:else}
+                      <span class="expiry-hint text-muted">{$t('licenses.expiryLongTermRedeem')}</span>
+                    {/if}
+                  </div>
+                {/if}
               </td>
               <td>
                 <span class="device-info">
@@ -698,4 +798,9 @@
   .promo-tag-row { display: flex; align-items: center; gap: 0.35rem; }
   .badge-unredeemed { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.35); }
   .badge-expired { background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.35); }
+  .badge-lifetime { background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.35); }
+  .expiry-cell { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.85rem; }
+  .expiry-date { font-weight: 500; }
+  .expiry-hint { font-size: 0.75rem; }
+  .text-danger { color: #ef4444; }
 </style>

@@ -3946,6 +3946,9 @@ function bindEvents() {
                 return;
             }
             if (e.target.closest('#activation-email-cancel-btn')) {
+                import('./components/activation_email_modal.js').then(m => {
+                    m.cleanupActivationEmailModal(state);
+                });
                 openPanel('redeem');
                 return;
             }
@@ -4958,6 +4961,9 @@ function closePanel() {
         state.crashReport = null;
     }
     if (state.activePanel === 'bind-email') {
+        import('./components/activation_email_modal.js').then(m => {
+            m.cleanupActivationEmailModal(state);
+        });
         state.activationEmailModal = null;
     }
     if (state.activePanel === 'plan-comparison') {
@@ -6676,6 +6682,9 @@ async function handleActivationSuccess(code, tierHint) {
     state.redeemMessage = t('activation_success', { tier: licenseTiers[tier] || tier }) || `${licenseTiers[tier]} activated successfully.`;
     state.redeemError = '';
     state.tempRedeemCode = ''; // Clear on success
+    import('./components/activation_email_modal.js').then(m => {
+        m.cleanupActivationEmailModal(state);
+    });
     state.activationEmailModal = null;
     stopChatUsage();
     openPanel('redeem');

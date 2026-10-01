@@ -22,6 +22,7 @@ import {
   revokeLicenseSql
 } from '../utils/license-source';
 import { ensureAutoRenewColumn, ensureLicenseSourceColumns, ensureLicenseUpgradesTable } from '../utils/auth';
+import { evaluateLicenseExpiration } from './drm';
 
 /** Never leak raw Paddle JSON dumps to the browser toast. */
 function sanitizeRefundPublicError(err: unknown, reqLang: string): string {
@@ -149,12 +150,17 @@ export async function handlePortalRoutes(
       const lastPurchaseTime = lastPurchasedStr ? new Date(lastPurchasedStr).getTime() : 0;
       const isInRefundWindow = lastPurchaseTime > 0 && (Date.now() - lastPurchaseTime < REFUND_WINDOW_MS);
 
-      const isExpired = Boolean(lic.expires_at && lic.expires_at !== 'LIFETIME' && new Date(lic.expires_at).getTime() < Date.now());
+      const isRedeemed = Boolean(lic.first_activated_at || (activations && activations.length > 0));
+      const evalRes = evaluateLicenseExpiration(lic, lic.expires_at || "LIFETIME");
+      const effectiveExpiresAt = evalRes.effectiveExpiresAt;
+      const isExpired = evalRes.isExpired || evalRes.isRedeemExpired;
       const isRefunded = Boolean(lic.status === 'revoked' && (lic.revoke_reason === 'refund' || lic.revoke_reason === 'chargeback'));
 
       list.push({
         ...lic,
         source,
+        is_redeemed: isRedeemed,
+        effective_expires_at: effectiveExpiresAt,
         is_expired: isExpired,
         is_refunded: isRefunded,
         auto_renew: (source === 'purchase' && lic.status === 'active' && isRealPaddleSubscriptionId(lic.paddle_subscription_id)) ? (lic.auto_renew === 0 ? 0 : 1) : 0,

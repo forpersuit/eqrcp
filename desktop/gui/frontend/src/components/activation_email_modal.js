@@ -201,8 +201,7 @@ export async function handleSubmitActivationEmail(state, render, onActivated, fo
 
     try {
         const result = await ActivateLicenseWithEmail(modal.licenseCode, email, code);
-        modal.submitting = false;
-        clearInterval(cooldownInterval);
+        cleanupActivationEmailModal(state);
         if (onActivated) {
             await onActivated(result);
         }
@@ -218,60 +217,18 @@ export async function handleSubmitActivationEmail(state, render, onActivated, fo
 }
 
 /**
- * 标准声明式事件绑定：挂载模态面板的 DOM 交互事件（无内联 onclick）
+ * 清理模态框相关的定时器及状态，防止后台泄漏
+ * @param {object} state 全局响应式状态
  */
-export function initActivationEmailModalListeners({ container, state, render, onActivated, formatActivationError, openPanel }) {
-    if (!container) return;
-
-    // Email input change
-    const emailInput = container.querySelector('#activation-email-input');
-    if (emailInput) {
-        emailInput.addEventListener('input', (e) => {
-            if (state.activationEmailModal) {
-                state.activationEmailModal.email = e.target.value;
-            }
-        });
+export function cleanupActivationEmailModal(state) {
+    if (cooldownInterval) {
+        clearInterval(cooldownInterval);
+        cooldownInterval = null;
     }
-
-    // OTP code input change
-    const otpInput = container.querySelector('#activation-otp-input');
-    if (otpInput) {
-        otpInput.addEventListener('input', (e) => {
-            if (state.activationEmailModal) {
-                state.activationEmailModal.otpCode = e.target.value;
-            }
-        });
-        otpInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                handleSubmitActivationEmail(state, render, onActivated, formatActivationError);
-            }
-        });
-    }
-
-    // Send code button
-    const sendBtn = container.querySelector('#activation-email-send-btn');
-    if (sendBtn) {
-        sendBtn.addEventListener('click', () => {
-            handleSendActivationCode(state, render);
-        });
-    }
-
-    // Cancel button
-    const cancelBtn = container.querySelector('#activation-email-cancel-btn');
-    if (cancelBtn) {
-        cancelBtn.addEventListener('click', () => {
-            clearInterval(cooldownInterval);
-            if (openPanel) {
-                openPanel('redeem');
-            }
-        });
-    }
-
-    // Submit button
-    const submitBtn = container.querySelector('#activation-email-submit-btn');
-    if (submitBtn) {
-        submitBtn.addEventListener('click', () => {
-            handleSubmitActivationEmail(state, render, onActivated, formatActivationError);
-        });
+    if (state && state.activationEmailModal) {
+        state.activationEmailModal.sendingOtp = false;
+        state.activationEmailModal.submitting = false;
     }
 }
+
+

@@ -66,6 +66,8 @@ scripts/deploy-windows-results.sh
 - **流式服务分块推送**: 包装 `http.ResponseWriter` 进度监听时切忌直接委托 `io.ReaderFrom`，必须采用定长分块（256KB）循环写入，确保每写入一个 chunk 实时更新瞬时速率。
 - **全局滚动捕获与节点类型防护**: 在 `document.addEventListener('scroll', handler, { capture: true })` 捕获滚动事件时，顶层 `e.target` 为 `HTMLDocument`（非 `Element`），无 `classList` 与 `closest` 属性；必须首先判断 `e.target instanceof Element` 或进行可选链保护，杜绝抛出 `TypeError` 阻断事件循环。
 - **动态纵向滚动放行**: `touchmove` 拦截必须结合 `isScrollableElement` 动态检测；若祖先容器计算样式 `overflowY` 为 `'auto'/'scroll'` 且存在溢出，直接放行，杜绝弹窗无法滑动。
+- **Svelte 5 `{@const}` 语法层级约束**: `{@const}` 必须是控制流块（`{#snippet}`, `{#if}`, `{:else if}`, `{:else}`, `{#each}`, `{:then}`, `{:catch}`）的直接子级，严禁直接置于原生 HTML 元素（如 `<td>`、`<div>`）内部。
+- **倒计时定时器与模态生命周期收敛**: 具有冷却倒计时（如 OTP 60s 冷却）的独立组件必须暴露集中清理钩子（如 `cleanupActivationEmailModal`），在任意面板关闭、取消或成功回调时彻底 `clearInterval`，防止后台隐性周期性 render 泄漏。
 
 ---
 

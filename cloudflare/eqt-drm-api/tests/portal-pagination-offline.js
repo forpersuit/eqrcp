@@ -122,6 +122,8 @@ async function run() {
     assert(data.total === 12, 'data.total is 12');
     assert(data.licenses.length === 12, 'Returns all 12 licenses');
     assert(data.licenses[0].license_code === 'EQT-PLUS-20260815-ALICE12', 'First item is newest (ALICE12)');
+    assert(typeof data.licenses[0].is_redeemed === 'boolean', 'First item has boolean is_redeemed');
+    assert(typeof data.licenses[0].effective_expires_at === 'string', 'First item has effective_expires_at string');
   }
 
   // TEST 2: Page 1 with limit=5, offset=0
