@@ -52,6 +52,7 @@ while [[ "$#" -gt 0 ]]; do
         -m|--max) MAX_DEVICES="$2"; shift ;;
         -b|--batch) BATCH_ID="$2"; shift ;;
         -l|--local) ENV="local" ;;
+        --test) DB_TARGET="test" ;;
         --dry-run) ENV="dry-run" ;;
         -o|--output) OUTPUT_FILE="$2"; shift ;;
         -h|--help) show_help; exit 0 ;;
@@ -136,12 +137,17 @@ if [ "${ENV}" != "dry-run" ]; then
         WRANGLER_FLAGS="--local"
     fi
 
+    TARGET_DB="eqt-drm-db"
+    if [ "${DB_TARGET:-}" = "test" ]; then
+        TARGET_DB="eqt-drm-db-test"
+    fi
+
     (
         cd "${WRANGLER_DIR}" || exit 1
-        npx wrangler d1 execute "eqt-drm-db" ${WRANGLER_FLAGS} --file="${TMP_SQL_FILE}"
+        env -u http_proxy -u HTTP_PROXY -u https_proxy -u HTTPS_PROXY -u all_proxy -u ALL_PROXY CI=true npx wrangler d1 execute "${TARGET_DB}" ${WRANGLER_FLAGS} --file="${TMP_SQL_FILE}"
     )
     rm -f "${TMP_SQL_FILE}"
-    echo "✅ 成功向 D1 (${ENV}) 写入 ${COUNT} 条激活码！"
+    echo "✅ 成功向 D1 (${TARGET_DB} / ${ENV}) 写入 ${COUNT} 条激活码！"
     echo ""
 else
     echo "⚠️  [DRY-RUN 模式] 未向数据库执行写入。"

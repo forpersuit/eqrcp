@@ -1479,7 +1479,6 @@
                 const escSourceLabel = escapeHtml(sourceLabel);
                 const escEntitlementLabel = escapeHtml(entitlementLabel);
                 const escCreatedDate = escapeHtml(createdDate);
-                const escExpiresLabel = escapeHtml(expiresLabel);
                 const escTxn = escapeHtml(lic.paddle_transaction_id || 'N/A');
                 const escSub = escapeHtml(lic.paddle_subscription_id || '');
                 const escRevokeReason = lic.revoke_reason ? ` · ${escapeHtml(lic.revoke_reason)}` : '';
