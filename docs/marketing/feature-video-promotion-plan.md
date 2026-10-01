@@ -29,9 +29,9 @@
 | 秒数 | 画面 (Visual) | 台词/字幕 (Voiceover / Overlay) | 画面细节说明 |
 | :--- | :--- | :--- | :--- |
 | **0 - 3s** | 特写：Windows 电脑想用 AirDrop 传文件，提示“No Apple device detected”，旁边放着 iPhone，红色 ❌ | “Why is AirDrop STILL locked to Apple in 2026?” (为什么 2026 年了 AirDrop 还锁在苹果全家桶？) | 直击欧美 Windows+iPhone 用户的巨大痛点 |
-| **4 - 8s** | 切换到 Windows 终端输入 `eqt send ./document.pdf`（或托盘右键点击 Share），瞬间弹出一个清晰的二维码 | “Meet EQT — an open-source Go tool. Run one command to generate a local QR code.” | 展现极致轻量与极客感 |
+| **4 - 8s** | 切换到 Windows 终端输入 `eqt send ./document.pdf`（或托盘右键点击 Share），瞬间弹出一个清晰的二维码 | “Meet EQT — a lightweight Go tool. Run one command to generate a local QR code.” | 展现极致轻量与极客感 |
 | **9 - 14s** | 实拍：拿起 iPhone，使用 iOS 原生相机扫码，Safari 浏览器瞬间打开并以 80MB/s 满速完成下载预览 | “Zero mobile app! Any phone camera scans to download instantly over local WiFi.” | 突出“免装 App”与“内网极速” |
-| **15 - 18s** | 电脑终端与手机同框，定格在 GitHub 开源仓库主页 | “100% offline & open-source. Link in the pinned reply below!” | 引导查看评论区第一条链接 |
+| **15 - 18s** | 电脑终端与手机同框，定格在官方网站落地页 | “100% offline & private. Link in the pinned reply below!” | 引导查看评论区第一条链接 |
 
 ---
 
@@ -59,7 +59,7 @@
 | **0 - 3s** | 屏幕特写：VS Code 里的 `.env` 配置文件有一串 OpenAI API Key 和数据库密码 | “Never paste private API keys into corporate Slack or Discord DMs.” | 唤醒企业 IT 审计与隐私安全痛点 |
 | **4 - 9s** | 终端敲入 `eqt chat`，手机相机扫码进入 Web 端。电脑端复制 API Key，手机端网页瞬间同步显示 | “Run `eqt chat` to spin up an ephemeral encrypted room on your local network.” | 展现 Chat 模式毫秒级跨端互通 |
 | **10 - 15s** | 手机端点击“Copy to Clipboard”，并在移动端测试工具中一键粘贴运行 | “Instant bidirectional clipboard & text sync. 100% peer-to-peer, zero cloud telemetry.” | 突出双向剪贴板与 0 遥测 |
-| **16 - 20s** | 终端按下 `Ctrl+C`，终端显示“Session destroyed, memory wiped” | “Close terminal, session burns instantly. Open source on GitHub!” | 强调阅后即焚与极客属性 |
+| **16 - 20s** | 终端按下 `Ctrl+C`，终端显示“Session destroyed, memory wiped” | “Close terminal, session burns instantly. 100% private local LAN!” | 强调阅后即焚与极客属性 |
 
 ---
 
@@ -79,8 +79,8 @@
 ## 3. 短视频制作与海外平台发布 SOP
 
 ### 3.1 海外发布技术标准
-* **字幕语言**：全英文大字硬字幕（Bold Sans-Serif 粗体无衬线，关键词如 `Zero App`, `85MB/s`, `Local LAN`, `Open Source` 加明黄色高亮）。
+* **字幕语言**：全英文大字硬字幕（Bold Sans-Serif 粗体无衬线，关键词如 `Zero App`, `85MB/s`, `Local LAN`, `Zero Cloud` 加明黄色高亮）。
 * **分辨率与比例**：
   - 竖屏版（9:16，1080x1920）：适配 TikTok, YouTube Shorts, Instagram Reels, Twitter Mobile。
   - 横屏版（16:9，1920x1080）：适配 Twitter Desktop, Reddit (`r/golang`, `r/selfhosted`)。
-* **首帖置顶转化规范**：视频发出后 30 秒内，在评论区发布英文 First Reply 并 Pin 置顶，引导前往 GitHub 仓库与官网下载。
+* **首帖置顶转化规范**：视频发出后 30 秒内，在评论区发布英文 First Reply 并 Pin 置顶，引导前往官网下载体验。

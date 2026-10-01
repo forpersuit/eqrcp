@@ -20,23 +20,23 @@
 
 | 选项定位 | 英文 Bio 文案 (可直接复制) | 字符数 (上限 160) | 适用场景 |
 | :--- | :--- | :---: | :--- |
-| **Option 1: 痛点击穿型<br>*(🌟 官方首选推荐)* | `AirDrop alternative for Windows, Linux & Android. Blazing-fast local file transfer & private chat via QR code. Zero mobile app • 100% Open Source ⚡` | **147** | 转化率最高，直击 Windows/Android 用户的 AirDrop 缺失痛点。 |
-| **Option 2: 极客与开发者型** | `Blazing-fast LAN file transfer & ephemeral chat in Go. Scan terminal QR code, transfer at gigabit speed. Zero cloud, zero mobile app • 100% Open Source.` | **154** | 面向 GitHub、开源社区、Go 语言开发者与隐私极客。 |
+| **Option 1: 痛点击穿型<br>*(🌟 官方首选推荐)* | `AirDrop alternative for Windows, Mac & Android. Blazing-fast local file transfer & ephemeral chat via QR code. Zero mobile app • 100% Private local Wi-Fi ⚡` | **154** | 转化率最高，直击 Windows/Android 用户的 AirDrop 缺失痛点。 |
+| **Option 2: 极客与高效型** | `Blazing-fast LAN file transfer & ephemeral chat. Scan QR code, transfer at gigabit speed. Zero cloud, zero mobile app • 100% Private local Wi-Fi.` | **148** | 面向独立工具爱好者、开发人员与隐私极客。 |
 | **Option 3: 场景与功能型** | `Transfer 4K videos & sync clipboards across PC, Mac, iOS & Android over local WiFi. 🚀 Scan QR code to transfer instantly. Zero cables • Zero mobile app.` | **152** | 面向多设备混合办公族、创作者与大文件传输用户。 |
-| **Option 4: 极简科技型** | `Fast, private cross-device file sharing & local chat. Scan a QR code, transfer at full LAN speed. No cables, no cloud, no mobile app needed. Built with Go.` | **155** | 极简克制，强调本地网络与无云端隐私。 |
+| **Option 4: 极简科技型** | `Fast, private cross-device file sharing & local chat. Scan a QR code, transfer at full LAN speed. No cables, no cloud, no mobile app needed.` | **141** | 极简克制，强调本地网络与无云端隐私。 |
 
 ### 0.3 其它资料字段推荐
 * **Location（位置）**：`Global / Localhost` 或 `Decentralized / LAN`
 * **Website（网址）**：`https://eqt.net.im`
-* **Pinned Tweet（置顶推文）**：置顶本文档中的 **[方案四：官方主打 6 推 Thread]**，评论区带上 GitHub 开源链接。
+* **Pinned Tweet（置顶推文）**：置顶本文档中的 **[方案四：官方主打长文 / Thread]**，评论区沉淀官网唯一下载体验地址。
 
 ---
 
 ## 1. Twitter (X) 算法推荐逻辑与发推黄金法则
 
 ### 1.1 零外链降权原则 (No-Link Penalty)
-* **算法机制**：Twitter 对正文中包含外链（如 github.com、http 链接）的推文施加重度降权（曝光量减少 50%~80%）。
-* **执行规范**：**所有主帖正文严禁出现任何链接**。所有 GitHub 开源地址、官网、文档链接统一在**评论区第 1 条 (First Reply / 置顶评论)** 中发布，正文尾部仅保留指引符号（如 `👇 开源地址与安装见评论区第1条`）。
+* **算法机制**：Twitter 对正文中包含外链（如 http 链接）的推文施加重度降权（曝光量减少 50%~80%）。
+* **执行规范**：**所有主帖正文严禁出现任何链接**。所有官网下载、文档链接统一在**评论区第 1 条 (First Reply / 置顶评论)** 中发布，正文尾部仅保留指引符号（如 `👇 官网下载与体验见评论区第1条`）。
 
 ### 1.2 互动权重倍率 (Engagement Multipliers)
 * 🔖 **Bookmark（书签/收藏） [~30x - 50x 权重]**：算法最高权重点赞指标。文案中高频自然植入“建议先 Bookmark 收藏防丢”、“建议收藏备用”。
@@ -69,7 +69,7 @@
 终端敲一行命令生成临时加密房间，手机扫码秒连！
 两端文字、代码、截图即时双向互通，关闭即焚。
 
-👇 开源地址与安装见评论区第1条
+👇 官方下载与体验见评论区第1条
 ```
 * **字符数**：272 / 280 单元 (安全)
 * **外链检查**：无外链 (通过)
@@ -82,13 +82,11 @@
 
 #### 💬 评论区第 1 条 (First Reply)
 ```text
-🔗 GitHub Repo (Open Source): https://github.com/forpersuit/eqt
-Official Site & Docs: https://eqt.net.im
+Official Site & Download: https://eqt.net.im
 
-💻 Quick Start via Terminal:
-eqt chat --browser
+💡 Tip: Zero mobile app required — any modern phone with a stock camera scans and transfers directly over local Wi-Fi at gigabit speeds!
 
-Pure Go single binary, zero cloud dependency, works 100% offline on your local network. Dropping a Star ⭐️ on GitHub would mean the world!
+Pure standalone desktop utility, zero cloud dependency, works 100% offline on your local network.
 ```
 
 ---
@@ -107,7 +105,7 @@ Pure Go single binary, zero cloud dependency, works 100% offline on your local n
 
 不加好友、不建 Slack 临时群、手机 0 安装。
 
-建议【Bookmark 收藏】备用，👇 开源地址见评论区
+建议【Bookmark 收藏】备用，👇 官网体验见评论区
 ```
 * **字符数**：250 / 280 单元 (安全)
 * **外链检查**：无外链 (通过)
@@ -120,7 +118,7 @@ Pure Go single binary, zero cloud dependency, works 100% offline on your local n
 
 #### 💬 评论区第 1 条 (First Reply)
 ```text
-🔗 Open Source on GitHub: https://github.com/forpersuit/eqt
+Official Website & Download: https://eqt.net.im
 Cross-platform support: Windows, macOS, Linux, iOS & Android.
 
 💡 Tip: Zero mobile app required — any modern browser downloads directly over LAN at full Wi-Fi speeds!
@@ -170,7 +168,7 @@ iPhone 拍了 4K ProRes 视频，怎么快速导入 Windows 剪辑？
 
 纯本地局域网传输，0 云端留痕。
 
-👇 开源地址见评论区
+👇 官网体验见评论区
 ```
 * **字符数**：264 / 280 单元
 * **效果配图指南**：
@@ -193,7 +191,7 @@ Windows 电脑 + iPhone，如何拥有比 AirDrop 还爽的互传体验？
 
 无需安装手机 App，打破苹果生态壁垒！
 
-👇 开源项目与下载见评论区第1条
+👇 官网下载与体验见评论区第1条
 ```
 * **字符数**：243 / 280 单元
 * **效果配图指南**：
@@ -216,7 +214,7 @@ Windows 电脑 + iPhone，如何拥有比 AirDrop 还爽的互传体验？
 
 免装 App、不占云盘容量。
 
-👇 开源体验见评论区
+👇 官网体验见评论区
 ```
 * **字符数**：244 / 280 单元
 * **效果配图指南**：
@@ -318,7 +316,7 @@ Windows 电脑 + iPhone，如何拥有比 AirDrop 还爽的互传体验？
 • 欢迎【转发】并【Bookmark 收藏】此推文备用
 • 你目前跨设备传文件用什么？欢迎在评论区吐槽！
 
-👇 开源项目地址与一键安装见【评论区第一条】：6/6
+👇 官网下载与体验见【评论区第一条】：6/6
 ```
 * **字符数**：186 / 280 单元
 * **行动指令**：引导 Bookmark、Retweet 与评论区引流。
@@ -327,17 +325,11 @@ Windows 电脑 + iPhone，如何拥有比 AirDrop 还爽的互传体验？
 
 ### 💬 评论区第 1 条跟帖 (First Reply)
 ```text
-🔗 项目已在 GitHub 完全开源，欢迎 Star 支持 ⭐️
+Official Website & Download: https://eqt.net.im
 
-📦 快速上手（macOS / Linux / Windows）：
-• GitHub: https://github.com/forpersuit/eqt
-• 官网 & 文档: https://eqt.net.im
+💡 Zero mobile app needed — stock phone camera scans & transfers at gigabit LAN speed.
 
-💻 一行命令即刻体验：
-go install github.com/forpersuit/eqt@latest
-eqt send ./your-file.pdf
-
-欢迎体验并提出 Issue / PR 意见！
+🎁 Community Giveaway: RT & comment "EQT" for a free 1-Year Plus Pass ($11.99 value) in DMs!
 ```
 
 ---
@@ -398,18 +390,16 @@ Sharing project assets with teammates in a meeting without AirDrop:
 
 No accounts, zero mobile app.
 
-RT & Bookmark! 👇 GitHub in 1st reply
+RT & Bookmark! 👇 Official link in 1st reply
 ```
 
-#### 💬 EN 1st Reply (Conversion & Repo Link)
+#### 💬 EN 1st Reply (Conversion & Download Link)
 ```text
-🔗 EQT is 100% open source on GitHub:
-👉 https://github.com/forpersuit/eqt
+Official Website & Download: https://eqt.net.im
 
-📦 Install via Go:
-`go install github.com/forpersuit/eqt@latest`
+💡 Tip: Zero mobile app required — any modern phone camera scans and transfers directly over Wi-Fi at gigabit speeds!
 
-Available for Windows, macOS, and Linux. If you find this helpful, dropping a ⭐️ on GitHub would mean the world!
+Available for Windows, macOS, and Linux.
 ```
 
 ---
@@ -423,18 +413,18 @@ PCとスマホ間のファイル転送はまだ不便です：
 • クラウド経由はアップ・ダウンで二度手間
 • チャットアプリは画質が劣化
 
-Go言語製ツール【EQT】を作りました：
-ターミナルのQRコードをカメラで読むだけ。アプリ不要！
+軽量ツール【EQT】を作りました：
+画面のQRコードをスマホカメラで読むだけ。アプリ不要！
 
 👇 詳細はリプライ欄へ
 ```
 
 #### 💬 日语评论区第 1 条 (1st Reply)
 ```text
-🔗 GitHubリポジトリ（オープンソース）:
-👉 https://github.com/forpersuit/eqt
+🔗 公式サイト＆ダウンロード:
+👉 https://eqt.net.im
 
-Windows / Mac / Linux対応。スマホはブラウザさえあればアプリ追加不要です！⭐️応援よろしくお願いします！
+Windows / Mac / Linux対応。スマホはブラウザさえあればアプリ追加不要です！
 ```
 
 ---
@@ -447,20 +437,20 @@ Dateien zwischen PC & Handy übertragen ohne Cloud:
 
 • 100% lokal im WLAN (bis 100 MB/s)
 • Kein Upload auf fremde Server (DSGVO-konform)
-• QR-Code im Terminal scannen & direkt laden
+• QR-Code scannen & direkt laden
 • Keine App auf dem Handy nötig
 
-Open-Source Tool in Go.
+Effizientes Desktop-Tool.
 
-👇 GitHub-Link im 1. Kommentar
+👇 Download-Link im 1. Kommentar
 ```
 
 #### 💬 德语评论区第 1 条 (1st Reply)
 ```text
-🔗 Vollständig Open Source auf GitHub:
-👉 https://github.com/forpersuit/eqt
+🔗 Offizielle Website & Download:
+👉 https://eqt.net.im
 
-100% datenschutzkonform, keine Cloud-Speicherung, keine Telemetrie. Star auf GitHub willkommen! ⭐️
+100% datenschutzkonform, keine Cloud-Speicherung, keine Telemetrie.
 ```
 
 ---

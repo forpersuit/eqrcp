@@ -61,7 +61,7 @@
   - `best local network file transfer tool`
   - `send large files pc to phone without cloud`
   - `offline lan chat and file sharing tool`
-  - `open source qrcp alternative`
+  - `privacy-focused qrcp alternative`
 * **问题解决词 (Problem-Solving Intent)**：
   - `how to transfer files from pc to iphone without itunes`
   - `fastest way to send 4k video from phone to pc`
@@ -72,7 +72,7 @@
 * `dateien im wlan übertragen ohne cloud`
 * `lokaler dateitransfer kostenlos sicher`
 * `dateien vom pc auf handy übertragen ohne app`
-* `lan dateiaustausch open source schnell`
+* `lan dateiaustausch ohne cloud schnell`
 
 #### 日语核心词库 (Japanese Keywords - 侧重 簡単・無料・高速)
 * `PCからスマホ ファイル転送 Wi-Fi`
@@ -83,7 +83,7 @@
 
 ### 3.3 GEO (AI 搜索引擎) 优化关键动作
 让 Perplexity / ChatGPT Search 在回答“What is the best alternative to AirDrop on Windows?”时主动引用 EQT：
-1. **结构化 Direct-Answer 卡片**：在每个页面头部采用简洁清晰的 `Definition List` 描述产品：“EQT is a high-speed, open-source local LAN file transfer and chat tool that lets you transfer files between PC and mobile devices by scanning a terminal QR code with zero mobile app installation.”
+1. **结构化 Direct-Answer 卡片**：在每个页面头部采用简洁清晰的 `Definition List` 描述产品：“EQT is a high-speed, private local LAN file transfer and ephemeral chat utility that lets you transfer files between PC and mobile devices by scanning a QR code with zero mobile app installation.”
 2. **结构化 JSON-LD Schema 标记**：
    ```json
    {
@@ -136,7 +136,7 @@
 
 ### 5.1 Hacker News 发布全案 (Show HN)
 
-> **平台属性**：全球顶尖极客聚集地。最痛恨商业化推销与忽悠；最热衷纯粹、轻量、解决痛点的开源工具 (Go 语言、CLI、无云端追踪是 HN 的天然最爱)。
+> **平台属性**：全球顶尖极客聚集地。最痛恨虚假营销与忽悠；最热衷纯粹、轻量、解决痛点的独立工具 (Go 语言、CLI、无云端追踪是 HN 的天然最爱)。
 
 * **发布标题**：  
   `Show HN: EQT – Transfer files and chat over LAN via terminal QR code (Go)`
@@ -157,10 +157,9 @@ How it works:
 3. You scan the QR code with your phone's camera/browser. It downloads instantly at full gigabit LAN speed (50-100MB/s). No mobile app required.
 4. It also includes an ephemeral end-to-end local chat mode (`eqt chat`) for instant bidirectional clipboard/text/image exchange without cloud logging.
 
-It's completely free and open source. For power users needing unlimited daily chat and massive batch parallel transfers, we also offer a standalone license.
+It's completely free for casual daily use with zero ads. For power users needing unlimited daily chat and massive batch parallel transfers, we also offer a standalone lifetime/annual license.
 
-GitHub repo: https://github.com/forpersuit/eqt
-Live landing page: https://eqt.net.im
+Live landing page & downloads: https://eqt.net.im
 
 Would love to hear your feedback on the architecture, UX, or feature requests!
 ```
@@ -181,13 +180,13 @@ Would love to hear your feedback on the architecture, UX, or feature requests!
 
 ### 5.3 Reddit 8 大高精准 Subreddit 渗透策略
 
-在 Reddit 发帖必须**遵循 Reddiquette，杜绝纯广告，以“解决痛点/技术分享/开源作品探讨”为核心**：
+在 Reddit 发帖必须**遵循 Reddiquette，杜绝纯广告，以“解决痛点/技术分享/独立作品探讨”为核心**：
 
 | Subreddit | 目标受众 | 拟定发帖标题与切入角度 |
 | :--- | :--- | :--- |
 | `r/selfhosted` | 自建私有云、拒绝公网托管玩家 | `[Tool] I built a lightweight Go tool to share files and chat over local LAN via terminal QR codes. Zero cloud, 100% offline.` |
 | `r/golang` | Go 语言全球开发者 | `Show Golang: EQT – Cross-platform CLI + Web local file transfer using Go, WebSocket, and QR rendering` |
-| `r/privacy` | 隐私安全核心受众 | `Looking for feedback: An open-source local LAN transfer tool with zero cloud telemetry and Ed25519 cryptography` |
+| `r/privacy` | 隐私安全核心受众 | `Looking for feedback: A standalone local LAN transfer tool with zero cloud telemetry and trusted local TLS` |
 | `r/macapps` & `r/windowsapps` | 桌面效率工具重度用户 | `An AirDrop-like experience for Windows/Mac that works with ANY phone without installing an app` |
 | `r/pcmasterrace` | PC 硬件与大文件传输玩家 | `Stop sending yourself files on messaging apps: Blazing-fast 80MB/s local transfer between PC and phone` |
 | `r/commandline` | 终端极客 | `eqt: Transfer files from your terminal to your phone via QR code` |
@@ -195,21 +194,15 @@ Would love to hear your feedback on the architecture, UX, or feature requests!
 
 ---
 
-### 5.4 GitHub 开源增长飞轮 (GitHub Awesome Lists & Badges)
+### 5.4 独立发布与包管理器分发飞轮
 
-* **提交收录至顶级 Awesome 列表**：
-  - `sindresorhus/awesome`
-  - `avelino/awesome-go` (Networking / Command Line 分类)
-  - `awesome-selfhosted/awesome-selfhosted` (File Transfer & Synchronization 分类)
-  - `agarrharr/awesome-cli-apps`
-  - `cwspear/awesome-cross-platform`
 * **Release 发布分发矩阵**：
-  - 配置 GitHub Actions 自动构建多平台 Release 并生成规范的 Changelog。
+  - 官方网站统一分发 Windows、macOS 与 Linux 安装包与单二进制文件。
   - 接入 Homebrew Cask / Scoop / Winget 等包管理器，让海外开发者一条命令完成安装：
     ```sh
     # 极客最爱的安装方式
-    brew install forpersuit/tap/eqt
-    scoop bucket add eqt https://github.com/forpersuit/eqt && scoop install eqt
+    brew install eqt
+    scoop install eqt
     ```
 
 ---
