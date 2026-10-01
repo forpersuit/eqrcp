@@ -18,6 +18,11 @@ set -euo pipefail
 
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
+# 1. G-Layer Hard Invariant Gate Check (< 2 seconds)
+if [[ -x "$root_dir/scripts/check-gates.sh" ]]; then
+  "$root_dir/scripts/check-gates.sh"
+fi
+
 echo "=== eqt pre-commit: deploy Windows acceptance artifacts ==="
 EQT_PRE_COMMIT_CONTEXT=1 "$root_dir/scripts/deploy-windows-results.sh"
 

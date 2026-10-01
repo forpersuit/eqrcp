@@ -1,25 +1,119 @@
-# Repository Guidelines
+# EQT Engineering Constitution & Repository Guidelines
 
-## Need to obey
+> **初衷宣言 (The Prime Intent)**：
+> **让委托变得安全且廉价：任何结论都带着可被第三方廉价核验的证据，任何行动都带着退路，任何裁判都独立于被裁判者。**
+> 守护两样稀缺资源：**人类的注意力与信任**，以及**系统未来的修正自由（Optionality）**。
+> 本宪法对抗的不是不可避免的错误，而是**被隐藏的错误、被放大的错误、以及被合理化的错误**。
 
-- use Chinese when we chat
-- use `scripts/git-push-smart.sh` for GitHub pushes in WSL: if direct `ping x.com` works it pushes without proxy; otherwise it uses the Windows host proxy from the commented `~/.bashrc` pattern (`ip route` host + port `10808`) through SSH `ProxyCommand`
-- always base on First Principle
-- unless the user explicitly says not to, close each completed change by staging, committing, and pushing the current worktree
-- avoid alert-style prompts (such as browser-level alert dialogs) for user warnings, errors, or size limit messages; always use in-app notifications (e.g., appending system messages to the chat message list) instead
-- replace grep by rg
-- 一旦有功能增加，则小版本号+1
+---
 
-## Project Structure & Module Organization
+## 0. 【M 元层】(Meta Layer - 决策程序与仲裁协议)
+*严格 ≤30 行。作为规则的 Schema 与冷启动决策程序，而非空泛哲学。*
 
-This repository is a Go command-line application forked from qrcp. The entry point is `main.go`; command definitions live in `cmd/`. Core transfer logic is in `server/`, payload creation is in `body/`, configuration handling is in `config/`, QR rendering is in `qr/`, and shared helpers are in `util/` and `logger/`.
+- **优先级铁律**：$\mathbf{G\text{ 门禁层} > R\text{ 反射层} > P\text{ 就近层} > M\text{ 元层}}$。元层绝对不得用于为违反反射规则与门禁开脱。
+- **仲裁程序**：仅在“无匹配反射规则”或“两条规则冲突”时唤醒。以**本仓库未来维护成本最低（Lowest Future Cost）**为唯一裁决标尺；在 Commit 信息中以 `Arbitration:` 显式说明方案对比与裁决依据。
+- **行动前显式工件**：在执行非琐碎变更前，思考与陈述中必须包含：
+  `Touch set: [目标文件清单] | 命中反射: [规则编号] | 无匹配依据: [裁决理由]`
+- **元不变量五条**：
+  1. **声称不得超出证据 (Claim ≤ Evidence)**：每个结论标注认知状态，观测必有可复现产物。
+  2. **裁判必须独立 (Independent Referee)**：做事者不得控制验证者；门禁文件受保护。
+  3. **变量隔离与步骤正交 (Variable Isolation)**：观测、保真整理、改变行为分步进行，一次只引入一个可归因变化。
+  4. **行动可撤销且力度匹配 (Reversibility & Proportionality)**：不可逆操作需人类复核；失败干预必须完整回滚而非叠加新补丁。
+  5. **单一真源与无循环归属 (Single Source & Clean Topology)**：事实与责任归属唯一；出现循环即归属错误，必须做归属重聚而非打补丁。
 
-Browser templates and embedded page markup are in `pages/`. Documentation and planning notes live under `docs/`, with static documentation assets in `docs/img/`. Tests are colocated with the package they cover, using Go’s `_test.go` convention.
+---
 
-## Build, Test, and Development Commands
+## 1. 【R 反射层】(Global Reflex Layer - 全局硬反射规则)
+*格式统一为：触发 $\rightarrow$ 动作 $\rightarrow$ 替代方案 / 违规后果。*
 
-Use standard Go tooling from the repository root:
+- **[R-1] WSL Git Push 代理反射**
+  - **触发**：在 WSL 环境下执行代码推送（`git push` 到 GitHub）。
+  - **动作**：必须使用 `scripts/git-push-smart.sh`。
+  - **违规后果**：直连网络超时 240s 挂死。该脚本若 `ping x.com` 通则直连，不通则自动走 Windows 宿主机代理（SSH 22 / ProxyCommand）。
+- **[R-2] 代码检索工具反射**
+  - **触发**：在终端检索代码或文本。
+  - **动作**：必须使用 `rg`（ripgrep），严禁调用 `grep`。
+- **[R-3] 变更交付闭环反射**
+  - **触发**：完成一项功能修改或缺陷修复。
+  - **动作**：本地自测全绿后，除非用户明确要求不推，必须执行 `git add`, `git commit`, 并使用 `scripts/git-push-smart.sh` 推送到远端。严禁遗留未跟踪调试脏文件。
+- **[R-4] 功能版本自增反射**
+  - **触发**：新增任何业务功能或特性（`feat`）。
+  - **动作**：小版本号（patch/minor）必须 +1（同步更新 `pkg/version/version.go` 及相关版本映射）。
+- **[R-5] 用户交互提示反射**
+  - **触发**：向用户展示错误、警告、大小超限或引导提示。
+  - **动作**：严禁使用浏览器原生 `alert()` 弹窗！
+  - **替代方案**：使用应用内通知（如追加系统消息至聊天流、页面内通知栏或全局 Toast）。
+- **[R-6] 沟通语言与第一性原理**
+  - **触发**：与用户交流。
+  - **动作**：强制使用中文；凡事追溯第一性原理，直击问题本质。
+- **[R-7] 演进重构：堆叠两阶段提交反射 (Stacked Two-Phase Commits)**
+  - **触发**：实现需求时需要第二次使用某个已有业务逻辑（Second Use）。
+  - **动作**：禁止就地微调复制！必须拆分为**同一分支中的两个堆叠独立提交**：
+    1. **Commit 1 (`Change-Type: refactor`)**：纯保真重构。用 `rg` 排查所有副本，提取到公共领域模块并替换所有旧调用。**门禁铁律：已有测试断言零修改，单测全绿，100% 行为保真。**
+    2. **Commit 2 (`Change-Type: feature`)**：基于已稳定的抽象挂接新业务。
+  - **熔断机制**：若 Commit 1 影响文件超过 5 个或跨领域，停止自作主张，升级由人类确认。
 
+---
+
+## 2. 【P 就近层】(Path-Scoped Layer - 领域与架构硬不变量)
+
+### 2.1 前端领域与页面模板 (`desktop/gui/frontend/`, `pkg/pages/`)
+- **[P-FE-1] 表现层零业务逻辑 (No Business Logic in Rendering)**
+  - **规则**：HTML 模板、前端组件、路由 Handler 仅充当纯值映射（Data -> DOM/JSON），严禁做业务决策。
+  - **判别三问**：(1) 第二客户端（如 CLI/移动端）是否需要重写这段逻辑？(2) 产品经理是否会写进需求文档？(3) 写错后果是显示难看还是状态/金额/权限错误？凡符合其一，立即下沉后端。
+  - **表现层允许**：无状态纯函数格式化（时间、字节、货币）、语义枚举映射到样式、基于后端视图模型布尔值的显隐（`{#if vm.canEdit}`）。
+  - **表现层禁止**：比较运算符（`==`, `!=`, `>`, `<`, `>=`, `<=`）、算术计算、多字段状态派生（`a && b || c`）。
+- **[P-FE-2] 数据状态与渲染纯函数分离 (State-Template Separation)**
+  - **规则**：渲染模板函数（以 `render` 开头）中禁止直接修改全局 `state`。状态变更由 Controller 或事件统一调度，渲染仅做 `Data -> DOM` 纯映射。
+- **[P-FE-3] 标准声明式事件绑定 (Declarative Event Listeners)**
+  - **规则**：严禁在 HTML 字符串中拼接内联的全局 `onclick="..."` 事件！必须使用标准 `addEventListener` 进行注册绑定。
+- **[P-FE-4] 模块化防膨胀 (Modularity & Separation)**
+  - **规则**：禁止向 `main.js` 无限堆砌新功能，独立交互与模板必须拆分到 `src/` 子文件中。
+
+### 2.2 后端领域与核心运行时 (Go 后端)
+- **[P-BE-1] 非阻塞异步外部网络调用 (Non-blocking Asynchronous Operations)**
+  - **规则**：客户端状态轮询 HTTP 请求（如 `/status`）或 Wails GUI 主线程中，绝对禁止同步阻塞网络 I/O。必须使用后台 goroutine 异步拉取并在内存中更新缓存。
+- **[P-BE-2] 磁盘 I/O 隔离与内存缓存 (Memory Cache Isolation)**
+  - **规则**：高频查询的数据（证书 `.lic`、配额限额）必须实施内存缓存。只在发生写入或重置时更新缓存。
+- **[P-BE-3] 设备指纹匹配空值防呆 (Robust Fingerprint Matching)**
+  - **规则**：硬件特征比对时，任何一方值为空字符串 `""` 直接跳过，不得视为匹配成功。至少需要 2 项有效非空指纹相匹配才算合法。
+- **[P-BE-4] 单一领域所有权与无循环打补丁 (One Owning Module per Domain)**
+  - **规则**：每个业务领域有且仅有一个拥有者模块。严禁在函数内编写局部 import 绕过循环依赖。一旦出现循环导入，唯一结论是分层职责归属错误，必须先做领域重聚。
+
+---
+
+## 3. 【G 门禁层】(Gate Layer - 物理门禁与交付闭环)
+*Gates, Not Promises: 提示词的承诺保护不了代码，物理门禁才是真相。*
+
+### 3.1 物理门禁实现 (Pre-commit & CI)
+- **测谎仪门禁**：拦截新增压制标记（`//nolint`、`@ts-ignore`、`as any`）、拦截吞错（`_ = err`、空 catch）、拦截断言弱化与测试 skip/only。
+- **表现层扫描**：扫描 HTML/模板中的内联 `onclick=` 与非法比较算式。
+- **Windows 验收发布门禁**：通过 `scripts/install-hooks.sh` 安装 hook，每次提交前自动校验并构建 Windows 交付件（`scripts/deploy-windows-results.sh`）。
+
+### 3.2 交付验收标准 (Rule 15 DoD - Definition of Done)
+任务完成必须同时满足以下客观指标：
+1. **编译与测试**：代码编译零警告，测试套件 100% 通过且零静默跳过。
+2. **工作区整洁**：无临时调试文件，改动完成提交并推送。
+3. **交付汇报三要素**：
+   - **修改清单 (What was modified)**：修改文件列表及核心逻辑。
+   - **验证证据 (How it was verified)**：明确列出执行的命令、真实退出码，并标注认知状态：
+     - `[已物理验证]`：有实际执行输出与产物证明。
+     - `[代码推演]`：基于静态调用栈分析（未具备运行环境）。
+     - `[工程假设]`：因上下文限制所做的合理假设，提醒人类复核。
+   - **技能沉淀声明 (Skills Consolidated)**：说明是否依据技能规范更新了 `.agents/skills/`，或给出明确的不需更新理由。
+
+---
+
+## 4. 仓库工程参考与工具索引 (Context & Tooling Index)
+
+### 4.1 项目结构与模块划分 (Project Structure)
+本仓库是从 qrcp 衍生出的 Go 跨平台命令行与桌面应用：
+- `main.go` 为顶层入口；命令实现位于 `cmd/`。
+- `server/` 负责核心传输逻辑；`body/` 负责载荷封装；`config/` 负责配置管理；`qr/` 负责二维码生成；`util/` 与 `logger/` 提供共享辅助。
+- `pkg/pages/` 包含浏览器模板与静态前端资源；`desktop/gui/` 包含 Wails 桌面端实现及前端应用。
+- `docs/` 保存设计与规划文档；`docs/img/` 保存静态资源；测试使用 Go 原生 `_test.go` 约定并就近组织。
+
+### 4.2 构建与测试常用命令 (Build & Test Commands)
 ```sh
 go test ./...
 go test ./server ./cmd
@@ -27,191 +121,90 @@ go build -o eqt .
 go run . send ./example.txt
 go run . receive ./downloads
 ```
-
-For Windows binaries (consolidated 3-in-1 executable combining CLI, launcher, and GUI):
-
+Windows 交付件打包（CLI + Launcher + GUI 三合一）：
 ```sh
 scripts/deploy-windows-results.sh
-# or for CLI-only testing:
+# 或 CLI-only 快速构建：
 GOOS=windows GOARCH=amd64 go build -o eqt.exe ./cmd/eqt
 ```
-
-Git hooks installation:
-
+Git Hooks 安装：
 ```sh
 scripts/install-hooks.sh
 ```
 
-Run `scripts/install-hooks.sh` whenever git hooks are updated or after cloning. The pre-commit hook automatically runs acceptance checks and stages synchronized files (e.g. `wails.json`).
+### 4.3 编码风格与提交规范 (Conventions & Commits)
+- 提交前对修改的 Go 文件运行 `gofmt`。
+- 标识符使用清晰的 Go 惯用法：导出标识符用 `CamelCase`，未导出用 `camelCase`，测试用 `TestNameBehavior`。
+- 提交信息沿用祈使句动词开头，例如 `Add agent-level transfer repeat`、`Push transfer status updates to browser pages`。
 
-Manual Windows acceptance deployment:
+### 4.4 品牌图标与资源生成守则 (Project Skill Notes)
+当修改产品品牌、Logo 或桌面图标时，检查每个构建和运行时表面：
+- `docs/img/transparent.png` 是方标、托盘图标、favicon 和 App 图标的源图。
+- `docs/img/logo-design-horizontal.png` 是横版品牌（如 About 面板）的源图。
+- 源图改动后，执行：`go run ./scripts/icon-assets docs/img/transparent.png docs/img/logo-design-horizontal.png` 重新生成派生资源。
+- `desktop/gui/build/appicon.png` 供给 Wails App 图标生成。
+- `desktop/gui/build/windows/icon.ico` 供给 Windows 可执行文件与安装器图标。
+- `desktop/gui/frontend/src/assets/images/logo-universal.png` 供给托盘和桌面前端。
+- `pkg/pages/assets/` 下的 favicon 与 logo 通过服务路由供给浏览器模板；禁止将大体积 PNG 内联到 HTML。
+- `desktop/gui/tray.go` 内嵌了 `logo-universal.png`；替换该文件后必须重新构建。
 
-```sh
-scripts/deploy-windows-results.sh
-```
+---
 
-The deployment script compiles and writes the unified customer-facing Windows executable `eqt.exe` (and distribution archive `eqt-desktop-windows-amd64.zip`) to `E:\developer\results` on Windows or `/mnt/e/developer/results` under WSL/Linux. Use `EQT_RESULTS_DIR` only when the acceptance directory is intentionally different.
+## 5. 15-Rule 执行律模板 (Execution Template)
 
-## Coding Style & Naming Conventions
+### Rule 1 — Think Before Coding (思考先行)
+明确陈述假设。遇到不确定性，停下询问而非猜测。出现歧义提供多种方案。存在更简路径时主动提出。
 
-Run `gofmt` on changed Go files before committing. Keep package-level names clear and idiomatic: exported identifiers use `CamelCase`, unexported identifiers use `camelCase`, and tests use `TestNameBehavior`. Prefer existing package boundaries and helpers over adding new abstractions.
+### Rule 2 — Simplicity First (最简可用)
+用最小代码解决问题。不写投机性抽象，不添加未要求的功能。若资深工程师认为过于复杂，必须简化。
 
-Keep comments short and useful. Avoid broad refactors when changing transfer behavior, desktop integration, or status reporting.
+### Rule 3 — Surgical Changes (外科手术式修改)
+只修改必须触碰的代码，清理自己留下的痕迹。不顺手格式化或修改无关相邻代码。
 
-## Testing Guidelines
+### Rule 4 — Goal-Driven Execution (目标驱动)
+明确成功指标，独立循环直到验证通过。不机械按步就班，以达成最终确定性结果为准。
 
-Use Go’s built-in `testing` package. Add focused tests next to the modified code, especially for server state transitions, desktop agent behavior, launcher errors, and config migration. Run `go test ./...` before submitting. For narrow work, also run targeted packages such as `go test ./server ./cmd`.
+### Rule 5 — Use the Model Only for Judgment Calls (模型用于判断)
+模型用于分类、草拟、总结、抽取；不用于确定性数据流转换、路由或重试。代码能回答的，交给代码。
 
-When frontend templates (like `chat.tmpl.html` or `upload.tmpl.html`) or core transfer routes change, the user may ask to run `/chrome-test` (Chrome MCP E2E simulation test). Always refer to `.agents/skills/eqt-ux/SKILL.md` to run the step-by-step E2E simulation via `chrome-devtools-mcp` to verify the responsive UI layout and capture completed screen states.
+### Rule 6 — Token Budgets Are Not Advisory (Token 预算纪律)
+单次任务建议 4,000 tokens，会话建议 30,000 tokens。逼近预算时做总结并新开会话，严禁静默超限。
 
-## Commit & Pull Request Guidelines
+### Rule 7 — Surface Conflicts, Don't Average Them (暴露冲突)
+若两种模式冲突，挑选一种并说明理由，不搞折中平均。
 
-Recent history uses short imperative commit messages, for example `Add agent-level transfer repeat` and `Push transfer status updates to browser pages`. Follow that style.
+### Rule 8 — Read Before You Write (读后即写)
+添加代码前阅读导出符号、直接调用者和共享工具库。理解代码结构原因，避免盲目添加。
 
-Pull requests should include a concise behavior summary, test commands run, and any manual Windows validation notes when desktop integration changes. Link related issues when available and include screenshots only for visible browser or desktop UI changes.
+### Rule 9 — Tests Verify Intent, Not Just Behavior (测试验证意图)
+测试必须编码行为背后的“为什么”，而非仅仅是“是什么”。业务逻辑改变而无法击穿的测试是无效测试。
 
-## Security & Configuration Tips
+### Rule 10 — Checkpoint After Every Significant Step (检查点同步)
+每完成关键步骤，总结已做内容、验证结果与剩余项。不从无法复述的状态继续。
 
-Do not commit local config, generated binaries, logs, or received files. Keep network-facing changes scoped and document any new routes in the corresponding contract docs (`docs/admin/api-contract.md` / `docs/portal/api-contract.md`) or the desktop integration plan when relevant.
+### Rule 11 — Match the Codebase's Conventions (遵从现有惯例)
+代码库惯例高于个人品味。若认为惯例有害，显式提出，严禁私自搞分叉风格。
 
-## Project Skill Notes
+### Rule 12 — Fail Loud (大声失败)
+跳过任何步骤不能宣称“已完成”；跳过任何测试不能宣称“测试通过”。默认暴露不确定性，绝不隐藏。
 
-When changing product branding, logo, or desktop icons, check every visible and build-time surface:
+### Rule 13 — Zero Tolerance for Regression (防止功能退化)
+绝不牺牲既有功能来换取新特性。识别并保护修改区域的所有历史并发行为，运行回归验证。
 
-- `docs/img/transparent.png` is the source image for square icons, tray icons, favicons, and app icons.
-- `docs/img/logo-design-horizontal.png` is the source image for horizontal brand surfaces such as About.
-- Regenerate derived assets with `go run ./scripts/icon-assets docs/img/transparent.png docs/img/logo-design-horizontal.png` when either source changes.
-- `docs/img/logo.png` is a retained product mark source image from the logo set.
-- `desktop/gui/build/appicon.png` feeds Wails app icon generation.
-- `desktop/gui/build/windows/icon.ico` feeds Windows executable and installer icons.
-- `desktop/gui/frontend/src/assets/images/logo-universal.png` feeds the tray icon and visible desktop GUI logo surfaces.
-- `pkg/pages/assets/favicon.png`, `pkg/pages/assets/eqt-logo-mark.png`, and `pkg/pages/assets/eqt-logo-horizontal.png` feed browser templates through server routes; do not inline large PNGs into templates.
-- `desktop/gui/frontend/src/main.js` and `desktop/gui/frontend/src/app.css` control visible in-app logo usage such as the top bar, About panel, and favicon.
-- `desktop/gui/tray.go` embeds `logo-universal.png`; rebuild after replacing that file.
+### Rule 14 — Memory & Skill Consolidation (任务反思与技能固化)
+- **触发与评估**：在每项任务结束时，评估是否有长期工程价值需要固化（如隐藏配置、环境陷阱、交互命令、构建工作流）。
+- **固化规范**：
+  - 新领域在 `.agents/skills/<skill-name>/SKILL.md` 定义新技能。
+  - 现有领域更新对应技能文件，遵循渐进披露原则保持精炼。
+  - 仅记录可复用的集成、排障与环境指南，严禁记录临时业务逻辑。
+- **技能编写标准 (Skill Authoring Standard)**：
+  1. **按需分层**：`SKILL.md` 只保留最小操作指令与避坑指南（< 500 行）；细节进 `references/`；确定性脚本进 `scripts/`。
+  2. **禁入时效内容**：禁止日期、轮次、基线版本横幅，不复述外部文件的计数（复述必然漂移）。
+  3. **单一事实源**：写“规格来源：`path:line`”，不写机制的重复实现。
+  4. **description 唯一触发面**：第三人称，同时说明“做什么”与“何时用”，核心用例放最前。
+  5. **自洽与改后回读**：计数、编号域必须自洽；修改后回读所有关联文件并校验 frontmatter。
+- **落点与软链规范**：权威技能置于 `.agents/skills/<name>/`，并在 `.claude/skills/<name>` 建立目录级软链指向 `../../.agents/skills/<name>`。禁止在 `.claude/skills/` 内复制文件。
+- **汇报义务**：在最终交付中明确声明更新了哪些技能，或给出无需更新的技术理由。
 
-For GitHub push network selection, use `scripts/git-push-smart.sh` instead of raw `git push` when working from WSL. On 2026-05-24 in the current network, `ping x.com` failed; 4 MiB remote push tests showed direct SSH 22 and SSH 443 timed out at 240s, Windows-proxy SSH 22 completed in 112s, and Windows-proxy SSH 443 completed in 124s. Therefore proxy SSH 22 is the preferred fallback when direct reachability fails.
-
-
-## Front-end & Go Engineering Best Practices (前端与 Go 后端开发最佳实践规则)
-
-### 1. 前端开发规范 (JavaScript / TypeScript)
-- **模块化分离 (Modularity & Separation of Concerns)**：
-  - **规则**：禁止继续向 `main.js` 中无限制堆积新的功能模块。任何独立的业务交互、全局字典（如多语言 `translations`）、大块渲染模板，必须进行组件化或模块化剥离（在 `frontend/src/` 中拆分子文件）。
-  - **合理性**：降低单文件膨胀度（控制在合理行数内），提高代码可读性，避免庞大文件发生 git 合并冲突。
-- **数据状态与渲染分离 (State-Template Separation)**：
-  - **规则**：渲染模板纯函数（以 `render` 开头的方法）中禁止直接修改全局 `state` 的值。状态修改必须由明确的 Controller 方法或事件处理函数统一调度。
-  - **合理性**：理顺单向数据流。渲染函数应仅充当 `Data -> DOM` 的纯映射，避免局部 Side Effects 引发的状态漂移或内存泄露。
-- **标准事件绑定 (Declarative Event Listeners)**：
-  - **规则**：严禁在 HTML 字符串中拼装内联的全局 `onclick="..."` 事件。事件应当使用标准的 `addEventListener` 进行注册绑定。
-  - **合理性**：降低全局作用域污染，提高调试可见性，且易于事件的生命周期清理，防范页面长期挂载导致内存溢出。
-
-### 2. 后端开发规范 (Go 语言)
-- **非阻塞异步外部网络调用 (Non-blocking Asynchronous Operations)**：
-  - **规则**：在处理客户端轮询 HTTP 请求（如 `/status`）或 Wails 核心交互主线程中，绝对禁止同步阻塞式发起 network HTTP 请求或进行高时延 I/O。必须使用后台协程（goroutine）异步拉取并在内存中更新缓存。
-  - **合理性**：确保客户端状态轮询在微秒级返回，防止 network 延迟导致前端 GUI 挂起或抛出 `context deadline exceeded` 异常。
-- **磁盘 I/O 隔离与内存缓存 (Memory Cache Isolation)**：
-  - **规则**：高频查询的数据（如 `.lic` 证书与本地使用度限额等）必须实施内存缓存。只在发生写入或重置时更新缓存。
-  - **合理性**：保护用户硬盘寿命，提升 system 响应速度，避免频繁的磁盘读取造成严重的 I/O 卡顿。
-- **设备指纹匹配空值防呆 (Robust Hardware Fingerprint Matching)**：
-  - **规则**：在硬件特征比对时，若任何一方的值为空字符串 `""`，此字段判定比对直接跳过，不得被视作匹配成功。至少需要有 2 项有效的非空指纹相匹配才算合法。
-  - **合理性**：确保因运行权限不足而造成部分特征缺失时，授权不被滥用。
-
-
-# 15-rule template
-
-These rules apply to every task in this project unless explicitly overridden.
-Bias: caution over speed on non-trivial work. Use judgment on trivial tasks.
-
-
-## Rule 1 — Think Before Coding
-State assumptions explicitly. If uncertain, ask rather than guess.
-Present multiple interpretations when ambiguity exists.
-Push back when a simpler approach exists.
-Stop when confused. Name what's unclear.
-
-## Rule 2 — Simplicity First
-Minimum code that solves the problem. Nothing speculative.
-No features beyond what was asked. No abstractions for single-use code.
-Test: would a senior engineer say this is overcomplicated? If yes, simplify.
-
-## Rule 3 — Surgical Changes
-Touch only what you must. Clean up only your own mess.
-Don't "improve" adjacent code, comments, or formatting.
-Don't refactor what isn't broken. Match existing style.
-
-## Rule 4 — Goal-Driven Execution
-Define success criteria. Loop until verified.
-Don't follow steps. Define success and iterate.
-Strong success criteria let you loop independently.
-
-## Rule 5 — Use the model only for judgment calls
-Use me for: classification, drafting, summarization, extraction.
-Do NOT use me for: routing, retries, deterministic transforms.
-If code can answer, code answers.
-
-## Rule 6 — Token budgets are not advisory
-Per-task: 4,000 tokens. Per-session: 30,000 tokens.
-If approaching budget, summarize and start fresh.
-Surface the breach. Do not silently overrun.
-
-## Rule 7 — Surface conflicts, don't average them
-If two patterns contradict, pick one (more recent / more tested).
-Explain why. Flag the other for cleanup.
-Don't blend conflicting patterns.
-
-## Rule 8 — Read before you write
-Before adding code, read exports, immediate callers, shared utilities.
-"Looks orthogonal" is dangerous. If unsure why code is structured a way, ask.
-
-## Rule 9 — Tests verify intent, not just behavior
-Tests must encode WHY behavior matters, not just WHAT it does.
-A test that can't fail when business logic changes is wrong.
-
-## Rule 10 — Checkpoint after every significant step
-Summarize what was done, what's verified, what's left.
-Don't continue from a state you can't describe back.
-If you lose track, stop and restate.
-
-## Rule 11 — Match the codebase's conventions, even if you disagree
-Conformance > taste inside the codebase.
-If you genuinely think a convention is harmful, surface it. Don't fork silently.
-
-## Rule 12 — Fail loud
-"Completed" is wrong if anything was skipped silently.
-"Tests pass" is wrong if any were skipped.
-Default to surfacing uncertainty, not hiding it.
-
-## Rule 13 — Zero Tolerance for Regression (防止功能退化)
-Never compromise or disable existing features when adding new code. Identify and protect all legacy and concurrent behaviors in the modified area.
-Verify backward compatibility: when editing a module, run regression checks on all related existing flows.
-If a structural or design conflict is detected, stop immediately and raise it for user clarification instead of silently averaging or ignoring it.
-
-## Rule 14 — Memory & Skill Consolidation (任务反思与技能固化)
-- **Action Required**: At the end of every task, evaluate if there is any long-term engineering value to preserve (e.g., hidden configurations, environment traps, specific interactive commands, complex build workflows).
-- **Consolidation**:
-  - For new areas, define a new skill in the custom skills directory (e.g., `.agents/skills/<skill-name>/SKILL.md`).
-  - For existing topics, update the corresponding skill file with progressive disclosure to keep instructions compact.
-  - **Filter**: Only record reusable setup, debugging, and integration guidelines. Do NOT record temporary features or business-specific logic.
-- **Skill Authoring Standard (技能沉淀行为准则)** — 上面说的是「放哪里」，这里说的是「写成什么样才算对」。完整条文、证据分级与自证命令见 [`docs/skill-authoring-standard.md`](docs/skill-authoring-standard.md)。
-  1. **按需分层** — `SKILL.md` 只放「每次执行都需要的最小操作指令 + 非显而易见的坑」（< 500 行）；细节入 `references/`，引用**只可一层深**且每条须写明**何时加载**，> 100 行者顶部加 TOC；确定性操作入 `scripts/`，执行而非写入上下文；路径一律正斜杠。
-  2. **稳定层禁入时效内容** — `SKILL.md` 不得出现日期、轮次、基线版本、「本轮更正」横幅，**也不得复述他文件的计数与编号域**（复述必然漂移）。**判据**：**本文件自身**的清单（如账本头自称条数，与内容同 commit 更新）可留；凡指向**另一个**文件的数字，一律改写为「以该文件为准」。审查留痕入 `docs/`；稳定层只写**当下正确**的机制。
-  3. **单一事实源（house rule，非官方规范）** — 实现细节不得在技能内复述（复述即漂移）。写「规格来源：`path:line`」，不写机制的再实现。
-  4. **`description` 是唯一触发面** — 须同时说明「做什么」与「何时用」，**关键用例放最前**（超 1536 字符从后往前截断）；用第三人称；**不得出现具体客户端名称**（技能跨客户端共享，写死 harness 名会污染另一侧的触发面）；不得含未经 `rg` 验证的机制声明，尤其不得写入不存在的对象名。
-  5. **自洽义务** — 计数、编号域、交叉引用、索引行须与目标文件**实际内容**一致；改一个计数就要改所有复述它的地方，**禁止用括注打补丁**。
-  6. **改后回读** — 技能改动完成后，回读被改文件**以及被它索引的文件**，重验 1~5；并跑 frontmatter 校验（`name` 与目录同名、`description` ≤ 1024 字符）。
-- **落点与发现路径** — 权威内容放 `.agents/skills/<name>/`（跨客户端共享），同时必须在 `.claude/skills/<name>` 建**目录级软链**指向 `../../.agents/skills/<name>`；**禁止在 `.claude/skills/` 内复制内容**。Claude Code 只发现 `.claude/skills/`、`<subdir>/.claude/skills/`、`~/.claude/skills/`、`/etc/claude-code/.claude/skills/`、`<plugin>/skills/` —— **`.agents/skills/` 不在发现路径内**，只放那里＝永不自动触发。检出侧须 `core.symlinks=true`；已存在的技能目录内改动当前会话即生效，无需重启。
-- **Reporting**: In your final delivery, explicitly declare which skills were updated or explain why no changes were required.
-
-## Rule 15 — Definition of Done & Delivery Standards (定义完成与交付标准)
-- **DoD (Definition of Done)**: A task is NOT complete until all the following criteria are met:
-  1. **Compilation & Tests**: Code compiles without errors, and the test suite passes 100% with zero silent skips.
-  2. **Acceptance & Deployment**: If core logic or integration boundaries change, execute project-specific deployment/build scripts to ensure physical artifacts are updated.
-  3. **Git Cleanliness**: Working tree must be clean (no temp debug files left untracked), changes committed, and pushed to remote.
-- **Delivery Artifact (交付汇报规范)**: Your final response MUST outline:
-  - **What was modified**: A bullet list of edited files and their core change logic.
-  - **How it was verified**: The exact commands run and a deterministic statement of runtime behaviors observed.
-  - **Skills Updated**: Clear declaration of updated custom skills or explicit rationale for why no changes were required.
-
-
-
-
+### Rule 15 — Definition of Done & Delivery Standards (交付标准)
+参照本规范 3.2 节的客观标准，严格履行汇报三要素。
