@@ -38,7 +38,14 @@
    - 4 支 15~30 秒高转化短视频分镜头脚本（痛点直击型、多设备并发型、极客 Chat 剪贴板型、80MB/s 性能狂飙型）。
    - 视觉“Aha!”爽点设计、平台分发矩阵（Twitter Video / TikTok / Shorts / Reels）与制作 SOP。
 
-7. **[官网多语种 SEO/GEO 深度适配落地设计规范](multilingual-seo-geo-design-spec.md)**
+7. **[EQT 全渠道推广攻坚规划全案 (Omnichannel Launch Plan)](omnichannel-launch-and-promotion-plan.md)** 🎯 *(全渠道攻坚总控)*
+   - 覆盖五大攻坚梯队：被动长尾目录 (AlternativeTo)、国内极客圈 (V2EX / 少数派 / 知乎)、全球技术打榜 (Hacker News / Indie Hackers)、创客首发 (Product Hunt) 与短视频切片 (Shorts / B 站 / 小红书)。
+   - 提供各平台的定位画像、切入痛点、物料准备清单、审核防雷与看板状态追踪。
+
+8. **[Reddit 推广实战与防刷风控执行手册](reddit-launch-execution-playbook.md)**
+   - 包含 r/SideProject 4.9s 循环高清视频发帖实操、Lexical AST 注入代码、避坑黑名单规则与首评互动。
+
+9. **[官网多语种 SEO/GEO 深度适配落地设计规范](multilingual-seo-geo-design-spec.md)**
    - Cloudflare Pages 静态预渲染 (SSG) 与边缘路由体系（`/en/`, `/zh/`, `/de/`, `/ja/`, `hreflang` 双向绑定）。
    - 现代 GEO 核心资产 `/llms.txt`、Schema.org JSON-LD 与 Twitter Cards 全链路闭环。
 
