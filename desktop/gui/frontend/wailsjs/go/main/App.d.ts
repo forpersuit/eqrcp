@@ -5,9 +5,9 @@ import {main} from '../models';
 
 export function ActivateLicense(arg1:string):Promise<void>;
 
-export function ActivateLicenseWithEmail(arg1:string,arg2:string,arg3:string):Promise<server.ActivationResult>;
+export function ActivateLicenseWithEmail(arg1:string,arg2:string,arg3:string,arg4:string):Promise<server.ActivationResult>;
 
-export function ActivateLicenseWithResult(arg1:string):Promise<server.ActivationResult>;
+export function ActivateLicenseWithResult(arg1:string,arg2:string):Promise<server.ActivationResult>;
 
 export function AgentStatus():Promise<main.AgentStatus>;
 
@@ -107,7 +107,7 @@ export function SelectReceiveDirectory():Promise<string>;
 
 export function SelectShareDirectory():Promise<string>;
 
-export function SendActivationCode(arg1:string,arg2:string):Promise<void>;
+export function SendActivationCode(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function SetAutoStop(arg1:boolean):Promise<main.AgentStatus>;
 

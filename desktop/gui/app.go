@@ -1722,28 +1722,28 @@ func (a *App) ActivateLicense(code string) error {
 	return a.agent.activateLicense(code)
 }
 
-func (a *App) ActivateLicenseWithResult(code string) (*server.ActivationResult, error) {
-	a.logInfo(fmt.Sprintf("[GUI] ActivateLicenseWithResult called with code=%s", code))
+func (a *App) ActivateLicenseWithResult(code, lang string) (*server.ActivationResult, error) {
+	a.logInfo(fmt.Sprintf("[GUI] ActivateLicenseWithResult called with code=%s, lang=%s", code, lang))
 	if a.agent == nil {
 		return nil, fmt.Errorf("agent not initialized")
 	}
-	return a.agent.activateLicenseWithResult(code)
+	return a.agent.activateLicenseWithResult(code, lang)
 }
 
-func (a *App) SendActivationCode(licenseCode, email string) error {
-	a.logInfo(fmt.Sprintf("[GUI] SendActivationCode called for license=%s, email=%s", licenseCode, email))
+func (a *App) SendActivationCode(licenseCode, email, lang string) error {
+	a.logInfo(fmt.Sprintf("[GUI] SendActivationCode called for license=%s, email=%s, lang=%s", licenseCode, email, lang))
 	if a.agent == nil {
 		return fmt.Errorf("agent not initialized")
 	}
-	return a.agent.sendActivationCode(licenseCode, email)
+	return a.agent.sendActivationCode(licenseCode, email, lang)
 }
 
-func (a *App) ActivateLicenseWithEmail(licenseCode, email, otpCode string) (*server.ActivationResult, error) {
-	a.logInfo(fmt.Sprintf("[GUI] ActivateLicenseWithEmail called for license=%s, email=%s", licenseCode, email))
+func (a *App) ActivateLicenseWithEmail(licenseCode, email, otpCode, lang string) (*server.ActivationResult, error) {
+	a.logInfo(fmt.Sprintf("[GUI] ActivateLicenseWithEmail called for license=%s, email=%s, lang=%s", licenseCode, email, lang))
 	if a.agent == nil {
 		return nil, fmt.Errorf("agent not initialized")
 	}
-	return a.agent.activateLicenseWithEmail(licenseCode, email, otpCode)
+	return a.agent.activateLicenseWithEmail(licenseCode, email, otpCode, lang)
 }
 
 func (a *App) ResetLicense() error {

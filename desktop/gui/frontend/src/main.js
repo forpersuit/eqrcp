@@ -1,5 +1,5 @@
 import { state } from './state.js';
-import { t, getSystemLocale } from './i18n.js';
+import { t, getSystemLocale, getCurrentLang } from './i18n.js';
 import { allEmojis, culturalEmojis, getCategoryLocalizedName } from './emojis.js';
 import './style.css';
 import './app.css';
@@ -4236,7 +4236,7 @@ function bindEvents() {
                 state.devInjectMsg = t('dev_inject_working');
                 render();
                 openPanel('settings');
-                ActivateLicenseWithResult(code).then(async (res) => {
+                ActivateLicenseWithResult(code, getCurrentLang()).then(async (res) => {
                     if (res && res.need_email) {
                         state.activationEmailModal = {
                             licenseCode: code,
@@ -6708,7 +6708,7 @@ function confirmRedeem() {
     state.isActivating = true;
     render();
 
-    ActivateLicenseWithResult(code).then(async function(res) {
+    ActivateLicenseWithResult(code, getCurrentLang()).then(async function(res) {
         if (res && res.need_email) {
             state.activationEmailModal = {
                 licenseCode: code,

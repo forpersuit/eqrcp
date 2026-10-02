@@ -185,11 +185,12 @@ async function runTests() {
     });
     assertEqual(notFound.status, 404, 'Non-existent license returns 404');
 
-    // 2.3 Valid request
+    // 2.3 Valid request with explicit lang
     const sendRes = await callAuth('POST', '/api/v1/auth/send-code', {
       email: 'user@example.com',
       purpose: 'activate',
-      license_code: promoCode
+      license_code: promoCode,
+      lang: 'en'
     });
     assertEqual(sendRes.status, 200, 'Valid send-code returns 200');
     assertEqual(sendRes.json.success, true, 'send-code returns success: true');

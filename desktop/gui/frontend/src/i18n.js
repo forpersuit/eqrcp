@@ -3372,8 +3372,12 @@ export function getSystemLocale() {
     return 'en';
 }
 
+export function getCurrentLang() {
+    return (state && state.settings && state.settings.lang) || getSystemLocale();
+}
+
 export function t(key, params) {
-    const lang = (state && state.settings && state.settings.lang) || getSystemLocale();
+    const lang = getCurrentLang();
     let val = (translations[lang] && translations[lang][key]) || 
               (translations['en'] && translations['en'][key]) || 
               (translations['zh'] && translations['zh'][key]) || 

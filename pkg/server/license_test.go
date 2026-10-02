@@ -681,8 +681,10 @@ func TestUnifiedActivationAndEmailBinding(t *testing.T) {
 	var sendCodeReceivedEmail string
 	var sendCodeReceivedPurpose string
 	var sendCodeReceivedLic string
+	var sendCodeReceivedLang string
 	var activateReceivedEmail string
 	var activateReceivedCode string
+	var activateReceivedLang string
 
 	stage := "challenge" // "challenge" -> "verify_success"
 
@@ -693,6 +695,7 @@ func TestUnifiedActivationAndEmailBinding(t *testing.T) {
 			sendCodeReceivedEmail = body["email"]
 			sendCodeReceivedPurpose = body["purpose"]
 			sendCodeReceivedLic = body["license_code"]
+			sendCodeReceivedLang = body["lang"]
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "message": "code sent"})
 			return
@@ -703,6 +706,7 @@ func TestUnifiedActivationAndEmailBinding(t *testing.T) {
 			_ = json.NewDecoder(r.Body).Decode(&body)
 			activateReceivedEmail = body["email"]
 			activateReceivedCode = body["verification_code"]
+			activateReceivedLang = body["lang"]
 
 			w.Header().Set("Content-Type", "application/json")
 			if stage == "challenge" {
@@ -769,9 +773,20 @@ func TestUnifiedActivationAndEmailBinding(t *testing.T) {
 	if errSend != nil {
 		t.Fatalf("SendActivationCodeOnline failed: %v", errSend)
 	}
-	if sendCodeReceivedEmail != "tester@example.com" || sendCodeReceivedPurpose != "activate" || sendCodeReceivedLic != licenseCode {
-		t.Errorf("send-code payload mismatch: email=%s, purpose=%s, lic=%s",
-			sendCodeReceivedEmail, sendCodeReceivedPurpose, sendCodeReceivedLic)
+	if sendCodeReceivedEmail != "tester@example.com" || sendCodeReceivedPurpose != "activate" || sendCodeReceivedLic != licenseCode || sendCodeReceivedLang != "en" {
+		t.Errorf("send-code payload mismatch: email=%s, purpose=%s, lic=%s, lang=%s",
+			sendCodeReceivedEmail, sendCodeReceivedPurpose, sendCodeReceivedLic, sendCodeReceivedLang)
+	}
+
+	// 2.1 Test intelligent locale fallback when lang is empty string
+	t.Setenv("LANG", "ja_JP.UTF-8")
+	t.Setenv("LC_ALL", "")
+	errSendFallback := SendActivationCodeOnline(licenseCode, "tester@example.com", "")
+	if errSendFallback != nil {
+		t.Fatalf("SendActivationCodeOnline with fallback failed: %v", errSendFallback)
+	}
+	if sendCodeReceivedLang != "ja" {
+		t.Errorf("expected lang fallback to 'ja', got: %s", sendCodeReceivedLang)
 	}
 
 	// 3. Complete activation with email and OTP
@@ -783,8 +798,8 @@ func TestUnifiedActivationAndEmailBinding(t *testing.T) {
 	if resFinal == nil || !resFinal.Success || resFinal.NeedEmail {
 		t.Fatalf("expected Success=true and NeedEmail=false, got: %+v", resFinal)
 	}
-	if activateReceivedEmail != "tester@example.com" || activateReceivedCode != "654321" {
-		t.Errorf("activate payload mismatch: email=%s, code=%s", activateReceivedEmail, activateReceivedCode)
+	if activateReceivedEmail != "tester@example.com" || activateReceivedCode != "654321" || activateReceivedLang != "en" {
+		t.Errorf("activate payload mismatch: email=%s, code=%s, lang=%s", activateReceivedEmail, activateReceivedCode, activateReceivedLang)
 	}
 
 	// Verify local state was set to paid

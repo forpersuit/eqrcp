@@ -69,7 +69,24 @@ func NormalizeLangCode(raw string) string {
 	return "zh"
 }
 
-// GetConfiguredLang reads the configured language from viper config, defaulting to "zh" if unset or on error.
+// detectSystemLocale returns a normalized 2-letter language code from system environment variables, or "" if not found.
+func detectSystemLocale() string {
+	for _, envKey := range []string{"LC_ALL", "LC_MESSAGES", "LANG"} {
+		val := strings.TrimSpace(os.Getenv(envKey))
+		if val != "" && val != "C" && val != "POSIX" {
+			raw := strings.TrimSpace(strings.ToLower(val))
+			parts := strings.FieldsFunc(raw, func(r rune) bool {
+				return r == '-' || r == '_' || r == '.'
+			})
+			if len(parts) > 0 && len(parts[0]) == 2 {
+				return parts[0]
+			}
+		}
+	}
+	return ""
+}
+
+// GetConfiguredLang reads the configured language from viper config, defaulting to system locale or "zh" if unset or on error.
 func GetConfiguredLang() string {
 	v := GetViperInstance(application.App{})
 	if err := v.ReadInConfig(); err == nil {
@@ -79,6 +96,9 @@ func GetConfiguredLang() string {
 				return l
 			}
 		}
+	}
+	if sys := detectSystemLocale(); sys != "" {
+		return sys
 	}
 	return "zh"
 }

@@ -6,12 +6,12 @@ export function ActivateLicense(arg1) {
   return window['go']['main']['App']['ActivateLicense'](arg1);
 }
 
-export function ActivateLicenseWithEmail(arg1, arg2, arg3) {
-  return window['go']['main']['App']['ActivateLicenseWithEmail'](arg1, arg2, arg3);
+export function ActivateLicenseWithEmail(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['ActivateLicenseWithEmail'](arg1, arg2, arg3, arg4);
 }
 
-export function ActivateLicenseWithResult(arg1) {
-  return window['go']['main']['App']['ActivateLicenseWithResult'](arg1);
+export function ActivateLicenseWithResult(arg1, arg2) {
+  return window['go']['main']['App']['ActivateLicenseWithResult'](arg1, arg2);
 }
 
 export function AgentStatus() {
@@ -210,8 +210,8 @@ export function SelectShareDirectory() {
   return window['go']['main']['App']['SelectShareDirectory']();
 }
 
-export function SendActivationCode(arg1, arg2) {
-  return window['go']['main']['App']['SendActivationCode'](arg1, arg2);
+export function SendActivationCode(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SendActivationCode'](arg1, arg2, arg3);
 }
 
 export function SetAutoStop(arg1) {

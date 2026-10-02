@@ -1,7 +1,7 @@
 // Unified License Activation & Email Ownership Binding Component
 // 统一授权激活所有权邮箱确权组件
 
-import { t } from '../i18n.js';
+import { t, getCurrentLang } from '../i18n.js';
 import { SendActivationCode, ActivateLicenseWithEmail } from '../../wailsjs/go/main/App.js';
 
 let cooldownInterval = null;
@@ -149,7 +149,8 @@ export async function handleSendActivationCode(state, render) {
     render();
 
     try {
-        await SendActivationCode(modal.licenseCode, email);
+        const lang = getCurrentLang();
+        await SendActivationCode(modal.licenseCode, email, lang);
         modal.sendingOtp = false;
         modal.notice = t('code_sent_notice') || 'Verification code sent to your email, valid for 5 minutes.';
         modal.cooldownSeconds = 60;
@@ -200,7 +201,8 @@ export async function handleSubmitActivationEmail(state, render, onActivated, fo
     render();
 
     try {
-        const result = await ActivateLicenseWithEmail(modal.licenseCode, email, code);
+        const lang = getCurrentLang();
+        const result = await ActivateLicenseWithEmail(modal.licenseCode, email, code, lang);
         cleanupActivationEmailModal(state);
         if (onActivated) {
             await onActivated(result);

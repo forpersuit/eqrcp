@@ -433,3 +433,26 @@ func TestConfigDirectoryIsolationBetweenTestAndProduction(t *testing.T) {
 		t.Fatalf("production and test directories must be strictly physically isolated, but both are: %s", prodDir)
 	}
 }
+
+func TestGetConfiguredLangLocaleDetection(t *testing.T) {
+	// 1. When config is unset and LANG is English
+	t.Setenv("LC_ALL", "")
+	t.Setenv("LC_MESSAGES", "")
+	t.Setenv("LANG", "en_US.UTF-8")
+	if loc := detectSystemLocale(); loc != "en" {
+		t.Fatalf("expected detectSystemLocale() to return 'en', got: %s", loc)
+	}
+
+	// 2. When config is unset and LANG is Japanese
+	t.Setenv("LANG", "ja_JP.UTF-8")
+	if loc := detectSystemLocale(); loc != "ja" {
+		t.Fatalf("expected detectSystemLocale() to return 'ja', got: %s", loc)
+	}
+
+	// 3. When LANG is C or POSIX, returns ""
+	t.Setenv("LANG", "POSIX")
+	if loc := detectSystemLocale(); loc != "" {
+		t.Fatalf("expected detectSystemLocale() to return empty for POSIX, got: %s", loc)
+	}
+}
+

@@ -1386,16 +1386,16 @@ func (agent *desktopAgent) activateLicense(code string) error {
 	return server.ActivateLicenseOnline(code)
 }
 
-func (agent *desktopAgent) activateLicenseWithResult(code string) (*server.ActivationResult, error) {
-	return server.ActivateLicenseOnlineWithResult(code, "")
+func (agent *desktopAgent) activateLicenseWithResult(code, lang string) (*server.ActivationResult, error) {
+	return server.ActivateLicenseOnlineWithResult(code, lang)
 }
 
-func (agent *desktopAgent) sendActivationCode(licenseCode, email string) error {
-	return server.SendActivationCodeOnline(licenseCode, email, "")
+func (agent *desktopAgent) sendActivationCode(licenseCode, email, lang string) error {
+	return server.SendActivationCodeOnline(licenseCode, email, lang)
 }
 
-func (agent *desktopAgent) activateLicenseWithEmail(licenseCode, email, otpCode string) (*server.ActivationResult, error) {
-	return server.ActivateLicenseWithEmailOnline(licenseCode, email, otpCode, "")
+func (agent *desktopAgent) activateLicenseWithEmail(licenseCode, email, otpCode, lang string) (*server.ActivationResult, error) {
+	return server.ActivateLicenseWithEmailOnline(licenseCode, email, otpCode, lang)
 }
 
 func (agent *desktopAgent) resetLicense() {
