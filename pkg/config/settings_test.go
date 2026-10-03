@@ -449,10 +449,36 @@ func TestGetConfiguredLangLocaleDetection(t *testing.T) {
 		t.Fatalf("expected detectSystemLocale() to return 'ja', got: %s", loc)
 	}
 
-	// 3. When LANG is C or POSIX, returns ""
-	t.Setenv("LANG", "POSIX")
-	if loc := detectSystemLocale(); loc != "" {
-		t.Fatalf("expected detectSystemLocale() to return empty for POSIX, got: %s", loc)
+	// 3. When LANG is C or POSIX (case-insensitive), returns ""
+	for _, dummy := range []string{"POSIX", "posix", "C", "c"} {
+		t.Setenv("LANG", dummy)
+		if loc := detectSystemLocale(); loc != "" {
+			t.Fatalf("expected detectSystemLocale() to return empty for %s, got: %s", dummy, loc)
+		}
 	}
 }
 
+func TestNormalizeLangCode(t *testing.T) {
+	cases := []struct {
+		input    string
+		expected string
+	}{
+		{"zh-CN", "zh"},
+		{"zh_CN.UTF-8", "zh"},
+		{"en-US", "en"},
+		{"en_GB", "en"},
+		{"ja", "ja"},
+		{"C", "zh"},
+		{"c", "zh"},
+		{"POSIX", "zh"},
+		{"posix", "zh"},
+		{"", "zh"},
+		{"invalid_lang_too_long", "zh"},
+	}
+
+	for _, tc := range cases {
+		if actual := NormalizeLangCode(tc.input); actual != tc.expected {
+			t.Errorf("NormalizeLangCode(%q) = %q, expected %q", tc.input, actual, tc.expected)
+		}
+	}
+}

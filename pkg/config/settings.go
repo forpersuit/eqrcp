@@ -54,11 +54,13 @@ const (
 	DesktopCloseBehaviorQuit = "quit"
 )
 
-// NormalizeLangCode converts locale strings like "zh-CN", "zh_CN.UTF-8", "en_US" into standard two-letter ISO language codes (e.g. "zh", "en").
-func NormalizeLangCode(raw string) string {
+// parseTwoLetterLangCode extracts and normalizes a two-letter ISO language code (e.g., "en", "zh")
+// from raw strings or environment variables (e.g., "zh_CN.UTF-8", "en-US", "POSIX").
+// Returns "" if invalid or POSIX/C dummy locale.
+func parseTwoLetterLangCode(raw string) string {
 	raw = strings.TrimSpace(strings.ToLower(raw))
 	if raw == "" || raw == "c" || raw == "posix" {
-		return "zh"
+		return ""
 	}
 	parts := strings.FieldsFunc(raw, func(r rune) bool {
 		return r == '-' || r == '_' || r == '.'
@@ -66,21 +68,22 @@ func NormalizeLangCode(raw string) string {
 	if len(parts) > 0 && len(parts[0]) == 2 {
 		return parts[0]
 	}
+	return ""
+}
+
+// NormalizeLangCode converts locale strings like "zh-CN", "zh_CN.UTF-8", "en_US" into standard two-letter ISO language codes (e.g. "zh", "en").
+func NormalizeLangCode(raw string) string {
+	if code := parseTwoLetterLangCode(raw); code != "" {
+		return code
+	}
 	return "zh"
 }
 
 // detectSystemLocale returns a normalized 2-letter language code from system environment variables, or "" if not found.
 func detectSystemLocale() string {
 	for _, envKey := range []string{"LC_ALL", "LC_MESSAGES", "LANG"} {
-		val := strings.TrimSpace(os.Getenv(envKey))
-		if val != "" && val != "C" && val != "POSIX" {
-			raw := strings.TrimSpace(strings.ToLower(val))
-			parts := strings.FieldsFunc(raw, func(r rune) bool {
-				return r == '-' || r == '_' || r == '.'
-			})
-			if len(parts) > 0 && len(parts[0]) == 2 {
-				return parts[0]
-			}
+		if code := parseTwoLetterLangCode(os.Getenv(envKey)); code != "" {
+			return code
 		}
 	}
 	return ""

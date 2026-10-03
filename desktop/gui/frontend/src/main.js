@@ -3671,7 +3671,7 @@ function bindEvents() {
             const portalBtn = e.target.closest('#manage-license-portal-btn, .manage-license-portal-btn');
             if (portalBtn) {
                 e.preventDefault();
-                const lang = (state && state.settings && state.settings.lang) || getSystemLocale();
+                const lang = getCurrentLang();
                 let portalUrl = isTestEnvironment()
                     ? 'https://test.eqt.net.im/portal.html'
                     : 'https://www.eqt.net.im/portal.html';
@@ -3692,7 +3692,7 @@ function bindEvents() {
             const buyLicBtn = e.target.closest('.buy-license-btn, #buy-license-btn, #plan-buy-license-btn');
             if (buyLicBtn) {
                 e.preventDefault();
-                const lang = (state && state.settings && state.settings.lang) || getSystemLocale();
+                const lang = getCurrentLang();
                 let pricingUrl = isTestEnvironment()
                     ? 'https://test.eqt.net.im/pricing.html'
                     : 'https://www.eqt.net.im/pricing.html';
