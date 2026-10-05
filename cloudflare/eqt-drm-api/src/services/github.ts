@@ -64,7 +64,7 @@ export async function handleDownloadDomain(
         assets: [
           {
             name: "eqt-desktop-test-windows-amd64.zip",
-            download_url: "https://download.eqt.net.im/downloads/test/eqt-desktop-test-windows-amd64.zip?t=202610011752",
+            download_url: "https://download.eqt.net.im/downloads/test/eqt-desktop-test-windows-amd64.zip?t=202610051026",
             size: 7790422
           },
           {
@@ -74,12 +74,12 @@ export async function handleDownloadDomain(
           },
           {
             name: "EQT-test-windows-amd64.zip",
-            download_url: "https://download.eqt.net.im/downloads/test/EQT-test-windows-amd64.zip?t=202610011752",
+            download_url: "https://download.eqt.net.im/downloads/test/EQT-test-windows-amd64.zip?t=202610051026",
             size: 7790422
           },
           {
             name: "EQT.exe",
-            download_url: "https://download.eqt.net.im/downloads/test/EQT.exe?t=202610011752",
+            download_url: "https://download.eqt.net.im/downloads/test/EQT.exe?t=202610051026",
             size: 19067904
           }
         ]
