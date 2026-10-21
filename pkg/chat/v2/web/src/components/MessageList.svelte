@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher, onDestroy, onMount, beforeUpdate, afterUpdate, tick } from 'svelte';
   import { getTranslation } from '../lib/i18n';
+  import { formatMessageTime } from '../lib/time';
   import { connState, historyHasMore, historyLoading } from '../state/chatStore';
   import type { Message } from '../services/types';
   import { getThemeColors, getSenderThemeColors } from '../services/types';
@@ -1095,6 +1096,7 @@
         {@const colors = getMessageColors(msg, mine)}
         {@const identity = getSenderIdentity(msg)}
         {@const isCancelledFile = isFileSendCancelled(msg, mine, ulTx)}
+        {@const time = formatMessageTime(msg.createdAt)}
         <div 
           class="message" 
           class:mine 
@@ -1116,8 +1118,8 @@
                 {identity.sender ? identity.sender.slice(0, 2).toUpperCase() : 'DE'}
               {/if}
             </div>
-            <div class="bubble-time">
-              {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            <div class="bubble-time" title={time.full}>
+              <span class="time-hm">{time.hm}</span><span class="time-sec">{time.sec}</span>
             </div>
           </div>
 

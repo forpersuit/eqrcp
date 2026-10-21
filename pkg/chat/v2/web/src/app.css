@@ -1133,11 +1133,16 @@ button.batch-status-badge.clickable:hover {
 .bubble-time {
     color: var(--muted);
     font-size: 10px;
-    line-height: 1.12;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.15;
     margin-top: 1px;
+    max-width: 100%;
     text-align: center;
-    white-space: pre-line;
-    width: 40px;
+    white-space: nowrap;
+    width: 100%;
+}
+.bubble-time .time-sec {
+    display: inline;
 }
 /* ── Bubble ── */
 .bubble {
@@ -1988,6 +1993,13 @@ input:focus { border-color: var(--accent); outline: none; }
     }
     .bubble-time {
         font-size: 8px;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: clip;
+        width: 100%;
+    }
+    .bubble-time .time-sec {
+        display: none;
     }
     /* Session QR Mobile Adapt */
     .session-backdrop.open {
