@@ -11,6 +11,7 @@
 - [8. 触控高亮消除与精确触控边界约束](#8-触控高亮消除与精确触控边界约束)
 - [9. 输入焦点、输入区域与键盘的排他性对应](#9-输入焦点输入区域与键盘的排他性对应)
 - [10. 移动端卡片容器防溢出与底边圆角保护规范](#10-移动端卡片容器防溢出与底边圆角保护规范)
+- [11. 消息头像列几何尺寸与时间戳响应式防重叠规约](#11-消息头像列几何尺寸与时间戳响应式防重叠规约)
 
 ---
 
@@ -159,4 +160,20 @@
   - **防线**:
     1. **子元素圆角同步**: 为底部贴边子容器 `.composer` 显式声明 `border-bottom-left-radius: 13px; border-bottom-right-radius: 13px;`（桌面端为 `11px`），确保底色与外框圆角同心收紧；
     2. **物理遮罩双保险**: 为父容器 `.chat-shell` 叠加 `-webkit-mask-image: -webkit-radial-gradient(white, black); mask-image: radial-gradient(white, black);`，借助合成层 mask 通道彻底抹除子元素图层穿透溢出。
+
+---
+
+## 11. 消息头像列几何尺寸与时间戳响应式防重叠规约
+
+- **规格来源**: `pkg/chat/v2/web/src/app.css` 与 `pkg/chat/v2/web/src/components/MessageList.svelte`
+- **问题根因 (Overlap Mechanics)**:
+  - 在移动端媒体查询（`@media (max-width: 820px)`）下，`.message` 网格头像列 `.avatar-stack` 宽度收缩至 `clamp(28px, 8.5vw, 32px)`，列间距 `column-gap` 为 `clamp(6px, 1.8vw, 8px)`；
+  - 若头像下时间戳包含秒数（如 `14:30:25`，8 字符，甚至特定 locale 带 `下午` 或 `AM/PM`），在 8px 字号下文本物理渲染宽度达 40px~55px，超出列宽；加上居中对齐向两侧溢出，直接盖在相邻的消息气泡（`.bubble`）上。
+- **纯 CSS 响应式解耦防线**:
+  1. **结构分离**: 时间戳拆分为 `<span class="time-hm">{time.hm}</span>`（5 字符 24 小时制）与 `<span class="time-sec">{time.sec}</span>`（秒数部分 `:ss`），外层容器声明 `title={time.full}` 供完整时间提示；
+  2. **窄屏自适应隐藏秒数**:
+     - 默认宽屏（>820px）下，`.bubble-time` 宽 100%（即 40px 容器），`.time-sec { display: inline; }`，渲染完整时分秒；
+     - 移动端视口（`@media (max-width: 820px)`）下，声明 `.bubble-time .time-sec { display: none; }` 且 `.bubble-time { width: 100%; white-space: nowrap; overflow: hidden; text-overflow: clip; }`；
+     - 隐藏秒数后仅剩 `HH:mm`（约 22px），居中容纳于 28px~32px 的头像列，与气泡之间至少保留 9px~13px 安全间隙，从根本上杜绝物理重叠。
+
 
