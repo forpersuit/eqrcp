@@ -11,6 +11,7 @@
   import { DEFAULT_FREE_MAX_ATTACHMENT_BYTES } from './services/quotaConfig';
   import { resolveDownloadTransferId, applyDownloadCancelled, applyBatchDownloadCancelled } from './services/attachmentPolicy';
   import { pinLayoutScroll } from './lib/viewport';
+  import { extractClipboardImages, readClipboardImagesAsync } from './services/clipboard';
 
   if (typeof window !== 'undefined') {
     window.addEventListener('error', (e) => {
@@ -862,6 +863,12 @@
                 input.setSelectionRange(newPos, newPos);
               } catch (_) {}
             } else {
+              if (input.id === 'message-textarea' && $chatSessionStatus === 'active') {
+                const images = await readClipboardImagesAsync();
+                for (let i = 0; i < images.length; i++) {
+                  enqueueSendFile(images[i], images[i].name);
+                }
+              }
               input.focus();
             }
           }
@@ -965,6 +972,28 @@
     const sizes = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
+  function handleGlobalPaste(e: ClipboardEvent) {
+    if (e.defaultPrevented) return;
+    if ($chatSessionStatus !== 'active') return;
+
+    const target = e.target as HTMLElement | null;
+    if (target && target.tagName === 'INPUT' && (target as HTMLInputElement).type !== 'file') {
+      return;
+    }
+
+    const clipboardData = e.clipboardData;
+    if (!clipboardData) return;
+
+    const imageFiles = extractClipboardImages(clipboardData);
+    if (imageFiles.length === 0) return;
+
+    e.preventDefault();
+    for (let i = 0; i < imageFiles.length; i++) {
+      const file = imageFiles[i];
+      enqueueSendFile(file, file.name);
+    }
   }
 
   onMount(() => {
@@ -1300,9 +1329,11 @@
     client.onTransferEvent = handleWebSocketTransferEvent;
     client.connect();
     document.addEventListener('contextmenu', handleGlobalContextMenu);
+    window.addEventListener('paste', handleGlobalPaste);
   });
 
   onDestroy(() => {
+    window.removeEventListener('paste', handleGlobalPaste);
     if (typeof window !== 'undefined') {
       window.removeEventListener('resize', checkScreenSize);
       window.removeEventListener('orientationchange', checkScreenSize);

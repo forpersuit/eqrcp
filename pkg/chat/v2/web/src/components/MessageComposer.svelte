@@ -3,6 +3,7 @@
   import { getTranslation } from '../lib/i18n';
   import { chatSessionStatus } from '../state/chatStore';
   import { isTouchOrMobile, scheduleViewportRestore, pinLayoutScroll } from '../lib/viewport';
+  import { extractClipboardImages } from '../services/clipboard';
   const dispatch = createEventDispatcher();
   export let text = '';
   export let currentLang = 'zh';
@@ -61,6 +62,48 @@
     if (isTouchOrMobile() && !isSending) {
       scheduleViewportRestore();
     }
+  }
+
+  function handlePaste(e: ClipboardEvent) {
+    if ($chatSessionStatus !== 'active') return;
+    const clipboardData = e.clipboardData;
+    if (!clipboardData) return;
+
+    const imageFiles = extractClipboardImages(clipboardData);
+    if (imageFiles.length === 0) {
+      return;
+    }
+
+    e.preventDefault();
+
+    const pastedText = clipboardData.getData ? clipboardData.getData('text/plain') : '';
+    if (pastedText && textareaEl) {
+      const start = textareaEl.selectionStart || 0;
+      const end = textareaEl.selectionEnd || 0;
+      text = text.slice(0, start) + pastedText + text.slice(end);
+      const newPos = start + pastedText.length;
+      tick().then(() => {
+        if (textareaEl) {
+          textareaEl.setSelectionRange(newPos, newPos);
+        }
+      });
+    }
+
+    for (let i = 0; i < imageFiles.length; i++) {
+      const file = imageFiles[i];
+      dispatch('sendFile', {
+        file: file,
+        name: file.name,
+        size: file.size,
+        type: file.type
+      });
+    }
+
+    requestAnimationFrame(() => {
+      if (textareaEl) {
+        textareaEl.focus({ preventScroll: true });
+      }
+    });
   }
 
   function handleFocus() {
@@ -213,6 +256,7 @@
         on:keydown={handleKeydown}
         on:focus={handleFocus}
         on:blur={handleBlur}
+        on:paste={handlePaste}
       ></textarea>
       <div class="composer-actions-right">
         <button class="send-button" type="submit" aria-label={getTranslation('send', currentLang)} title={getTranslation('send', currentLang)} disabled={!text.trim() || $chatSessionStatus !== 'active'} on:pointerdown={handleSendPointerDown}>

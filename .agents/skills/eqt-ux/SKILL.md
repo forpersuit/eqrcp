@@ -69,6 +69,7 @@ scripts/deploy-windows-results.sh
 - **Svelte 5 `{@const}` 语法层级约束**: `{@const}` 必须是控制流块（`{#snippet}`, `{#if}`, `{:else if}`, `{:else}`, `{#each}`, `{:then}`, `{:catch}`）的直接子级，严禁直接置于原生 HTML 元素（如 `<td>`、`<div>`）内部。
 - **倒计时定时器与模态生命周期收敛**: 具有冷却倒计时（如 OTP 60s 冷却）的独立组件必须暴露集中清理钩子（如 `cleanupActivationEmailModal`），在任意面板关闭、取消或成功回调时彻底 `clearInterval`，防止后台隐性周期性 render 泄漏。
 - **移动端消息头像列与时间戳防重叠**: 移动端头像列宽仅 28px~32px，严禁渲染未经解耦的全量秒数/长文本时间戳（会导致文字溢出覆盖气泡）；必须采用 `<span class="time-hm">` + `<span class="time-sec">` 结构，并在 `@media (max-width: 820px)` 下隐藏秒数，确保仅保留 5 字符 `HH:mm` 紧凑排布。
+- **输入框剪贴板图片提取与时间戳命名**: 在输入框（textarea）监听 `paste` 事件时，若剪贴板含有图片（`item.kind === 'file' && item.type.startsWith('image/')`），必须 `e.preventDefault()` 阻断原生乱码插入，并将图片作为附件派发上传；对系统截图 generic 文件名（如 `image.png`、`blob`）必须使用格式化时间戳（`image_YYYYMMDD_HHmmss.ext`）进行重命名，避免对端保存同名覆盖。同时右键菜单粘贴（`contextmenu`）与全局粘贴需保持一致的行为闭环。
 
 ---
 
