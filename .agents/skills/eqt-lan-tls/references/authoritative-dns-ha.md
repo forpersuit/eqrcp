@@ -7,9 +7,10 @@
 ## 1. 权威 DNS 双机灾备与负载均衡规范 (RFC 1035 NS Delegation)
 
 ### 1.1 节点架构
-- **节点 1 (ns1.eqt.net.im)**: `128.241.227.181` (Ubuntu Linux, 53 UDP/TCP, 127.0.0.1:5380 HTTP)
-- **节点 2 (ns2.eqt.net.im)**: `103.232.92.220` (Ubuntu Linux, 53 UDP/TCP, 127.0.0.1:5380 HTTP)
+- **节点 1 (ns1.eqt.net.im)**: `154.81.140.232`（`ssh light181`，Ubuntu Linux，53 UDP/TCP 监听 `154.81.140.232:53`，`127.0.0.1:5380` HTTP；原 IP 为 `128.241.227.181`）
+- **节点 2 (ns2.eqt.net.im)**: `103.232.92.220`（`ssh cloudcone-cf`，Ubuntu Linux，53 UDP/TCP 监听 `103.232.92.220:53`，`127.0.0.1:5380` HTTP）
 - **安全基准**：HTTP 管理端口强行锁定在 `127.0.0.1:5380`，仅限本地或 SSH 安全通道调用，严禁公网开放！
+- **VPS 换 IP / 迁移排坑**：`eqt-dns.service` 使用 `-listen <PUBLIC_IP>` 显式绑定网卡公网 IP（避免与本机 `systemd-resolved` 占用 `127.0.0.53/54:53` 冲突）。若 VPS 更换公网 IP 后未同步更新 `/etc/systemd/system/eqt-dns.service` 中的 `-listen` 参数，`eqt-dns` 会因 `bind: cannot assign requested address` 持续崩溃重启，导致 Caddy 反代 `https://ns1-dns.eqt.net.im` 返回 `HTTP 502`、`setDns01Challenge` 报 `1/2 authoritative endpoint(s)` 失败。排查时直接比对 `ip -4 addr show` 与 `systemctl status eqt-dns` / `journalctl -u eqt-dns`。
 
 ### 1.2 Systemd 守护配置
 ```ini
